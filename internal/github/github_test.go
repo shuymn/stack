@@ -180,6 +180,65 @@ func TestMergeResult(t *testing.T) {
 	})
 }
 
+func TestDisableAutoResult(t *testing.T) {
+	argv := []string{"pr", "merge", "7", "--disable-auto"}
+	t.Run("forwards output and reports the exit", func(t *testing.T) {
+		c := client(t, "gh", proctest.Response{Args: argv, Stderr: "already merged\n", Exit: 1})
+		var log bytes.Buffer
+		res := c.DisableAuto(t.Context(), 7, &log)
+		if res.OK() || res.String() != "exited 1" || log.String() != "already merged\n" {
+			t.Errorf("result = %+v, log %q", res, log.String())
+		}
+	})
+	t.Run("timeout", func(t *testing.T) {
+		c := client(t, "gh", proctest.Response{Args: argv, Sleep: 10 * time.Second})
+		c.Timeout = 200 * time.Millisecond
+		if res := c.DisableAuto(t.Context(), 7, &bytes.Buffer{}); res.OK() || !res.TimedOut {
+			t.Errorf("result = %+v", res)
+		}
+	})
+	t.Run("cannot start", func(t *testing.T) {
+		c := Client{Runner: proc.Exec{}, Gh: filepath.Join(t.TempDir(), "gh")}
+		if res := c.DisableAuto(t.Context(), 7, &bytes.Buffer{}); res.OK() || res.Err == nil {
+			t.Errorf("result = %+v", res)
+		}
+	})
+}
+
+func TestAutoMergeRequest(t *testing.T) {
+	view := []string{
+		"pr", "view", "7", "--json",
+		"headRefOid,baseRefName,state,isDraft,mergeable,autoMergeRequest",
+	}
+	read := []string{"pr", "view", "7", "--json", "state,headRefOid,mergeCommit,autoMergeRequest"}
+	for _, tt := range []struct {
+		field string // the JSON after the other fields, or empty for none
+		want  bool
+		err   string
+	}{
+		{`,"autoMergeRequest":null`, false, ""},
+		{`,"autoMergeRequest":{"mergeMethod":"SQUASH"}`, true, ""},
+		{``, false, "no autoMergeRequest field"},
+		{`,"autoMergeRequest":true`, false, "unexpected autoMergeRequest true"},
+	} {
+		c := client(t, "gh",
+			proctest.Response{Args: view, Stdout: `{"state":"OPEN"` + tt.field + `}`},
+			proctest.Response{Args: read, Stdout: `{"state":"OPEN"` + tt.field + `}`})
+		pr, err := c.PRViewAuto(t.Context(), 7)
+		back, err2 := c.AutoReadBack(t.Context(), 7)
+		for _, got := range []struct {
+			auto bool
+			err  error
+		}{{pr.AutoMerge, err}, {back.AutoMerge, err2}} {
+			if tt.err == "" && (got.err != nil || got.auto != tt.want) ||
+				tt.err != "" && (got.err == nil || !strings.Contains(got.err.Error(), tt.err)) {
+				t.Errorf("%s: auto %v, err %v; want %v, %q", tt.field, got.auto, got.err,
+					tt.want, tt.err)
+			}
+		}
+	}
+}
+
 func TestCommitChecksPaging(t *testing.T) {
 	repo := Repo{Owner: "o", Name: "r"}
 	page := func(total int, next bool, cursor, node string) string {

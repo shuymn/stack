@@ -18,11 +18,16 @@ import (
 // term in --subject/--body and an unusable config exit 2; every later refusal exits 1.
 //
 // SIGINT and SIGTERM cancel the run instead of ending the process, so the running child is killed
-// and a merge call that already started is still read back. Only this command catches them; every
+// and a merge call that already started is still read back; with --auto, auto-merge is disabled
+// first. Only this command catches them; every
 // other command keeps the default exit on signal.
 func runPrMerge(ctx context.Context, env Env, inv invocation) error {
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// A consumer that closed stdout or stderr (e.g. `| head -1`) must not end stack while
+	// auto-merge may be enabled: with SIGPIPE caught, writes there just fail and cleanup still runs.
+	// It stays caught until the process exits, so the final reason cannot end it by signal either.
+	signal.Notify(make(chan os.Signal, 1), syscall.SIGPIPE)
 	o := merge.Options{
 		PR:            inv.args[0],
 		Head:          inv.args[1],
@@ -44,6 +49,7 @@ func runPrMerge(ctx context.Context, env Env, inv invocation) error {
 			o.Methods = append(o.Methods, m)
 		}
 	}
+	o.Merge.Auto = boolFlagValue(inv.flags, "auto")
 	o.Merge.DeleteBranch = boolFlagValue(inv.flags, "delete-branch")
 	// Visit sees only the flags given, so an explicit empty value stays distinct from none.
 	inv.flags.Visit(func(f *flag.Flag) {

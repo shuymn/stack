@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shuymn/stack/internal/github"
 	"github.com/shuymn/stack/internal/gittest"
 	"github.com/shuymn/stack/internal/proc/proctest"
 )
@@ -126,5 +127,90 @@ func TestSignalStopsPrMerge(t *testing.T) {
 	code := waitExit(t, cmd, 10*time.Second)
 	if code != 1 || !strings.Contains(stderr.String(), "could not read PR 7") {
 		t.Errorf("exit code %d, stderr %q; want 1 and a refusal", code, stderr)
+	}
+}
+
+// TestClosedStderrKeepsAutoCleanup: with stderr a pipe whose reader is gone (`2>&1 | head -1`), the
+// waiting line of pr merge --auto fails instead of ending stack by SIGPIPE, so a stop still
+// disables auto-merge.
+func TestClosedStderrKeepsAutoCleanup(t *testing.T) {
+	skipWithoutSIGTERM(t)
+	const head = "0123456789abcdef0123456789abcdef01234567"
+	repo := github.Repo{Owner: "octo", Name: "demo"}
+	resp := func(args []string, stdout string) proctest.Response {
+		return proctest.Response{Args: args, Stdout: stdout}
+	}
+	autoRead := []string{
+		"pr",
+		"view",
+		"7",
+		"--json",
+		"state,headRefOid,mergeCommit,autoMergeRequest",
+	}
+	disable := []string{"pr", "merge", "7", "--disable-auto"}
+	r := gittest.New(t)
+	gh := proctest.Install(t, "gh", proctest.Scenario{Responses: []proctest.Response{
+		resp([]string{
+			"pr", "view", "7", "--json",
+			"headRefOid,baseRefName,state,isDraft,mergeable,autoMergeRequest",
+		}, `{"headRefOid":"`+head+`","state":"OPEN","isDraft":false,"mergeable":"MERGEABLE",`+
+			`"autoMergeRequest":null}`),
+		resp([]string{
+			"repo", "view", "--json",
+			"nameWithOwner,mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed",
+		}, `{"nameWithOwner":"octo/demo","mergeCommitAllowed":true}`),
+		resp([]string{"pr", "view", "7", "--json", "commits"}, `{"commits":[]}`),
+		resp(github.ChecksArgs(repo, head, ""), `{"data":{"repository":{"object":{"oid":"`+head+
+			`","statusCheckRollup":null}}}}`),
+		resp(github.MergeQueueArgs(repo, 7),
+			`{"data":{"repository":{"pullRequest":{"isMergeQueueEnabled":false}}}}`),
+		resp([]string{"pr", "merge", "7", "--merge", "--auto", "--match-head-commit", head}, ""),
+		resp(autoRead, `{"state":"OPEN","headRefOid":"`+head+`","mergeCommit":null,`+
+			`"autoMergeRequest":{"mergeMethod":"MERGE"}}`),
+		resp(disable, ""),
+	}})
+	env := []string{"HOME=" + t.TempDir()}
+	for _, kv := range r.Env {
+		if name, value, _ := strings.Cut(kv, "="); name == "PATH" {
+			kv = "PATH=" + filepath.Dir(gh) + string(os.PathListSeparator) + value
+		} else if name == "HOME" {
+			continue
+		}
+		env = append(env, kv)
+	}
+	cmd, _ := stack(t, r.Dir, env, "pr", "merge", "7", head, "--merge", "--auto",
+		"--allow-no-checks")
+	cmd.Stderr = nil
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	_ = stderr.Close() // the consumer is gone before stack writes anything
+	read := func() bool {
+		return slices.ContainsFunc(proctest.Calls(t, gh), func(c proctest.Call) bool {
+			return slices.Equal(c.Args, autoRead)
+		})
+	}
+	deadline := time.Now().Add(30 * time.Second)
+	for !read() {
+		if time.Now().After(deadline) {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+			t.Fatal("the first read-back never ran")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	time.Sleep(500 * time.Millisecond) // past the waiting line, into the 20 s wait
+	// Before the fix SIGPIPE has already ended stack; the signal then fails or finds it gone.
+	_ = cmd.Process.Signal(syscall.SIGTERM)
+	code := waitExit(t, cmd, 30*time.Second)
+	disabled := slices.ContainsFunc(proctest.Calls(t, gh), func(c proctest.Call) bool {
+		return slices.Equal(c.Args, disable)
+	})
+	if code != 1 || !disabled {
+		t.Errorf("exit code %d, disable called %v; want 1 and the disable", code, disabled)
 	}
 }

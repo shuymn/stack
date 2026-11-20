@@ -350,9 +350,9 @@ publishing (the commit-pr skill's order), not by this hook.
 Settings wiring (dotfiles): matcher `Bash|Read|NotebookRead|Grep|Glob|mcp__pencil__execute`, exec form,
 `timeout: 5`, failure-continue as in §4.2.
 
-### 4.4 `stack pr merge <pr> <head-sha> [--merge|--squash|--rebase] [--delete-branch] [--subject S] [--body B] [--allow-no-checks]`
+### 4.4 `stack pr merge <pr> <head-sha> [--merge|--squash|--rebase] [--delete-branch] [--subject S] [--body B] [--allow-no-checks] [--auto]`
 
-Ports `~/.claude/bin/merge-pr` minus the owner-only list (`merge-pr:82-159,178-183`) and minus `--auto` (§10). Run
+Ports `~/.claude/bin/merge-pr` minus the owner-only list (`merge-pr:82-159,178-183`). Run
 inside a checkout of the PR's repo; allowed from agent worktrees too (approval is the caller's duty). Step 1 failures
 exit 2; later refusals exit 1 with a one-line reason on stderr.
 
@@ -379,7 +379,7 @@ exit 2; later refusals exit 1 with a one-line reason on stderr.
    error refuses. Chosen over `gh pr checks` (reads whatever head the PR has at that moment and returns no SHA) and
    over REST `commits/{sha}/check-runs` + `/status` (two paginated calls) because one query is pinned to `H` and
    covers both check runs and commit statuses (`merge-pr:161-170`).
-9. `gh pr merge <pr> <method> --match-head-commit H [--delete-branch] [--subject S] [--body B]`; GitHub rejects the
+9. Without `--auto`: `gh pr merge <pr> <method> --match-head-commit H [--delete-branch] [--subject S] [--body B]`; GitHub rejects the
    merge if the head moved after step 8. Then, **whatever its exit code**, read back
    `gh pr view <pr> --json state,headRefOid,mergeCommit` (`merge-pr:189-207`) on its own 30 s deadline, also when
    SIGINT/SIGTERM (which cancel the context and kill the running child) arrived after `gh pr merge` started.
@@ -387,6 +387,34 @@ exit 2; later refusals exit 1 with a one-line reason on stderr.
    `MERGED <H> <merge-oid>`, exit 0, plus a stderr note if `gh pr merge` exited non-zero (e.g. branch deletion failed
    after the merge), so the caller does not retry. `OPEN` → exit 1, not merged. A failed read-back or any other
    state → exit 1 with `result unknown — check the PR before retrying`, never an invitation to retry.
+
+10. `--auto` (for repositories whose rules only let GitHub merge after merge intent, e.g. a required status that an
+   automerge gate posts on `auto_merge_enabled`; an admin bypass is not used). Steps 1–8 run unchanged, and step 3
+   also reads `autoMergeRequest`: one already active at preflight (e.g. the owner's) is refused. No lock: callers
+   must not run concurrent `--auto` attempts on the same PR. Then `gh pr merge <pr> <method> --auto --match-head-commit H …`: gh either merges
+   directly (merge state `CLEAN`/`HAS_HOOKS`/`UNSTABLE`) or enables auto-merge, both with `expectedHeadOid: H`, so a
+   head other than `H` at submission is rejected by GitHub. Read-back decides the outcome, never gh's exit code:
+   - Every read here fetches `state`, `headRefOid`, `mergeCommit` and `autoMergeRequest` (explicit `null` = none;
+     a missing field is unreadable). Read immediately after gh returns (any exit code, also after a cancel), then every 20 s, under one absolute 15-minute deadline that
+     also bounds each read; an unreadable or malformed read is retried within the deadline (`merge-pr:185-198`).
+   - `MERGED` + `H` + full merge OID → `MERGED <H> <oid>`, exit 0 (stderr note on a non-zero gh, as in step 9).
+   - `MERGED` with another head → exit 1 naming both SHAs: inspect the PR (a merge cannot be undone).
+   - Stop conditions, checked after a read that is not a merge: a non-zero gh exit; `OPEN` on `H` with no
+     `autoMergeRequest` (nothing will merge it); a head other than `H` while `OPEN`; `CLOSED`; the deadline; or
+     SIGINT/SIGTERM after gh started. Each attempts `gh pr merge <pr> --disable-auto` on a fresh 30 s context, then read back
+     once more on its own 30 s deadline, whatever the disable returned. That read wins: `MERGED` is judged as above;
+     `OPEN` with no `autoMergeRequest` → exit 1 `not merged; auto-merge disabled`; anything else →
+     exit 1 `result unknown — auto-merge may still be enabled; check the PR before retrying`.
+   - `--delete-branch` acts only on gh's direct-merge path; after a deferred merge the branch is left to the
+     repository's auto-delete setting.
+
+   **Accepted gap:** while auto-merge is active, GitHub can merge a later head that a writer pushed; GitHub disables
+   auto-merge only on a push by a user without write access, and the gate re-evaluates the new head. Accepted because
+   in this owner's repositories only the owner, their agents and their bots push to PR branches, the first read that
+   sees a moved head triggers a disable attempt, and a merge of any other head is reported as a failure. Step 8 is a snapshot
+   of the contexts already on `H`; GitHub enforces the required contexts at merge time. If a gate run already posted
+   failure on `H`, rerun the failed CI and the gate for `H` (or push a new head) before retrying. The raw-merge rule
+   keeps denying `gh pr merge --auto` and `enablePullRequestAutoMerge` outside `stack pr merge`.
 
 No config needed. Not done: owner-only list, chezmoi lookup, shallow-unshallow, base-moved recheck (all served the
 list), and the delegated-worktree refusal.
@@ -484,7 +512,7 @@ kaizen until Phase 3; `--json` is decided together with the `statusline.sh.tmpl`
 | Stop mtime block (`orchestration-context.py:314-330`) | **Dropped** | §4 S1 retired |
 | Never fail a session (`orchestration-context.py:23,341`) | **Kept** for both hooks; new for the guard (legacy raised on bad JSON) | constraint |
 | `merge-pr` head/state/draft/mergeable/method/fixup/checks/merge-queue/merge-check/readback (`merge-pr`) | **Kept**; checks pinned to the full head OID; readback after non-zero `gh pr merge`; non-runnable merge-check refuses | §3 pr merge |
-| `merge-pr --auto` wait and disable (`merge-pr:74-80,192-205`) | **Deferred** (§10) | cannot pin the merged head |
+| `merge-pr --auto` wait and disable (`merge-pr:74-80,192-205`) | **Kept** (§4.4 step 10): submission pinned to `H`; 15-min read-back wait; disable then re-read on a moved head, `CLOSED`, timeout or cancel; an existing auto-merge request is refused; a merge of another head is reported, not prevented | dotfiles needs merge intent for its required gate status, and the owner cannot approve their own PRs |
 | `merge-pr` `.claude/kaizen-managed` + chezmoi + unshallow + base-moved recheck (`merge-pr:82-159,178-183`) | **Dropped** | §1 (owner-only merge list) |
 | `merge-pr` refuses in delegated worktree (`merge-pr:24-26`) | **Dropped** | §4 S2 |
 | public-check range/message/paths/added lines/title/body/branch, private terms (`public-check:118-164`) | **Kept**, streamed; `--title` → `--title-file`; Windows paths; Unicode boundaries; one-character names still match; `.t3` fragments to private terms | §3 check public |
@@ -603,7 +631,7 @@ those callers.
 | P10 | When a session compacts, the hook shall restore the kits opened and not closed under that session id, when the `.kits` lock is acquired within 1 s (else the kit part is omitted with a marker). | §3, §4 | kit block present after `/compact`; absent after `kit close`; absent in a fork | live: `kit open demo`, `/compact`; close, `/compact` again |
 | P11 | When a worker session compacts, the hook shall restore `opus-worker.md` whole and the original brief, verbatim when both fit in 9,500 chars and otherwise cut with a marker. | §4 worker detection | rules and brief visible after compact | live: first prompt starting with the marker; `/compact` |
 | P12 | When `check public` finds a local path (POSIX or Windows) or private term in a range or metadata, it shall exit 1 naming each hit. | §1, §3 | stderr lists hits; exit 1; clean → 0; bad range → 2 | real repo branch with a seeded commit; Windows CI via `stack.exe` |
-| P13 | When `pr merge` merges, it shall merge only the checked full head SHA, after every check of that SHA passed (or none exist and `--allow-no-checks` is given) and `.claude/merge-check` is absent or passed. | §3 | stdout `MERGED <H> …`; refusals exit 1 | scratch GitHub repo PR: stale SHA, failing check, no checks without the flag, refusing merge-check, then success |
+| P13 | When `pr merge` merges without `--auto`, it shall merge only the checked full head SHA, after every check of that SHA passed (or none exist and `--allow-no-checks` is given) and `.claude/merge-check` is absent or passed; with `--auto`, steps 1–8 shall check that SHA, the submission shall require it, and success shall require a verified merge of it; a merge of any other head (GitHub cannot pin the head it later merges while auto-merge is active) is reported as a failure (§4.4 step 10). | §3 | stdout `MERGED <H> …`; refusals exit 1 | scratch GitHub repo PR: stale SHA, failing check, no checks without the flag, refusing merge-check, then success; `--auto`: a dotfiles PR whose gate status is absent until auto-merge is enabled merges `H` |
 | P14 | When a direct `rm` with a recursive flag targets `/`, home, a drive root or an existing `.git` directory, the hook shall deny it. | §1 item 2 | deny reason | live: `rm -rf .git` in a scratch clone |
 | P15 | While no extension is installed, `stack run <stage>` shall pass and list the skipped names (design choice). | §3, §4 | exit 0, `"status":"pass"` | `stack run outbound` on a clean machine |
 | P16 | When an extension returns block, `stack run` shall exit 1; when it times out or returns malformed output, it shall warn and exit 0 (design choice). | §3 protocol | JSON aggregate | stub `stack-demo` on PATH |
@@ -642,11 +670,4 @@ those callers.
 | C25 | `pr merge` shall treat `.claude/merge-check` absent as pass, and not runnable or non-zero as refusal. | `merge.TestMergeCheck` | three separate cases |
 | C26 | When `gh pr merge` exits non-zero, `pr merge` shall read back and report merged only for `MERGED` + `H` + merge OID; it shall refuse `--subject/--body` with a local path. | `merge.TestReadback`, `merge.TestMessageLocalPath` | exit 0 + stderr note vs exit 1; empty or non-SHA merge OID → exit 1 |
 | C27 | `budget status` shall show byte sizes and per-role counts incl. `all`, and exit 0 regardless of sizes. | `budget.TestStatus` | exact bytes and counts asserted; `all`-only register shows its count; oversized → exit 0 |
-
-## 10. Deferred
-
-- **`stack pr merge --auto`.** GitHub merges an auto-merge PR later, at whatever head satisfies the rules then;
-  `--match-head-commit` at enable time cannot pin the head that is eventually merged, so the checked-head guarantee
-  (P13) would not hold. Porting it needs a separate decision covering that gap and cleanup on cancellation
-  (`merge-pr:74-80`). Until then the raw-merge rule still denies `gh pr merge --auto` and
-  `enablePullRequestAutoMerge`.
+| C28 | When `--auto` is given, `pr merge` shall send `--auto --match-head-commit <full H>` only after steps 1–8 pass (and no auto-merge request is active), report success only for a read-back of `MERGED` + `H` + full merge OID, and on every stop condition attempt to disable auto-merge and decide by a final read-back. | `merge.TestAuto` | fake gh, injected clock, no real sleeps; exact exit code, stdout and argv order for: existing request refused; immediate merge; delayed merge; non-zero gh then verified merge; non-zero gh then open → disable without polling; open on `H` with no request → stop; merged other head; moved head → disable; `CLOSED`; unreadable polls to the deadline; disable fails then `OPEN` + `null` → not merged, then active or unreadable request → unknown, then `MERGED` `H` → success; cancel → disable |
