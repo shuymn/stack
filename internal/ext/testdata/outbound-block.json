@@ -1,0 +1,4 @@
+{
+  "request": {"stage": "outbound", "repo": "", "range": "main..HEAD", "prompt": "replayed prompt"},
+  "expect": {"status": "block"}
+}
