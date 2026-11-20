@@ -24,6 +24,10 @@ import (
 func runPrMerge(ctx context.Context, env Env, inv invocation) error {
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// A consumer that closed stdout or stderr (e.g. `| head -1`) must not end stack while
+	// auto-merge may be enabled: with SIGPIPE caught, writes there just fail and cleanup still runs.
+	// It stays caught until the process exits, so the final reason cannot end it by signal either.
+	signal.Notify(make(chan os.Signal, 1), syscall.SIGPIPE)
 	o := merge.Options{
 		PR:            inv.args[0],
 		Head:          inv.args[1],
