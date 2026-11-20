@@ -454,8 +454,10 @@ func (c Client) ghJSON(ctx context.Context, v any, args ...string) error {
 	if err := dec.Decode(v); err != nil {
 		return fmt.Errorf("%w: %s: decode: %w", ErrGh, what, err)
 	}
-	// Only whitespace may follow the value; Decoder.More would accept a stray `]` or `}`.
-	if len(bytes.TrimSpace(res.Stdout[dec.InputOffset():])) > 0 {
+	// Only JSON whitespace may follow the value: a second Decode must reach the end. Decoder.More
+	// would accept a stray `]` or `}`, bytes.TrimSpace a vertical tab.
+	var extra json.RawMessage
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
 		return fmt.Errorf("%w: %s: trailing output after JSON", ErrGh, what)
 	}
 	return nil

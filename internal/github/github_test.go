@@ -60,6 +60,7 @@ func TestGhFailures(t *testing.T) {
 		{"not JSON", proctest.Response{Stdout: "o/r\n"}, "decode"},
 		{"trailing JSON", proctest.Response{Stdout: ok + ok}, "trailing output"},
 		{"trailing bracket", proctest.Response{Stdout: ok + "]"}, "trailing output"},
+		{"trailing vertical tab", proctest.Response{Stdout: ok + "\v"}, "trailing output"},
 		{
 			"bad nameWithOwner",
 			proctest.Response{Stdout: `{"nameWithOwner":"o/r/x"}`},
@@ -87,7 +88,7 @@ func TestGhFailures(t *testing.T) {
 	})
 	t.Run("ok", func(t *testing.T) {
 		c := client(t, "gh", proctest.Response{Args: repoArgs, Stdout: `{"nameWithOwner":"o/r",` +
-			`"squashMergeAllowed":true}`})
+			`"squashMergeAllowed":true}` + " \r\n\t"}) // JSON whitespace may follow
 		r, err := c.RepoView(t.Context())
 		if err != nil || r != (Repo{Owner: "o", Name: "r", SquashMergeAllowed: true}) {
 			t.Errorf("RepoView = %+v, %v", r, err)
