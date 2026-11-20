@@ -39,6 +39,13 @@ var (
 	ErrGit = errors.New("git failed")
 
 	shaRe = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
+
+	// repoVars point git at a repository. A git hook that runs `stack check public` exports some of
+	// them, so they are dropped and the repository is found from the working directory instead.
+	repoVars = []string{
+		"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY",
+		"GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE",
+	}
 )
 
 // Text is one piece of metadata to scan.
@@ -52,11 +59,12 @@ type Text struct {
 type Options struct {
 	// Range is `<base>..<head>`.
 	Range string
-	// Dir is git's working directory; empty means the current one.
+	// Dir is where the repository is looked for; empty means the current directory.
 	Dir string
 	// Git is the git executable; empty means "git".
 	Git string
-	// Env replaces git's environment when non-nil.
+	// Env replaces the inherited environment of git when non-nil. Repository-location variables
+	// (GIT_DIR, GIT_WORK_TREE, …) are dropped from either.
 	Env    []string
 	Runner proc.Runner
 	// Terms are the private terms (see ReadTerms).
@@ -126,10 +134,19 @@ func Check(ctx context.Context, o Options) error {
 	if o.GitTimeout <= 0 {
 		o.GitTimeout = defaultGitTimeout
 	}
+	if o.Env == nil {
+		o.Env = os.Environ()
+	}
+	o.Env = dropRepoVars(o.Env)
+	top, err := o.toplevel(ctx)
+	if err != nil {
+		return err
+	}
+	o.Dir = top
 	s := &scanner{terms: publictext.NewTerms(o.Terms), out: o.Out, seen: map[string]bool{}}
 
 	var shas []string
-	err := o.stream(ctx, []string{"rev-list", "--reverse", "--end-of-options", o.Range},
+	err = o.stream(ctx, []string{"rev-list", "--reverse", "--end-of-options", o.Range},
 		eachLine(func(line string) error {
 			if !shaRe.MatchString(line) {
 				return fmt.Errorf("%w: unexpected rev-list line %q", ErrGit, line)
@@ -195,11 +212,45 @@ func (o Options) commit(ctx context.Context, s *scanner, sha string) error {
 		}))
 }
 
+// dropRepoVars returns env without the repository-location variables.
+func dropRepoVars(env []string) []string {
+	return slices.DeleteFunc(slices.Clone(env), func(kv string) bool {
+		name, _, _ := strings.Cut(kv, "=")
+		return slices.ContainsFunc(
+			repoVars,
+			func(v string) bool { return strings.EqualFold(v, name) },
+		)
+	})
+}
+
+// toplevel returns the work tree that contains o.Dir.
+func (o Options) toplevel(ctx context.Context) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, o.GitTimeout)
+	defer cancel()
+	args := []string{"rev-parse", "--show-toplevel"}
+	res, err := o.Runner.Run(ctx, proc.Cmd{Name: o.Git, Args: args, Dir: o.Dir, Env: o.Env})
+	switch {
+	case err != nil:
+		return "", fmt.Errorf("%w: git %s: %w", ErrGit, strings.Join(args, " "), err)
+	case res.TimedOut:
+		return "", fmt.Errorf("%w: git %s: %w", ErrGit, strings.Join(args, " "), proc.ErrTimedOut)
+	case res.WaitDelayExceeded, res.Truncated, res.ExitCode != 0:
+		return "", fmt.Errorf("%w: git %s: exit %d: %s", ErrGit, strings.Join(args, " "),
+			res.ExitCode, strings.TrimSpace(string(res.Stderr)))
+	}
+	top := strings.TrimSpace(string(res.Stdout))
+	if top == "" {
+		return "", fmt.Errorf("%w: not in a work tree", ErrGit)
+	}
+	return top, nil
+}
+
 // stream runs git with args and passes its stdout to consume.
 func (o Options) stream(ctx context.Context, args []string, consume func(io.Reader) error) error {
 	ctx, cancel := context.WithTimeout(ctx, o.GitTimeout)
 	defer cancel()
-	err := o.Runner.Stream(ctx, proc.Cmd{Name: o.Git, Args: args, Dir: o.Dir, Env: o.Env}, consume)
+	cmd := proc.Cmd{Name: o.Git, Args: slices.Concat([]string{"-C", o.Dir}, args), Env: o.Env}
+	err := o.Runner.Stream(ctx, cmd, consume)
 	if err != nil {
 		if errors.Is(err, ErrGit) {
 			return err
