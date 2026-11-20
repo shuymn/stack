@@ -79,6 +79,9 @@ func TestParseCalls(t *testing.T) {
 			[][]string{{"true"}, {"gh", "x"}, {"gh", "y"}},
 		},
 		{"f() { gh x; }", [][]string{{"gh", "x"}}},
+		{"if cd d; then gh x; elif cd e; then gh y; else gh z; fi", [][]string{
+			{"cd", "d"}, {"gh", "x"}, {"cd", "e"}, {"gh", "y"}, {"gh", "z"},
+		}},
 		{"( gh x ) && { gh y; }", [][]string{{"gh", "x"}, {"gh", "y"}}},
 		{"export A=\"$(gh x)\"", [][]string{{"gh", "x"}}},
 	}

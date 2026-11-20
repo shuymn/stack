@@ -261,7 +261,8 @@ func (w *walker) ifClause(sc scope, c *syntax.IfClause, cwd string, depth int) s
 	after := cwd
 	for ; c != nil; c = c.Else {
 		cond := w.stmts(sc, c.Cond, cwd, depth)
-		if cond != cwd || w.stmts(sc, c.Then, cond, depth) != cwd {
+		then := w.stmts(sc, c.Then, cond, depth) // walked even when the condition changed the cwd
+		if cond != cwd || then != cwd {
 			after = ""
 		}
 	}

@@ -118,6 +118,31 @@ func TestPreToolUseMalformedStdin(t *testing.T) {
 	}
 }
 
+// TestPreToolUseRegressions runs review findings through the CLI entry point. rule "" means allow.
+func TestPreToolUseRegressions(t *testing.T) {
+	tests := []struct {
+		name, tool string
+		input      map[string]any
+		rule       string
+	}{
+		{
+			"guarded call in an if body after cd", "Bash",
+			map[string]any{"command": "if cd docs; then gh pr merge -R o/r 1 --squash; fi"},
+			"raw-merge",
+		},
+	}
+	for _, tt := range tests {
+		r := runHookStdin(t, t.TempDir(), payload(t, t.TempDir(), tt.tool, tt.input))
+		if tt.rule == "" {
+			if r.code != exitOK || r.stdout != "" {
+				t.Errorf("%s = %+v, want allow", tt.name, r)
+			}
+			continue
+		}
+		assertDeny(t, tt.name, r, tt.rule)
+	}
+}
+
 func TestPreToolUseAllowsOrdinaryCommand(t *testing.T) {
 	r := runHookStdin(t, t.TempDir(),
 		payload(t, t.TempDir(), "Bash", map[string]any{"command": "git status"}))
