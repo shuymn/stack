@@ -136,6 +136,19 @@ func TestPublished(t *testing.T) {
 	}
 }
 
+func TestDryRun(t *testing.T) {
+	for line, want := range map[string]bool{
+		"pr create -b x":                 false,
+		"pr create --dry-run -b x":       true,
+		"pr create --dry-run=false -b x": false,
+		"pr create -b --dry-run":         false,
+	} {
+		if c := parse(t, line); c.DryRun != want {
+			t.Errorf("%q dry run = %v, want %v", line, c.DryRun, want)
+		}
+	}
+}
+
 func TestQuotedTildeIsNotExpanded(t *testing.T) {
 	c, _ := Parse([]Arg{
 		{Text: "pr", Static: true},

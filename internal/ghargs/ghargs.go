@@ -64,6 +64,9 @@ type Call struct {
 	Help bool
 	// DisableAuto reports that --disable-auto parsed as true (pr merge).
 	DisableAuto bool
+	// DryRun reports that --dry-run parsed as true (pr create): gh prints the pull request and
+	// returns before creating it.
+	DryRun bool
 	// Method is the effective HTTP method of `gh api`, upper-cased.
 	Method string
 	// Endpoint is the `gh api` endpoint as gh resolves it: without scheme, host, leading `/` and
@@ -103,6 +106,9 @@ func Parse(args []Arg) (Call, bool) {
 	switch command {
 	case "pr merge":
 		c.DisableAuto = boolValue(fs, "disable-auto")
+	case "pr create":
+		c.DryRun = boolValue(fs, "dry-run")
+		c.Published = commandPublished(command, fs)
 	case "api":
 		c.Method, c.Endpoint = apiTarget(fs)
 		if c.Method != http.MethodGet {

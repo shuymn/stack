@@ -177,6 +177,26 @@ func TestPreToolUseRegressions(t *testing.T) {
 			map[string]any{"pattern": "KEY", "path": ".dev.vars", "glob": "!*.md"},
 			"secrets",
 		},
+		{
+			"gh api help merges nothing", "Bash",
+			map[string]any{"command": "gh api --help -X PUT repos/o/r/pulls/1/merge"},
+			"",
+		},
+		{
+			"gh pr create help publishes nothing", "Bash",
+			map[string]any{"command": "gh pr create -h --body '" + home + "/x'"},
+			"",
+		},
+		{
+			"gh pr create dry run publishes nothing", "Bash",
+			map[string]any{"command": "gh pr create --dry-run -t t --body '" + home + "/x'"},
+			"",
+		},
+		{
+			"gh pr create dry run turned off publishes", "Bash",
+			map[string]any{"command": "gh pr create --dry-run=false -t t --body '" + home + "/x'"},
+			"gh-publish",
+		},
 	}
 	for _, tt := range tests {
 		r := runHookStdin(t, t.TempDir(), payload(t, t.TempDir(), tt.tool, tt.input))

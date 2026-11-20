@@ -328,7 +328,8 @@ missing from the table (a newer gh) makes pflag stop with an unknown-flag error;
 published input collected before the error has a hit, and otherwise every remaining word is scanned as literal text
 for local paths, so parsing never silently stops before a later guarded input. Help is effective when `-h`/`--help`
 parses as a true boolean flag (`-h=false` and `--help=false` are not help); `--disable-auto` likewise
-(`--disable-auto=false` merges). `gh api` method: `-X/--method` value, else `POST` when any field or
+(`--disable-auto=false` merges). An effective help skips every rule for that call (gh only prints help), and an
+effective `pr create --dry-run` skips its publish inputs (gh prints the pull request and returns before creating it). `gh api` method: `-X/--method` value, else `POST` when any field or
 `--input` is given, else `GET`.
 
 | gh command (aliases) | Published inputs | File / stdin inputs |

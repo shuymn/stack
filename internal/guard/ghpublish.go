@@ -12,6 +12,9 @@ const publishAdvice = "Use repository-relative paths or leave the path out."
 // words from the failing one on are scanned as text.
 func ghPublish(calls []ghCall, opts Options) (Decision, bool) {
 	for _, c := range calls {
+		if c.gh.Help || c.gh.DryRun { // gh shows help or a preview and publishes nothing
+			continue
+		}
 		for _, in := range c.gh.Published {
 			text, ok := readInput(in, c.call, opts.Home)
 			if !ok {

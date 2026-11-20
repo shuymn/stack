@@ -19,9 +19,12 @@ var mergeFields = map[string]bool{"mergePullRequest": true, "enablePullRequestAu
 // selecting a merge field. A query gqlparser cannot parse is not judged.
 func rawMerge(calls []ghCall, opts Options) (Decision, bool) {
 	for _, c := range calls {
+		if c.gh.Help { // gh shows help and runs nothing
+			continue
+		}
 		switch c.gh.Command {
 		case "pr merge":
-			if !c.gh.Help && !c.gh.DisableAuto {
+			if !c.gh.DisableAuto {
 				return deny(RuleRawMerge, "gh pr merge is not run directly. %s", mergeAdvice)
 			}
 		case "api":
