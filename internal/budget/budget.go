@@ -22,9 +22,6 @@ import (
 )
 
 const (
-	// stateLimit is the size in bytes past which a state file gets a note; it matches the rewrite
-	// note of the kit renderer.
-	stateLimit = 3000
 	// roleAll is the role whose items apply to every role; they are counted in their own column.
 	roleAll = "all"
 	// unknown fills a cell whose value could not be read.
@@ -34,9 +31,6 @@ const (
 	// gap is the number of spaces between table columns.
 	gap = 2
 )
-
-// stateFiles are the kit files whose sizes are shown, in column order.
-var stateFiles = []string{"NORTH.md", "state.md"}
 
 // Options selects what Status reads.
 type Options struct {
@@ -60,12 +54,14 @@ type kitRow struct {
 	notes  []string
 }
 
-// Status writes the table of every kit under o.Root to w, or "no kits" when there is none. Only a
-// kit root that exists but cannot be listed is an error; sizes never are.
+// Status writes the table of every kit under o.Root to w, or "no kits" when there is none. It is
+// display only: a kit root that cannot be listed is shown with its reason, and only a failed write
+// is an error.
 func Status(ctx context.Context, w io.Writer, o Options) error {
 	slugs, err := listKits(o.Root)
 	if err != nil {
-		return err
+		_, err := fmt.Fprintf(w, "kit root: %s\ncannot list kits: %v\n", o.Root, err)
+		return wrapWrite(err)
 	}
 	if len(slugs) == 0 {
 		_, err := fmt.Fprintln(w, "no kits")
@@ -94,7 +90,7 @@ func listKits(root string) ([]string, error) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("kit root: %w", err)
+		return nil, fmt.Errorf("read kit root: %w", err)
 	}
 	var slugs []string
 	for _, e := range entries {
@@ -131,32 +127,33 @@ func readKit(dir, slug string) kitRow {
 	root, err := os.OpenRoot(dir)
 	if err != nil {
 		row.notes = append(row.notes, slug+" is unreadable")
-		for range stateFiles {
+		for range kit.StateFiles {
 			row.sizes = append(row.sizes, unknown)
 		}
 		return row
 	}
 	defer func() { _ = root.Close() }()
 
-	for _, name := range stateFiles {
-		data, err := root.ReadFile(name)
+	for _, name := range kit.StateFiles {
+		info, err := kit.Stat(root, name)
 		switch {
-		case errors.Is(err, fs.ErrNotExist):
-			if _, lerr := root.Lstat(name); errors.Is(lerr, fs.ErrNotExist) {
-				row.sizes = append(row.sizes, absent)
-				continue
-			}
-			fallthrough // a dangling symlink exists but cannot be read
+		case errors.Is(err, kit.ErrMissing):
+			row.sizes = append(row.sizes, absent)
+			continue
 		case err != nil:
 			row.sizes = append(row.sizes, unknown)
 			row.notes = append(row.notes, slug+"/"+name+" is unreadable")
 			continue
+		case !info.Mode().IsRegular():
+			row.sizes = append(row.sizes, unknown)
+			row.notes = append(row.notes, slug+"/"+name+" is not a regular file")
+			continue
 		}
-		n := len(data)
-		row.sizes = append(row.sizes, strconv.Itoa(n))
-		if n > stateLimit {
+		n := info.Size()
+		row.sizes = append(row.sizes, strconv.FormatInt(n, 10))
+		if n > kit.StateLimit {
 			row.notes = append(row.notes,
-				fmt.Sprintf("%s/%s is %d bytes, over %d", slug, name, n, stateLimit))
+				fmt.Sprintf("%s/%s is %d bytes, over %d", slug, name, n, kit.StateLimit))
 		}
 	}
 	row.counts, row.notes = countItems(root, slug, row.notes)
@@ -168,14 +165,11 @@ func readKit(dir, slug string) kitRow {
 // are no caps here). A missing file counts nothing; an unreadable or malformed one yields nil
 // counts and a note.
 func countItems(root *os.Root, slug string, notes []string) (map[string]int, []string) {
-	rel := filepath.Join("attention", "items.json")
-	label := slug + "/attention/items.json"
+	label := slug + "/" + filepath.ToSlash(kit.ItemsFile)
 	counts := map[string]int{}
-	data, err := root.ReadFile(rel)
-	if errors.Is(err, fs.ErrNotExist) {
-		if _, lerr := root.Lstat(rel); errors.Is(lerr, fs.ErrNotExist) {
-			return counts, notes
-		}
+	data, err := kit.ReadFile(root, kit.ItemsFile)
+	if errors.Is(err, kit.ErrMissing) {
+		return counts, notes
 	}
 	if err != nil {
 		return nil, append(notes, label+" is unreadable")
@@ -218,7 +212,7 @@ func write(w io.Writer, root string, rows []kitRow) error {
 	var b strings.Builder
 	b.WriteString("kit root: " + root + "\n")
 	tw := tabwriter.NewWriter(&b, 0, 0, gap, ' ', 0)
-	header := append([]string{"  kit"}, stateFiles...)
+	header := append([]string{"  kit"}, kit.StateFiles...)
 	for _, role := range roles {
 		header = append(header, cell(role))
 	}

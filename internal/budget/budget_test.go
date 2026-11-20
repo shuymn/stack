@@ -54,7 +54,11 @@ func TestStatus(t *testing.T) {
 		writeFile(t, filepath.Join(root, "beta", "state.md"), "")
 		writeFile(t, filepath.Join(root, "beta", "attention", "items.json"),
 			`{"items": [{"role": "all"}, {"role": "all"}]}`)
-		// gamma: malformed items; exactly 3,000 bytes is not over.
+		// gamma: a NORTH.md that is not a regular file; malformed items; exactly 3,000 bytes is
+		// not over.
+		if err := os.MkdirAll(filepath.Join(root, "gamma", "NORTH.md"), 0o700); err != nil {
+			t.Fatal(err)
+		}
 		writeFile(t, filepath.Join(root, "gamma", "state.md"), strings.Repeat("g", 3000))
 		writeFile(t, filepath.Join(root, "gamma", "attention", "items.json"), `{"items": [`)
 		// Neither a file nor an invalid slug is a kit.
@@ -74,9 +78,10 @@ func TestStatus(t *testing.T) {
 			"  kit    NORTH.md  state.md  orchestrator  worker  all\n" +
 			"* alpha  9         3001      2             1       1\n" +
 			"  beta   -         0         0             0       2\n" +
-			"  gamma  -         3000      ?             ?       ?\n" +
+			"  gamma  ?         3000      ?             ?       ?\n" +
 			"* open in this session\n" +
 			"note: alpha/state.md is 3001 bytes, over 3000\n" +
+			"note: gamma/NORTH.md is not a regular file\n" +
 			"note: gamma/attention/items.json is not valid JSON\n"
 		if err != nil || out != want || errOut != "" {
 			t.Errorf("Status = %q, %q, %v\nwant %q", out, errOut, err, want)
@@ -122,8 +127,10 @@ func TestStatus(t *testing.T) {
 		t.Parallel()
 		root := filepath.Join(t.TempDir(), "kits")
 		writeFile(t, root, "not a dir")
-		if out, _, err := status(t, root, t.TempDir(), ""); err == nil || out != "" {
-			t.Errorf("Status = %q, %v, want an error", out, err)
+		// Display only: the reason is shown and Status does not fail.
+		out, _, err := status(t, root, t.TempDir(), "")
+		if err != nil || !strings.HasPrefix(out, "kit root: "+root+"\ncannot list kits: ") {
+			t.Errorf("Status = %q, %v, want the reason and no error", out, err)
 		}
 	})
 }

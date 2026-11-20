@@ -35,16 +35,37 @@ func TestBudgetStatus(t *testing.T) {
 		t.Errorf("oversized = %+v\nwant %q", r, want)
 	}
 
-	// An invalid session id only costs the marks.
+	// An invalid session id only costs the marks and the legend.
 	r = runIn(t, home, map[string]string{"STACK_SESSION_ID": "a/b"}, "budget", "status")
-	if r.code != exitOK || strings.Contains(r.stdout, "*") ||
+	want = "kit root: " + root + "\n" +
+		"  kit   NORTH.md  state.md  all\n" +
+		"  demo  -         5000      0\n" +
+		"note: demo/state.md is 5000 bytes, over 3000\n"
+	if r.code != exitOK || r.stdout != want ||
 		!strings.Contains(r.stderr, "session kits are not marked") {
-		t.Errorf("invalid id = %+v", r)
+		t.Errorf("invalid id = %+v\nwant %q", r, want)
 	}
 
-	// A broken config is an error (exit 2).
+	// A kit root that cannot be listed is shown with its reason, exit 0.
+	file := filepath.Join(t.TempDir(), "kits")
+	writeFile(t, file, []byte("not a dir"))
+	writeFile(t, filepath.Join(home, ".config", "stack", "config.toml"),
+		[]byte("version = 1\n[kit]\nroot = "+strconv.Quote(file)+"\n"))
+	r = runIn(t, home, nil, "budget", "status")
+	if r.code != exitOK || !strings.HasPrefix(r.stdout, "kit root: "+file+"\ncannot list kits: ") {
+		t.Errorf("unlistable root = %+v", r)
+	}
+
+	// A broken config is a warning; the default kit root is shown, exit 0.
 	writeFile(t, filepath.Join(home, ".config", "stack", "config.toml"), []byte("version = \n"))
-	if r := runIn(t, home, nil, "budget", "status"); r.code != exitUsage || r.stdout != "" {
-		t.Errorf("broken config = %+v", r)
+	writeFile(t, filepath.Join(home, ".local", "state", "stack", "kits", "dflt", "NORTH.md"),
+		[]byte("n\n"))
+	r = runIn(t, home, nil, "budget", "status")
+	want = "kit root: " + filepath.Join(home, ".local", "state", "stack", "kits") + "\n" +
+		"  kit   NORTH.md  state.md  all\n" +
+		"  dflt  2         -         0\n"
+	if r.code != exitOK || r.stdout != want ||
+		!strings.Contains(r.stderr, "using the default kit root") {
+		t.Errorf("broken config = %+v\nwant %q", r, want)
 	}
 }
