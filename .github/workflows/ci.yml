@@ -41,14 +41,22 @@ jobs:
         if: runner.os != 'Windows'
         run: mise exec -- bash scripts/test
 
-      - name: Build and test (Windows)
+      # One command per step: a multi-line pwsh script reports only its last command's exit code.
+      - name: Vet (Windows)
         if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          mise exec -- go vet ./...
-          mise exec -- go test -race ./...
-          mise exec -- go build -o stack.exe ./cmd/stack
-          ./stack.exe --version
+        run: mise exec -- go vet ./...
+
+      - name: Test (Windows)
+        if: runner.os == 'Windows'
+        run: mise exec -- go test -race ./...
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: mise exec -- go build -o stack.exe ./cmd/stack
+
+      - name: Run (Windows)
+        if: runner.os == 'Windows'
+        run: ./stack.exe --version
 
   check:
     name: Check
