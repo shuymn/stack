@@ -87,13 +87,13 @@ outside the kit dir is no longer followed (legacy read it) and renders as an unr
 | Session kits | `~/.local/state/stack/sessions/<id>.kits` + `<id>.lock`; no config key, no GC (files are tiny) |
 | Improve stamp | `~/.local/state/stack/improve/YYYY-Www` (Phase 3; not used in core) |
 
-- `Expand(p)`: only `~`, `~/…`, `~\…` expand with `Home`; `~user` is left verbatim. Result is `filepath.Clean`ed.
+- `Expand(p)`: only `~`, `~/…`, `~\…` expand with `Home`; `~user` is left verbatim.
   Config values use this form only. Shell words carry whether their leading `~` was unquoted (§4.3): only an unquoted
   one expands, as in bash; `'~'` names a directory called `~`.
 - `Resolve(cwd, p)`: `Expand` (when allowed), then on Windows the Git Bash forms are mapped **before** any
   `filepath.IsAbs` call (which would treat a Git Bash `/` as relative to the current drive): `/` is the Git Bash root, which is not a drive root and is not translated: `Resolve` returns it as the
   marker `ShellRoot` (rmroot treats it as a root; file reads under it are unknown and skipped). `/<drive>` and
-  `/<drive>/…` → `<drive>:\…`; finally a relative path is joined to `cwd` and Cleaned. After `cd /` the known cwd is
+  `/<drive>/…` → `<drive>:\…`; finally a relative path is joined to `cwd`; a Windows drive-relative `C:x` is unknown. Neither function removes `..` lexically, because past a symlink that would name another file; only `Norm` cleans, for comparison. After `cd /` the known cwd is
   unknown on Windows.
   `check public` file arguments use the same function, so the `/c/…` and `~` forms Git Bash passes open the real file.
 - `Same(a, b)` / `Within(p, root)` / `HasComponent(p, name)`: compare slash-normalised paths **by component**, so

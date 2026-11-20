@@ -32,6 +32,9 @@ func TestHome(t *testing.T) {
 	}
 }
 
+// sep is the OS separator as a string, for expected values built without cleaning.
+const sep = string(filepath.Separator)
+
 func TestExpand(t *testing.T) {
 	home := t.TempDir()
 	tests := []struct {
@@ -39,14 +42,14 @@ func TestExpand(t *testing.T) {
 	}{
 		{"~", home},
 		{"~/", home},
-		{"~/x/../y", filepath.Join(home, "y")},
-		{`~\x`, filepath.Join(home, "x")},
-		{"~/.config/stack/config.toml", filepath.Join(home, ".config", "stack", "config.toml")},
+		{"~/x/../y", home + sep + "x/../y"},
+		{`~\x`, home + sep + "x"},
+		{"~/.config/stack/config.toml", home + sep + ".config/stack/config.toml"},
 		{"~user", "~user"},
-		{"~user/x", filepath.Clean("~user/x")},
-		{"x/~", filepath.Clean("x/~")},
+		{"~user/x", "~user/x"},
+		{"x/~", "x/~"},
 		{".dev.vars", ".dev.vars"},
-		{"a//b/", filepath.Clean("a/b")},
+		{"a//b/", "a//b/"},
 	}
 	for _, tt := range tests {
 		if got := Expand(home, tt.in); got != tt.want {
@@ -66,17 +69,17 @@ func TestResolve(t *testing.T) {
 		want   string
 		ok     bool
 	}{
-		{"relative joined to cwd", cwd, "a/../b", false, filepath.Join(cwd, "b"), true},
-		{"tilde expanded", cwd, "~/x", true, filepath.Join(home, "x"), true},
+		{"relative joined to cwd", cwd, "a/../b", false, cwd + sep + "a/../b", true},
+		{"tilde expanded", cwd, "~/x", true, home + sep + "x", true},
 		{"bare tilde expanded", cwd, "~", true, home, true},
-		{"quoted tilde is a name", cwd, "~", false, filepath.Join(cwd, "~"), true},
-		{"tilde user is a name", cwd, "~user", true, filepath.Join(cwd, "~user"), true},
+		{"quoted tilde is a name", cwd, "~", false, cwd + sep + "~", true},
+		{"tilde user is a name", cwd, "~user", true, cwd + sep + "~user", true},
 		{
-			"absolute kept",
+			"absolute kept as written",
 			"",
-			filepath.Join(home, "a", "..", "b"),
+			home + sep + ".." + sep + "b",
 			false,
-			filepath.Join(home, "b"),
+			home + sep + ".." + sep + "b",
 			true,
 		},
 		{"relative with unknown cwd", "", "x", false, "", false},
@@ -129,18 +132,77 @@ func TestResolveWindowsGitBash(t *testing.T) {
 		t.Fatalf("ReadFile(Resolve(%q) = %q) = %q, %v", gitBash, got, data, err)
 	}
 
-	for _, in := range []string{"/", "/./", "/c/.."} {
+	for _, in := range []string{"/", "/./", "/usr/.."} {
 		if got, ok := Resolve("", dir, in, false); got != ShellRoot || !ok {
 			t.Errorf("Resolve(%q) = %q, %v; want ShellRoot", in, got, ok)
 		}
 	}
-	for _, in := range []string{"/usr/bin", `\x`} {
+	for _, in := range []string{"/usr/bin", `\x`, "C:body.txt"} {
 		if got, ok := Resolve("", dir, in, false); ok {
 			t.Errorf("Resolve(%q) = %q, ok; want unknown", in, got)
 		}
 	}
 	if got, ok := Resolve("", dir, "/c", false); got != `C:\` || !ok {
 		t.Errorf("Resolve(/c) = %q, %v; want C:\\", got, ok)
+	}
+}
+
+// TestResolveKeepsComponents opens the resolved path: lexical `..` removal would skip the symlink
+// and name a different file.
+func TestResolveKeepsComponents(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "real")
+	if err := os.MkdirAll(filepath.Join(target, "sub"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "f.txt"), []byte("real"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte("decoy"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(target, "sub"), filepath.Join(dir, "link")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	for _, in := range []string{"link/../f.txt", filepath.Join(dir, "link") + sep + ".." + sep + "f.txt"} {
+		got, ok := Resolve("", dir, in, false)
+		if !ok {
+			t.Fatalf("Resolve(%q) not ok", in)
+		}
+		data, err := os.ReadFile(got)
+		if err != nil || string(data) != "real" {
+			t.Errorf("ReadFile(Resolve(%q) = %q) = %q, %v; want real", in, got, data, err)
+		}
+	}
+}
+
+func TestResolveRules(t *testing.T) {
+	tests := []struct {
+		windows bool
+		cwd, in string
+		want    string
+		ok      bool
+	}{
+		{false, "/w", "/var/../usr/bin/true", "/var/../usr/bin/true", true},
+		{false, "/w/", "x", "/w/x", true},
+		{false, "/w", `C:\x`, `/w/C:\x`, true},
+		{true, `C:\w`, "C:body.txt", "", false},
+		{true, `C:\w`, "c:", "", false},
+		{true, `C:\w`, `\x`, "", false},
+		{true, `C:\w`, `x\..\y`, `C:\w\x\..\y`, true},
+		{true, `C:\w`, `D:\a\..\b`, `D:\a\..\b`, true},
+		{true, `C:\w`, "C:/a", "C:/a", true},
+		{true, `C:\w`, `\\host\share\x`, `\\host\share\x`, true},
+		{true, `C:\w`, "/c/a/../b", `C:\a\..\b`, true},
+		{true, `C:\w`, "/", ShellRoot, true},
+		{true, ShellRoot, "x", "", false},
+	}
+	for _, tt := range tests {
+		got, ok := resolve("", tt.cwd, tt.in, false, tt.windows)
+		if got != tt.want || ok != tt.ok {
+			t.Errorf("resolve(windows=%v, %q, %q) = %q, %v; want %q, %v",
+				tt.windows, tt.cwd, tt.in, got, ok, tt.want, tt.ok)
+		}
 	}
 }
 
@@ -154,7 +216,9 @@ func TestGitBashToWindows(t *testing.T) {
 		{"/./", ShellRoot, gitBashRoot},
 		{"/c", `C:\`, gitBashDrive},
 		{"/c/", `C:\`, gitBashDrive},
-		{"/D/a/b/../c", `D:\a\c`, gitBashDrive},
+		{"/D/a/b/../c", `D:\a\b\..\c`, gitBashDrive},
+		{"/c/..", `C:\..`, gitBashDrive},
+		{"/usr/..", ShellRoot, gitBashRoot},
 		{"/usr/bin", "", gitBashUnknown},
 		{"/1/x", "", gitBashUnknown},
 		{"//server/share", "", gitBashNone},
@@ -218,6 +282,20 @@ func TestCompare(t *testing.T) {
 		}
 		if within(norm(`C:\a`, true, true), norm(`C:\`, true, true)) != true {
 			t.Fatal(`C:\a not within C:\`)
+		}
+		for _, c := range []struct {
+			p, root string
+			want    bool
+		}{
+			{"//host/share/../x", "//host/share", true},
+			{`\\host\share\..\..\x`, `\\host\share`, true},
+			{"//host/share2/x", "//host/share", false},
+			{"//host/x", "//host/share", false},
+			{"C:/../x", "C:/", true},
+		} {
+			if got := within(norm(c.p, true, true), norm(c.root, true, true)); got != c.want {
+				t.Errorf("windows within(%q, %q) = %v, want %v", c.p, c.root, got, c.want)
+			}
 		}
 		if got := norm(`\\server\share\x\..`, true, false); got != "//server/share" {
 			t.Fatalf("UNC norm = %q", got)

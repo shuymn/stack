@@ -43,45 +43,88 @@ func Home() (string, error) {
 	return home, nil
 }
 
-// Expand replaces a leading `~`, `~/` or `~\` with home and cleans the result. `~user` and every
-// other form are returned cleaned but otherwise verbatim.
+// Expand replaces a leading `~`, `~/` or `~\` with home. `~user` and every other form are returned
+// verbatim. Components are kept as written: no lexical `..` removal, which could change the file
+// opened through a symlink.
 func Expand(home, p string) string {
+	return expand(home, p, isWindows)
+}
+
+func expand(home, p string, windows bool) string {
 	switch {
 	case p == "~":
-		return filepath.Clean(home)
+		return home
 	case strings.HasPrefix(p, "~/"), strings.HasPrefix(p, `~\`):
-		return filepath.Join(home, p[2:])
+		return join(home, p[2:], windows)
 	default:
-		return filepath.Clean(p)
+		return p
 	}
 }
 
-// Resolve turns p into an absolute, cleaned path, joining a relative p to cwd. A leading `~` is
-// expanded only when expand is true (an unquoted shell word or a config value). On Windows the Git
-// Bash forms are mapped first: `/` becomes ShellRoot and `/<drive>[/…]` becomes `<drive>:\…`.
-// ok is false when the result is unknown: a relative p with an empty or ShellRoot cwd, or, on
-// Windows, a path under the Git Bash root other than a drive, or one rooted on the current drive.
+// Resolve turns p into an absolute path for opening, joining a relative p to cwd. A leading `~` is
+// expanded only when expand is true (an unquoted shell word or a config value). Components are kept
+// as written (no lexical `..` removal); Norm cleans for comparison. On Windows the Git Bash forms
+// are mapped first: `/` becomes ShellRoot and `/<drive>[/…]` becomes `<drive>:\…`. ok is false when
+// the result is unknown: a relative p with an empty or ShellRoot cwd, or, on Windows, a path under
+// the Git Bash root other than a drive, one rooted on the current drive (`\x`), or a drive-relative
+// one (`C:x`).
 func Resolve(home, cwd, p string, expand bool) (string, bool) {
-	if expand {
-		if p == "~" || strings.HasPrefix(p, "~/") || strings.HasPrefix(p, `~\`) {
-			return Expand(home, p), true
-		}
+	return resolve(home, cwd, p, expand, isWindows)
+}
+
+func resolve(home, cwd, p string, doExpand, windows bool) (string, bool) {
+	if doExpand && (p == "~" || strings.HasPrefix(p, "~/") || strings.HasPrefix(p, `~\`)) {
+		return expand(home, p, windows), true
 	}
-	if isWindows {
+	if windows {
 		if mapped, kind := gitBashToWindows(p); kind != gitBashNone {
 			return mapped, kind != gitBashUnknown
 		}
-		if (strings.HasPrefix(p, `\`) || strings.HasPrefix(p, "/")) && !filepath.IsAbs(p) {
+		if !isAbs(p, true) &&
+			(hasDrive(p) || strings.HasPrefix(p, `\`) || strings.HasPrefix(p, "/")) {
 			return "", false
 		}
 	}
-	if filepath.IsAbs(p) {
-		return filepath.Clean(p), true
+	if isAbs(p, windows) {
+		return p, true
 	}
 	if cwd == "" || cwd == ShellRoot {
 		return "", false
 	}
-	return filepath.Join(cwd, p), true
+	return join(cwd, p, windows), true
+}
+
+// isAbs is filepath.IsAbs for the given OS, so both rule sets are testable everywhere.
+func isAbs(p string, windows bool) bool {
+	if !windows {
+		return strings.HasPrefix(p, "/")
+	}
+	if hasDrive(p) {
+		return len(p) > 2 && isSep(p[2], true)
+	}
+	return len(p) > 1 && isSep(p[0], true) && isSep(p[1], true) // UNC or \\?\
+}
+
+func hasDrive(p string) bool {
+	return len(p) >= 2 && p[1] == ':' && isASCIILetter(p[0])
+}
+
+func isSep(c byte, windows bool) bool {
+	return c == '/' || (windows && c == '\\')
+}
+
+// join appends rel to base with one separator and no cleaning.
+func join(base, rel string, windows bool) string {
+	switch {
+	case rel == "":
+		return base
+	case base != "" && isSep(base[len(base)-1], windows):
+		return base + rel
+	case windows:
+		return base + `\` + rel
+	default:
+		return base + "/" + rel
+	}
 }
 
 type gitBashKind int
@@ -93,52 +136,68 @@ const (
 	gitBashUnknown
 )
 
-// gitBashToWindows maps a Git Bash absolute path (forward slash, not `//`) to its Windows form.
-// It is pure string logic so it is testable on every OS.
+// gitBashToWindows maps a Git Bash absolute path (forward slash, not `//`) to its Windows form,
+// keeping the components after the drive as written. It is pure string logic so it is testable on
+// every OS.
 func gitBashToWindows(p string) (string, gitBashKind) {
 	if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") {
 		return "", gitBashNone
 	}
-	clean := path.Clean(p)
-	if clean == "/" {
+	first, rest, _ := strings.Cut(p[1:], "/")
+	if len(first) == 1 && isASCIILetter(first[0]) {
+		return strings.ToUpper(first) + `:\` + strings.ReplaceAll(rest, "/", `\`), gitBashDrive
+	}
+	if path.Clean(p) == "/" {
 		return ShellRoot, gitBashRoot
 	}
-	first, rest, _ := strings.Cut(clean[1:], "/")
-	if len(first) != 1 || !isASCIILetter(first[0]) {
-		return "", gitBashUnknown
-	}
-	return strings.ToUpper(first) + `:\` + strings.ReplaceAll(rest, "/", `\`), gitBashDrive
+	return "", gitBashUnknown
 }
 
 func isASCIILetter(c byte) bool {
 	return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z')
 }
 
-// Norm returns p cleaned with `/` separators, case-folded where the platform file system is
-// case-insensitive by default (darwin, windows). Backslash is a separator only on Windows.
+// Norm returns p lexically cleaned with `/` separators, case-folded where the platform file system
+// is case-insensitive by default (darwin, windows). On Windows backslash is a separator too, and the
+// volume (`C:` or `//host/share`) is kept whole so `..` never climbs out of it.
 func Norm(p string) string {
 	return norm(p, isWindows, foldCase)
 }
 
 func norm(p string, windows, fold bool) string {
+	var vol string
 	if windows {
 		p = strings.ReplaceAll(p, `\`, "/")
-	}
-	var lead, vol string
-	if windows && strings.HasPrefix(p, "//") {
-		lead = "/" // UNC: path.Clean would collapse the leading `//`
-	}
-	if windows && len(p) >= 2 && p[1] == ':' && isASCIILetter(p[0]) {
-		vol, p = p[:2], p[2:]
+		vol = windowsVolume(p)
+		p = p[len(vol):]
 	}
 	if p != "" {
 		p = path.Clean(p)
 	}
-	s := lead + vol + p
+	if p == "/" && strings.HasPrefix(vol, "//") {
+		p = "" // `//host/share/` and `//host/share` name the same share root
+	}
+	s := vol + p
 	if fold {
 		s = strings.ToLower(s)
 	}
 	return s
+}
+
+// windowsVolume returns the volume of a slash-separated Windows path: `C:`, `//host/share`, or "".
+func windowsVolume(p string) string {
+	if hasDrive(p) {
+		return p[:2]
+	}
+	if len(p) < 3 || !strings.HasPrefix(p, "//") || p[2] == '/' {
+		return ""
+	}
+	host, rest, ok := strings.Cut(p[2:], "/")
+	if !ok {
+		return p
+	}
+	share, _, _ := strings.Cut(rest, "/")
+	return "//" + host + "/" + share
 }
 
 // Same reports whether a and b name the same path after Norm.
