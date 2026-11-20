@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"slices"
 
 	"github.com/BurntSushi/toml"
 )
@@ -32,14 +33,14 @@ type Config struct {
 
 // Kit is the `[kit]` table.
 type Kit struct {
-	Root string `toml:"root"`
+	Root string
 }
 
 // Worker is the `[worker]` table.
 type Worker struct {
-	AgentTypes []string `toml:"agent_types"`
-	Marker     string   `toml:"marker"`
-	Body       string   `toml:"body"`
+	AgentTypes []string
+	Marker     string
+	Body       string
 }
 
 // HandoverEntry is one `ENV_VAR = "path"` line of `[handover]`.
@@ -50,16 +51,16 @@ type HandoverEntry struct {
 
 // Safety is the `[safety]` table.
 type Safety struct {
-	Secrets            []string `toml:"secrets"`
-	PrivateTerms       string   `toml:"private_terms"`
-	DenyPencilGenerate bool     `toml:"deny_pencil_generate"`
+	Secrets            []string
+	PrivateTerms       string
+	DenyPencilGenerate bool
 }
 
 // Stages is the `[stages]` table: extension names per stage.
 type Stages struct {
-	Entry    []string `toml:"entry"`
-	Outbound []string `toml:"outbound"`
-	Cycle    []string `toml:"cycle"`
+	Entry    []string
+	Outbound []string
+	Cycle    []string
 }
 
 // Defaults returns the §5 defaults. Each call returns fresh slices.
@@ -89,20 +90,19 @@ func Defaults() Config {
 	}
 }
 
-// file mirrors the TOML layout; `[handover]` is a map whose order comes from MetaData.Keys.
-type file struct {
-	Version  int               `toml:"version"`
-	Kit      Kit               `toml:"kit"`
-	Worker   Worker            `toml:"worker"`
-	Handover map[string]string `toml:"handover"`
-	Safety   Safety            `toml:"safety"`
-	Stages   Stages            `toml:"stages"`
+// section is one TOML table with its values left undecoded, at path. Map keys keep their exact
+// case, so each schema key is looked up exactly; BurntSushi's struct decoding would also accept
+// `ROOT` for `root`.
+type section struct {
+	path toml.Key
+	m    map[string]toml.Primitive
 }
 
-// Load reads the config at path over the defaults. A missing file yields the defaults. Unknown keys
-// are returned as warnings, one per key. A syntax error cites the file and line, an unsupported
-// version cites the file and the key `version`; both wrap ErrInvalid. Arrays replace defaults, and
-// a `[handover]` table replaces the default entries.
+// Load reads the config at path over the defaults. A missing file yields the defaults. Unknown keys,
+// including case variants of known ones, are ignored and returned as warnings, one per key. A syntax
+// or type error cites the file and line, an unsupported version cites the file and the key
+// `version`; both wrap ErrInvalid. Arrays replace defaults, and a `[handover]` table replaces the
+// default entries.
 func Load(path string) (Config, []string, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -112,15 +112,8 @@ func Load(path string) (Config, []string, error) {
 		return Config{}, nil, fmt.Errorf("%w: %w", ErrInvalid, err)
 	}
 
-	def := Defaults()
-	f := file{
-		Version: def.Version,
-		Kit:     def.Kit,
-		Worker:  def.Worker,
-		Safety:  def.Safety,
-		Stages:  def.Stages,
-	}
-	md, err := toml.Decode(string(data), &f)
+	var top section
+	md, err := toml.Decode(string(data), &top.m)
 	if err != nil {
 		if pe, ok := errors.AsType[toml.ParseError](err); ok {
 			return Config{}, nil, fmt.Errorf(
@@ -133,36 +126,81 @@ func Load(path string) (Config, []string, error) {
 		}
 		return Config{}, nil, fmt.Errorf("%w: %s: %w", ErrInvalid, path, err)
 	}
-	if f.Version != SupportedVersion {
+
+	cfg := Defaults()
+	d := decoder{md: &md, known: map[string]bool{}}
+	d.field(top, "version", &cfg.Version)
+	if d.err == nil && cfg.Version != SupportedVersion {
 		return Config{}, nil, fmt.Errorf("%w: %s: key version: unsupported value %d (want %d)",
-			ErrInvalid, path, f.Version, SupportedVersion)
+			ErrInvalid, path, cfg.Version, SupportedVersion)
 	}
 
-	cfg := Config{
-		Version:  f.Version,
-		Kit:      f.Kit,
-		Worker:   f.Worker,
-		Handover: def.Handover,
-		Safety:   f.Safety,
-		Stages:   f.Stages,
-	}
-	if md.IsDefined("handover") {
+	kit := d.section(top, "kit")
+	d.field(kit, "root", &cfg.Kit.Root)
+
+	worker := d.section(top, "worker")
+	d.field(worker, "agent_types", &cfg.Worker.AgentTypes)
+	d.field(worker, "marker", &cfg.Worker.Marker)
+	d.field(worker, "body", &cfg.Worker.Body)
+
+	if handover := d.section(top, "handover"); handover.m != nil {
 		cfg.Handover = []HandoverEntry{}
 		for _, k := range md.Keys() {
 			if len(k) == 2 && k[0] == "handover" {
-				cfg.Handover = append(
-					cfg.Handover,
-					HandoverEntry{Env: k[1], Path: f.Handover[k[1]]},
-				)
+				e := HandoverEntry{Env: k[1]}
+				d.field(handover, k[1], &e.Path)
+				cfg.Handover = append(cfg.Handover, e)
 			}
 		}
 	}
 
+	safety := d.section(top, "safety")
+	d.field(safety, "secrets", &cfg.Safety.Secrets)
+	d.field(safety, "private_terms", &cfg.Safety.PrivateTerms)
+	d.field(safety, "deny_pencil_generate", &cfg.Safety.DenyPencilGenerate)
+
+	stages := d.section(top, "stages")
+	d.field(stages, "entry", &cfg.Stages.Entry)
+	d.field(stages, "outbound", &cfg.Stages.Outbound)
+	d.field(stages, "cycle", &cfg.Stages.Cycle)
+
+	if d.err != nil {
+		return Config{}, nil, fmt.Errorf("%w: %s: %w", ErrInvalid, path, d.err)
+	}
+
 	var warnings []string
-	for _, k := range md.Undecoded() {
-		warnings = append(warnings, fmt.Sprintf("%s: unknown key %s", path, k.String()))
+	for _, k := range md.Keys() {
+		if !d.known[k.String()] {
+			warnings = append(warnings, fmt.Sprintf("%s: unknown key %s", path, k.String()))
+		}
 	}
 	return cfg, warnings, nil
+}
+
+// decoder decodes exact schema keys, records them as known, and keeps the first error.
+type decoder struct {
+	md    *toml.MetaData
+	known map[string]bool
+	err   error
+}
+
+// field decodes s[key] into dst when the key exists with exactly that case.
+func (d *decoder) field(s section, key string, dst any) {
+	p, ok := s.m[key]
+	if !ok || d.err != nil {
+		return
+	}
+	d.known[append(slices.Clip(s.path), key).String()] = true
+	if err := d.md.PrimitiveDecode(p, dst); err != nil {
+		d.err = err
+	}
+}
+
+// section returns the table under key; its map is nil when the key is absent.
+func (d *decoder) section(s section, key string) section {
+	sub := section{path: append(slices.Clip(s.path), key)}
+	d.field(s, key, &sub.m)
+	return sub
 }
 
 // LoadForHook is Load for hook commands, which never fail: any error yields the defaults, so a

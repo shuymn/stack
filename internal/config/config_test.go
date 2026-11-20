@@ -172,6 +172,39 @@ entry = []
 	}
 }
 
+func TestLoadExactKeys(t *testing.T) {
+	p := writeConfig(t, `VERSION = 2
+
+[kit]
+ROOT = "scratch"
+
+[safety]
+deny_pencil_generate = true
+Deny_Pencil_Generate = false
+
+[Stages]
+entry = []
+`)
+	cfg, warnings, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(cfg, want5()) {
+		t.Fatalf("Load =\n%+v\nwant §5 defaults", cfg)
+	}
+	slices.Sort(warnings)
+	want := []string{
+		p + ": unknown key Stages",
+		p + ": unknown key Stages.entry",
+		p + ": unknown key VERSION",
+		p + ": unknown key kit.ROOT",
+		p + ": unknown key safety.Deny_Pencil_Generate",
+	}
+	if !slices.Equal(warnings, want) {
+		t.Fatalf("warnings = %q, want %q", warnings, want)
+	}
+}
+
 func TestLoadHandoverOrder(t *testing.T) {
 	p := writeConfig(t, `[handover]
 HERDR_ENV = "h.md"
