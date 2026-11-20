@@ -6,6 +6,9 @@
 // Each step refuses on anything it cannot verify; nothing after a refusal runs, so `gh pr merge` is
 // invoked only when every step passed. GitHub itself rejects the merge when the head moved after the
 // checks (`--match-head-commit`).
+//
+// With --auto, gh merges at once or enables auto-merge, both pinned to the checked head; the result
+// is read back until GitHub merges or a stop condition disables auto-merge again.
 package merge
 
 import (
@@ -32,8 +35,13 @@ const (
 	defaultRetryDelay = 3 * time.Second
 	// DefaultMergeCheckTimeout bounds `.claude/merge-check`, which may run benchmarks.
 	DefaultMergeCheckTimeout = 30 * time.Minute
-	// readBackTimeout bounds the read-back, which runs even after stack was told to stop.
+	// readBackTimeout bounds the read-back, which runs even after stack was told to stop, and with
+	// --auto also the disable call and the read-back after it.
 	readBackTimeout = 30 * time.Second
+	// AutoWait bounds the --auto wait for GitHub to merge, every read included.
+	AutoWait = 15 * time.Minute
+	// AutoPoll is the wait between --auto read-backs.
+	AutoPoll = 20 * time.Second
 )
 
 var (
@@ -60,7 +68,7 @@ type Options struct {
 	Head string
 	// Methods are the method flags given; at most one is allowed, none means the repository's only one.
 	Methods []string
-	// Merge holds --delete-branch, --subject and --body.
+	// Merge holds --auto, --delete-branch, --subject and --body.
 	Merge         github.MergeArgs
 	AllowNoChecks bool
 	// GHRepo is the value of GH_REPO, which must be empty.
@@ -73,6 +81,9 @@ type Options struct {
 	RetryDelay time.Duration
 	// MergeCheckTimeout bounds `.claude/merge-check`; zero means DefaultMergeCheckTimeout.
 	MergeCheckTimeout time.Duration
+	// Now and Sleep are the clock of the --auto wait; nil means the real one.
+	Now   func() time.Time
+	Sleep func(ctx context.Context, d time.Duration) error
 
 	// Stdout receives the `MERGED <head> <merge-oid>` line; Stderr notes and the output of
 	// merge-check and gh pr merge.
@@ -85,6 +96,7 @@ type request struct {
 	pr     int
 	want   string
 	method string
+	auto   bool
 }
 
 // Validate checks the arguments (step 1) without running anything.
@@ -114,7 +126,7 @@ func validate(o Options) (request, error) {
 		return r, fmt.Errorf("%w: pass one merge method, not --%s", ErrInvalid,
 			strings.Join(o.Methods, " --"))
 	}
-	r = request{pr: n, want: o.Head}
+	r = request{pr: n, want: o.Head, auto: o.Merge.Auto}
 	if len(o.Methods) == 1 {
 		r.method = o.Methods[0]
 	}
@@ -197,6 +209,9 @@ func Run(ctx context.Context, o Options) error {
 		return err
 	}
 
+	if r.auto {
+		return autoMerge(ctx, o, c, r.pr, r.method, head)
+	}
 	res := c.Merge(ctx, r.pr, r.method, head, o.Merge, o.Stderr)
 	// The merge may have happened even when stack is being stopped: read back on a short deadline
 	// of its own.
@@ -212,15 +227,141 @@ func Run(ctx context.Context, o Options) error {
 	case back.State != "MERGED" || back.HeadRefOid != head || !github.IsFullSHA(back.MergeOID):
 		return unknown(r.pr, "read back %s, not MERGED on %s; gh pr merge %s", back, head, res)
 	}
-	if _, err := fmt.Fprintf(o.Stdout, "MERGED %s %s\n", head, back.MergeOID); err != nil {
+	return reportMerged(o, r.pr, head, back.MergeOID, res)
+}
+
+// reportMerged writes the result line of a merge the read-back confirmed, plus a note when gh pr
+// merge did not exit cleanly, so the caller does not retry.
+func reportMerged(o Options, pr int, head, mergeOID string, res github.MergeResult) error {
+	if _, err := fmt.Fprintf(o.Stdout, "MERGED %s %s\n", head, mergeOID); err != nil {
 		return fmt.Errorf("write result: %w", err)
 	}
 	if !res.OK() {
 		_, _ = fmt.Fprintf(o.Stderr, "stack pr merge: PR %d is merged, but gh pr merge %s "+
 			"(a cleanup step such as --delete-branch can fail after the merge); do not retry\n",
-			r.pr, res)
+			pr, res)
 	}
 	return nil
+}
+
+// autoMerge submits the merge with --auto on head and waits for GitHub to merge it (step 10). gh
+// merges at once when GitHub allows it, otherwise it enables auto-merge; either way only head is
+// accepted. On a moved head, a closed PR, the deadline or a stop it disables auto-merge and decides
+// by one more read-back.
+func autoMerge(ctx context.Context, o Options, c github.Client, pr int, method, head string) error {
+	res := c.Merge(ctx, pr, method, head, o.Merge, o.Stderr)
+	now, wait := o.now(), o.sleep()
+	deadline := now().Add(AutoWait)
+	var stop, lastErr string
+	announced := false
+	for stop == "" {
+		left := deadline.Sub(now())
+		switch {
+		case ctx.Err() != nil:
+			stop = "stack pr merge was stopped"
+			continue
+		case left <= 0:
+			stop = fmt.Sprintf("not merged within %s", AutoWait)
+			if lastErr != "" {
+				stop += " (last read-back: " + lastErr + ")"
+			}
+			continue
+		}
+		readCtx, cancel := context.WithTimeout(ctx, left)
+		back, err := c.AutoReadBack(readCtx, pr)
+		cancel()
+		switch {
+		case err != nil:
+			lastErr = err.Error()
+		case back.State == "MERGED":
+			if done, err := judgeMerged(o, pr, head, back, res); done {
+				return err
+			}
+			lastErr = "read back " + back.String()
+		case back.State == "OPEN" && back.HeadRefOid == head:
+			lastErr = ""
+			if !announced {
+				announced = true
+				_, _ = fmt.Fprintf(o.Stderr, "stack pr merge: waiting up to %s for GitHub to "+
+					"merge PR %d on %s\n", AutoWait, pr, head)
+			}
+		case back.State == "OPEN" && github.IsFullSHA(back.HeadRefOid):
+			stop = "the head moved to " + back.HeadRefOid
+			continue
+		case back.State == "CLOSED":
+			stop = "the PR was closed"
+			continue
+		default:
+			lastErr = "read back " + back.String()
+		}
+		_ = wait(ctx, min(AutoPoll, deadline.Sub(now())))
+	}
+
+	// The stop may come from a signal: disable and read back on fresh deadlines of their own.
+	disCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), readBackTimeout)
+	dis := c.DisableAuto(disCtx, pr, o.Stderr)
+	cancel()
+	backCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), readBackTimeout)
+	defer cancel()
+	back, err := c.AutoReadBack(backCtx, pr)
+	why := fmt.Sprintf("%s; gh pr merge --auto %s; gh pr merge --disable-auto %s", stop, res, dis)
+	switch {
+	case err != nil:
+		return autoUnknown(pr, "%s; the read-back failed: %v", why, err)
+	case back.State == "MERGED":
+		if done, err := judgeMerged(o, pr, head, back, res); done {
+			return err
+		}
+	case back.State == "OPEN" && !back.AutoMerge:
+		return refuse("PR %d is not merged; auto-merge disabled: %s", pr, why)
+	}
+	return autoUnknown(pr, "read back %s (auto-merge %s); %s", back, onOff(back.AutoMerge), why)
+}
+
+// judgeMerged decides a MERGED read-back: merged on head with a full merge OID succeeds, merged on
+// another full head fails. Anything else is not decided (done false).
+func judgeMerged(
+	o Options,
+	pr int,
+	head string,
+	back github.Readback,
+	res github.MergeResult,
+) (bool, error) {
+	switch {
+	case back.HeadRefOid == head && github.IsFullSHA(back.MergeOID):
+		return true, reportMerged(o, pr, head, back.MergeOID, res)
+	case back.HeadRefOid != head && github.IsFullSHA(back.HeadRefOid):
+		return true, refuse("PR %d was merged on %s, not on the checked %s: inspect the PR "+
+			"(a merge cannot be undone)", pr, back.HeadRefOid, head)
+	}
+	return false, nil
+}
+
+// autoUnknown is unknown for --auto, whose request may still be active.
+func autoUnknown(pr int, format string, args ...any) error {
+	return fmt.Errorf("%w: %w for PR %d — auto-merge may still be enabled; check the PR before "+
+		"retrying: %s", ErrRefused, ErrUnknown, pr, fmt.Sprintf(format, args...))
+}
+
+func onOff(b bool) string {
+	if b {
+		return "enabled"
+	}
+	return "disabled"
+}
+
+func (o Options) now() func() time.Time {
+	if o.Now == nil {
+		return time.Now
+	}
+	return o.Now
+}
+
+func (o Options) sleep() func(context.Context, time.Duration) error {
+	if o.Sleep == nil {
+		return sleep
+	}
+	return o.Sleep
 }
 
 func (o Options) retryDelay() time.Duration {
@@ -244,10 +385,14 @@ func refuse(format string, args ...any) error {
 // checkPR reads the PR, retrying while its mergeability is UNKNOWN, and returns the full head SHA
 // once the head matches, the PR is open, ready and mergeable (step 3).
 func checkPR(ctx context.Context, c github.Client, r request, delay time.Duration) (string, error) {
+	view := c.PRView
+	if r.auto {
+		view = c.PRViewAuto
+	}
 	var pr github.PR
 	for attempt := 1; ; attempt++ {
 		var err error
-		pr, err = c.PRView(ctx, r.pr)
+		pr, err = view(ctx, r.pr)
 		if err != nil {
 			return "", refuse("could not read PR %d: %v", r.pr, err)
 		}
@@ -270,6 +415,10 @@ func checkPR(ctx context.Context, c github.Client, r request, delay time.Duratio
 	case pr.Mergeable != "MERGEABLE":
 		return "", refuse("PR %d is not mergeable (%s; UNKNOWN means GitHub has not decided yet, "+
 			"retry)", r.pr, pr.Mergeable)
+	case pr.AutoMerge:
+		// Cleanup disables auto-merge, so it must never meet a request this run did not make.
+		return "", refuse("PR %d already has auto-merge enabled: disable it first, or let it "+
+			"merge", r.pr)
 	}
 	return pr.HeadRefOid, nil
 }
