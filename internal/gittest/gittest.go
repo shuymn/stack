@@ -4,8 +4,8 @@
 // Fixture git commands get an environment built from an allowlist, never the inherited one: a git
 // hook (e.g. lefthook's pre-push) exports GIT_DIR, GIT_INDEX_FILE and friends, which would point a
 // fixture's git at the real repository. Before every command a Repo also checks that git resolves
-// its git dir inside the fixture. Main records the real repository's refs, HEAD, worktrees and
-// config before the tests and fails the run if any of them changed.
+// its git dir inside the fixture. Main records the real repository's shared config, the HEAD and
+// index of the worktree the tests run in, and its tags, and fails the run if any of them changed.
 package gittest
 
 import (
@@ -207,7 +207,7 @@ func run(dir string, env []string, args ...string) (string, error) {
 }
 
 // Main runs the tests and fails the run when the real repository around the package directory
-// changed: its refs, HEAD, worktree list or config. Outside a git checkout it only runs the tests.
+// changed: its shared config, this worktree's HEAD or index, or its tags. Outside a git checkout it only runs the tests.
 func Main(m *testing.M) int {
 	env := CleanEnv(os.Environ())
 	before, err := snapshot(env)
@@ -238,30 +238,50 @@ func Main(m *testing.M) int {
 
 type state map[string]string
 
+// snapshot records what fixture tests could damage but other tools and sessions sharing the
+// repository do not move: the shared config, the HEAD and index of the worktree the tests run in,
+// and the tags. Other refs and worktrees change legitimately while the tests run.
 func snapshot(env []string) (state, error) {
-	common, err := run("", env, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	gitPath := func(args ...string) (string, error) {
+		out, err := run(
+			"",
+			env,
+			append([]string{"rev-parse", "--path-format=absolute"}, args...)...)
+		return filepath.FromSlash(strings.TrimSpace(out)), err
+	}
+	common, err := gitPath("--git-common-dir")
 	if err != nil {
 		return nil, err
 	}
 	s := state{}
-	for name, args := range map[string][]string{
-		"refs":      {"for-each-ref", "--format=%(refname) %(objectname)"},
-		"HEAD":      {"rev-parse", "HEAD"},
-		"worktrees": {"worktree", "list", "--porcelain"},
-	} {
-		if s[name], err = run("", env, args...); err != nil {
-			return nil, err
-		}
+	if s["config"], err = fileHash(filepath.Join(common, "config")); err != nil {
+		return nil, err
 	}
-	// HEAD's branch; detached is fine, so the exit status is not checked.
+	// The staged entries, not the index file's bytes: any `git status` in the worktree (an editor,
+	// a prompt) rewrites the file's cached stat data.
+	if s["index"], err = run("", env, "ls-files", "--stage"); err != nil {
+		return nil, err
+	}
+	if s["HEAD"], err = run("", env, "rev-parse", "HEAD"); err != nil {
+		return nil, err
+	}
+	// The branch HEAD points to; detached is fine, so the exit status is not checked.
 	s["HEAD ref"], _ = run("", env, "symbolic-ref", "-q", "HEAD")
-	data, err := os.ReadFile(filepath.Join(filepath.FromSlash(strings.TrimSpace(common)), "config"))
+	s["tags"], err = run("", env, "for-each-ref", "--format=%(refname) %(objectname)", "refs/tags")
 	if err != nil {
-		return nil, fmt.Errorf("gittest: %w", err)
+		return nil, err
+	}
+	return s, nil
+}
+
+// fileHash is the SHA-256 of a file.
+func fileHash(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("gittest: %w", err)
 	}
 	sum := sha256.Sum256(data)
-	s["config"] = hex.EncodeToString(sum[:])
-	return s, nil
+	return hex.EncodeToString(sum[:]), nil
 }
 
 func diff(before, after state) string {
