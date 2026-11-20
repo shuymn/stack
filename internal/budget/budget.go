@@ -87,7 +87,11 @@ func wrapWrite(err error) error {
 func listKits(root string) ([]string, error) {
 	entries, err := os.ReadDir(root)
 	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
+		// Windows reports a file used as a directory as "path not found"; only a root that is
+		// really absent has no kits.
+		if _, serr := os.Lstat(root); errors.Is(serr, fs.ErrNotExist) {
+			return nil, nil
+		}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("read kit root: %w", err)
