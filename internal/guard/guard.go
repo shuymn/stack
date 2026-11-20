@@ -1,6 +1,6 @@
 // Package guard decides a Claude Code PreToolUse payload: it denies the hard-boundary hazards of
 // docs/design/phase2-core.md §4.3 and allows everything else. Rules run in table order (secrets, gh
-// publish, raw merge, rmroot); the first deny wins.
+// publish, raw merge, rmroot, pencil); the first deny wins.
 package guard
 
 import (
@@ -21,6 +21,7 @@ const (
 	RuleGhPublish = "gh-publish"
 	RuleRawMerge  = "raw-merge"
 	RuleRmRoot    = "rmroot"
+	RulePencil    = "pencil"
 )
 
 // Options carries what a decision needs besides the payload.
@@ -57,6 +58,8 @@ func Decide(in hookio.Input, opts Options) (Decision, bool) {
 			return Decision{}, false
 		}
 		return decideBash(tin.Command, in.CWD, opts)
+	case "mcp__pencil__execute":
+		return pencil(in.ToolInput, opts.Config)
 	default:
 		return Decision{}, false
 	}

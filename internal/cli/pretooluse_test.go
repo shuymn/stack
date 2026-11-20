@@ -70,10 +70,14 @@ func writeConfig(t *testing.T, home, text string) {
 }
 
 // TestHookConfigFallback is the CLI half of C2: under a broken config the hook applies the §5
-// defaults, so the secrets rule still denies.
+// defaults, so the secrets and Pencil rules still deny.
 func TestHookConfigFallback(t *testing.T) {
 	read := func(cwd string) string {
 		return payload(t, cwd, "Read", map[string]any{"file_path": ".dev.vars"})
+	}
+	pencil := func(cwd string) string {
+		return payload(t, cwd, "mcp__pencil__execute",
+			map[string]any{"input": `await Generate({prompt: "icon"})`})
 	}
 	for name, cfg := range map[string]string{
 		"no config":    "",
@@ -87,6 +91,13 @@ func TestHookConfigFallback(t *testing.T) {
 		}
 		cwd := t.TempDir()
 		assertDeny(t, name+": Read secret", runHookStdin(t, home, read(cwd)), "secrets")
+		assertDeny(t, name+": Pencil Generate", runHookStdin(t, home, pencil(cwd)), "pencil")
+	}
+
+	home := t.TempDir()
+	writeConfig(t, home, "version = 1\n[safety]\ndeny_pencil_generate = false\n")
+	if r := runHookStdin(t, home, pencil(t.TempDir())); r.code != exitOK || r.stdout != "" {
+		t.Errorf("valid config disabling the Pencil rule = %+v, want allow", r)
 	}
 }
 

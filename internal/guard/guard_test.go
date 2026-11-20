@@ -386,3 +386,66 @@ func TestRmRoot(t *testing.T) {
 	d, ok := f.bash("rm -rf .git")
 	wantAllow(t, "relative operand under an unknown cwd", d, ok)
 }
+
+func TestPencil(t *testing.T) {
+	f := newFixture(t)
+	execute := func(input string, replaces ...string) map[string]any {
+		edits := make([]map[string]string, len(replaces))
+		for i, r := range replaces {
+			edits[i] = map[string]string{"find": "x", "replace": r}
+		}
+		m := map[string]any{"input": input}
+		if len(edits) > 0 {
+			m["edits"] = edits
+		}
+		return m
+	}
+	deny := []struct {
+		name  string
+		input map[string]any
+	}{
+		{"Generate call", execute(`const img = Generate({prompt: "icon"})`)},
+		{"nested template call", execute("const s = `a ${`b ${Generate(x)}`}`")},
+		{"regex literal then call", execute(`const r = /"/; Generate()`)},
+		{"top-level await", execute(`await Generate({})`)},
+		{"top-level return", execute(`return Generate({})`)},
+		{"member call", execute(`x.Generate()`)},
+		{"generateImage", execute(`generateImage({})`)},
+		{"optional call", execute(`api?.generate?.()`)},
+		{"token fallback: real call", execute(`Generate(a) ) (`)},
+		{"edit replace call", execute(`ok()`, `Generate(x)`)},
+	}
+	for _, tt := range deny {
+		d, ok := f.decide("mcp__pencil__execute", tt.input)
+		wantDeny(t, tt.name, d, ok, RulePencil)
+	}
+	allow := []struct {
+		name  string
+		input map[string]any
+	}{
+		{"string", execute(`Print("Generate()")`)},
+		{"template text", execute("Print(`Generate()`)")},
+		{"line comment", execute("// Generate()\nok()")},
+		{"block comment", execute("/* Generate() */ ok()")},
+		{"regex test", execute(`/Generate(x)/.test(s)`)},
+		{"regenerate", execute(`regenerate()`)},
+		{"property not called", execute(`const g = x.Generate`)},
+		{"token fallback: regex after =", execute(`x = /Generate(a)/ ) (`)},
+		{"edit replace string", execute(`ok()`, `"Generate(x)"`)},
+		{"edit replace closing a string (documented gap)", execute(`ok()`, `"); Generate(x); ("`)},
+	}
+	for _, tt := range allow {
+		d, ok := f.decide("mcp__pencil__execute", tt.input)
+		wantAllow(t, tt.name, d, ok)
+	}
+	d, ok := f.decide("mcp__pencil__execute", map[string]any{
+		"input": "ok()", "description": "Generate(icon)",
+	})
+	wantAllow(t, "Generate only in description", d, ok)
+	d, ok = f.decide("mcp__pencil__get_style", map[string]any{"input": "Generate()"})
+	wantAllow(t, "another pencil tool", d, ok)
+
+	f.opts.Config.Safety.DenyPencilGenerate = false
+	d, ok = f.decide("mcp__pencil__execute", execute(`Generate({})`))
+	wantAllow(t, "deny_pencil_generate = false", d, ok)
+}
