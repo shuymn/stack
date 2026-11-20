@@ -258,6 +258,16 @@ func ConfigFile(home string) string {
 	return filepath.Join(home, ".config", "stack", "config.toml")
 }
 
+// FromConfig resolves a path written in the config: `~` expands with Expand, and a relative result
+// is taken against the config file's directory, so it does not depend on the working directory.
+func FromConfig(home, p string) string {
+	path := Expand(home, p)
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(filepath.Dir(ConfigFile(home)), path)
+	}
+	return path
+}
+
 // StateRoot is `~/.local/state/stack`.
 func StateRoot(home string) string {
 	return filepath.Join(home, ".local", "state", "stack")
