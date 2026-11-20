@@ -21,6 +21,7 @@ import (
 var (
 	errReplayStage    = errors.New("replay request stage differs from the command's stage")
 	errReplayConflict = errors.New("--replay cannot be combined with --range or --prompt-file")
+	errEmptyFlag      = errors.New("empty value")
 	errExpect         = errors.New("aggregate status differs from the replay's expect")
 	errBlocked        = errors.New("block")
 )
@@ -34,6 +35,12 @@ func runRun(ctx context.Context, env Env, inv invocation) error {
 	// Arguments first, so a usage error does not depend on the config.
 	if set["replay"] && (set["range"] || set["prompt-file"]) {
 		return errReplayConflict
+	}
+	// An explicitly empty value is not an omitted flag: `--range=` must not fall back.
+	for _, name := range []string{"range", "prompt-file"} {
+		if set[name] && inv.flags.Lookup(name).Value.String() == "" {
+			return fmt.Errorf("--%s: %w", name, errEmptyFlag)
+		}
 	}
 	names, err := stageNames(env, inv, stage)
 	if err != nil {

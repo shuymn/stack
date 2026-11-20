@@ -161,6 +161,9 @@ func TestRunUsageErrors(t *testing.T) {
 		{[]string{"--ext", "blocker", "--prompt-file", nonUTF8}, "not UTF-8"},
 		{[]string{"--ext", "blocker", "--prompt-file", filepath.Join(bin, "none")}, "--prompt-file"},
 		{[]string{"--replay", nonUTF8, "--range", "HEAD"}, "cannot be combined"},
+		{[]string{"--ext", "absent", "--range="}, "--range: empty value"},
+		{[]string{"--ext", "blocker", "--prompt-file="}, "--prompt-file: empty value"},
+		{[]string{"--ext", "blocker", "--range", ""}, "--range: empty value"},
 	} {
 		args := append([]string{"run", "outbound"}, tt.args...)
 		res := runIn(t, home, nil, args...)
