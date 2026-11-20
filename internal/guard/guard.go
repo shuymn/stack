@@ -123,11 +123,15 @@ func readInput(in ghargs.Input, call shell.Call, home string) (string, bool) {
 	return "", false
 }
 
-// readFile reads a file named in a command, resolved against the call's cwd. There is no size cap: a
-// hit past any cap would otherwise pass.
+// readFile reads a regular file named in a command, resolved against the call's cwd, whole: there is
+// no size cap, since a hit past any cap would otherwise pass. Anything else (a FIFO, a device, a
+// directory) is skipped before opening, because opening a FIFO blocks until a writer appears.
 func readFile(home, cwd, p string, expand bool) (string, bool) {
 	full, ok := paths.Resolve(home, cwd, p, expand)
 	if !ok || full == paths.ShellRoot {
+		return "", false
+	}
+	if fi, err := os.Stat(full); err != nil || !fi.Mode().IsRegular() {
 		return "", false
 	}
 	data, err := os.ReadFile(full)
