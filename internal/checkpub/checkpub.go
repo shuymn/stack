@@ -31,12 +31,11 @@ const defaultGitTimeout = 10 * time.Minute
 var (
 	// ErrFound reports that at least one hit was written.
 	ErrFound = errors.New("found text that must not be published")
-	// ErrUsage reports a malformed range.
-	ErrUsage = errors.New("RANGE must be <base>..<head>")
 	// ErrInput reports an input file that cannot be used.
 	ErrInput = errors.New("cannot read")
-	// ErrGit reports a git failure.
-	ErrGit = errors.New("git failed")
+
+	errUsage = errors.New("RANGE must be <base>..<head>")
+	errGit   = errors.New("git failed")
 
 	shaRe = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
@@ -82,12 +81,12 @@ type Options struct {
 func ValidRange(r string) error {
 	base, head, ok := strings.Cut(r, "..")
 	if !ok || strings.Contains(head, "..") {
-		return ErrUsage
+		return errUsage
 	}
 	for _, e := range []string{base, head} {
 		if e == "" || strings.HasPrefix(e, ".") || strings.HasSuffix(e, ".") ||
 			strings.HasPrefix(e, "-") {
-			return ErrUsage
+			return errUsage
 		}
 	}
 	return nil
@@ -107,7 +106,7 @@ func ReadTerms(path string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return publictext.ParseTerms(text), nil
+	return parseTerms(text), nil
 }
 
 // ReadUTF8 reads a whole input file, which must be UTF-8.
@@ -123,7 +122,7 @@ func ReadUTF8(path string) (string, error) {
 }
 
 // Check scans the range and the metadata. It writes each distinct hit once, in order, and returns
-// ErrFound when there was any. A git failure returns an ErrGit error, also after hits were written.
+// ErrFound when there was any. A git failure is reported as such, also after hits were written.
 func Check(ctx context.Context, o Options) error {
 	if err := ValidRange(o.Range); err != nil {
 		return err
@@ -143,13 +142,13 @@ func Check(ctx context.Context, o Options) error {
 		return err
 	}
 	o.Dir = top
-	s := &scanner{terms: publictext.NewTerms(o.Terms), out: o.Out, seen: map[string]bool{}}
+	s := &scanner{terms: newTerms(o.Terms), out: o.Out, seen: map[string]bool{}}
 
 	var shas []string
 	err = o.stream(ctx, []string{"rev-list", "--reverse", "--end-of-options", o.Range},
 		eachLine(func(line string) error {
 			if !shaRe.MatchString(line) {
-				return fmt.Errorf("%w: unexpected rev-list line %q", ErrGit, line)
+				return fmt.Errorf("%w: unexpected rev-list line %q", errGit, line)
 			}
 			shas = append(shas, line)
 			return nil
@@ -169,7 +168,7 @@ func Check(ctx context.Context, o Options) error {
 			}
 		}
 	}
-	if s.found {
+	if len(s.seen) > 0 {
 		return ErrFound
 	}
 	return nil
@@ -178,12 +177,17 @@ func Check(ctx context.Context, o Options) error {
 // commit scans the message, destination paths and added lines of one commit.
 func (o Options) commit(ctx context.Context, s *scanner, sha string) error {
 	prefix := "commit " + sha[:9]
-	err := o.stream(ctx, []string{"show", "-s", "--format=%B", sha},
+	// --encoding: i18n.logOutputEncoding could re-encode the message (UTF-16 hides every ASCII hit).
+	err := o.stream(ctx, []string{"show", "-s", "--encoding=UTF-8", "--format=%B", sha},
 		eachLine(func(line string) error { return s.scan(prefix+" message", line) }))
 	if err != nil {
 		return err
 	}
-	diff := []string{"show", "--format=", "-M", "--no-relative", "--diff-merges=first-parent"}
+	// The submodule flags override diff.ignoreSubmodules, which could hide an added gitlink.
+	diff := []string{
+		"show", "--format=", "-M", "--no-relative", "--diff-merges=first-parent",
+		"--ignore-submodules=none", "--submodule=short",
+	}
 	// Destination names only: a deleted or renamed-away name is not published anew.
 	err = o.stream(
 		ctx,
@@ -231,16 +235,17 @@ func (o Options) toplevel(ctx context.Context) (string, error) {
 	res, err := o.Runner.Run(ctx, proc.Cmd{Name: o.Git, Args: args, Dir: o.Dir, Env: o.Env})
 	switch {
 	case err != nil:
-		return "", fmt.Errorf("%w: git %s: %w", ErrGit, strings.Join(args, " "), err)
+		return "", fmt.Errorf("%w: git %s: %w", errGit, strings.Join(args, " "), err)
 	case res.TimedOut:
-		return "", fmt.Errorf("%w: git %s: %w", ErrGit, strings.Join(args, " "), proc.ErrTimedOut)
+		return "", fmt.Errorf("%w: git %s: %w", errGit, strings.Join(args, " "), proc.ErrTimedOut)
 	case res.WaitDelayExceeded, res.Truncated, res.ExitCode != 0:
-		return "", fmt.Errorf("%w: git %s: exit %d: %s", ErrGit, strings.Join(args, " "),
+		return "", fmt.Errorf("%w: git %s: exit %d: %s", errGit, strings.Join(args, " "),
 			res.ExitCode, strings.TrimSpace(string(res.Stderr)))
 	}
-	top := strings.TrimSpace(string(res.Stdout))
+	// Only git's line end: a directory name may itself end in a space.
+	top := strings.TrimSuffix(string(res.Stdout), "\n")
 	if top == "" {
-		return "", fmt.Errorf("%w: not in a work tree", ErrGit)
+		return "", fmt.Errorf("%w: not in a work tree", errGit)
 	}
 	return top, nil
 }
@@ -252,10 +257,10 @@ func (o Options) stream(ctx context.Context, args []string, consume func(io.Read
 	cmd := proc.Cmd{Name: o.Git, Args: slices.Concat([]string{"-C", o.Dir}, args), Env: o.Env}
 	err := o.Runner.Stream(ctx, cmd, consume)
 	if err != nil {
-		if errors.Is(err, ErrGit) {
+		if errors.Is(err, errGit) {
 			return err
 		}
-		return fmt.Errorf("%w: git %s: %w", ErrGit, strings.Join(args, " "), err)
+		return fmt.Errorf("%w: git %s: %w", errGit, strings.Join(args, " "), err)
 	}
 	return nil
 }
@@ -281,7 +286,7 @@ func eachRecord(delim byte, fn func(string) error) func(io.Reader) error {
 				return nil
 			}
 			if err != nil {
-				return fmt.Errorf("%w: read: %w", ErrGit, err)
+				return fmt.Errorf("%w: read: %w", errGit, err)
 			}
 		}
 	}
@@ -289,10 +294,9 @@ func eachRecord(delim byte, fn func(string) error) func(io.Reader) error {
 
 // scanner writes each distinct hit once.
 type scanner struct {
-	terms publictext.Terms
+	terms terms
 	out   io.Writer
 	seen  map[string]bool
-	found bool
 }
 
 func (s *scanner) scan(where, text string) error {
@@ -301,7 +305,7 @@ func (s *scanner) scan(where, text string) error {
 			return err
 		}
 	}
-	for _, term := range s.terms.Find(text) {
+	for _, term := range s.terms.find(text) {
 		if err := s.report(fmt.Sprintf("%s: private term '%s'", where, term)); err != nil {
 			return err
 		}
@@ -310,7 +314,6 @@ func (s *scanner) scan(where, text string) error {
 }
 
 func (s *scanner) report(msg string) error {
-	s.found = true
 	if s.seen[msg] {
 		return nil
 	}
@@ -319,4 +322,55 @@ func (s *scanner) report(msg string) error {
 		return fmt.Errorf("write hit: %w", err)
 	}
 	return nil
+}
+
+// parseTerms returns the private terms of a private-terms file: each line trimmed of surrounding
+// space, without blank lines and lines starting with `#`. Lines break where Python's
+// str.splitlines breaks them, as the legacy public-check read the same file.
+func parseTerms(text string) []string {
+	var out []string
+	for _, line := range strings.FieldsFunc(text, isLineBreak) {
+		if t := strings.TrimSpace(line); t != "" && !strings.HasPrefix(t, "#") {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// isLineBreak reports the runes str.splitlines splits on (CRLF is a CR then an LF).
+func isLineBreak(r rune) bool {
+	switch r {
+	case '\n', '\r', '\v', '\f', '\x1c', '\x1d', '\x1e', '\u0085', '\u2028', '\u2029':
+		return true
+	}
+	return false
+}
+
+// terms matches private terms as case-insensitive substrings.
+type terms struct {
+	terms []string
+	lower []string
+}
+
+func newTerms(list []string) terms {
+	t := terms{terms: list, lower: make([]string, len(list))}
+	for i, term := range list {
+		t.lower[i] = strings.ToLower(term)
+	}
+	return t
+}
+
+// find returns the terms that occur in s, in the order they were given.
+func (t terms) find(s string) []string {
+	if len(t.terms) == 0 {
+		return nil
+	}
+	lower := strings.ToLower(s)
+	var found []string
+	for i, term := range t.lower {
+		if strings.Contains(lower, term) {
+			found = append(found, t.terms[i])
+		}
+	}
+	return found
 }

@@ -1,5 +1,5 @@
-// Package publictext finds text that must not be published: local home paths (POSIX, Windows, Git
-// Bash and WSL forms) and private terms.
+// Package publictext finds local home paths (POSIX, Windows, Git Bash and WSL forms) in text that
+// is about to be published.
 //
 // A home-path hit starts a token: it is at the start of the text, or the rune before it is not a
 // Unicode letter or digit and not `.`, `-` or `_`, so `資料/home/demo` and `dot_home/x` pass. It ends
@@ -170,46 +170,4 @@ func isNameRune(r rune) bool {
 func isASCIILetter(c byte) bool {
 	c |= 0x20
 	return c >= 'a' && c <= 'z'
-}
-
-// ParseTerms returns the private terms of a private-terms file: each line trimmed of surrounding
-// space, without blank lines and lines starting with `#`. Lines may end in CRLF.
-func ParseTerms(text string) []string {
-	var terms []string
-	for line := range strings.SplitSeq(text, "\n") {
-		if t := strings.TrimSpace(line); t != "" && !strings.HasPrefix(t, "#") {
-			terms = append(terms, t)
-		}
-	}
-	return terms
-}
-
-// Terms matches private terms as case-insensitive substrings.
-type Terms struct {
-	terms []string
-	lower []string
-}
-
-// NewTerms returns a matcher for terms.
-func NewTerms(terms []string) Terms {
-	t := Terms{terms: terms, lower: make([]string, len(terms))}
-	for i, term := range terms {
-		t.lower[i] = strings.ToLower(term)
-	}
-	return t
-}
-
-// Find returns the terms that occur in s, in the order they were given.
-func (t Terms) Find(s string) []string {
-	if len(t.terms) == 0 {
-		return nil
-	}
-	lower := strings.ToLower(s)
-	var found []string
-	for i, term := range t.lower {
-		if strings.Contains(lower, term) {
-			found = append(found, t.terms[i])
-		}
-	}
-	return found
 }

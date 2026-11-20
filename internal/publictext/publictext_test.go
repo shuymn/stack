@@ -89,21 +89,6 @@ func TestLocalPath(t *testing.T) {
 	}
 }
 
-func TestTerms(t *testing.T) {
-	const secret = "\u79d8\u5bc6"
-	terms := ParseTerms("# comment\r\n\r\n  Project Zebra  \r\n" + secret + "\n#also\n")
-	if want := []string{"Project Zebra", secret}; !slices.Equal(terms, want) {
-		t.Fatalf("ParseTerms = %q, want %q", terms, want)
-	}
-	m := NewTerms(terms)
-	if got := m.Find("notes for PROJECT zebra, " + secret + ".md"); !slices.Equal(got, terms) {
-		t.Errorf("Find = %q, want %q", got, terms)
-	}
-	if got := m.Find("a comment"); got != nil {
-		t.Errorf("Find(comment) = %q, want none", got)
-	}
-}
-
 // TestRepoTree runs the matcher over every tracked file and the design document: the repository
 // publishes no local path.
 func TestRepoTree(t *testing.T) {
