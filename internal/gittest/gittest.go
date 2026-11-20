@@ -224,6 +224,13 @@ func (r *Repo) inside(p string) bool {
 	}
 }
 
+// exitError is git's non-zero exit status.
+type exitError int
+
+func (e exitError) Error() string { return fmt.Sprintf("%v: exit %d", errGit, int(e)) }
+
+func (e exitError) Unwrap() error { return errGit }
+
 func run(dir string, env []string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -234,8 +241,7 @@ func run(dir string, env []string, args ...string) (string, error) {
 	case res.TimedOut, res.WaitDelayExceeded, res.Truncated:
 		return "", fmt.Errorf("gittest: git %q: %w: %+v", args, errGit, res)
 	case res.ExitCode != 0:
-		return "", fmt.Errorf("gittest: git %q: %w: exit %d: %s", args, errGit, res.ExitCode,
-			res.Stderr)
+		return "", fmt.Errorf("gittest: git %q: %w: %s", args, exitError(res.ExitCode), res.Stderr)
 	}
 	return string(res.Stdout), nil
 }
@@ -244,7 +250,8 @@ func run(dir string, env []string, args ...string) (string, error) {
 // changed: its shared config, this worktree's HEAD or index, or its tags. Only outside a git
 // checkout does it run the tests unguarded; any other failure to take the snapshot fails the run.
 func Main(m *testing.M) int {
-	env := CleanEnv(os.Environ())
+	// Untranslated git messages: guard matches git's English diagnostic.
+	env := append(CleanEnv(os.Environ()), "LC_ALL=C", "LANGUAGE=")
 	before, err := guard("", env)
 	if errors.Is(err, errNotCheckout) {
 		return m.Run()
@@ -311,8 +318,13 @@ func snapshot(dir string, env []string) (state, error) {
 	if s["HEAD"], err = run(dir, env, "rev-parse", "HEAD"); err != nil {
 		return nil, err
 	}
-	// The branch HEAD points to; detached is fine, so the exit status is not checked.
-	s["HEAD ref"], _ = run(dir, env, "symbolic-ref", "-q", "HEAD")
+	// The branch HEAD points to; exit 1 means a detached HEAD, any other failure is an error.
+	if s["HEAD ref"], err = run(dir, env, "symbolic-ref", "-q", "HEAD"); err != nil {
+		if code := exitError(0); !errors.As(err, &code) || code != 1 {
+			return nil, err
+		}
+		s["HEAD ref"] = "detached"
+	}
 	s["tags"], err = run(dir, env, "for-each-ref", "--format=%(refname) %(objectname)", "refs/tags")
 	if err != nil {
 		return nil, err
