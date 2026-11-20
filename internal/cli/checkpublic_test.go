@@ -16,16 +16,14 @@ func TestMain(m *testing.M) {
 
 // checkRepo makes a fixture repository with an empty base commit tagged `base` and one commit on top
 // whose message is msg, and changes into it. The git that stack runs inherits the process
-// environment, so it is pointed at the fixture's isolated config too.
+// environment, so the process gets the fixture's git variables and no inherited ones.
 func checkRepo(t *testing.T, msg string) {
 	t.Helper()
 	r := gittest.New(t)
 	r.Commit("chore: base")
 	r.Tag("base")
 	r.Commit(msg)
-	t.Setenv("GIT_CONFIG_GLOBAL", r.GlobalConfig)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
-	t.Setenv("GIT_CEILING_DIRECTORIES", r.Root)
+	r.SetProcessEnv(t)
 	t.Chdir(r.Dir)
 }
 
@@ -167,5 +165,19 @@ func TestCheckPublicBadSetup(t *testing.T) {
 	}
 	if r := runHome(t, "", "check", "public", "base..HEAD"); r.code != exitUsage {
 		t.Fatalf("no home: r = %+v, want exit 2", r)
+	}
+}
+
+// TestCheckPublicInheritsNoGitVars checks that the git stack runs in these tests does not inherit a
+// GIT_* variable from the test process: GIT_TRACE would make it write a trace file.
+func TestCheckPublicInheritsNoGitVars(t *testing.T) {
+	trace := filepath.Join(t.TempDir(), "trace")
+	t.Setenv("GIT_TRACE", trace)
+	checkRepo(t, "fix: tidy")
+	if r := runHome(t, t.TempDir(), "check", "public", "base..HEAD"); r.code != exitOK {
+		t.Fatalf("r = %+v", r)
+	}
+	if _, err := os.Stat(trace); !os.IsNotExist(err) {
+		t.Errorf("GIT_TRACE reached git: stat = %v", err)
 	}
 }

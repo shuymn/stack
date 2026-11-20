@@ -14,6 +14,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,7 +27,10 @@ import (
 const timeout = time.Minute
 
 // errGit reports a git command that did not finish with status 0 and complete output.
-var errGit = errors.New("git failed")
+var (
+	errGit         = errors.New("git failed")
+	errNotCheckout = errors.New("not in a git checkout")
+)
 
 // passThrough are the only inherited variables a fixture's git sees: the executable search path
 // and what Windows needs to run programs and find a temp dir.
@@ -101,6 +105,36 @@ func New(tb testing.TB) *Repo {
 	r.root = info
 	r.run(root, "-c", "core.autocrlf=false", "init", "-q", r.Dir)
 	return r
+}
+
+// Sibling initialises another empty repository named name next to r's, sharing its environment.
+func (r *Repo) Sibling(name string) *Repo {
+	r.tb.Helper()
+	s := *r
+	s.Dir = filepath.Join(r.Root, name)
+	s.run(r.Root, "-c", "core.autocrlf=false", "init", "-q", s.Dir)
+	return &s
+}
+
+// SetProcessEnv makes the test process's git environment the fixture's, for code under test that
+// runs git with the inherited environment: every inherited GIT_* variable is removed and the
+// fixture's GIT_*, HOME and XDG_CONFIG_HOME are set, all restored after the test.
+func (r *Repo) SetProcessEnv(tb testing.TB) {
+	tb.Helper()
+	for _, kv := range os.Environ() {
+		if name, _, _ := strings.Cut(kv, "="); strings.HasPrefix(strings.ToUpper(name), "GIT_") {
+			tb.Setenv(name, "") // registers the restore
+			if err := os.Unsetenv(name); err != nil {
+				tb.Fatal(err)
+			}
+		}
+	}
+	for _, kv := range r.Env {
+		name, value, _ := strings.Cut(kv, "=")
+		if strings.HasPrefix(name, "GIT_") || name == "HOME" || name == "XDG_CONFIG_HOME" {
+			tb.Setenv(name, value)
+		}
+	}
 }
 
 // Git runs git in the work tree after checking that its git dir is inside the fixture, and returns
@@ -207,16 +241,20 @@ func run(dir string, env []string, args ...string) (string, error) {
 }
 
 // Main runs the tests and fails the run when the real repository around the package directory
-// changed: its shared config, this worktree's HEAD or index, or its tags. Outside a git checkout it only runs the tests.
+// changed: its shared config, this worktree's HEAD or index, or its tags. Only outside a git
+// checkout does it run the tests unguarded; any other failure to take the snapshot fails the run.
 func Main(m *testing.M) int {
 	env := CleanEnv(os.Environ())
-	before, err := snapshot(env)
-	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "gittest: real repository not checked: %v\n", err)
+	before, err := guard("", env)
+	if errors.Is(err, errNotCheckout) {
 		return m.Run()
 	}
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "gittest: cannot check the real repository: %v\n", err)
+		return 1
+	}
 	code := m.Run()
-	after, err := snapshot(env)
+	after, err := snapshot("", env)
 	if err != nil {
 		_, _ = fmt.Fprintf(
 			os.Stderr,
@@ -238,40 +276,64 @@ func Main(m *testing.M) int {
 
 type state map[string]string
 
+// guard returns the snapshot of the repository around dir, or errNotCheckout when dir is not in a
+// git checkout.
+func guard(dir string, env []string) (state, error) {
+	if _, err := run(dir, env, "rev-parse", "--git-dir"); err != nil {
+		// Git's message when no repository is found at all; a broken one names its path instead.
+		if strings.Contains(err.Error(), "not a git repository (or any") {
+			return nil, errNotCheckout
+		}
+		return nil, err
+	}
+	return snapshot(dir, env)
+}
+
 // snapshot records what fixture tests could damage but other tools and sessions sharing the
 // repository do not move: the shared config, the HEAD and index of the worktree the tests run in,
 // and the tags. Other refs and worktrees change legitimately while the tests run.
-func snapshot(env []string) (state, error) {
-	gitPath := func(args ...string) (string, error) {
-		out, err := run(
-			"",
-			env,
-			append([]string{"rev-parse", "--path-format=absolute"}, args...)...)
-		return filepath.FromSlash(strings.TrimSpace(out)), err
-	}
-	common, err := gitPath("--git-common-dir")
+func snapshot(dir string, env []string) (state, error) {
+	common, err := run(dir, env, "rev-parse", "--path-format=absolute", "--git-common-dir")
 	if err != nil {
 		return nil, err
 	}
 	s := state{}
-	if s["config"], err = fileHash(filepath.Join(common, "config")); err != nil {
+	config := filepath.Join(filepath.FromSlash(strings.TrimSuffix(common, "\n")), "config")
+	if s["config"], err = fileHash(config); err != nil {
 		return nil, err
 	}
-	// The staged entries, not the index file's bytes: any `git status` in the worktree (an editor,
-	// a prompt) rewrites the file's cached stat data.
-	if s["index"], err = run("", env, "ls-files", "--stage"); err != nil {
+	// The staged entries with their flags (-v marks assume-unchanged and skip-worktree), not the
+	// index file's bytes: any `git status` in the worktree rewrites the file's cached stat data.
+	// Streamed into a hash, so a large index is compared whole.
+	if s["index"], err = streamHash(dir, env, "ls-files", "--stage", "-v"); err != nil {
 		return nil, err
 	}
-	if s["HEAD"], err = run("", env, "rev-parse", "HEAD"); err != nil {
+	if s["HEAD"], err = run(dir, env, "rev-parse", "HEAD"); err != nil {
 		return nil, err
 	}
 	// The branch HEAD points to; detached is fine, so the exit status is not checked.
-	s["HEAD ref"], _ = run("", env, "symbolic-ref", "-q", "HEAD")
-	s["tags"], err = run("", env, "for-each-ref", "--format=%(refname) %(objectname)", "refs/tags")
+	s["HEAD ref"], _ = run(dir, env, "symbolic-ref", "-q", "HEAD")
+	s["tags"], err = run(dir, env, "for-each-ref", "--format=%(refname) %(objectname)", "refs/tags")
 	if err != nil {
 		return nil, err
 	}
 	return s, nil
+}
+
+// streamHash is the SHA-256 of git's whole stdout.
+func streamHash(dir string, env []string, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	h := sha256.New()
+	err := proc.Exec{}.Stream(ctx, proc.Cmd{Name: "git", Args: args, Dir: dir, Env: env},
+		func(r io.Reader) error {
+			_, err := io.Copy(h, r)
+			return err //nolint:wrapcheck // reported with the command below
+		})
+	if err != nil {
+		return "", fmt.Errorf("gittest: git %q: %w", args, err)
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // fileHash is the SHA-256 of a file.
