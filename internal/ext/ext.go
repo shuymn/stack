@@ -18,6 +18,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/shuymn/stack/internal/config"
 	"github.com/shuymn/stack/internal/proc"
@@ -266,11 +267,16 @@ func evaluate(name string, res proc.Result, runErr error, timeout time.Duration)
 
 var errResponse = errors.New("malformed")
 
-// parse decodes one response object followed by nothing but white space.
+// parse decodes one response object followed by nothing but white space. stdout must be UTF-8;
+// context, when present, must be a string and findings, when present, an array (null is neither).
+// An absent context is "" and absent findings are [].
 func parse(stdout []byte) (Result, error) {
+	if !utf8.Valid(stdout) {
+		return Result{}, fmt.Errorf("%w: not UTF-8", errResponse)
+	}
 	var resp struct {
 		Status   string          `json:"status"`
-		Context  string          `json:"context"`
+		Context  json.RawMessage `json:"context"`
 		Findings json.RawMessage `json:"findings"`
 	}
 	dec := json.NewDecoder(bytes.NewReader(stdout))
@@ -287,14 +293,21 @@ func parse(stdout []byte) (Result, error) {
 	default:
 		return Result{}, fmt.Errorf("%w: unknown status %q", errResponse, resp.Status)
 	}
-	findings := bytes.TrimSpace(resp.Findings)
-	switch {
-	case len(findings) == 0 || string(findings) == "null":
-		findings = []byte("[]")
-	case findings[0] != '[':
-		return Result{}, fmt.Errorf("%w: findings is not an array", errResponse)
+	r := Result{Status: resp.Status, Findings: json.RawMessage("[]")}
+	if resp.Context != nil {
+		if bytes.TrimSpace(resp.Context)[0] != '"' {
+			return Result{}, fmt.Errorf("%w: context is not a string", errResponse)
+		}
+		if err := json.Unmarshal(resp.Context, &r.Context); err != nil {
+			return Result{}, fmt.Errorf("%w: context: %w", errResponse, err)
+		}
 	}
-	return Result{Status: resp.Status, Context: resp.Context, Findings: findings}, nil
+	if resp.Findings != nil {
+		if r.Findings = bytes.TrimSpace(resp.Findings); r.Findings[0] != '[' {
+			return Result{}, fmt.Errorf("%w: findings is not an array", errResponse)
+		}
+	}
+	return r, nil
 }
 
 func warn(name, reason string) Result {

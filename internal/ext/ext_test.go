@@ -187,6 +187,39 @@ func TestEvaluateOrder(t *testing.T) {
 	}
 }
 
+// TestEvaluateStrictResponse covers C21's response shape: stdout must be UTF-8, context a string
+// and findings an array; null is neither, and an absent field takes its empty value.
+func TestEvaluateStrictResponse(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		stdout  string
+		want    string
+		context string
+		reason  string
+	}{
+		{"{\"status\":\"pass\",\"context\":\"\xff\",\"findings\":[]}", StatusWarn, "", "not UTF-8"},
+		{`{"status":"pass","context":null,"findings":[]}`, StatusWarn, "", "context is not a string"},
+		{`{"status":"pass","context":1}`, StatusWarn, "", "context is not a string"},
+		{`{"status":"pass","context":"C","findings":null}`, StatusWarn, "", "findings is not an array"},
+		{`{"status":"pass","findings":"x"}`, StatusWarn, "", "findings is not an array"},
+		{`{"status":"pass","context":"C\u00e9"}`, StatusPass, "C\u00e9", ""},
+		{`{"status":"block"}`, StatusBlock, "", ""},
+	} {
+		r := evaluate("demo", proc.Result{Stdout: []byte(tt.stdout)}, nil, time.Second)
+		if r.Status != tt.want || r.Context != tt.context || !strings.Contains(r.Error, tt.reason) {
+			t.Errorf("evaluate(%q) = %+v, want %s %q", tt.stdout, r, tt.want, tt.reason)
+			continue
+		}
+		if tt.reason != "" {
+			if f := findings(t, r); len(f) != 1 || f[0]["extension"] != "demo" {
+				t.Errorf("evaluate(%q) findings = %s", tt.stdout, r.Findings)
+			}
+		} else if string(r.Findings) != "[]" {
+			t.Errorf("evaluate(%q) findings = %s, want []", tt.stdout, r.Findings)
+		}
+	}
+}
+
 // TestRunWaitDelay covers a valid response whose pipes a grandchild keeps open: warn.
 func TestRunWaitDelay(t *testing.T) {
 	t.Parallel()
