@@ -517,9 +517,10 @@ those callers.
   decision and, for denies, the rule name in the reason.
 - **Real git:** `checkpub` tests create temp repos (`git init`, `-c core.autocrlf=false`, fixed author env).
 - **Fake executables:** `proctest.Install(t, "gh", scenario)` copies the test binary to `t.TempDir()/gh[.exe]` and
-  returns its absolute path. Each package's `TestMain` calls `proctest.Main()` before `m.Run`; when
-  `STACK_FAKE_SCENARIO` is set it answers argv from a JSON scenario (`argv → stdout, stderr, exit, sleep, spawn
-  grandchild`) and appends argv and stdin to a log the test asserts on. Code under test receives the resolved path
+  returns its absolute path. Each package's `TestMain` calls `proctest.Main()` before `m.Run`; a copy that finds its
+  JSON scenario file next to its own executable answers argv from it (`argv → stdout, stderr, exit, sleep, spawn
+  grandchild`) and appends argv and stdin to a log the test asserts on. Detection does not use the environment, so a
+  fake still works when the code under test replaces `Cmd.Env`. Code under test receives the resolved path
   through the `Runner`/lookup seam; tests that must change `PATH` (discovery) are not parallel, because setting `PATH`
   in `Cmd.Env` does not change the parent's `PATH` lookup. The same helper fakes extensions and boards.
 - **Processes:** the inherited-pipe test spawns a grandchild that keeps stdout open after the child exits and
