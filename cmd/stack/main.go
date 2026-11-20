@@ -1,28 +1,24 @@
 package main
 
 import (
-	"fmt"
-	"io"
+	"context"
 	"os"
-)
 
-const exitUsage = 2
+	"github.com/shuymn/stack/internal/cli"
+	"github.com/shuymn/stack/internal/paths"
+)
 
 var version = "dev"
 
-func run(args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 {
-		_, _ = fmt.Fprintln(stdout, "stack: minimal orchestration CLI (see docs/architecture.md)")
-		return 0
-	}
-	if args[0] == "--version" || args[0] == "-v" {
-		_, _ = fmt.Fprintln(stdout, version)
-		return 0
-	}
-	_, _ = fmt.Fprintf(stderr, "stack: unknown command %q\n", args[0])
-	return exitUsage
-}
-
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+	// An unknown home stays empty; commands that need it report that themselves.
+	home, _ := paths.Home()
+	os.Exit(cli.Run(context.Background(), os.Args[1:], cli.Env{
+		Stdin:   os.Stdin,
+		Stdout:  os.Stdout,
+		Stderr:  os.Stderr,
+		Getenv:  os.Getenv,
+		Home:    home,
+		Version: version,
+	}))
 }
