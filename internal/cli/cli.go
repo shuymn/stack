@@ -90,6 +90,7 @@ var commands = []*command{
 		path:    []string{"hook", "claude", "pre-tool-use"},
 		summary: "PreToolUse hook: deny the hard-boundary hazards",
 		hook:    true,
+		run:     runPreToolUse,
 	},
 	{
 		path: []string{"pr", "merge"},

@@ -1,0 +1,1 @@
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"stack guard (pencil): the code calls generateImage(…). Pencil's Generate (AI image/SVG) is not used: the quota is small. Draw icons as paths (Octicons). If this is a helper of your own named generate*, rename it."}}
