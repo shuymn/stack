@@ -90,6 +90,7 @@ func TestPrMerge(t *testing.T) {
 			want string
 		}{
 			{nil, []string{"12", "abc"}, "7-40 lower-case hex"},
+			{nil, []string{"12", "abc", "--auto"}, "7-40 lower-case hex"},
 			{nil, []string{"7", prHead, "--merge", "--rebase"}, "pass one merge method"},
 			{map[string]string{"GH_REPO": "o/r"}, []string{"7", prHead}, "GH_REPO"},
 			{nil, []string{"7", prHead, "--body", "see /" + "home/bob/x"}, "--body: local path"},

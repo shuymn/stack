@@ -103,7 +103,7 @@ func TestArgumentErrors(t *testing.T) {
 		{"kit", "open"},
 		{"kit", "open", "a", "b"},
 		{"pr", "merge", "12"},
-		{"pr", "merge", "12", "abc", "--auto"},
+		{"pr", "merge", "12", "abc", "--admin"},
 		{"pr", "merge", "12", "abc", "--subject"},
 		{"pr", "merge", "12", "abc", "--squash=maybe"},
 		{"check", "public"},

@@ -96,7 +96,7 @@ var commands = []*command{
 		path: []string{"pr", "merge"},
 		args: "<pr> <head-sha>",
 		flagDoc: "[--merge|--squash|--rebase] [--delete-branch] [--subject S] [--body B] " +
-			"[--allow-no-checks]",
+			"[--allow-no-checks] [--auto]",
 		summary: "merge the checked head SHA after its checks pass",
 		define: func(fs *flag.FlagSet) {
 			fs.Bool("merge", false, "")
@@ -106,6 +106,7 @@ var commands = []*command{
 			fs.String("subject", "", "")
 			fs.String("body", "", "")
 			fs.Bool("allow-no-checks", false, "")
+			fs.Bool("auto", false, "")
 		},
 		run: runPrMerge,
 	},
