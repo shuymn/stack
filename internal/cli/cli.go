@@ -114,6 +114,7 @@ var commands = []*command{
 			fs.String("body-file", "", "")
 			fs.String("branch", "", "")
 		},
+		run: runCheckPublic,
 	},
 	{
 		path:    []string{"budget", "status"},
