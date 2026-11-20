@@ -18,13 +18,19 @@ type result struct {
 
 func run(t *testing.T, env map[string]string, args ...string) result {
 	t.Helper()
+	return runIn(t, t.TempDir(), env, args...)
+}
+
+// runIn is run with a given home.
+func runIn(t *testing.T, home string, env map[string]string, args ...string) result {
+	t.Helper()
 	var stdout, stderr bytes.Buffer
 	code := Run(context.Background(), args, Env{
 		Stdin:   strings.NewReader(""),
 		Stdout:  &stdout,
 		Stderr:  &stderr,
 		Getenv:  func(k string) string { return env[k] },
-		Home:    t.TempDir(),
+		Home:    home,
 		Version: "v1.2.3",
 	})
 	return result{code, stdout.String(), stderr.String()}
@@ -78,8 +84,6 @@ func TestUnknownCommand(t *testing.T) {
 
 func TestRouting(t *testing.T) {
 	tests := [][]string{
-		{"kit", "open", "demo"},
-		{"kit", "close", "demo"},
 		{"pr", "merge", "12", "abc", "--squash"},
 		{"pr", "merge", "--delete-branch", "12", "--body", "--x", "abc", "--merge=false"},
 		{"budget", "status"},

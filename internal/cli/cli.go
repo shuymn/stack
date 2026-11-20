@@ -72,11 +72,13 @@ var commands = []*command{
 		path:    []string{"kit", "open"},
 		args:    "<slug>",
 		summary: "record <slug> for this session and print its context",
+		run:     runKitOpen,
 	},
 	{
 		path:    []string{"kit", "close"},
 		args:    "<slug>",
 		summary: "remove <slug> from this session's kits",
+		run:     runKitClose,
 	},
 	{
 		path:    []string{"hook", "claude", "session-start"},

@@ -42,9 +42,12 @@ func TestExpand(t *testing.T) {
 	}{
 		{"~", home},
 		{"~/", home},
-		{"~/x/../y", home + sep + "x/../y"},
+		{"~/x/../y", home + sep + filepath.FromSlash("x/../y")},
 		{`~\x`, home + sep + "x"},
-		{"~/.config/stack/config.toml", home + sep + ".config/stack/config.toml"},
+		{
+			"~/.config/stack/config.toml",
+			home + sep + filepath.FromSlash(".config/stack/config.toml"),
+		},
 		{"~user", "~user"},
 		{"~user/x", "~user/x"},
 		{"x/~", "x/~"},
@@ -55,6 +58,15 @@ func TestExpand(t *testing.T) {
 		if got := Expand(home, tt.in); got != tt.want {
 			t.Errorf("Expand(%q) = %q, want %q", tt.in, got, tt.want)
 		}
+	}
+}
+
+func TestTildeWindowsSeparators(t *testing.T) {
+	if got, ok := tilde(`C:\h`, "~/a/../b/c.md", true); !ok || got != `C:\h\a\..\b\c.md` {
+		t.Errorf("tilde windows = %q, %v", got, ok)
+	}
+	if got, _ := tilde("/h", "~/a/b", false); got != "/h/a/b" {
+		t.Errorf("tilde posix = %q", got)
 	}
 }
 
@@ -69,7 +81,14 @@ func TestResolve(t *testing.T) {
 		want   string
 		ok     bool
 	}{
-		{"relative joined to cwd", cwd, "a/../b", false, cwd + sep + "a/../b", true},
+		{
+			"relative joined to cwd",
+			cwd,
+			"a/../b",
+			false,
+			cwd + sep + filepath.FromSlash("a/../b"),
+			true,
+		},
 		{"tilde expanded", cwd, "~/x", true, home + sep + "x", true},
 		{"bare tilde expanded", cwd, "~", true, home, true},
 		{"quoted tilde is a name", cwd, "~", false, cwd + sep + "~", true},
@@ -165,7 +184,7 @@ func TestResolveKeepsComponents(t *testing.T) {
 	link := filepath.Join(dir, "link")
 	symlinked := os.Symlink(filepath.Join(target, "sub"), link) == nil
 	tests := []struct{ in, want string }{
-		{"link/../f.txt", dir + sep + "link/../f.txt"},
+		{"link/../f.txt", dir + sep + filepath.FromSlash("link/../f.txt")},
 		{link + sep + ".." + sep + "f.txt", link + sep + ".." + sep + "f.txt"},
 	}
 	for _, tt := range tests {
