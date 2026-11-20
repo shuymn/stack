@@ -144,16 +144,41 @@ func secretsFileTool(in hookio.Input, opts Options) (Decision, bool) {
 				secretsAdvice)
 		}
 	}
-	// A Grep glob starting with `!` excludes the files it matches (ripgrep's negation), so it never
-	// reads a secret; the path above is still judged on its own.
-	negated := in.ToolName == "Grep" && strings.HasPrefix(glob, "!")
-	if glob != "" && !negated {
-		if s, ok := secretGlob(list, glob, tin.Path, in.CWD, opts.Home); ok {
+	patterns := []string{glob}
+	if in.ToolName == "Grep" {
+		patterns = splitGlobs(glob)
+	}
+	for _, p := range patterns {
+		// A pattern starting with `!` excludes the files it matches (ripgrep's negation), so it
+		// never reads a secret; the path above is judged on its own.
+		if p == "" || strings.HasPrefix(p, "!") {
+			continue
+		}
+		if s, ok := secretGlob(list, p, tin.Path, in.CWD, opts.Home); ok {
 			return deny(RuleSecrets, "%s pattern %q can match the secret %q. %s", in.ToolName,
-				glob, s.entry, secretsAdvice)
+				p, s.entry, secretsAdvice)
 		}
 	}
 	return Decision{}, false
+}
+
+// splitGlobs splits a Grep glob field into its patterns as Claude Code does: at whitespace and
+// commas outside `{…}` brace groups, so `!*.md,.env` is two patterns and `*.{ts,tsx}` one.
+func splitGlobs(field string) []string {
+	var out []string
+	depth, start := 0, 0
+	for i, r := range field {
+		switch {
+		case r == '{':
+			depth++
+		case r == '}' && depth > 0:
+			depth--
+		case depth == 0 && (r == ',' || unicode.IsSpace(r)):
+			out = append(out, field[start:i])
+			start = i + utf8.RuneLen(r)
+		}
+	}
+	return append(out, field[start:])
 }
 
 // secretPath reports the secret p names, resolved against cwd, and with follow also through its

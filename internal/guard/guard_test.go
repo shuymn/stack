@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -165,6 +166,22 @@ func TestSecretsFileTools(t *testing.T) {
 		wantAllow(t, ".DEV.VARS on Linux", d, ok)
 	} else {
 		wantDeny(t, ".DEV.VARS on a case-insensitive OS", d, ok, RuleSecrets)
+	}
+}
+
+func TestSplitGlobs(t *testing.T) {
+	for field, want := range map[string][]string{
+		"*.go":               {"*.go"},
+		"!*.md,*.go":         {"!*.md", "*.go"},
+		"*.ts  *.go":         {"*.ts", "", "*.go"},
+		"*.{ts,tsx},!x/**":   {"*.{ts,tsx}", "!x/**"},
+		"!{a,b} c":           {"!{a,b}", "c"},
+		"a{b,{c,d}}e,f":      {"a{b,{c,d}}e", "f"},
+		"unbalanced{a,b c,d": {"unbalanced{a,b c,d"},
+	} {
+		if got := splitGlobs(field); !slices.Equal(got, want) {
+			t.Errorf("splitGlobs(%q) = %q, want %q", field, got, want)
+		}
 	}
 }
 

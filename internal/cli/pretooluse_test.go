@@ -178,6 +178,26 @@ func TestPreToolUseRegressions(t *testing.T) {
 			"secrets",
 		},
 		{
+			"positive pattern after a negated one in a comma list", "Grep",
+			map[string]any{"pattern": "KEY", "glob": "!*.md,.dev.vars"},
+			"secrets",
+		},
+		{
+			"positive pattern after a negated one in a space list", "Grep",
+			map[string]any{"pattern": "KEY", "glob": "!*.md **/.dev.vars*"},
+			"secrets",
+		},
+		{
+			"negated patterns only", "Grep",
+			map[string]any{"pattern": "KEY", "glob": "!**/.dev.vars, !*.md"},
+			"",
+		},
+		{
+			"negated brace group stays whole", "Grep",
+			map[string]any{"pattern": "KEY", "glob": "!{*.md,.dev.vars}"},
+			"",
+		},
+		{
 			"gh api help merges nothing", "Bash",
 			map[string]any{"command": "gh api --help -X PUT repos/o/r/pulls/1/merge"},
 			"",
