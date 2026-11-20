@@ -48,7 +48,7 @@ const (
 	CycleTimeout    = 30 * time.Minute
 )
 
-// Timeouts bound each extension run of a stage.
+// Timeouts bound each stage: one deadline shared by all its extensions.
 var Timeouts = map[string]time.Duration{
 	StageEntry:    EntryTimeout,
 	StageOutbound: OutboundTimeout,
@@ -182,7 +182,8 @@ type Options struct {
 	// Stderr receives each extension's stderr, every line prefixed `[<name>] `; nil discards it.
 	// It must not block.
 	Stderr io.Writer
-	// Timeout bounds each extension run; zero means the stage's entry in Timeouts.
+	// Timeout is the stage's one deadline, shared by all its extensions; zero means the stage's
+	// entry in Timeouts.
 	Timeout time.Duration
 	// MaxStdout caps each response; zero means proc's 1 MiB.
 	MaxStdout int64
@@ -195,30 +196,49 @@ func Run(ctx context.Context, o Options, stage string, stdin []byte, plans []Pla
 	for _, p := range plans {
 		if p.Skipped() {
 			agg.Skipped = append(agg.Skipped, p.Name)
-			continue
 		}
-		var r Result
-		if p.Runnable() {
-			r = o.runOne(ctx, stage, stdin, p)
-		} else {
-			r = warn(p.Name, p.Err.Error())
-		}
+	}
+	Stream(ctx, o, stage, stdin, plans, func(r Result) {
 		agg.Results = append(agg.Results, r)
 		if slices.Index(severity, r.Status) > slices.Index(severity, agg.Status) {
 			agg.Status = r.Status
 		}
-	}
+	})
 	return agg
 }
 
-func (o Options) runOne(ctx context.Context, stage string, stdin []byte, p Plan) Result {
+// Stream runs the runnable plans of stage in order under one stage deadline and passes each
+// result to each as soon as it is known; skipped plans yield nothing. Once the deadline has
+// passed no extension starts: each remaining one warns, so a stage takes at most its timeout
+// plus one cleanup grace period of the runner.
+func Stream(ctx context.Context, o Options, stage string, stdin []byte, plans []Plan,
+	each func(Result),
+) {
 	timeout := o.Timeout
 	if timeout <= 0 {
 		timeout = Timeouts[stage]
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	for _, p := range plans {
+		switch {
+		case p.Skipped():
+			continue
+		case !p.Runnable():
+			each(warn(p.Name, p.Err.Error()))
+		case errors.Is(ctx.Err(), context.DeadlineExceeded):
+			each(warn(p.Name, fmt.Sprintf("not started: stage deadline of %s exceeded", timeout)))
+		case ctx.Err() != nil:
+			each(warn(p.Name, "not started: "+ctx.Err().Error()))
+		default:
+			each(o.runOne(ctx, stage, stdin, p, timeout))
+		}
+	}
+}
 
+func (o Options) runOne(ctx context.Context, stage string, stdin []byte, p Plan,
+	timeout time.Duration,
+) Result {
 	stderr := io.Discard
 	if o.Stderr != nil {
 		stderr = o.Stderr
@@ -247,7 +267,7 @@ func evaluate(name string, res proc.Result, runErr error, timeout time.Duration)
 	case runErr != nil:
 		return warn(name, runErr.Error())
 	case res.TimedOut:
-		return warn(name, fmt.Sprintf("timed out after %s", timeout))
+		return warn(name, fmt.Sprintf("timed out: stage deadline of %s exceeded", timeout))
 	case res.WaitDelayExceeded:
 		return warn(name, "stdout or stderr stayed open after the extension exited")
 	case res.Truncated:

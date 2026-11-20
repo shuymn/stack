@@ -171,7 +171,7 @@ func TestEvaluateOrder(t *testing.T) {
 		want   string
 		reason string
 	}{
-		{proc.Result{Stdout: valid, TimedOut: true, ExitCode: -1}, StatusWarn, "timed out after 1s"},
+		{proc.Result{Stdout: valid, TimedOut: true, ExitCode: -1}, StatusWarn, "timed out: stage deadline of 1s exceeded"},
 		{proc.Result{Stdout: valid, WaitDelayExceeded: true}, StatusWarn, "stayed open"},
 		{proc.Result{Stdout: valid, Truncated: true}, StatusWarn, "size limit"},
 		{proc.Result{Stdout: valid, ExitCode: 9}, StatusBlock, ""},
@@ -217,6 +217,33 @@ func TestEvaluateStrictResponse(t *testing.T) {
 		} else if string(r.Findings) != "[]" {
 			t.Errorf("evaluate(%q) findings = %s, want []", tt.stdout, r.Findings)
 		}
+	}
+}
+
+// TestRunStageDeadline covers C21's one deadline per stage: two extensions that hang finish within
+// one budget plus one cleanup grace period, and the second never starts.
+func TestRunStageDeadline(t *testing.T) {
+	t.Parallel()
+	const budget, grace = 2 * time.Second, 500 * time.Millisecond
+	hang := proctest.Response{Stdout: `{"status":"pass"}`, Sleep: time.Minute}
+	first, second := install(t, "first", hang), install(t, "second", hang)
+	o := Options{Runner: proc.Exec{WaitDelay: grace}, Timeout: budget}
+	start := time.Now()
+	agg := Run(context.Background(), o, StageCycle, []byte(request), []Plan{first, second})
+	elapsed := time.Since(start)
+	if limit := budget + grace + time.Second; elapsed >= limit {
+		t.Fatalf("stage took %s, want under %s", elapsed, limit)
+	}
+	if agg.Status != StatusWarn || len(agg.Results) != 2 ||
+		!strings.Contains(agg.Results[0].Error, "timed out") ||
+		!strings.Contains(agg.Results[1].Error, "not started: stage deadline of 2s exceeded") {
+		t.Fatalf("aggregate = %+v", agg)
+	}
+	if f := findings(t, agg.Results[1]); len(f) != 1 || f[0]["extension"] != "second" {
+		t.Fatalf("unlaunched finding = %s", agg.Results[1].Findings)
+	}
+	if calls := proctest.Calls(t, second.Path); len(calls) != 0 {
+		t.Fatalf("second extension started after the deadline: %+v", calls)
 	}
 }
 
