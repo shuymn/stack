@@ -21,8 +21,8 @@ const (
 	// BoardDeadline is the one deadline covering every board of a render
 	// (`orchestration-context.py:47`).
 	BoardDeadline = 40 * time.Second
-	// stateLimit is the size in bytes past which a state file gets a rewrite note.
-	stateLimit = 3000
+	// StateLimit is the size in bytes past which a state file gets a rewrite note.
+	StateLimit = 3000
 )
 
 // Block kinds, so compact restore can budget each kind separately.
@@ -33,8 +33,11 @@ const (
 	KindBoard    = "board"
 )
 
-// stateFiles are rendered in this order.
-var stateFiles = []string{"NORTH.md", "state.md"}
+// StateFiles are a kit's state files, in render order. Callers must not modify it.
+var StateFiles = []string{"NORTH.md", "state.md"}
+
+// ItemsFile is a kit's attention item register, relative to the kit dir.
+var ItemsFile = filepath.Join("attention", "items.json")
 
 // Block is one part of a kit context: a tagged block naming its absolute path, or, with an empty
 // Tag, a bare marker line in Body.
@@ -101,11 +104,11 @@ func StateBlocks(dir string) []Block {
 	defer func() { _ = root.Close() }()
 
 	var blocks []Block
-	for _, name := range stateFiles {
+	for _, name := range StateFiles {
 		path := filepath.Join(dir, name)
-		data, err := readKitFile(root, name)
+		data, err := ReadFile(root, name)
 		switch {
-		case errors.Is(err, errMissing):
+		case errors.Is(err, ErrMissing):
 			if name == "state.md" {
 				blocks = append(blocks, marker(KindState,
 					fmt.Sprintf("[new kit: %s; write state.md here]", dir)))
@@ -117,9 +120,9 @@ func StateBlocks(dir string) []Block {
 		}
 		state := strings.ReplaceAll(text(data), "\r\n", "\n")
 		body := state
-		if n := len(state); n > stateLimit {
+		if n := len(state); n > StateLimit {
 			body = fmt.Sprintf("[%s is %d bytes, over %d: rewrite it shorter now; "+
-				"it holds the current state, not history.]\n%s", name, n, stateLimit, state)
+				"it holds the current state, not history.]\n%s", name, n, StateLimit, state)
 		}
 		blocks = append(blocks, Block{
 			Kind:  KindState,
@@ -135,28 +138,43 @@ func StateBlocks(dir string) []Block {
 	return blocks
 }
 
-// errMissing reports a kit file that does not exist, as opposed to one that cannot be read.
-var errMissing = errors.New("missing")
+// ErrMissing reports a kit file that does not exist, as opposed to one that cannot be read.
+var ErrMissing = errors.New("missing")
 
-// readKitFile reads rel under root. Only a name that does not exist at all yields errMissing; a
+// ReadFile reads rel under root. Only a name that does not exist at all yields ErrMissing; a
 // dangling symlink exists and fails as unreadable.
-func readKitFile(root *os.Root, rel string) ([]byte, error) {
+func ReadFile(root *os.Root, rel string) ([]byte, error) {
 	data, err := root.ReadFile(rel)
-	if errors.Is(err, fs.ErrNotExist) {
-		if _, lerr := root.Lstat(rel); errors.Is(lerr, fs.ErrNotExist) {
-			return nil, errMissing
-		}
+	if missing(root, rel, err) {
+		return nil, ErrMissing
 	}
 	return data, err //nolint:wrapcheck // callers only render a marker from it.
+}
+
+// Stat is ReadFile for the file's info, following a symlink that stays under root.
+func Stat(root *os.Root, rel string) (fs.FileInfo, error) {
+	info, err := root.Stat(rel)
+	if missing(root, rel, err) {
+		return nil, ErrMissing
+	}
+	return info, err //nolint:wrapcheck // callers only display a marker from it.
+}
+
+// missing reports whether err, from accessing rel under root, means rel does not exist at all.
+func missing(root *os.Root, rel string, err error) bool {
+	if !errors.Is(err, fs.ErrNotExist) {
+		return false
+	}
+	_, lerr := root.Lstat(rel)
+	return errors.Is(lerr, fs.ErrNotExist)
 }
 
 // itemsBlock lists the rules of `attention/items.json` for roles orchestrator and all. A missing or
 // malformed file, or one without such rules, yields no block; an unreadable one yields a marker.
 func itemsBlock(root *os.Root, dir string) (Block, bool) {
-	rel := filepath.Join("attention", "items.json")
-	path := filepath.Join(dir, rel)
-	data, err := readKitFile(root, rel)
-	if errors.Is(err, errMissing) {
+	path := filepath.Join(dir, ItemsFile)
+	data, err := ReadFile(root, ItemsFile)
+	if errors.Is(err, ErrMissing) {
 		return Block{}, false
 	}
 	if err != nil {

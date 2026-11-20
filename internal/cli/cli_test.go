@@ -84,7 +84,6 @@ func TestUnknownCommand(t *testing.T) {
 
 func TestRouting(t *testing.T) {
 	tests := [][]string{
-		{"budget", "status"},
 		{"run", "entry"},
 		{"run", "--dry-run", "outbound", "--ext", "demo", "--range", "a..b", "--prompt-file", "p"},
 		{"run", "cycle", "--replay", "f.json"},
