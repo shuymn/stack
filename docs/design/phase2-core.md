@@ -262,10 +262,13 @@ Stdin: SessionStart payload. Env: `CLAUDE_ENV_FILE`.
 5. **Budget: 9,500 chars** (`orchestration-context.py:43`), counting everything emitted: block tags, path headers
    and markers included. Allocated in priority order: (1) the worker rules body, whole when it fits, else cut at its tail with `[...cut N chars]` (legacy puts rules first);
    (2) the brief, verbatim if it fits in the remainder, else cut at its tail and ended with `[...cut N chars]`;
-   (3) per kit in `.kits` order its `NORTH.md`/`state.md`/items blocks, each capped at 4,500 chars as legacy;
-   (4) handover and board blocks. Display order is rules, brief, kits. A block that does not fit is cut with the same
-   marker, or replaced by `[<kind> omitted: context limit]` when not even its tags fit; the space for these markers is
-   reserved before lower-priority text is placed.
+   (3) kits: first, per kit in `.kits` order, the block header and the first 600 chars of each of its
+   `NORTH.md`/`state.md` blocks, so with several kits every kit keeps its start; then, again in `.kits` order, the
+   rest of those blocks and the items blocks, each capped at 4,500 chars as legacy; (4) the handover block, which
+   appears once per compact, not per kit, and the board blocks. Display order is rules, brief, then per kit its state,
+   items and board blocks, then the handover. A block that does not fit is cut with the same marker, or replaced by
+   `[<kind> omitted: context limit]` when not even its tags fit; the space for these markers is reserved before
+   lower-priority text is placed.
 
 Settings wiring (dotfiles): `SessionStart`, no matcher, exec form (argv, no shell) of the pinned Claude Code
 version, `timeout: 60`, failure-continue (`onFailure: "continue"` where that version supports it) so a launch failure
@@ -616,7 +619,7 @@ those callers.
 | C17 | The renderer shall select the handover by `[handover]` order and render unreadable parts as markers. | `kit.TestRender` | T3 beats herdr; `HERDR_ENV=0` → none, `=1` → herdr; out-of-kit symlink → marker; board `.cmd` on Windows → marker |
 | C18 | For every source, when `CLAUDE_ENV_FILE` is provided, session-start shall append the export line; it shall print nothing except on compact. | `session.TestExport` | sources incl. `fork`; sourcing the file yields the id; stdout empty; `CLAUDE_ENV_FILE` unset → nothing written, exit 0, and a compact worker payload still restores the worker part |
 | C19 | When source is `compact`, session-start shall render the kits of that id only, without extensions. | `session.TestCompact` | resume→compact (same id) restores; fork→compact (new id) restores nothing; close then compact → absent; `.kits` lock held → kits omitted, worker part still restored; fake `stack-<name>` on `PATH` never invoked |
-| C20 | For a detected worker, compact shall restore body and brief within the 9,500-char budget in the stated priority. | `session.TestWorker` | each signal alone; string, block-array, tool_result-first and CRLF transcripts; rules whole and long brief verbatim with kits cut; a brief alone over 9,500 chars → rules whole, brief cut with marker, total incl. tags and markers ≤ 9,500; a rules body alone over 9,500 → rules cut with marker, nothing else, total ≤ 9,500; broken transcript keeps kits; unreadable kit keeps brief |
+| C20 | For a detected worker, compact shall restore body and brief within the 9,500-char budget in the stated priority. | `session.TestWorker`, `session.TestMultiKitReservation` | each signal alone; string, block-array, tool_result-first and CRLF transcripts; rules whole and long brief verbatim with kits cut; a brief alone over 9,500 chars → rules whole, brief cut with marker, total incl. tags and markers ≤ 9,500; a rules body alone over 9,500 → rules cut with marker, nothing else, total ≤ 9,500; broken transcript keeps kits; unreadable kit keeps brief; several kits after a long brief → each keeps its header and first 600 chars |
 | C21 | `ext` shall skip missing extensions, warn on unrunnable/timeout/WaitDelay/truncated/malformed output, reject non-component names, and aggregate block > warn > pass. | `ext.TestRun*` (proctest) | valid JSON then hang → warn; JSON and exit per case; mixed statuses; `--ext ../x` → exit 2; Windows: only `stack-x.cmd` on PATH → warn not runnable; a `.cmd` earlier on PATH than `stack-x.exe` → the `.exe` runs |
 | C22 | `--replay` shall send the fixture request, compare `expect`, and reject a stage mismatch. | `cli.TestRunReplay` | match → expected status; status mismatch → 1; stage mismatch → 2; fake's stdin log equals the fixture request |
 | C23 | If any pre-merge step fails, then `pr merge` shall not invoke `gh pr merge`. | `merge.TestRefusals` (argv log) | one fake scenario per step; checks query OID ≠ `H` refuses; confirmed-empty vs query-error distinguished |
