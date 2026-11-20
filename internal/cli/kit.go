@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/shuymn/stack/internal/config"
+	"github.com/shuymn/stack/internal/ext"
 	"github.com/shuymn/stack/internal/kit"
 	"github.com/shuymn/stack/internal/paths"
 	"github.com/shuymn/stack/internal/proc"
@@ -64,12 +65,14 @@ func runKitOpen(ctx context.Context, env Env, inv invocation) error {
 	if err != nil {
 		return err
 	}
-	cfg, warnings, err := config.Load(paths.ConfigFile(env.Home))
+	cfg, err := loadConfig(env)
 	if err != nil {
 		return err
 	}
-	for _, w := range warnings {
-		_, _ = fmt.Fprintf(env.Stderr, "stack: %s\n", w)
+	// A bad entry name is a config error found before anything changes.
+	if err := ext.CheckNames(cfg.Stages.Entry); err != nil {
+		return fmt.Errorf("%w: %s: [stages].entry: %w", config.ErrInvalid,
+			paths.ConfigFile(env.Home), err)
 	}
 	root, err := filepath.Abs(paths.FromConfig(env.Home, cfg.Kit.Root))
 	if err != nil {
@@ -98,7 +101,9 @@ func runKitOpen(ctx context.Context, env Env, inv invocation) error {
 		Getenv:   env.Getenv,
 		Handover: cfg.Handover,
 	}
-	if _, err := fmt.Fprint(env.Stdout, kit.Join(r.Render(boardCtx, dir))); err != nil {
+	blocks := r.Render(boardCtx, dir)
+	blocks = append(blocks, entryBlocks(ctx, env, cfg.Stages.Entry)...)
+	if _, err := fmt.Fprint(env.Stdout, kit.Join(blocks)); err != nil {
 		if id != "" {
 			return fmt.Errorf("write context: %w; %s is recorded, rerun `stack kit open %s` to "+
 				"print it", err, slug, slug)

@@ -8,7 +8,6 @@ import (
 	"os"
 
 	"github.com/shuymn/stack/internal/checkpub"
-	"github.com/shuymn/stack/internal/config"
 	"github.com/shuymn/stack/internal/paths"
 	"github.com/shuymn/stack/internal/proc"
 )
@@ -62,15 +61,9 @@ func runCheckPublic(ctx context.Context, env Env, inv invocation) error {
 
 // privateTerms loads the config, printing its warnings, and reads the configured private terms.
 func privateTerms(env Env) ([]string, error) {
-	if env.Home == "" {
-		return nil, errNoHome
-	}
-	cfg, warnings, err := config.Load(paths.ConfigFile(env.Home))
+	cfg, err := loadConfig(env)
 	if err != nil {
 		return nil, err
-	}
-	for _, w := range warnings {
-		_, _ = fmt.Fprintf(env.Stderr, "stack: %s\n", w)
 	}
 	return checkpub.ReadTerms(paths.Expand(env.Home, cfg.Safety.PrivateTerms))
 }
