@@ -59,6 +59,7 @@ func TestGhFailures(t *testing.T) {
 		{"truncated", proctest.Response{Stdout: ok + strings.Repeat(" ", 1<<20)}, "size cap"},
 		{"not JSON", proctest.Response{Stdout: "o/r\n"}, "decode"},
 		{"trailing JSON", proctest.Response{Stdout: ok + ok}, "trailing output"},
+		{"trailing bracket", proctest.Response{Stdout: ok + "]"}, "trailing output"},
 		{
 			"bad nameWithOwner",
 			proctest.Response{Stdout: `{"nameWithOwner":"o/r/x"}`},

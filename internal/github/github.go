@@ -157,7 +157,8 @@ func (r MergeResult) String() string {
 // Toplevel returns the work tree containing Dir, or "" when Dir is not in a work tree (git exits
 // non-zero). A git that cannot run or times out is an error.
 func (c Client) Toplevel(ctx context.Context) (string, error) {
-	res, err := c.run(ctx, c.git(), c.timeout(), "rev-parse", "--show-toplevel")
+	res, err := c.run(ctx, c.timeout(),
+		proc.Cmd{Name: c.git(), Args: []string{"rev-parse", "--show-toplevel"}})
 	switch {
 	case err != nil:
 		return "", fmt.Errorf("%w: git rev-parse: %w", ErrGit, err)
@@ -402,10 +403,8 @@ func (c Client) Merge(
 	if timeout <= 0 {
 		timeout = DefaultMergeTimeout
 	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	res, err := c.Runner.Run(ctx, proc.Cmd{
-		Name: c.gh(), Args: MergeArgv(pr, method, head, a), Dir: c.Dir, Env: c.Env, Stderr: log,
+	res, err := c.run(ctx, timeout, proc.Cmd{
+		Name: c.gh(), Args: MergeArgv(pr, method, head, a), Stderr: log,
 	})
 	if len(res.Stdout) > 0 {
 		_, _ = log.Write(res.Stdout)
@@ -436,7 +435,7 @@ func (c Client) ReadBack(ctx context.Context, pr int) (Readback, error) {
 
 // ghJSON runs gh with args and decodes its stdout into v.
 func (c Client) ghJSON(ctx context.Context, v any, args ...string) error {
-	res, err := c.run(ctx, c.gh(), c.timeout(), args...)
+	res, err := c.run(ctx, c.timeout(), proc.Cmd{Name: c.gh(), Args: args})
 	what := strings.Join(args[:min(whatWords, len(args))], " ")
 	switch {
 	case err != nil:
@@ -455,23 +454,21 @@ func (c Client) ghJSON(ctx context.Context, v any, args ...string) error {
 	if err := dec.Decode(v); err != nil {
 		return fmt.Errorf("%w: %s: decode: %w", ErrGh, what, err)
 	}
-	if dec.More() {
+	// Only whitespace may follow the value; Decoder.More would accept a stray `]` or `}`.
+	if len(bytes.TrimSpace(res.Stdout[dec.InputOffset():])) > 0 {
 		return fmt.Errorf("%w: %s: trailing output after JSON", ErrGh, what)
 	}
 	return nil
 }
 
-func (c Client) run(
-	ctx context.Context,
-	name string,
-	timeout time.Duration,
-	args ...string,
-) (proc.Result, error) {
+// run runs cmd in c.Dir with c.Env under timeout.
+func (c Client) run(ctx context.Context, timeout time.Duration, cmd proc.Cmd) (proc.Result, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	res, err := c.Runner.Run(ctx, proc.Cmd{Name: name, Args: args, Dir: c.Dir, Env: c.Env})
+	cmd.Dir, cmd.Env = c.Dir, c.Env
+	res, err := c.Runner.Run(ctx, cmd)
 	if err != nil {
-		return res, fmt.Errorf("run %s: %w", name, err)
+		return res, fmt.Errorf("run %s: %w", cmd.Name, err)
 	}
 	return res, nil
 }
