@@ -29,11 +29,6 @@ func TestFailOpen(t *testing.T) {
 			fn:    func(Input) ([]byte, error) { return Deny("unreachable") },
 		},
 		{
-			name:  "oversized stdin",
-			stdin: `{"tool_name":"` + strings.Repeat("a", MaxInput) + `"}`,
-			fn:    func(Input) ([]byte, error) { return Deny("unreachable") },
-		},
-		{
 			name:  "callback error with output",
 			stdin: `{"tool_name":"Read"}`,
 			fn: func(Input) ([]byte, error) {
@@ -137,15 +132,31 @@ func TestContext(t *testing.T) {
 	}
 }
 
-func TestDecodeSizeLimit(t *testing.T) {
+// TestRunLargeInput guards against a size cap: a valid payload padded past
+// 8 MiB must still reach the decision.
+func TestRunLargeInput(t *testing.T) {
 	t.Parallel()
 
-	pad := strings.Repeat(" ", MaxInput-2)
-	if _, err := Decode(strings.NewReader("{}" + pad)); err != nil {
-		t.Fatalf("exactly MaxInput: %v", err)
-	}
-	if _, err := Decode(strings.NewReader("{}" + pad + " ")); !errors.Is(err, ErrInputTooLarge) {
-		t.Fatalf("MaxInput+1: err = %v, want ErrInputTooLarge", err)
+	payload := `{"hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":"a.txt"}}` +
+		strings.Repeat(
+			" ",
+			9<<20,
+		)
+	var stdout bytes.Buffer
+	code := Run(
+		strings.NewReader(payload),
+		&stdout,
+		io.Discard,
+		true,
+		func(in Input) ([]byte, error) {
+			if in.ToolName != "Read" {
+				return nil, errors.New("tool_name not decoded")
+			}
+			return Deny("denied")
+		},
+	)
+	if code != 0 || !strings.Contains(stdout.String(), `"permissionDecision":"deny"`) {
+		t.Fatalf("exit = %d, stdout = %q; want the deny", code, stdout.String())
 	}
 }
 

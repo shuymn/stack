@@ -144,7 +144,7 @@ as `exec.ErrDot` does. Per caller: kit board → `[board not runnable on this OS
 
 ### 2.3 Hook IO (`internal/hookio`)
 
-Decodes the stdin JSON (cap 8 MiB) into the fields core reads: `session_id`, `transcript_path`, `cwd`,
+Decodes the whole stdin JSON (no size cap, so a large valid payload is still judged) into the fields core reads: `session_id`, `transcript_path`, `cwd`,
 `hook_event_name`, `source`, `agent_type`, `tool_name`, `tool_input` (kept as `json.RawMessage`, decoded per tool).
 Output is buffered and written once at the end:
 

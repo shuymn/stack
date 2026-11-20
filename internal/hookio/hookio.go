@@ -14,16 +14,11 @@ import (
 	"runtime/debug"
 )
 
-// MaxInput is the largest hook payload Decode accepts.
-const MaxInput = 8 << 20
-
 // DebugEnv names the variable that, when exactly "1", sends swallowed hook
 // errors to stderr.
 const DebugEnv = "STACK_DEBUG"
 
 var (
-	// ErrInputTooLarge reports a payload over MaxInput.
-	ErrInputTooLarge = errors.New("hook input exceeds 8 MiB")
 	// ErrNotObject reports a payload that is valid JSON but not an object.
 	ErrNotObject = errors.New("hook input is not a JSON object")
 	// ErrPanic reports a recovered panic in a hook function.
@@ -45,14 +40,12 @@ type Input struct {
 	ToolInput      json.RawMessage `json:"tool_input"`
 }
 
-// Decode reads one JSON object of at most MaxInput bytes from r.
+// Decode reads one JSON object from r. There is no size cap: a large but
+// valid payload must still be judged.
 func Decode(r io.Reader) (Input, error) {
-	data, err := io.ReadAll(io.LimitReader(r, MaxInput+1))
+	data, err := io.ReadAll(r)
 	if err != nil {
 		return Input{}, fmt.Errorf("read hook input: %w", err)
-	}
-	if len(data) > MaxInput {
-		return Input{}, ErrInputTooLarge
 	}
 	trimmed := bytes.TrimLeft(data, " \t\r\n")
 	if len(trimmed) == 0 || trimmed[0] != '{' {
