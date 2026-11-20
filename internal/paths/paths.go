@@ -47,17 +47,19 @@ func Home() (string, error) {
 // verbatim. Components are kept as written: no lexical `..` removal, which could change the file
 // opened through a symlink.
 func Expand(home, p string) string {
-	return expand(home, p, isWindows)
+	s, _ := tilde(home, p, isWindows)
+	return s
 }
 
-func expand(home, p string, windows bool) string {
+// tilde expands the three `~` forms and reports whether p was one of them.
+func tilde(home, p string, windows bool) (string, bool) {
 	switch {
 	case p == "~":
-		return home
+		return home, true
 	case strings.HasPrefix(p, "~/"), strings.HasPrefix(p, `~\`):
-		return join(home, p[2:], windows)
+		return join(home, p[2:], windows), true
 	default:
-		return p
+		return p, false
 	}
 }
 
@@ -72,21 +74,20 @@ func Resolve(home, cwd, p string, expand bool) (string, bool) {
 	return resolve(home, cwd, p, expand, isWindows)
 }
 
-func resolve(home, cwd, p string, doExpand, windows bool) (string, bool) {
-	if doExpand && (p == "~" || strings.HasPrefix(p, "~/") || strings.HasPrefix(p, `~\`)) {
-		return expand(home, p, windows), true
+func resolve(home, cwd, p string, expand, windows bool) (string, bool) {
+	if expand {
+		if s, ok := tilde(home, p, windows); ok {
+			return s, true
+		}
 	}
-	if windows {
-		if mapped, kind := gitBashToWindows(p); kind != gitBashNone {
-			return mapped, kind != gitBashUnknown
-		}
-		if !isAbs(p, true) &&
-			(hasDrive(p) || strings.HasPrefix(p, `\`) || strings.HasPrefix(p, "/")) {
-			return "", false
-		}
+	if windows && strings.HasPrefix(p, "/") && !strings.HasPrefix(p, "//") {
+		return gitBashToWindows(p)
 	}
 	if isAbs(p, windows) {
 		return p, true
+	}
+	if windows && (hasDrive(p) || strings.HasPrefix(p, `\`)) {
+		return "", false
 	}
 	if cwd == "" || cwd == ShellRoot {
 		return "", false
@@ -127,30 +128,41 @@ func join(base, rel string, windows bool) string {
 	}
 }
 
-type gitBashKind int
-
-const (
-	gitBashNone gitBashKind = iota
-	gitBashRoot
-	gitBashDrive
-	gitBashUnknown
-)
-
-// gitBashToWindows maps a Git Bash absolute path (forward slash, not `//`) to its Windows form,
-// keeping the components after the drive as written. It is pure string logic so it is testable on
-// every OS.
-func gitBashToWindows(p string) (string, gitBashKind) {
-	if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") {
-		return "", gitBashNone
-	}
+// gitBashToWindows maps a Git Bash absolute path (one leading `/`) to its Windows form: the root
+// becomes ShellRoot and `/<drive>/…` becomes `<drive>:\…` with its components kept as written. A
+// path whose `..` steps above the drive mount is classified by its cleaned form, as Git Bash does,
+// so `/c/..` is ShellRoot. ok is false for any other path under the Git Bash root. It is pure string
+// logic so it is testable on every OS.
+func gitBashToWindows(p string) (string, bool) {
 	first, rest, _ := strings.Cut(p[1:], "/")
-	if len(first) == 1 && isASCIILetter(first[0]) {
-		return strings.ToUpper(first) + `:\` + strings.ReplaceAll(rest, "/", `\`), gitBashDrive
+	if len(first) == 1 && isASCIILetter(first[0]) && !stepsAbove(rest) {
+		return strings.ToUpper(first) + `:\` + strings.ReplaceAll(rest, "/", `\`), true
 	}
-	if path.Clean(p) == "/" {
-		return ShellRoot, gitBashRoot
+	switch clean := path.Clean(p); {
+	case clean == "/":
+		return ShellRoot, true
+	case clean != p:
+		return gitBashToWindows(clean) // clean is a fixed point of path.Clean, so this ends
+	default:
+		return "", false
 	}
-	return "", gitBashUnknown
+}
+
+// stepsAbove reports whether the slash-separated relative path climbs above its start with `..`.
+func stepsAbove(rel string) bool {
+	depth := 0
+	for c := range strings.SplitSeq(rel, "/") {
+		switch c {
+		case "", ".":
+		case "..":
+			if depth--; depth < 0 {
+				return true
+			}
+		default:
+			depth++
+		}
+	}
+	return false
 }
 
 func isASCIILetter(c byte) bool {

@@ -147,8 +147,9 @@ func TestResolveWindowsGitBash(t *testing.T) {
 	}
 }
 
-// TestResolveKeepsComponents opens the resolved path: lexical `..` removal would skip the symlink
-// and name a different file.
+// TestResolveKeepsComponents checks that Resolve returns `..` as written. On Unix it also opens the
+// result: lexical `..` removal would skip the symlink and name a different file. Windows itself
+// removes `..` before following links, so only the string is checked there.
 func TestResolveKeepsComponents(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "real")
@@ -161,17 +162,24 @@ func TestResolveKeepsComponents(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte("decoy"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(filepath.Join(target, "sub"), filepath.Join(dir, "link")); err != nil {
-		t.Skipf("symlinks unavailable: %v", err)
+	link := filepath.Join(dir, "link")
+	symlinked := os.Symlink(filepath.Join(target, "sub"), link) == nil
+	tests := []struct{ in, want string }{
+		{"link/../f.txt", dir + sep + "link/../f.txt"},
+		{link + sep + ".." + sep + "f.txt", link + sep + ".." + sep + "f.txt"},
 	}
-	for _, in := range []string{"link/../f.txt", filepath.Join(dir, "link") + sep + ".." + sep + "f.txt"} {
-		got, ok := Resolve("", dir, in, false)
-		if !ok {
-			t.Fatalf("Resolve(%q) not ok", in)
+	for _, tt := range tests {
+		got, ok := Resolve("", dir, tt.in, false)
+		if got != tt.want || !ok {
+			t.Errorf("Resolve(%q) = %q, %v; want %q, true", tt.in, got, ok, tt.want)
+			continue
+		}
+		if runtime.GOOS == "windows" || !symlinked {
+			continue
 		}
 		data, err := os.ReadFile(got)
 		if err != nil || string(data) != "real" {
-			t.Errorf("ReadFile(Resolve(%q) = %q) = %q, %v; want real", in, got, data, err)
+			t.Errorf("ReadFile(Resolve(%q) = %q) = %q, %v; want real", tt.in, got, data, err)
 		}
 	}
 }
@@ -193,8 +201,11 @@ func TestResolveRules(t *testing.T) {
 		{true, `C:\w`, `D:\a\..\b`, `D:\a\..\b`, true},
 		{true, `C:\w`, "C:/a", "C:/a", true},
 		{true, `C:\w`, `\\host\share\x`, `\\host\share\x`, true},
+		{true, `C:\w`, "//host/share/x", "//host/share/x", true},
 		{true, `C:\w`, "/c/a/../b", `C:\a\..\b`, true},
+		{true, `C:\w`, "/c/..", ShellRoot, true},
 		{true, `C:\w`, "/", ShellRoot, true},
+		{true, `C:\w`, "/usr/bin", "", false},
 		{true, ShellRoot, "x", "", false},
 	}
 	for _, tt := range tests {
@@ -210,32 +221,26 @@ func TestGitBashToWindows(t *testing.T) {
 	tests := []struct {
 		in   string
 		want string
-		kind gitBashKind
+		ok   bool
 	}{
-		{"/", ShellRoot, gitBashRoot},
-		{"/./", ShellRoot, gitBashRoot},
-		{"/c", `C:\`, gitBashDrive},
-		{"/c/", `C:\`, gitBashDrive},
-		{"/D/a/b/../c", `D:\a\b\..\c`, gitBashDrive},
-		{"/c/..", `C:\..`, gitBashDrive},
-		{"/usr/..", ShellRoot, gitBashRoot},
-		{"/usr/bin", "", gitBashUnknown},
-		{"/1/x", "", gitBashUnknown},
-		{"//server/share", "", gitBashNone},
-		{"rel/c", "", gitBashNone},
-		{`C:\x`, "", gitBashNone},
+		{"/", ShellRoot, true},
+		{"/./", ShellRoot, true},
+		{"/c", `C:\`, true},
+		{"/c/", `C:\`, true},
+		{"/D/a/b/../c", `D:\a\b\..\c`, true},
+		{"/c/..", ShellRoot, true},
+		{"/c/a/../..", ShellRoot, true},
+		{"/c/a/../../d/x", `D:\x`, true},
+		{"/c/../usr", "", false},
+		{"/usr/..", ShellRoot, true},
+		{"/usr/../c/x", `C:\x`, true},
+		{"/usr/bin", "", false},
+		{"/1/x", "", false},
 	}
 	for _, tt := range tests {
-		got, kind := gitBashToWindows(tt.in)
-		if got != tt.want || kind != tt.kind {
-			t.Errorf(
-				"gitBashToWindows(%q) = %q, %v; want %q, %v",
-				tt.in,
-				got,
-				kind,
-				tt.want,
-				tt.kind,
-			)
+		got, ok := gitBashToWindows(tt.in)
+		if got != tt.want || ok != tt.ok {
+			t.Errorf("gitBashToWindows(%q) = %q, %v; want %q, %v", tt.in, got, ok, tt.want, tt.ok)
 		}
 	}
 }

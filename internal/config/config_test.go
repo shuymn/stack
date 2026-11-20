@@ -110,6 +110,12 @@ func TestLoadInvalid(t *testing.T) {
 			"version = 1\n[safety]\ndeny_pencil_generate = \"no\"\n",
 			[]string{"line 3"},
 		},
+		{
+			"handover table value",
+			"[handover]\nT3CODE_THREAD_ID.path = \"t.md\"\n",
+			[]string{"handover"},
+		},
+		{"handover non-string value", "[handover]\nHERDR_ENV = 1\n", []string{"line 2"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

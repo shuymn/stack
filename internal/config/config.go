@@ -143,13 +143,16 @@ func Load(path string) (Config, []string, error) {
 	d.field(worker, "marker", &cfg.Worker.Marker)
 	d.field(worker, "body", &cfg.Worker.Body)
 
-	if handover := d.section(top, "handover"); handover.m != nil {
+	// Every `[handover]` value must be a string, so decode the table whole; its keys are free-form
+	// env names and take their order from MetaData.Keys.
+	if _, ok := top.m["handover"]; ok {
+		var handover map[string]string
+		d.field(top, "handover", &handover)
 		cfg.Handover = []HandoverEntry{}
 		for _, k := range md.Keys() {
 			if len(k) == 2 && k[0] == "handover" {
-				e := HandoverEntry{Env: k[1]}
-				d.field(handover, k[1], &e.Path)
-				cfg.Handover = append(cfg.Handover, e)
+				d.known[k.String()] = true
+				cfg.Handover = append(cfg.Handover, HandoverEntry{Env: k[1], Path: handover[k[1]]})
 			}
 		}
 	}
