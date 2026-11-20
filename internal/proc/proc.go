@@ -44,6 +44,8 @@ var (
 	ErrWaitDelay = errors.New("process pipes outlived the child")
 	// ErrExit reports a non-zero exit status from a Stream.
 	ErrExit = errors.New("process exited with non-zero status")
+	// ErrStart reports that the child never started, so it cannot have done anything.
+	ErrStart = errors.New("process did not start")
 )
 
 // Cmd describes one subprocess. Args exclude the program name.
@@ -264,7 +266,7 @@ func (e Exec) start(ctx context.Context, c Cmd, stderr io.Writer) (*child, error
 	fail := func(err error) (*child, error) {
 		closeFiles(theirs)
 		closeFiles(ch.ends)
-		return nil, fmt.Errorf("start %s: %w", c.Name, err)
+		return nil, fmt.Errorf("start %s: %w: %w", c.Name, ErrStart, err)
 	}
 	outR, outW, err := os.Pipe()
 	if err != nil {

@@ -250,27 +250,24 @@ func reportMerged(o Options, pr int, head, mergeOID string, res github.MergeResu
 // by one more read-back.
 func autoMerge(ctx context.Context, o Options, c github.Client, pr int, method, head string) error {
 	res := c.Merge(ctx, pr, method, head, o.Merge, o.Stderr)
+	if res.NotStarted {
+		// gh never ran, so no auto-merge request exists to read back or disable.
+		return refuse("PR %d is not merged: gh pr merge --auto did not run: %v", pr, res.Err)
+	}
 	now, wait := o.now(), o.sleep()
 	deadline := now().Add(AutoWait)
-	var stop, lastErr string
-	announced := false
+	var stop, last string
+	// mergedSeen marks a MERGED read on head whose merge commit could not be confirmed.
+	mergedSeen, announced := false, false
 	for attempt := 0; ; attempt++ {
 		left := deadline.Sub(now())
 		if attempt > 0 {
-			if ctx.Err() != nil {
-				stop = "stack pr merge was stopped"
-				break
-			}
-			if left <= 0 {
-				stop = fmt.Sprintf("not merged within %s", AutoWait)
-				if lastErr != "" {
-					stop += " (last " + lastErr + ")"
-				}
+			if stop = waitOver(ctx, left, mergedSeen, last); stop != "" {
 				break
 			}
 		}
 		back, err := readAuto(ctx, c, pr, left)
-		if err == nil && back.State == "MERGED" {
+		if err == nil {
 			if done, err := judgeMerged(o, pr, head, back, res); done {
 				return err
 			}
@@ -280,9 +277,9 @@ func autoMerge(ctx context.Context, o Options, c github.Client, pr int, method, 
 		}
 		switch {
 		case err != nil:
-			lastErr = err.Error()
+			last = err.Error()
 		case back.State == "OPEN" && back.HeadRefOid == head:
-			lastErr = ""
+			last = ""
 			if !announced {
 				announced = true
 				_, _ = fmt.Fprintf(o.Stderr, "stack pr merge: waiting up to %s for GitHub to "+
@@ -290,12 +287,14 @@ func autoMerge(ctx context.Context, o Options, c github.Client, pr int, method, 
 			}
 		default:
 			// A MERGED read without a full merge OID, or a state stack does not know.
-			lastErr = "read back " + back.String()
+			mergedSeen = mergedSeen || back.State == "MERGED" && back.HeadRefOid == head
+			last = "read back " + back.String()
 		}
 		_ = wait(ctx, min(AutoPoll, deadline.Sub(now())))
 	}
 
 	// The stop may come from a signal: disable and read back on fresh deadlines of their own.
+	// Neither depends on a write to stderr succeeding.
 	disCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), readBackTimeout)
 	dis := c.DisableAuto(disCtx, pr, o.Stderr)
 	cancel()
@@ -306,14 +305,34 @@ func autoMerge(ctx context.Context, o Options, c github.Client, pr int, method, 
 	switch {
 	case err != nil:
 		return autoUnknown(pr, "%s; the read-back failed: %v", why, err)
-	case back.State == "MERGED":
-		if done, err := judgeMerged(o, pr, head, back, res); done {
-			return err
-		}
-	case back.State == "OPEN" && !back.AutoMerge:
+	case !mergedSeen && back.State == "OPEN" && !back.AutoMerge:
 		return refuse("PR %d is not merged; auto-merge disabled: %s", pr, why)
 	}
+	if done, err := judgeMerged(o, pr, head, back, res); done {
+		return err
+	}
 	return autoUnknown(pr, "read back %s (auto-merge %s); %s", back, onOff(back.AutoMerge), why)
+}
+
+// waitOver names the stop that ends the wait before the next read: a stop of stack or the
+// deadline. A MERGED read without a usable merge commit makes the deadline unconfirmed, not "not
+// merged"; last is the last read that was not a plain wait.
+func waitOver(ctx context.Context, left time.Duration, mergedSeen bool, last string) string {
+	var stop string
+	switch {
+	case ctx.Err() != nil:
+		return "stack pr merge was stopped"
+	case left > 0:
+		return ""
+	case mergedSeen:
+		stop = fmt.Sprintf("the %s deadline expired before the merge could be confirmed", AutoWait)
+	default:
+		stop = fmt.Sprintf("not merged within %s", AutoWait)
+	}
+	if last != "" {
+		stop += " (last " + last + ")"
+	}
+	return stop
 }
 
 // readAuto reads the PR back within left. The first read also runs after a stop, on a deadline of
@@ -363,7 +382,7 @@ func autoStop(
 }
 
 // judgeMerged decides a MERGED read-back: merged on head with a full merge OID succeeds, merged on
-// another full head fails. Anything else is not decided (done false).
+// another full head fails. Any other read-back is not decided (done false).
 func judgeMerged(
 	o Options,
 	pr int,
@@ -372,6 +391,8 @@ func judgeMerged(
 	res github.MergeResult,
 ) (bool, error) {
 	switch {
+	case back.State != "MERGED":
+		return false, nil
 	case back.HeadRefOid == head && github.IsFullSHA(back.MergeOID):
 		return true, reportMerged(o, pr, head, back.MergeOID, res)
 	case back.HeadRefOid != head && github.IsFullSHA(back.HeadRefOid):

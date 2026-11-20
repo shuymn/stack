@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -87,6 +89,9 @@ type autoRunner struct {
 	cancel func()
 	// stopInMerge cancels the run shortly after the merge call starts, as a signal does.
 	stopInMerge bool
+	// cancelBeforeMerge cancels the run before the merge call starts; missingAtMerge makes the
+	// merge call's executable missing.
+	cancelBeforeMerge, missingAtMerge bool
 
 	mu       sync.Mutex
 	calls    [][]string
@@ -101,13 +106,20 @@ func (r *autoRunner) Run(ctx context.Context, c proc.Cmd) (proc.Result, error) {
 		switch {
 		case slices.Equal(c.Args, autoRead) && r.disabled:
 			c.Name = r.final
-		case slices.Equal(c.Args, autoRead):
+		case slices.Equal(c.Args, autoRead) && len(r.polls) > 0:
 			c.Name = r.polls[min(r.nPoll, len(r.polls)-1)]
 			r.nPoll++
 		case slices.Equal(c.Args, autoDisable):
 			r.disabled = true
-		case r.stopInMerge && len(c.Args) > 1 && c.Args[1] == "merge":
-			time.AfterFunc(300*time.Millisecond, r.cancel)
+		case len(c.Args) > 1 && c.Args[1] == "merge":
+			switch {
+			case r.stopInMerge:
+				time.AfterFunc(300*time.Millisecond, r.cancel)
+			case r.cancelBeforeMerge:
+				r.cancel()
+			case r.missingAtMerge:
+				c.Name = filepath.Join(os.TempDir(), "stack-missing-gh", "gh")
+			}
 		}
 		r.mu.Unlock()
 	}
@@ -122,8 +134,8 @@ type autoCase struct {
 	polls   []proctest.Response
 	final   proctest.Response
 	// cancelAt cancels the run during the nth sleep of the wait.
-	cancelAt    int
-	stopInMerge bool
+	cancelAt                                       int
+	stopInMerge, cancelBeforeMerge, missingAtMerge bool
 }
 
 type autoOutcome struct {
@@ -170,6 +182,7 @@ func runAuto(t *testing.T, tc autoCase) autoOutcome {
 	runner := &autoRunner{
 		gh: proctest.Install(t, "gh", sc), final: install(tc.final),
 		cancel: cancel, stopInMerge: tc.stopInMerge,
+		cancelBeforeMerge: tc.cancelBeforeMerge, missingAtMerge: tc.missingAtMerge,
 	}
 	for _, p := range tc.polls {
 		runner.polls = append(runner.polls, install(p))
@@ -218,6 +231,8 @@ type autoTest struct {
 	want   []string
 	argv   [][]string
 	sleeps []time.Duration
+	// waits is how often stderr says it is waiting for GitHub.
+	waits int
 }
 
 // TestAuto covers C28: --auto submits only after steps 1-8 pass, succeeds only on a read-back of
@@ -274,6 +289,41 @@ func autoTests() []autoTest {
 			want:   []string{"waiting up to 15m0s for GitHub to merge PR 7 on " + head},
 			argv:   seq(autoMergeCall, autoRead, autoRead, autoRead),
 			sleeps: []time.Duration{20 * time.Second, 20 * time.Second},
+			waits:  1,
+		},
+		{
+			name: "cancel before gh starts",
+			tc:   autoCase{cancelBeforeMerge: true},
+			code: 1,
+			want: []string{
+				"PR 7 is not merged: gh pr merge --auto did not run",
+				"context canceled",
+			},
+			argv: seq(autoMergeCall),
+		},
+		{
+			name: "gh missing at the merge",
+			tc:   autoCase{missingAtMerge: true},
+			code: 1,
+			want: []string{"PR 7 is not merged: gh pr merge --auto did not run"},
+			argv: seq(autoMergeCall),
+		},
+		{
+			name: "merged without a merge commit to the deadline",
+			tc: autoCase{
+				polls: []proctest.Response{rb("MERGED", head, "", false)},
+				final: failing,
+			},
+			code: 1,
+			want: []string{
+				unknownAuto,
+				"the 15m0s deadline expired before the merge could be confirmed " +
+					"(last read back MERGED " + head + ")",
+				"the read-back failed",
+			},
+			argv: seq(append(append([][]string{autoMergeCall}, repeatN(45, autoRead)...),
+				autoDisable, autoRead)...),
+			sleeps: repeatN(45, 20*time.Second),
 		},
 		{
 			name: "non-zero gh then verified merge",
@@ -320,6 +370,7 @@ func autoTests() []autoTest {
 			},
 			argv:   seq(autoMergeCall, autoRead, autoRead),
 			sleeps: []time.Duration{20 * time.Second},
+			waits:  1,
 		},
 		{
 			name: "moved head disables",
@@ -333,6 +384,7 @@ func autoTests() []autoTest {
 			},
 			argv:   seq(autoMergeCall, autoRead, autoRead, autoDisable, autoRead),
 			sleeps: []time.Duration{20 * time.Second},
+			waits:  1,
 		},
 		{
 			name: "closed disables",
@@ -347,7 +399,9 @@ func autoTests() []autoTest {
 			name: "unreadable polls to the deadline",
 			tc: autoCase{
 				polls: []proctest.Response{
-					{Stdout: "not json"}, rb("MERGED", head, "", false), openAuto, failing,
+					{Stdout: "not json"},
+					{Stdout: `{"state":"OPEN","headRefOid":"` + head + `"}`},
+					openAuto, failing,
 				},
 				final: openOff,
 			},
@@ -359,6 +413,7 @@ func autoTests() []autoTest {
 			argv: seq(append(append([][]string{autoMergeCall}, repeatN(45, autoRead)...),
 				autoDisable, autoRead)...),
 			sleeps: repeatN(45, 20*time.Second),
+			waits:  1,
 		},
 		{
 			name: "disable fails then open with no request",
@@ -428,6 +483,7 @@ func autoTests() []autoTest {
 			code: 0, stdout: merged,
 			argv:   seq(autoMergeCall, autoRead, autoDisable, autoRead),
 			sleeps: []time.Duration{20 * time.Second},
+			waits:  1,
 		},
 		{
 			name: "cancel disables",
@@ -435,6 +491,7 @@ func autoTests() []autoTest {
 			code: 1, want: []string{stopped},
 			argv:   seq(autoMergeCall, autoRead, autoDisable, autoRead),
 			sleeps: []time.Duration{20 * time.Second},
+			waits:  1,
 		},
 		{
 			name: "cancel during gh disables",
@@ -475,6 +532,9 @@ func checkAuto(t *testing.T, tt autoTest, out autoOutcome) {
 		}
 		t.Errorf("gh argv: %d calls, want %d; first difference at call %d: got %q",
 			len(out.gh), len(tt.argv), i, out.gh[i:min(i+1, len(out.gh))])
+	}
+	if n := strings.Count(out.stderr, "waiting up to"); n != tt.waits {
+		t.Errorf("waiting line printed %d times, want %d: %q", n, tt.waits, out.stderr)
 	}
 	if !slices.Equal(out.sleeps, tt.sleeps) {
 		t.Errorf("sleeps = %v, want %v", out.sleeps, tt.sleeps)

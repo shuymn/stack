@@ -139,9 +139,11 @@ type MergeArgs struct {
 
 // MergeResult is how `gh pr merge` ended. Err is set when it could not start or was canceled.
 type MergeResult struct {
-	ExitCode int
-	TimedOut bool
-	Err      error
+	// NotStarted reports that gh never started, so it changed nothing.
+	NotStarted bool
+	ExitCode   int
+	TimedOut   bool
+	Err        error
 }
 
 // OK reports a zero exit within the deadline.
@@ -445,13 +447,7 @@ func (c Client) Merge(
 	if timeout <= 0 {
 		timeout = DefaultMergeTimeout
 	}
-	res, err := c.run(ctx, timeout, proc.Cmd{
-		Name: c.gh(), Args: MergeArgv(pr, method, head, a), Stderr: log,
-	})
-	if len(res.Stdout) > 0 {
-		_, _ = log.Write(res.Stdout)
-	}
-	return MergeResult{ExitCode: res.ExitCode, TimedOut: res.TimedOut, Err: err}
+	return c.runLogged(ctx, timeout, MergeArgv(pr, method, head, a), log)
 }
 
 // DisableAutoArgv is the argv of `gh pr merge --disable-auto`.
@@ -462,13 +458,7 @@ func DisableAutoArgv(pr int) []string {
 // DisableAuto runs `gh pr merge --disable-auto` and forwards its output to log. Like Merge, its
 // outcome is a result: the caller reads the PR back whatever happened.
 func (c Client) DisableAuto(ctx context.Context, pr int, log io.Writer) MergeResult {
-	res, err := c.run(ctx, c.timeout(), proc.Cmd{
-		Name: c.gh(), Args: DisableAutoArgv(pr), Stderr: log,
-	})
-	if len(res.Stdout) > 0 {
-		_, _ = log.Write(res.Stdout)
-	}
-	return MergeResult{ExitCode: res.ExitCode, TimedOut: res.TimedOut, Err: err}
+	return c.runLogged(ctx, c.timeout(), DisableAutoArgv(pr), log)
 }
 
 // readback is the JSON of a read-back.
@@ -513,6 +503,24 @@ func (c Client) AutoReadBack(ctx context.Context, pr int) (Readback, error) {
 		return Readback{}, err
 	}
 	return r, nil
+}
+
+// runLogged runs gh with args, forwards its stdout and stderr to log and reports how it ended. A
+// failed write to log does not change the result.
+func (c Client) runLogged(
+	ctx context.Context,
+	timeout time.Duration,
+	args []string,
+	log io.Writer,
+) MergeResult {
+	res, err := c.run(ctx, timeout, proc.Cmd{Name: c.gh(), Args: args, Stderr: log})
+	if len(res.Stdout) > 0 {
+		_, _ = log.Write(res.Stdout)
+	}
+	return MergeResult{
+		NotStarted: errors.Is(err, proc.ErrStart),
+		ExitCode:   res.ExitCode, TimedOut: res.TimedOut, Err: err,
+	}
 }
 
 // ghJSON runs gh with args and decodes its stdout into v.
