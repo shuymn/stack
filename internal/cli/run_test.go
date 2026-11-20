@@ -309,15 +309,15 @@ func TestKitOpenEntryStage(t *testing.T) {
 	}
 }
 
-// chunkWriter records each write and calls onWrite before the first one.
+// chunkWriter records each write and calls onWrite with the write's index before recording it.
 type chunkWriter struct {
 	chunks  []string
-	onWrite func()
+	onWrite func(i int)
 }
 
 func (w *chunkWriter) Write(b []byte) (int, error) {
-	if len(w.chunks) == 0 && w.onWrite != nil {
-		w.onWrite()
+	if w.onWrite != nil {
+		w.onWrite(len(w.chunks))
 	}
 	w.chunks = append(w.chunks, string(b))
 	return len(b), nil
@@ -334,9 +334,14 @@ func TestKitOpenWritesKitFirst(t *testing.T) {
 		[]byte("[stages]\nentry = [\"first\", \"second\"]\n"))
 	kitDir := filepath.Join(home, ".local", "state", "stack", "kits", "demo")
 
-	var startedBeforeKit int
-	stdout := &chunkWriter{onWrite: func() {
-		startedBeforeKit = len(proctest.Calls(t, first)) + len(proctest.Calls(t, second))
+	// started[i] = calls of (first, second) when write i begins: none before the kit, and the
+	// first block is written before the second extension starts.
+	var started [][2]int
+	stdout := &chunkWriter{onWrite: func(int) {
+		started = append(
+			started,
+			[2]int{len(proctest.Calls(t, first)), len(proctest.Calls(t, second))},
+		)
 	}}
 	var stderr strings.Builder
 	code := Run(t.Context(), []string{"kit", "open", "demo"}, Env{
@@ -352,9 +357,10 @@ func TestKitOpenWritesKitFirst(t *testing.T) {
 		"\n<extension-context path=" + strconv.Quote(second) +
 			">\n[extension second: warn: warn]\nTWO\n</extension-context>\n",
 	}
-	if code != exitOK || startedBeforeKit != 0 || !slices.Equal(stdout.chunks, want) {
-		t.Fatalf("kit open = %d, %d started before the kit, chunks %q\nwant %q\nstderr %s",
-			code, startedBeforeKit, stdout.chunks, want, stderr.String())
+	wantStarted := [][2]int{{0, 0}, {1, 0}, {1, 1}}
+	if code != exitOK || !slices.Equal(started, wantStarted) || !slices.Equal(stdout.chunks, want) {
+		t.Fatalf("kit open = %d, started per write %v (want %v), chunks %q\nwant %q\nstderr %s",
+			code, started, wantStarted, stdout.chunks, want, stderr.String())
 	}
 }
 

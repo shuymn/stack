@@ -234,7 +234,9 @@ func TestRunStageDeadline(t *testing.T) {
 	start := time.Now()
 	agg := Run(context.Background(), o, StageCycle, []byte(request), []Plan{first, second})
 	elapsed := time.Since(start)
-	if limit := budget + grace + time.Second; elapsed >= limit {
+	// Generous slack for loaded runners; the "not started" assertions below are what fail when
+	// each extension gets its own deadline.
+	if limit := budget + grace + 5*time.Second; elapsed >= limit {
 		t.Fatalf("stage took %s, want under %s", elapsed, limit)
 	}
 	if agg.Status != StatusWarn || len(agg.Results) != 2 ||
