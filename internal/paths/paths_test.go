@@ -42,9 +42,9 @@ func TestExpand(t *testing.T) {
 	}{
 		{"~", home},
 		{"~/", home},
-		{"~/x/../y", home + sep + "x/../y"},
+		{"~/x/../y", home + sep + filepath.FromSlash("x/../y")},
 		{`~\x`, home + sep + "x"},
-		{"~/.config/stack/config.toml", home + sep + ".config/stack/config.toml"},
+		{"~/.config/stack/config.toml", home + sep + filepath.FromSlash(".config/stack/config.toml")},
 		{"~user", "~user"},
 		{"~user/x", "~user/x"},
 		{"x/~", "x/~"},
@@ -55,6 +55,15 @@ func TestExpand(t *testing.T) {
 		if got := Expand(home, tt.in); got != tt.want {
 			t.Errorf("Expand(%q) = %q, want %q", tt.in, got, tt.want)
 		}
+	}
+}
+
+func TestTildeWindowsSeparators(t *testing.T) {
+	if got, ok := tilde(`C:\h`, "~/a/../b/c.md", true); !ok || got != `C:\h\a\..\b\c.md` {
+		t.Errorf("tilde windows = %q, %v", got, ok)
+	}
+	if got, _ := tilde("/h", "~/a/b", false); got != "/h/a/b" {
+		t.Errorf("tilde posix = %q", got)
 	}
 }
 

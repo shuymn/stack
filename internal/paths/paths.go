@@ -116,6 +116,9 @@ func isSep(c byte, windows bool) bool {
 
 // join appends rel to base with one separator and no cleaning.
 func join(base, rel string, windows bool) string {
+	if windows {
+		rel = strings.ReplaceAll(rel, "/", `\`) // one separator style; components (incl. `..`) kept
+	}
 	switch {
 	case rel == "":
 		return base
