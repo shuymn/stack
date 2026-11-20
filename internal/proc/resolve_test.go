@@ -115,6 +115,43 @@ func TestResolveWindows(t *testing.T) {
 
 // TestResolveUnverifiable covers a candidate stat cannot check: it must not
 // read as absent, because merge-check treats absence as a pass.
+// TestResolveDanglingSymlink covers a name whose link target is missing: the
+// name exists, so it must not read as absent (merge-check passes on absent).
+func TestResolveDanglingSymlink(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.Symlink(
+		filepath.Join(dir, "missing"),
+		filepath.Join(dir, "merge-check"),
+	); err != nil {
+		t.Skipf("cannot create symlinks here: %v", err)
+	}
+	if err := os.Symlink(
+		filepath.Join(dir, "missing"),
+		filepath.Join(dir, "board.exe"),
+	); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ goos, name, path string }{
+		{"linux", "merge-check", "merge-check"},
+		{"windows", "merge-check", "merge-check"},
+		{"windows", "board", "board.exe"},
+	} {
+		path, err := resolve(tc.goos, dir, tc.name)
+		if want := filepath.Join(dir, tc.path); !errors.Is(err, ErrNotRunnable) || path != want {
+			t.Errorf(
+				"%s %s: path = %q, err = %v, want ErrNotRunnable at %q",
+				tc.goos,
+				tc.name,
+				path,
+				err,
+				want,
+			)
+		}
+	}
+}
+
 func TestResolveUnverifiable(t *testing.T) {
 	t.Parallel()
 	if runtime.GOOS == "windows" || os.Geteuid() == 0 {

@@ -12,7 +12,8 @@ import (
 )
 
 var (
-	// ErrNotFound reports that no candidate exists: every stat said so.
+	// ErrNotFound reports that no candidate name exists, not even as a
+	// dangling symlink.
 	ErrNotFound = errors.New("executable not found")
 	// ErrNotRunnable reports an entry that exists under the name but that
 	// stack does not run: a directory or other non-regular file, a Unix file
@@ -135,9 +136,17 @@ func statCandidate(path string, runnable bool) error {
 	// Walking a user-controlled PATH is the purpose; the name joined to
 	// each entry is one validated component.
 	info, err := os.Stat(path) //nolint:gosec // G703: PATH lookup by design.
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
+	if errors.Is(err, fs.ErrNotExist) {
+		// A dangling symlink is a name that exists: not runnable, not absent.
+		_, lerr := os.Lstat(path) //nolint:gosec // G703: PATH lookup by design.
+		if lerr == nil {
+			return fmt.Errorf("%w: %s: dangling symlink", ErrNotRunnable, path)
+		} else if !errors.Is(lerr, fs.ErrNotExist) {
+			return fmt.Errorf("%w: %s: %w", ErrUnverifiable, path, lerr)
+		}
 		return fmt.Errorf("%w: %s", ErrNotFound, path)
+	}
+	switch {
 	case err != nil:
 		return fmt.Errorf("%w: %s: %w", ErrUnverifiable, path, err)
 	case !runnable || !info.Mode().IsRegular():
