@@ -63,6 +63,9 @@ type Stdin struct {
 	Kind StdinKind
 	Text string // StdinText
 	File Word   // StdinFile
+	// Dir is the cwd the shell opened File in ("" when unknown): the statement carrying `< F`,
+	// which may differ from the cwd of a command inside it (`(cd d && cmd) < F`).
+	Dir string
 }
 
 // Call is one simple command.
@@ -440,6 +443,9 @@ func (w *walker) redirs(
 		w.substs(sc, r.Word, cwd, depth)
 		w.substs(sc, r.Hdoc, cwd, depth)
 		if stdin, ok := redirStdin(r); ok {
+			if stdin.Kind == StdinFile {
+				stdin.Dir = cwd // the shell opens F here, before any `cd` inside the command
+			}
 			in = input{stdin: stdin, base: hdocBase(sc, r, stdin)}
 		}
 		if r.Op == syntax.WordHdoc && soleSubst(r.Word) {

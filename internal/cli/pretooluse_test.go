@@ -215,6 +215,36 @@ func TestPreToolUseRegressions(t *testing.T) {
 	}
 }
 
+// TestPreToolUseInheritedStdinCwd checks that `( cd sub && … ) < F` reads F where the shell opens
+// it, the outer cwd, not the cwd of the command inside.
+func TestPreToolUseInheritedStdinCwd(t *testing.T) {
+	home := strings.Join([]string{"", "home", "dev"}, "/") // a local path, built at run time
+	const cmd = "(cd docs && gh issue comment 1 -F -) < body.md"
+	for name, files := range map[string]map[string]string{
+		"gh-publish": {"body.md": "see " + home + "/x\n", "docs/body.md": "clean\n"},
+		"":           {"body.md": "clean\n", "docs/body.md": "see " + home + "/x\n"},
+	} {
+		cwd := t.TempDir()
+		for rel, content := range files {
+			p := filepath.Join(cwd, filepath.FromSlash(rel))
+			if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		r := runHookStdin(t, t.TempDir(), payload(t, cwd, "Bash", map[string]any{"command": cmd}))
+		if name == "" {
+			if r.code != exitOK || r.stdout != "" {
+				t.Errorf("clean outer body.md = %+v, want allow", r)
+			}
+			continue
+		}
+		assertDeny(t, "local path in the outer body.md", r, name)
+	}
+}
+
 func TestPreToolUseAllowsOrdinaryCommand(t *testing.T) {
 	r := runHookStdin(t, t.TempDir(),
 		payload(t, t.TempDir(), "Bash", map[string]any{"command": "git status"}))

@@ -116,7 +116,7 @@ func readInput(in ghargs.Input, call shell.Call, home string) (string, bool) {
 		case shell.StdinText:
 			return call.Stdin.Text, true
 		case shell.StdinFile:
-			return readFile(home, call.Cwd, call.Stdin.File.Text, call.Stdin.File.Tilde)
+			return readFile(home, call.Stdin.Dir, call.Stdin.File.Text, call.Stdin.File.Tilde)
 		case shell.StdinNone, shell.StdinDynamic:
 		}
 	}

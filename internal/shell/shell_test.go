@@ -180,6 +180,20 @@ func TestParseStdin(t *testing.T) {
 	}
 }
 
+func TestParseStdinDir(t *testing.T) {
+	cwd := t.TempDir()
+	for cmd, want := range map[string]string{
+		"(cd d && gh x) < f": cwd,
+		"cd d && gh x < f":   filepath.Join(cwd, "d"),
+		"cd d; gh x < f":     "",
+	} {
+		c := find(t, Parse(cmd, cwd, ""), "gh")
+		if c.Stdin.Kind != StdinFile || c.Stdin.Dir != want {
+			t.Errorf("%q stdin = %+v, want file opened in %q", cmd, c.Stdin, want)
+		}
+	}
+}
+
 func TestParseSyntaxError(t *testing.T) {
 	tests := []struct {
 		cmd  string
