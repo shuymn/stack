@@ -130,6 +130,11 @@ func TestPreToolUseRegressions(t *testing.T) {
 			map[string]any{"command": "if cd docs; then gh pr merge -R o/r 1 --squash; fi"},
 			"raw-merge",
 		},
+		{
+			"empty here-string before a secret read", "Bash",
+			map[string]any{"command": `: <<< ""; cat .dev.vars`},
+			"secrets",
+		},
 	}
 	for _, tt := range tests {
 		r := runHookStdin(t, t.TempDir(), payload(t, t.TempDir(), tt.tool, tt.input))

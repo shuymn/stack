@@ -450,8 +450,11 @@ func soleSubst(wd *syntax.Word) bool {
 	case *syntax.CmdSubst:
 		return true
 	case *syntax.DblQuoted:
+		if len(p.Parts) != 1 { // `""` has no parts
+			return false
+		}
 		_, ok := p.Parts[0].(*syntax.CmdSubst)
-		return len(p.Parts) == 1 && ok
+		return ok
 	default:
 		return false
 	}
