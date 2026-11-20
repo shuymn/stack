@@ -126,12 +126,15 @@ rule off (§4.3). There is no toggle for the other rules.
 
 ### 2.2 Processes (`internal/proc`)
 
-`Runner` interface: `Run(ctx, Cmd{Name, Args, Dir, Env, Stdin, MaxStdout}) (Result, error)` and
-`Stream(ctx, Cmd, func(io.Reader) error) error` for unbounded output (`check public`). The real runner sets
-`cmd.WaitDelay` (2 s): its clock starts when the context ends or when `Wait` observes the child's exit, and then it
-closes the pipes so a child whose grandchild still holds them cannot hang `stack`. `WaitDelay` neither kills descendants nor stops their I/O; on Windows killing the child leaves grandchildren
-running. `Result` reports `TimedOut` (context deadline), `WaitDelayExceeded` (`exec.ErrWaitDelay`) and `Truncated`
-(stdout over `MaxStdout`, 1 MiB default), and callers evaluate these **before** using stdout.
+`Runner` interface: `Run(ctx, Cmd{Name, Args, Dir, Env, Stdin []byte, Stderr io.Writer, MaxStdout}) (Result, error)`
+and `Stream(ctx, Cmd, func(io.Reader) error) error` for unbounded output (`check public`). Stdin is in memory, so
+feeding it cannot block past the bounds below. `Stderr`, when set, receives all of stderr as it arrives (extensions
+pass it through, §4.7); otherwise `Run` captures up to 64 KiB. The runner owns the stdio pipes: when the context ends
+it kills the child, and once the child has exited it waits at most `WaitDelay` (2 s) for the pipes, then closes its
+ends so a child whose grandchild still holds them cannot hang `stack`. This neither kills descendants nor stops their
+I/O; on Windows killing the child leaves grandchildren running. `Result` reports `TimedOut` (killed at the context
+deadline, `ExitCode` -1 on every OS), `WaitDelayExceeded` (a pipe cut after `WaitDelay`, independent of the exit
+status) and `Truncated` (stdout over `MaxStdout`, 1 MiB default), and callers evaluate these **before** using stdout.
 
 `ResolveExecutable(dir, name)`: Unix — regular file this process may execute (effective permission, as
 `exec.LookPath` checks it). Windows — only `<name>.exe` is runnable; a `<name>` without extension or with

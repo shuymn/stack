@@ -1,11 +1,13 @@
 // Package proc runs subprocesses for stack: gh, git, kit boards,
 // .claude/merge-check and extensions.
 //
-// Every run is bounded by its context. The runner also sets Cmd.WaitDelay, so
-// a child whose grandchild still holds stdout or stderr cannot hang stack.
-// WaitDelay only closes stack's ends of the pipes and kills the direct child:
-// it neither kills grandchildren nor stops their I/O, and on Windows killing
-// the child leaves grandchildren running.
+// Every run is bounded by its context. stack owns the child's stdio pipes:
+// once the child has exited, on its own or killed when the context ended,
+// stack waits at most WaitDelay for the pipes to finish and then closes its
+// ends, so a grandchild that inherited them cannot hang stack. Closing the
+// pipes neither kills grandchildren nor stops their I/O, and on Windows
+// killing the child leaves grandchildren running. Stdin is an in-memory byte
+// slice, so feeding it cannot block past that bound either.
 package proc
 
 import (
@@ -14,28 +16,32 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 const (
-	// DefaultWaitDelay bounds how long Run and Stream wait for pipes after the
-	// context ends or the child exits.
+	// DefaultWaitDelay bounds how long Run and Stream wait for the pipes after
+	// the child exits.
 	DefaultWaitDelay = 2 * time.Second
 	// DefaultMaxStdout caps captured stdout when Cmd.MaxStdout is zero.
 	DefaultMaxStdout = 1 << 20
-	// maxStderr caps captured stderr. Stderr is diagnostic only, so its
-	// truncation is reported but never changes a decision.
+	// maxStderr caps stderr captured into Result.Stderr.
 	maxStderr = 64 << 10
+	// copyBuffer is the read size for pipes stack drains itself.
+	copyBuffer = 32 << 10
 )
 
 var (
-	// ErrTimedOut reports that the context deadline ended a Stream.
+	// ErrTimedOut reports that the runner killed the child at the context
+	// deadline.
 	ErrTimedOut = errors.New("process timed out")
-	// ErrWaitDelay reports that output pipes were still open WaitDelay after
-	// the child exited, usually because a grandchild inherited them.
-	ErrWaitDelay = errors.New("process output pipes outlived the child")
+	// ErrWaitDelay reports that the stdio pipes were still open WaitDelay
+	// after the child exited, usually because a grandchild inherited them.
+	ErrWaitDelay = errors.New("process pipes outlived the child")
 	// ErrExit reports a non-zero exit status from a Stream.
 	ErrExit = errors.New("process exited with non-zero status")
 )
@@ -48,28 +54,39 @@ type Cmd struct {
 	Dir string
 	// Env replaces the environment when non-nil; nil inherits it.
 	Env []string
-	// Stdin is the child's standard input; nil means the null device.
-	Stdin io.Reader
+	// Stdin is written to the child's standard input, which is then closed;
+	// nil means the null device. It is a byte slice rather than a reader so
+	// that feeding stdin cannot block past the context and WaitDelay.
+	Stdin []byte
+	// Stderr, when non-nil, receives the child's stderr as it arrives, without
+	// a cap, from a goroutine of the runner; Result.Stderr then stays empty.
+	// When nil, Run captures stderr into Result.Stderr up to 64 KiB.
+	Stderr io.Writer
 	// MaxStdout caps the stdout Run captures; zero means DefaultMaxStdout.
 	MaxStdout int64
 }
 
 // Result is the outcome of a run that started. Callers check TimedOut,
-// WaitDelayExceeded and Truncated before using Stdout.
+// WaitDelayExceeded and Truncated before using Stdout; each is recorded
+// independently of the exit status.
 type Result struct {
 	Stdout []byte
+	// Stderr is the captured stderr; empty when Cmd.Stderr was set.
 	Stderr []byte
-	// ExitCode is the exit status, or -1 when the child was killed.
+	// ExitCode is the child's exit status. It is -1 on every OS when the
+	// runner killed the child because the context ended (Windows would
+	// otherwise report 1), and when a signal ended the child.
 	ExitCode int
-	// TimedOut reports that the context deadline ended the child.
+	// TimedOut reports that the runner killed the child at the context
+	// deadline.
 	TimedOut bool
-	// WaitDelayExceeded reports that the child exited on its own but its
-	// output pipes stayed open past WaitDelay. A timed-out run reports only
-	// TimedOut.
+	// WaitDelayExceeded reports that a stdio pipe was still open WaitDelay
+	// after the child exited, so stack closed its end and output may be
+	// incomplete.
 	WaitDelayExceeded bool
 	// Truncated reports stdout over the MaxStdout cap.
 	Truncated bool
-	// StderrTruncated reports stderr over its internal cap.
+	// StderrTruncated reports captured stderr over its 64 KiB cap.
 	StderrTruncated bool
 }
 
@@ -80,9 +97,10 @@ type Runner interface {
 	// a timeout, a WaitDelay overrun and truncation are reported in Result.
 	Run(ctx context.Context, c Cmd) (Result, error)
 	// Stream passes the child's stdout to consume without a size cap and
-	// waits for the child. It returns consume's error, or an error wrapping
-	// ErrTimedOut, ErrWaitDelay or ErrExit. Stdout that consume leaves unread
-	// is discarded. Cmd.MaxStdout is ignored.
+	// waits for the child. It returns nil, or the join of consume's error and
+	// errors wrapping ErrTimedOut, ErrWaitDelay, ErrExit or the context's
+	// error. Stdout that consume leaves unread is discarded; when consume
+	// fails the child is killed. Cmd.MaxStdout is ignored.
 	Stream(ctx context.Context, c Cmd, consume func(io.Reader) error) error
 }
 
@@ -101,31 +119,34 @@ func (e Exec) Run(ctx context.Context, c Cmd) (Result, error) {
 		limit = DefaultMaxStdout
 	}
 	stdout := &capWriter{limit: limit}
-	stderr := &capWriter{limit: maxStderr}
-	cmd := e.command(ctx, c)
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	if err := cmd.Start(); err != nil {
-		return Result{}, fmt.Errorf("start %s: %w", c.Name, err)
+	stderr, captured := stderrSink(c)
+	ch, err := e.start(ctx, c, stderr)
+	if err != nil {
+		return Result{}, err
 	}
-	waitErr := cmd.Wait()
+	ch.io.Go(func() { drain(stdout, ch.stdout) })
+	overrun, waitErr := ch.finish(e.waitDelay())
+
 	res := Result{
-		Stdout:          stdout.bytes(),
-		Stderr:          stderr.bytes(),
-		ExitCode:        cmd.ProcessState.ExitCode(),
-		Truncated:       stdout.truncated(),
-		StderrTruncated: stderr.truncated(),
+		Stdout:            stdout.bytes(),
+		ExitCode:          ch.cmd.ProcessState.ExitCode(),
+		WaitDelayExceeded: overrun,
+		Truncated:         stdout.truncated(),
 	}
-	if waitErr == nil {
-		return res, nil
+	if captured != nil {
+		res.Stderr = captured.bytes()
+		res.StderrTruncated = captured.truncated()
 	}
-	switch {
-	case errors.Is(ctx.Err(), context.DeadlineExceeded):
-		res.TimedOut = true
-	case ctx.Err() != nil:
+	if ch.killed.Load() {
+		res.ExitCode = -1
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			res.TimedOut = true
+			return res, nil
+		}
 		return res, fmt.Errorf("run %s: %w", c.Name, ctx.Err())
-	case errors.Is(waitErr, exec.ErrWaitDelay):
-		res.WaitDelayExceeded = true
+	}
+	if _, exited := errors.AsType[*exec.ExitError](waitErr); waitErr != nil && !exited {
+		return res, fmt.Errorf("run %s: %w", c.Name, waitErr)
 	}
 	return res, nil
 }
@@ -135,72 +156,200 @@ func (e Exec) Stream(parent context.Context, c Cmd, consume func(io.Reader) erro
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 
-	pr, pw := io.Pipe()
-	stderr := &capWriter{limit: maxStderr}
-	cmd := e.command(ctx, c)
-	cmd.Stdout = pw
-	cmd.Stderr = stderr
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start %s: %w", c.Name, err)
+	stderr, captured := stderrSink(c)
+	ch, err := e.start(ctx, c, stderr)
+	if err != nil {
+		return err
 	}
-	waitErr := make(chan error, 1)
+	type outcome struct {
+		overrun bool
+		err     error
+	}
+	// consume is one of the readers finish waits for.
+	ch.io.Add(1)
+	finished := make(chan outcome, 1)
 	go func() {
-		err := cmd.Wait()
-		// Wait has returned, so no more stdout arrives; end the reader.
-		_ = pw.Close()
-		waitErr <- err
+		overrun, err := ch.finish(e.waitDelay())
+		finished <- outcome{overrun: overrun, err: err}
 	}()
 
-	consumeErr := consume(pr)
+	consumeErr := consume(ch.stdout)
 	if consumeErr != nil {
 		// The rest of stdout is not wanted; stop the child.
 		cancel()
-	} else {
-		// Discard what consume left unread so the child does not die of a
-		// closed pipe; the context and WaitDelay still bound this.
-		_, _ = io.Copy(io.Discard, pr)
 	}
-	_ = pr.CloseWithError(errStreamDone)
-	err := <-waitErr
+	drain(io.Discard, ch.stdout)
+	ch.io.Done()
+	out := <-finished
 
-	timedOut := err != nil && errors.Is(parent.Err(), context.DeadlineExceeded)
-	if consumeErr != nil {
-		if timedOut {
-			return errors.Join(consumeErr, fmt.Errorf("stream %s: %w", c.Name, ErrTimedOut))
-		}
-		return consumeErr
-	}
+	errs := []error{consumeErr}
+	killed := ch.killed.Load()
 	switch {
-	case err == nil:
-		return nil
-	case timedOut:
-		return fmt.Errorf("stream %s: %w", c.Name, ErrTimedOut)
-	case parent.Err() != nil:
-		return fmt.Errorf("stream %s: %w", c.Name, parent.Err())
-	case errors.Is(err, exec.ErrWaitDelay):
-		return fmt.Errorf("stream %s: %w", c.Name, ErrWaitDelay)
-	case !cmd.ProcessState.Success():
-		return fmt.Errorf("stream %s: %w (status %d): %s",
-			c.Name, ErrExit, cmd.ProcessState.ExitCode(), bytes.TrimSpace(stderr.bytes()))
-	default:
-		return fmt.Errorf("stream %s: %w", c.Name, err)
+	case killed && errors.Is(parent.Err(), context.DeadlineExceeded):
+		errs = append(errs, fmt.Errorf("stream %s: %w", c.Name, ErrTimedOut))
+	case killed && parent.Err() != nil:
+		errs = append(errs, fmt.Errorf("stream %s: %w", c.Name, parent.Err()))
+	case killed:
+		// Killed because consume failed; its error is already reported.
+	case out.err != nil:
+		if exitErr, ok := errors.AsType[*exec.ExitError](out.err); ok {
+			msg := ""
+			if captured != nil {
+				msg = string(bytes.TrimSpace(captured.bytes()))
+			}
+			errs = append(errs, fmt.Errorf("stream %s: %w (status %d): %s",
+				c.Name, ErrExit, exitErr.ExitCode(), msg))
+		} else {
+			errs = append(errs, fmt.Errorf("stream %s: %w", c.Name, out.err))
+		}
 	}
+	if out.overrun {
+		errs = append(errs, fmt.Errorf("stream %s: %w", c.Name, ErrWaitDelay))
+	}
+	return errors.Join(errs...)
 }
 
-func (e Exec) command(ctx context.Context, c Cmd) *exec.Cmd {
+func (e Exec) waitDelay() time.Duration {
+	if e.WaitDelay > 0 {
+		return e.WaitDelay
+	}
+	return DefaultWaitDelay
+}
+
+// child is a started subprocess whose stdio pipes stack owns.
+type child struct {
+	cmd *exec.Cmd
+	// killed is set when the runner killed the child because the context
+	// ended.
+	killed atomic.Bool
+	// stdout is stack's read end of the child's stdout.
+	stdout *os.File
+	// ends are stack's ends of all stdio pipes, closed on a WaitDelay overrun.
+	ends []*os.File
+	// io counts the goroutines still reading or writing the pipes.
+	io sync.WaitGroup
+}
+
+// start starts the child with stdout on a pipe the caller reads from
+// child.stdout, stderr drained into stderr and Cmd.Stdin written to stdin.
+func (e Exec) start(ctx context.Context, c Cmd, stderr io.Writer) (*child, error) {
 	//nolint:gosec // G204: no shell; executables are gh/git or user-owned paths (kit board, merge-check, stack-<name> on PATH) that the user already controls, argv is passed as a list
 	cmd := exec.CommandContext(ctx, c.Name, c.Args...)
 	cmd.Dir = c.Dir
 	cmd.Env = c.Env
-	cmd.Stdin = c.Stdin
-	cmd.WaitDelay = DefaultWaitDelay
-	if e.WaitDelay > 0 {
-		cmd.WaitDelay = e.WaitDelay
+	// Bounds the wait for a child that survives the kill; pipe handling is
+	// done below because os/exec does not own these pipes.
+	cmd.WaitDelay = e.waitDelay()
+	ch := &child{cmd: cmd}
+	cmd.Cancel = func() error {
+		if err := cmd.Process.Kill(); err != nil {
+			return fmt.Errorf("kill: %w", err) // os/exec checks errors.Is(os.ErrProcessDone).
+		}
+		ch.killed.Store(true)
+		return nil
 	}
-	return cmd
+
+	var theirs []*os.File // the child's ends, closed in stack once started
+	fail := func(err error) (*child, error) {
+		closeFiles(theirs)
+		closeFiles(ch.ends)
+		return nil, fmt.Errorf("start %s: %w", c.Name, err)
+	}
+	outR, outW, err := os.Pipe()
+	if err != nil {
+		return fail(err)
+	}
+	ch.stdout = outR
+	ch.ends, theirs = append(ch.ends, outR), append(theirs, outW)
+	errR, errW, err := os.Pipe()
+	if err != nil {
+		return fail(err)
+	}
+	ch.ends, theirs = append(ch.ends, errR), append(theirs, errW)
+	cmd.Stdout, cmd.Stderr = outW, errW
+	var inW *os.File
+	if c.Stdin != nil {
+		inR, w, err := os.Pipe()
+		if err != nil {
+			return fail(err)
+		}
+		inW = w
+		ch.ends, theirs = append(ch.ends, inW), append(theirs, inR)
+		cmd.Stdin = inR
+	}
+	if err := cmd.Start(); err != nil {
+		return fail(err)
+	}
+	closeFiles(theirs)
+
+	ch.io.Go(func() { drain(stderr, errR) })
+	if inW != nil {
+		ch.io.Go(func() {
+			// A child that exits without reading makes Write fail; that is
+			// not an error of the run.
+			_, _ = inW.Write(c.Stdin)
+			_ = inW.Close()
+		})
+	}
+	return ch, nil
 }
 
-var errStreamDone = errors.New("stream consumer returned")
+// finish waits for the child to exit, then at most delay for the pipe
+// goroutines. On overrun it closes stack's pipe ends, which ends those
+// goroutines, and reports true. err is the error of exec.Cmd.Wait.
+func (ch *child) finish(delay time.Duration) (bool, error) {
+	err := ch.cmd.Wait()
+	done := make(chan struct{})
+	go func() {
+		ch.io.Wait()
+		close(done)
+	}()
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	overrun := false
+	select {
+	case <-done:
+	case <-timer.C:
+		overrun = true
+		closeFiles(ch.ends)
+		<-done
+	}
+	closeFiles(ch.ends)
+	if err != nil {
+		return overrun, fmt.Errorf("wait: %w", err)
+	}
+	return overrun, nil
+}
+
+func stderrSink(c Cmd) (io.Writer, *capWriter) {
+	if c.Stderr != nil {
+		return c.Stderr, nil
+	}
+	captured := &capWriter{limit: maxStderr}
+	return captured, captured
+}
+
+// drain copies src to dst until EOF or a read error. After dst fails it keeps
+// reading, so the child never blocks on a full pipe.
+func drain(dst io.Writer, src io.Reader) {
+	buf := make([]byte, copyBuffer)
+	var writeErr error
+	for {
+		n, err := src.Read(buf)
+		if n > 0 && writeErr == nil {
+			_, writeErr = dst.Write(buf[:n])
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
+func closeFiles(files []*os.File) {
+	for _, f := range files {
+		_ = f.Close()
+	}
+}
 
 // capWriter keeps the first limit bytes and discards the rest, so the child
 // never blocks on a full pipe.

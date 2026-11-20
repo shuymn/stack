@@ -49,8 +49,9 @@ const (
 	cleanupWait           = 10 * time.Second
 )
 
-// Response is one scripted answer. The fake performs, in order: read stdin,
-// spawn the grandchild, log the call, write stdout and stderr, sleep, exit.
+// Response is one scripted answer. The fake performs, in order: read stdin
+// (unless NoStdin), spawn the grandchild, log the call, write stdout and
+// stderr, sleep, exit.
 type Response struct {
 	// Args matches the arguments after argv[0] exactly; nil matches any call
 	// and an empty non-nil slice matches only a call without arguments.
@@ -61,8 +62,11 @@ type Response struct {
 	Exit   int      `json:"exit,omitempty"`
 	// Sleep delays the exit after writing output.
 	Sleep time.Duration `json:"sleep,omitempty"`
+	// NoStdin leaves stdin unread.
+	NoStdin bool `json:"noStdin,omitempty"`
 	// Grandchild, when positive, starts a process that holds the fake's
-	// stdout and stderr open for at most this long, or until cleanup.
+	// stdin, stdout and stderr open, without reading stdin, for at most this
+	// long, or until cleanup.
 	Grandchild time.Duration `json:"grandchild,omitempty"`
 }
 
@@ -204,9 +208,12 @@ func runFake(exe, base string, data []byte) int {
 		return NoMatchExit
 	}
 	args := os.Args[1:]
-	stdin, _ := io.ReadAll(os.Stdin)
-	call := Call{Args: args, Stdin: string(stdin)}
 	resp, ok := match(s, args)
+	call := Call{Args: args}
+	if !ok || !resp.NoStdin {
+		stdin, _ := io.ReadAll(os.Stdin)
+		call.Stdin = string(stdin)
+	}
 	if ok && resp.Grandchild > 0 {
 		pid, err := spawnGrandchild(exe, resp.Grandchild)
 		if err != nil {
@@ -263,6 +270,7 @@ func spawnGrandchild(exe string, life time.Duration) (int, error) {
 	// The grandchild outlives this process on purpose; it ends itself.
 	cmd := exec.CommandContext(context.Background(), exe)
 	cmd.Env = append(os.Environ(), grandchildEnv+"="+life.String())
+	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {

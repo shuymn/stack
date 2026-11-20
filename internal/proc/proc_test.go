@@ -2,6 +2,7 @@ package proc_test
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -49,7 +50,7 @@ func TestRunFakeGh(t *testing.T) {
 	res, err := runner.Run(ctx, proc.Cmd{
 		Name:  gh,
 		Args:  []string{"pr", "view", "1"},
-		Stdin: strings.NewReader("request"),
+		Stdin: []byte("request"),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -251,6 +252,78 @@ func TestRunWaitDelayAfterChildExit(t *testing.T) {
 	}
 	if !res.WaitDelayExceeded || res.TimedOut || res.ExitCode != 0 || string(res.Stdout) != "done" {
 		t.Fatalf("result = %+v, want WaitDelayExceeded with stdout", res)
+	}
+}
+
+// TestRunWaitDelayWithNonZeroExit checks that a held pipe is reported even
+// when the child also exits non-zero, so a caller cannot take the output it
+// received as complete.
+func TestRunWaitDelayWithNonZeroExit(t *testing.T) {
+	t.Parallel()
+
+	fake := proctest.Install(t, "fake", one(proctest.Response{
+		Stdout: `{"status":"pass"}`, Exit: 7, Grandchild: grandchildLife,
+	}))
+	res, err := proc.Exec{WaitDelay: testWaitDelay}.Run(context.Background(), proc.Cmd{Name: fake})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ExitCode != 7 || !res.WaitDelayExceeded || res.TimedOut {
+		t.Fatalf("result = %+v, want exit 7 and WaitDelayExceeded", res)
+	}
+}
+
+// TestRunStderrWriter checks that a caller-supplied stderr writer receives
+// all of stderr, past the 64 KiB cap that applies only to captured stderr.
+func TestRunStderrWriter(t *testing.T) {
+	t.Parallel()
+
+	long := strings.Repeat("x", 64<<10) + "Z"
+	fake := proctest.Install(t, "fake", one(proctest.Response{Stderr: long}))
+	var stderr bytes.Buffer
+	res, err := proc.Exec{}.Run(context.Background(), proc.Cmd{Name: fake, Stderr: &stderr})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr.String() != long || len(res.Stderr) != 0 || res.StderrTruncated {
+		t.Fatalf("streamed %d bytes, captured %d, truncated %v; want all %d streamed",
+			stderr.Len(), len(res.Stderr), res.StderrTruncated, len(long))
+	}
+
+	res, err = proc.Exec{}.Run(context.Background(), proc.Cmd{Name: fake})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Stderr) != 64<<10 || !res.StderrTruncated {
+		t.Fatalf(
+			"captured %d bytes, truncated %v; want the 64 KiB cap",
+			len(res.Stderr),
+			res.StderrTruncated,
+		)
+	}
+}
+
+// TestRunStdinNotRead checks that stdin the child never reads, held open by a
+// grandchild, cannot keep Run from returning.
+func TestRunStdinNotRead(t *testing.T) {
+	t.Parallel()
+
+	fake := proctest.Install(t, "fake", one(proctest.Response{
+		Stdout: "ok", NoStdin: true, Grandchild: grandchildLife,
+	}))
+	start := time.Now()
+	res, err := proc.Exec{WaitDelay: testWaitDelay}.Run(context.Background(), proc.Cmd{
+		Name:  fake,
+		Stdin: bytes.Repeat([]byte("x"), 4<<20),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if took := time.Since(start); took > grandchildLife/2 {
+		t.Fatalf("took %s", took)
+	}
+	if string(res.Stdout) != "ok" || !res.WaitDelayExceeded {
+		t.Fatalf("result = %+v, want stdout and WaitDelayExceeded", res)
 	}
 }
 
