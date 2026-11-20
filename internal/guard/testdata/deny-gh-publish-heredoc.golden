@@ -1,0 +1,1 @@
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"stack guard (gh-publish): gh issue comment publishes the local path \"@@LOCAL@@/\" through --body-file - (stdin). Use repository-relative paths or leave the path out."}}
