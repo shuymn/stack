@@ -224,11 +224,13 @@ error. Hook commands always exit `0`.
 
 In order, each in a tagged block with its absolute path: `NORTH.md`, `state.md` (one-line size note over 3,000
 bytes, `orchestration-context.py:187`), kit items from `<kit>/attention/items.json` (roles `orchestrator`/`all`;
-malformed file = block omitted), the handover file selected by `[handover]` (§2.1), and the board (`<kit>/bin/board`
+malformed file = block omitted), the handover file selected by `[handover]` (§2.1; a relative path is resolved against the
+config file's directory), and the board (`<kit>/bin/board`
 via `ResolveExecutable`, cwd = kit dir, stdout minus a leading repeat of the state files, failures as a
 `[board exit N: …]` marker; `orchestration-context.py:193-212`). A new kit (no `state.md`) prints the kit path and
 "write state.md here". A file that cannot be read becomes `[unreadable: <path>]` and the other blocks still render.
-`kit open` output is uncapped; compact restore applies the budget of §4.2.
+`kit open` output is uncapped except the board's stdout, which keeps the runner's 1 MiB cap (§2.2) and
+is followed by `[board output truncated]` when cut; compact restore applies the budget of §4.2.
 
 ### 4.2 `stack hook claude session-start`
 

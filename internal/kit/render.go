@@ -103,9 +103,9 @@ func StateBlocks(dir string) []Block {
 	var blocks []Block
 	for _, name := range stateFiles {
 		path := filepath.Join(dir, name)
-		data, err := root.ReadFile(name)
+		data, err := readKitFile(root, name)
 		switch {
-		case errors.Is(err, fs.ErrNotExist):
+		case errors.Is(err, errMissing):
 			if name == "state.md" {
 				blocks = append(blocks, marker(KindState,
 					fmt.Sprintf("[new kit: %s; write state.md here]", dir)))
@@ -115,7 +115,7 @@ func StateBlocks(dir string) []Block {
 			blocks = append(blocks, unreadable(KindState, path))
 			continue
 		}
-		state := text(data)
+		state := strings.ReplaceAll(text(data), "\r\n", "\n")
 		body := state
 		if n := len(state); n > stateLimit {
 			body = fmt.Sprintf("[%s is %d bytes, over %d: rewrite it shorter now; "+
@@ -135,13 +135,28 @@ func StateBlocks(dir string) []Block {
 	return blocks
 }
 
+// errMissing reports a kit file that does not exist, as opposed to one that cannot be read.
+var errMissing = errors.New("missing")
+
+// readKitFile reads rel under root. Only a name that does not exist at all yields errMissing; a
+// dangling symlink exists and fails as unreadable.
+func readKitFile(root *os.Root, rel string) ([]byte, error) {
+	data, err := root.ReadFile(rel)
+	if errors.Is(err, fs.ErrNotExist) {
+		if _, lerr := root.Lstat(rel); errors.Is(lerr, fs.ErrNotExist) {
+			return nil, errMissing
+		}
+	}
+	return data, err //nolint:wrapcheck // callers only render a marker from it.
+}
+
 // itemsBlock lists the rules of `attention/items.json` for roles orchestrator and all. A missing or
 // malformed file, or one without such rules, yields no block; an unreadable one yields a marker.
 func itemsBlock(root *os.Root, dir string) (Block, bool) {
 	rel := filepath.Join("attention", "items.json")
 	path := filepath.Join(dir, rel)
-	data, err := root.ReadFile(rel)
-	if errors.Is(err, fs.ErrNotExist) {
+	data, err := readKitFile(root, rel)
+	if errors.Is(err, errMissing) {
 		return Block{}, false
 	}
 	if err != nil {
@@ -190,6 +205,9 @@ func (r Renderer) HandoverBlocks() []Block {
 			continue
 		}
 		path := paths.Expand(r.Home, h.Path)
+		if !filepath.IsAbs(path) { // relative to the config file's dir, like the file itself
+			path = filepath.Join(filepath.Dir(paths.ConfigFile(r.Home)), path)
+		}
 		// A user-configured path, read directly: a symlinked handover file is legitimate.
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -203,7 +221,8 @@ func (r Renderer) HandoverBlocks() []Block {
 }
 
 // BoardBlocks runs `<dir>/bin/board` with cwd dir under ctx and returns its output, minus a leading
-// repeat of the state files in prior, or a marker when it failed. No board yields nothing. A ctx
+// repeat of the state files in prior (whole lines, after CRLF normalisation), or a marker when it
+// failed. Output past proc's 1 MiB cap is cut and marked. No board yields nothing. A ctx
 // already done launches nothing and yields `[board skipped: deadline]`.
 func (r Renderer) BoardBlocks(ctx context.Context, dir string, prior []Block) []Block {
 	path, err := proc.ResolveExecutable(filepath.Join(dir, "bin"), "board")
@@ -229,10 +248,10 @@ func (r Renderer) BoardBlocks(ctx context.Context, dir string, prior []Block) []
 		return board("[board timed out]")
 	}
 
-	out := text(res.Stdout)
+	out := strings.ReplaceAll(text(res.Stdout), "\r\n", "\n")
 	for _, b := range prior {
-		if b.state != "" && strings.HasPrefix(out, b.state) {
-			out = strings.TrimLeft(out[len(b.state):], " \t\r\n")
+		if b.state != "" && (out == b.state || strings.HasPrefix(out, b.state+"\n")) {
+			out = strings.TrimLeft(out[len(b.state):], " \t\n")
 		}
 	}
 	notes := []string{out}

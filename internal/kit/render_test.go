@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -52,6 +53,12 @@ func render(t *testing.T, r Renderer, dir string) string {
 	return Join(r.Render(ctx, dir))
 }
 
+// block is the expected rendering of a tagged block; the path is quoted as Go quotes it, so
+// Windows backslashes appear escaped.
+func block(tag, path, body string) string {
+	return "<" + tag + " path=" + strconv.Quote(path) + ">\n" + body + "\n</" + tag + ">"
+}
+
 func TestRenderStateAndItems(t *testing.T) {
 	t.Parallel()
 	dir := newKit(t, map[string]string{
@@ -66,19 +73,10 @@ func TestRenderStateAndItems(t *testing.T) {
 		]}`,
 	})
 	got := render(t, Renderer{}, dir)
-	want := `<orchestration-state path="` + filepath.Join(dir, "NORTH.md") + `">
-north
-</orchestration-state>
-
-<orchestration-state path="` + filepath.Join(dir, "state.md") + `">
-state
-</orchestration-state>
-
-<orchestrator-attention-items path="` + filepath.Join(dir, "attention", "items.json") + `">
-- r1
-- r2
-</orchestrator-attention-items>
-`
+	want := block("orchestration-state", filepath.Join(dir, "NORTH.md"), "north") + "\n\n" +
+		block("orchestration-state", filepath.Join(dir, "state.md"), "state") + "\n\n" +
+		block("orchestrator-attention-items", filepath.Join(dir, "attention", "items.json"),
+			"- r1\n- r2") + "\n"
 	if got != want {
 		t.Fatalf("render =\n%s\nwant\n%s", got, want)
 	}
@@ -109,6 +107,10 @@ func TestRender(t *testing.T) {
 	home := t.TempDir()
 	write(t, filepath.Join(home, "h", "t3.md"), "T3 HOW-TO\n")
 	write(t, filepath.Join(home, "h", "herdr.md"), "HERDR HOW-TO\n")
+	relative := filepath.Join(home, ".config", "stack", "rel", "t3.md")
+	write(t, relative, "RELATIVE HOW-TO")
+	t3 := block("orchestration-handover", filepath.Join(home, "h", "t3.md"), "T3 HOW-TO")
+	herdr := block("orchestration-handover", filepath.Join(home, "h", "herdr.md"), "HERDR HOW-TO")
 	defaults := []config.HandoverEntry{
 		{Env: "T3CODE_THREAD_ID", Path: "~/h/t3.md"},
 		{Env: "HERDR_ENV", Path: "~/h/herdr.md"},
@@ -117,22 +119,28 @@ func TestRender(t *testing.T) {
 		name     string
 		handover []config.HandoverEntry
 		vars     map[string]string
-		want     string // "" means no handover block
+		want     string // the handover part of the output; "" means none
 	}{
 		{
 			"T3 beats herdr",
 			defaults,
 			map[string]string{"T3CODE_THREAD_ID": "t", "HERDR_ENV": "1"},
-			"T3 HOW-TO",
+			t3,
 		},
 		{"HERDR_ENV=0 is none", defaults, map[string]string{"HERDR_ENV": "0"}, ""},
-		{"HERDR_ENV=1 is herdr", defaults, map[string]string{"HERDR_ENV": "1"}, "HERDR HOW-TO"},
+		{"HERDR_ENV=1 is herdr", defaults, map[string]string{"HERDR_ENV": "1"}, herdr},
 		{"nothing set", defaults, nil, ""},
 		{
 			"file order decides",
 			[]config.HandoverEntry{defaults[1], defaults[0]},
 			map[string]string{"T3CODE_THREAD_ID": "t", "HERDR_ENV": "1"},
-			"HERDR HOW-TO",
+			herdr,
+		},
+		{
+			"relative path is under the config dir",
+			[]config.HandoverEntry{{Env: "T3CODE_THREAD_ID", Path: filepath.Join("rel", "t3.md")}},
+			map[string]string{"T3CODE_THREAD_ID": "t"},
+			block("orchestration-handover", relative, "RELATIVE HOW-TO"),
 		},
 		{
 			"missing handover file is a marker",
@@ -142,22 +150,38 @@ func TestRender(t *testing.T) {
 		},
 	}
 	dir := newKit(t, map[string]string{"state.md": "s"})
+	state := block("orchestration-state", filepath.Join(dir, "state.md"), "s")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			r := Renderer{Home: home, Getenv: env(tt.vars), Handover: tt.handover}
-			got := r.HandoverBlocks()
-			switch {
-			case tt.want == "" && len(got) != 0:
-				t.Fatalf("handover = %q, want none", Join(got))
-			case tt.want != "" && (len(got) != 1 || got[0].Body != tt.want):
-				t.Fatalf("handover = %q, want %q", Join(got), tt.want)
+			want := state + "\n"
+			if tt.want != "" {
+				want = state + "\n\n" + tt.want + "\n"
 			}
-			if out := render(t, r, dir); tt.want != "" && !strings.Contains(out, tt.want) {
-				t.Fatalf("render lacks the handover:\n%s", out)
+			r := Renderer{Home: home, Getenv: env(tt.vars), Handover: tt.handover}
+			if got := render(t, r, dir); got != want {
+				t.Fatalf("render =\n%s\nwant\n%s", got, want)
 			}
 		})
 	}
+
+	t.Run("dangling symlinks are markers", func(t *testing.T) {
+		t.Parallel()
+		dir := newKit(t, map[string]string{"NORTH.md": "north", "attention/keep": ""})
+		state := filepath.Join(dir, "state.md")
+		items := filepath.Join(dir, "attention", "items.json")
+		if err := os.Symlink("missing.md", state); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+		if err := os.Symlink("missing.json", items); err != nil {
+			t.Fatal(err)
+		}
+		got := render(t, Renderer{}, dir)
+		if !strings.Contains(got, "[unreadable: "+state+"]") ||
+			!strings.Contains(got, "[unreadable: "+items+"]") || strings.Contains(got, "new kit") {
+			t.Fatalf("render =\n%s", got)
+		}
+	})
 
 	t.Run("out-of-kit symlink is a marker", func(t *testing.T) {
 		t.Parallel()
@@ -226,6 +250,16 @@ func TestRenderBoard(t *testing.T) {
 			"live: 3 PRs",
 		},
 		{
+			"strips a CRLF repeat",
+			proctest.Response{Stdout: "north\r\nthe state\r\nlive\r\n"},
+			"live",
+		},
+		{
+			"keeps a line that only starts like the state",
+			proctest.Response{Stdout: "northern: 3 PRs\n"},
+			"northern: 3 PRs",
+		},
+		{
 			"non-zero exit keeps output and adds a marker",
 			proctest.Response{Stdout: "partial\n", Stderr: "warn\nboom\n", Exit: 3},
 			"partial\n[board exit 3: boom]",
@@ -238,7 +272,7 @@ func TestRenderBoard(t *testing.T) {
 			dir := newKit(t, map[string]string{"NORTH.md": "north", "state.md": "the state"})
 			board := installBoard(t, dir, tt.resp)
 			got := render(t, Renderer{}, dir)
-			want := "<orchestration-board path=\"" + board + "\">\n" + tt.want + "\n</orchestration-board>\n"
+			want := block("orchestration-board", board, tt.want) + "\n"
 			if !strings.HasSuffix(got, want) {
 				t.Fatalf("render =\n%s\nwant suffix\n%s", got, want)
 			}
