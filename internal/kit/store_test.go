@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -43,10 +44,16 @@ func TestStore(t *testing.T) {
 	s := Store{Home: home}
 	kits := paths.SessionKitsFile(home, "demo-1")
 
-	for _, slug := range []string{"b", "a", "b", "c"} {
+	for _, slug := range []string{"b", "a", "b"} {
 		if err := s.Add(ctx, "demo-1", slug); err != nil {
 			t.Fatalf("Add(%s): %v", slug, err)
 		}
+	}
+	if got := readFile(t, kits); got != "b\na\n" {
+		t.Fatalf(".kits right after re-adding b = %q, want b, a", got)
+	}
+	if err := s.Add(ctx, "demo-1", "c"); err != nil {
+		t.Fatal(err)
 	}
 	if got := readFile(t, kits); got != "b\na\nc\n" {
 		t.Fatalf(".kits = %q, want b, a, c once each in order", got)
@@ -94,6 +101,55 @@ func TestStore(t *testing.T) {
 		[]string{"demo-1.lock", "other.kits", "other.lock"},
 	) {
 		t.Fatalf("sessions dir = %q; no temp files may remain", got)
+	}
+}
+
+// TestStoreTempFileIsUnique plants a link at the name a fixed temp file would use; the write must
+// not go through it into another session's file.
+func TestStoreTempFileIsUnique(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	dir := paths.SessionsDir(home)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	other := paths.SessionKitsFile(home, "b")
+	if err := os.WriteFile(other, []byte("z\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("b.kits", filepath.Join(dir, "a.kits.tmp")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if err := (Store{Home: home}).Add(context.Background(), "a", "demo"); err != nil {
+		t.Fatal(err)
+	}
+	if got := readFile(t, other); got != "z\n" {
+		t.Fatalf("b.kits = %q; writing a.kits went through the planted link", got)
+	}
+	if got := readFile(t, paths.SessionKitsFile(home, "a")); got != "demo\n" {
+		t.Fatalf("a.kits = %q", got)
+	}
+}
+
+func TestStoreOpenRecordsOnlyAfterPrepare(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	ctx := context.Background()
+	s := Store{Home: home}
+	errPrepare := errors.New("no kit dir")
+	if err := s.Open(
+		ctx,
+		"id",
+		"demo",
+		func() error { return errPrepare },
+	); !errors.Is(
+		err,
+		errPrepare,
+	) {
+		t.Fatalf("Open = %v, want the prepare error", err)
+	}
+	if _, err := os.Stat(paths.SessionKitsFile(home, "id")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("failed prepare recorded the slug: %v", err)
 	}
 }
 
@@ -267,6 +323,12 @@ func runAll(t *testing.T, cmds ...*exec.Cmd) {
 		if err := c.Start(); err != nil {
 			t.Fatal(err)
 		}
+		t.Cleanup(func() {
+			if c.ProcessState == nil { // not waited for: the test stopped early
+				_ = c.Process.Kill()
+				_ = c.Wait()
+			}
+		})
 	}
 	for i, c := range cmds {
 		if err := c.Wait(); err != nil {

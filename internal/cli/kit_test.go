@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -105,6 +106,9 @@ func TestKitOpenClose(t *testing.T) {
 	r = runIn(t, home, withID, "kit", "open", "demo")
 	if r.code != exitOK || !strings.Contains(r.stdout, "the state") {
 		t.Fatalf("second open = %+v", r)
+	}
+	if got, _ := readKits(t, home); got != "demo\n" {
+		t.Fatalf(".kits right after re-opening demo = %q, want demo once", got)
 	}
 	if r := runIn(t, home, withID, "kit", "open", "other"); r.code != exitOK {
 		t.Fatalf("open other = %+v", r)
@@ -244,15 +248,22 @@ func TestKitLocked(t *testing.T) {
 	}
 	holder := exec.Command(exe, "-test.run=^$")
 	holder.Env = append(os.Environ(), lockHolderEnv+"="+paths.SessionLockFile(home, "demo-1"))
-	stdin, _ := holder.StdinPipe()
-	stdout, _ := holder.StdoutPipe()
+	stdin, err := holder.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := holder.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := holder.Start(); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_ = stdin.Close()
+		_ = holder.Process.Kill()
 		_ = holder.Wait()
 	})
+	defer func() { _ = stdin.Close() }()
 	if line, err := bufio.NewReader(stdout).ReadString('\n'); err != nil || line != "locked\n" {
 		t.Fatalf("lock holder: %q, %v", line, err)
 	}
@@ -281,5 +292,55 @@ func TestKitLocked(t *testing.T) {
 		fs.ErrNotExist,
 	) {
 		t.Fatalf("open under a held lock created the kit dir: %v", err)
+	}
+}
+
+// TestKitOpenFailedDirRecordsNothing: a kit path that cannot be a directory fails the open before
+// anything is recorded.
+func TestKitOpenFailedDirRecordsNothing(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	kits := filepath.Join(home, ".local", "state", "stack", "kits")
+	if err := os.MkdirAll(kits, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(kits, "bad"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r := runIn(t, home, map[string]string{"STACK_SESSION_ID": "demo-1"}, "kit", "open", "bad")
+	if r.code != exitUsage || r.stdout != "" || !strings.Contains(r.stderr, "create kit dir") {
+		t.Fatalf("open with a file at the kit path = %+v", r)
+	}
+	if got, ok := readKits(t, home); ok {
+		t.Fatalf(".kits = %q, want no record", got)
+	}
+}
+
+type failWriter struct{}
+
+func (failWriter) Write([]byte) (int, error) { return 0, errors.New("no space left on device") }
+
+func TestKitOpenStdoutError(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	var stderr strings.Builder
+	code := Run(context.Background(), []string{"kit", "open", "demo"}, Env{
+		Stdout: failWriter{},
+		Stderr: &stderr,
+		Getenv: func(k string) string { return map[string]string{"STACK_SESSION_ID": "demo-1"}[k] },
+		Home:   home,
+	})
+	want := "stack kit open: write context: no space left on device; demo is recorded, " +
+		"rerun `stack kit open demo` to print it\n"
+	if code == exitOK || stderr.String() != want {
+		t.Fatalf(
+			"open with a failing stdout = %d, %q; want non-zero and %q",
+			code,
+			stderr.String(),
+			want,
+		)
+	}
+	if got, _ := readKits(t, home); got != "demo\n" {
+		t.Fatalf(".kits = %q, want demo (open is retried, not undone)", got)
 	}
 }

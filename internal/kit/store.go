@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	// OpenTimeout bounds how long `kit open` and `kit close` wait for the `.kits` lock.
-	OpenTimeout = 5 * time.Second
+	// defaultTimeout bounds how long `kit open` and `kit close` wait for the `.kits` lock.
+	defaultTimeout = 5 * time.Second
 	// lockPoll is the interval between attempts to take the lock.
 	lockPoll = 25 * time.Millisecond
 )
@@ -38,7 +38,7 @@ var (
 // there is no stale reclaim; the lock file is never deleted.
 type Store struct {
 	Home string
-	// Timeout bounds the wait for the lock; zero means OpenTimeout.
+	// Timeout bounds the wait for the lock; zero means 5 s.
 	Timeout time.Duration
 }
 
@@ -55,7 +55,13 @@ func (s Store) List(ctx context.Context, id string) ([]string, error) {
 
 // Add appends slug to id's list unless it is already there.
 func (s Store) Add(ctx context.Context, id, slug string) error {
-	return s.update(ctx, id, slug, func(list []string) []string {
+	return s.Open(ctx, id, slug, nil)
+}
+
+// Open is Add for `kit open`: with id's lock held it first runs prepare (when non-nil), which
+// creates and verifies the kit dir, and records slug only when prepare succeeds.
+func (s Store) Open(ctx context.Context, id, slug string, prepare func() error) error {
+	return s.update(ctx, id, slug, prepare, func(list []string) []string {
 		if slices.Contains(list, slug) {
 			return list
 		}
@@ -66,16 +72,26 @@ func (s Store) Add(ctx context.Context, id, slug string) error {
 // Remove drops slug from id's list; removing an absent slug is a no-op. An emptied list deletes the
 // file.
 func (s Store) Remove(ctx context.Context, id, slug string) error {
-	return s.update(ctx, id, slug, func(list []string) []string {
+	return s.update(ctx, id, slug, nil, func(list []string) []string {
 		return slices.DeleteFunc(slices.Clone(list), func(v string) bool { return v == slug })
 	})
 }
 
-func (s Store) update(ctx context.Context, id, slug string, change func([]string) []string) error {
+func (s Store) update(
+	ctx context.Context,
+	id, slug string,
+	prepare func() error,
+	change func([]string) []string,
+) error {
 	if !paths.ValidSlug(slug) {
 		return fmt.Errorf("%w: %q", ErrInvalidSlug, slug)
 	}
 	return s.locked(ctx, id, func(root *os.Root, name string) error {
+		if prepare != nil {
+			if err := prepare(); err != nil {
+				return err
+			}
+		}
 		old, err := readKits(root, name)
 		if err != nil {
 			return err
@@ -90,7 +106,7 @@ func (s Store) update(ctx context.Context, id, slug string, change func([]string
 			}
 			return nil
 		}
-		return writeKits(root, name, updated)
+		return writeKits(root, paths.SessionsDir(s.Home), name, updated)
 	})
 }
 
@@ -112,7 +128,7 @@ func (s Store) locked(
 
 	timeout := s.Timeout
 	if timeout <= 0 {
-		timeout = OpenTimeout
+		timeout = defaultTimeout
 	}
 	lockCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -153,14 +169,15 @@ func readKits(root *os.Root, name string) ([]string, error) {
 	return out, nil
 }
 
-// writeKits replaces name with list through a temp file in the same dir. The temp handle is
-// closed before the rename, which Windows requires; the lock keeps every other handle closed.
-func writeKits(root *os.Root, name string, list []string) error {
-	tmp := name + ".tmp"
-	f, err := root.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+// writeKits replaces name in dir (the dir root is open on) with list through a new, uniquely named
+// temp file in dir, created exclusively so no existing file or link is written through. Its handle
+// is closed before the rename, which Windows requires; the lock keeps every other handle closed.
+func writeKits(root *os.Root, dir, name string, list []string) error {
+	f, err := os.CreateTemp(dir, name+".*.tmp")
 	if err != nil {
-		return fmt.Errorf("write %s: %w", tmp, err)
+		return fmt.Errorf("write %s: %w", name, err)
 	}
+	tmp := filepath.Base(f.Name())
 	_, werr := f.WriteString(strings.Join(list, "\n") + "\n")
 	cerr := f.Close()
 	if err := errors.Join(werr, cerr); err != nil {
@@ -170,6 +187,14 @@ func writeKits(root *os.Root, name string, list []string) error {
 	if err := root.Rename(tmp, name); err != nil {
 		_ = root.Remove(tmp)
 		return fmt.Errorf("replace %s: %w", name, err)
+	}
+	return nil
+}
+
+// EnsureDir creates the kit dir (0o700) if absent; an existing non-directory at dir is an error.
+func EnsureDir(dir string) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("create kit dir: %w", err)
 	}
 	return nil
 }

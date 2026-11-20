@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/shuymn/stack/internal/config"
@@ -77,15 +76,18 @@ func runKitOpen(ctx context.Context, env Env, inv invocation) error {
 		return fmt.Errorf("kit root: %w", err)
 	}
 
-	// Record before touching the kit dir, so a lock timeout changes nothing and prints nothing.
-	if id != "" {
-		if err := (kit.Store{Home: env.Home}).Add(ctx, id, slug); err != nil {
-			return storeError(err)
-		}
-	}
+	// With the lock held, create the kit dir and record the slug only once that succeeded; render
+	// after releasing the lock. A lock timeout changes nothing and prints nothing.
 	dir := paths.KitDir(root, slug)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("create kit dir: %w", err)
+	if id == "" {
+		err = kit.EnsureDir(dir)
+	} else {
+		err = storeError((kit.Store{Home: env.Home}).Open(ctx, id, slug, func() error {
+			return kit.EnsureDir(dir)
+		}))
+	}
+	if err != nil {
+		return err
 	}
 
 	boardCtx, cancel := context.WithTimeout(ctx, kit.BoardDeadline)
@@ -96,22 +98,18 @@ func runKitOpen(ctx context.Context, env Env, inv invocation) error {
 		Getenv:   env.Getenv,
 		Handover: cfg.Handover,
 	}
-	blocks := r.Render(boardCtx, dir)
-	blocks = append(blocks, entryStage(ctx, env, cfg, slug)...)
-	_, _ = fmt.Fprint(env.Stdout, kit.Join(blocks))
+	if _, err := fmt.Fprint(env.Stdout, kit.Join(r.Render(boardCtx, dir))); err != nil {
+		if id != "" {
+			return fmt.Errorf("write context: %w; %s is recorded, rerun `stack kit open %s` to "+
+				"print it", err, slug, slug)
+		}
+		return fmt.Errorf("write context: %w", err)
+	}
 
 	if id == "" {
 		_, _ = fmt.Fprintf(env.Stderr, "stack: %s unset; %s not recorded and will not be restored "+
 			"after compaction\n", sessionIDEnv, slug)
 	}
-	return nil
-}
-
-// entryStage is the seam for the entry-stage extensions that run after a successful `kit open`
-// (§4.1, §4.7): each result's context is appended in the renderer's block format, and a block
-// there is shown, not enforced. Extensions arrive with the `ext` package; until then it adds
-// nothing.
-func entryStage(_ context.Context, _ Env, _ config.Config, _ string) []kit.Block {
 	return nil
 }
 
