@@ -48,25 +48,28 @@ fixtures) are in `docs/design/phase2-core.md` §4.7.
 - **Discovery:** `<name>` matches `^[a-z0-9][a-z0-9-]*$`; names come from `[stages].<stage>`, or only from the
   repeatable `--ext NAME` for `stack run`, and run in that order. Core picks the first runnable `stack-<name>` in the
   absolute `PATH` entries (on Windows `stack-<name>.exe`; `PATHEXT` is ignored). A missing name is skipped without a
-  warning and listed under `skipped` (or in the `--dry-run` plan).
+  warning; `stack run` lists it under `skipped` (or in the `--dry-run` plan).
 - **Invocation:** no arguments; cwd is the invoker's; the environment is inherited, with `STACK_STAGE` set to the
   stage; `STACK_SESSION_ID` is passed through when set.
-- `stdin`: one UTF-8 JSON object, read to EOF: `{ "stage": "entry|outbound|cycle", "repo": "...", "range": "...",
-  "prompt": "..." }`. `repo` is the Git top-level of the cwd or `""`; `range` is `--range R`, else for outbound the
-  literal `@{upstream}..HEAD` when an upstream exists, else `""`; `prompt` is the `--prompt-file` contents or `""`
-  (`kit open` sends both empty). `--replay` sends the fixture's request object as is. Extensions ignore unknown
+- `stdin`: one UTF-8 JSON object, read to EOF. A live request has four strings: `{ "stage": "entry|outbound|cycle",
+  "repo": "...", "range": "...", "prompt": "..." }`. `repo` is the Git top-level of the cwd or `""`; `range` is
+  `--range R`, else for outbound the literal `@{upstream}..HEAD` when Git resolves `@{upstream}`, else `""`;
+  `prompt` is the `--prompt-file` contents or `""` (`kit open` sends both empty). `--replay` sends the fixture's
+  request object as is once its `stage` matches; the fixture supplies the other fields. Extensions ignore unknown
   fields.
-- `stdout`: one UTF-8 JSON object of at most 1 MiB: `{ "status": "pass|warn|block", "context": "...", "findings":
+- `stdout`: one UTF-8 JSON object; all stdout bytes count toward a 1 MiB limit: `{ "status": "pass|warn|block", "context": "...", "findings":
   [...] }`. `status` is required; `context` (a string) and `findings` (an array) may be omitted and default to `""`
-  and `[]`; unknown fields are ignored. For a run that completes with a valid response the exit code is ignored.
+  and `[]`; unknown fields are ignored. Once core accepts the response, the exit code is ignored (a valid `block`
+  counts even with a non-zero exit).
   stderr is forwarded to core's stderr with `[<name>] ` before each line.
 - **Limits and failures:** one deadline per stage shared by its extensions (entry 10 s, outbound 120 s, cycle 30
-  min). A lookup or start failure, the deadline (including an extension left unstarted), a pipe still open after
-  exit, oversized stdout or an invalid response becomes `warn` with a synthetic finding; a broken extension never
-  yields `block`.
-- **Result:** statuses aggregate as `block > warn > pass` (no result = `pass`). `stack run` exits 1 on `block`, else
-  0; with a replay `expect`, 0 or 1 reports match or mismatch. `stack kit open` shows entry results without
-  enforcing their status.
+  min). Before parsing stdout, core checks for a lookup or start failure, the deadline, a pipe still open when the
+  cleanup grace period after exit ends, and oversized stdout; these, an invalid response and an extension left
+  unstarted at the deadline become `warn` with a synthetic finding, never `block`.
+- **Result:** statuses aggregate as `block > warn > pass` (no result = `pass`). After writing the aggregate,
+  `stack run` exits 1 on `block` and 0 on `pass` or `warn`; with a replay `expect`, 0 or 1 reports match or
+  mismatch (usage errors exit 2; `--dry-run` exits 0). `stack kit open` appends each entry `context` and a marker
+  for `warn` or `block` without enforcing them; findings appear only in the `stack run` aggregate.
 
 ## 4. Three Named Stages & Session Lifecycle
 

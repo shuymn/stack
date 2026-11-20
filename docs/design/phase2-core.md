@@ -468,10 +468,10 @@ kaizen until Phase 3; `--json` is decided together with the `statusline.sh.tmpl`
   anything else (`../x`, `a/b`, `C:x`) is a config error or a usage error (exit 2).
 - **Discovery:** `stack-<name>` on `PATH` via `proc.LookPathExe` (§2.2; the `gh-<name>` / `git-<name>` convention),
   never as a direct path and never through `PATHEXT`. Not found = **skip**, listed under `skipped`, no warning
-  (`docs/architecture.md:60`). Found but not runnable (§2.2) or failing to start = `warn`. Core never looks inside
+  (`docs/architecture.md` §3 Extension Protocol). Found but not runnable (§2.2) or failing to start = `warn`. Core never looks inside
   `extensions/`. An installed `jev-*` without its key or config must itself answer `pass` with no context: v10 §4's
   silent opt-out is the extension's contract.
-- **Request (stdin):** `{"stage","repo","range","prompt"}` (`docs/architecture.md:42`). `repo` = repo toplevel or
+- **Request (stdin):** `{"stage","repo","range","prompt"}` (`docs/architecture.md` §3 Extension Protocol). `repo` = repo toplevel or
   `""`; `range` = `--range R`, else for outbound `@{upstream}..HEAD` when an upstream exists, else `""`; `prompt` =
   contents of `--prompt-file F` or `""`. An explicit `--range` that git cannot resolve or an unreadable/non-UTF-8
   `--prompt-file` exits 2. Env adds `STACK_STAGE` and passes `STACK_SESSION_ID` through.
@@ -483,7 +483,7 @@ kaizen until Phase 3; `--json` is decided together with the `statusline.sh.tmpl`
   **warn**. Every warn core produces carries a synthetic finding `{"extension":<name>,"error":<reason>}`. The exit code is ignored
   when stdout is a valid response.
 - **Aggregation:** `block > warn > pass`; no result (all skipped) = `pass`. Stdout:
-  `{"stage","status","results":[{"name","status","context","findings","error"}],"skipped":[…]}`. Exit: `pass`/`warn`
+  `{"stage","status","results":[{"name","status","context","findings","error"}],"skipped":[…]}`. Exit after writing the aggregate: `pass`/`warn`
   0, `block` 1. Warn-not-block for broken extensions and listing `skipped` are design choices of this doc.
 - `--dry-run`: print the resolved plan (`name → path | skipped | not runnable`) and the request, run no extension,
   exit 0. Git reads needed to build the plan are allowed.
