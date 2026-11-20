@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shuymn/stack/internal/gittest"
 	"github.com/shuymn/stack/internal/proc"
 )
 
@@ -110,7 +111,9 @@ func TestRepoTree(t *testing.T) {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 		defer cancel()
-		res, err := proc.Exec{}.Run(ctx, proc.Cmd{Name: "git", Args: args, MaxStdout: 64 << 20})
+		res, err := proc.Exec{}.Run(ctx, proc.Cmd{
+			Name: "git", Args: args, Env: gittest.CleanEnv(os.Environ()), MaxStdout: 64 << 20,
+		})
 		if err != nil || res.ExitCode != 0 || res.TimedOut || res.WaitDelayExceeded ||
 			res.Truncated {
 			t.Fatalf("git %q: %v %+v", args, err, res)

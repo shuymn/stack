@@ -2,51 +2,31 @@ package cli
 
 import (
 	"bytes"
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/shuymn/stack/internal/proc"
+	"github.com/shuymn/stack/internal/gittest"
 )
 
-// checkRepo makes a git repository with a clean base commit tagged `base` and one commit on top
-// whose message is msg, isolated from the user's git config through t.Setenv, and changes into it.
+func TestMain(m *testing.M) {
+	os.Exit(gittest.Main(m))
+}
+
+// checkRepo makes a fixture repository with an empty base commit tagged `base` and one commit on top
+// whose message is msg, and changes into it. The git that stack runs inherits the process
+// environment, so it is pointed at the fixture's isolated config too.
 func checkRepo(t *testing.T, msg string) {
 	t.Helper()
-	root := t.TempDir()
-	global := filepath.Join(root, "gitconfig")
-	if err := os.WriteFile(global, nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("GIT_CONFIG_GLOBAL", global)
+	r := gittest.New(t)
+	r.Commit("chore: base")
+	r.Tag("base")
+	r.Commit(msg)
+	t.Setenv("GIT_CONFIG_GLOBAL", r.GlobalConfig)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
-	for _, who := range []string{"AUTHOR", "COMMITTER"} {
-		t.Setenv("GIT_"+who+"_NAME", "Test")
-		t.Setenv("GIT_"+who+"_EMAIL", "test@example.com")
-		t.Setenv("GIT_"+who+"_DATE", "2026-01-01T00:00:00Z")
-	}
-	dir := filepath.Join(root, "repo")
-	git := func(args ...string) {
-		t.Helper()
-		ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
-		defer cancel()
-		res, err := proc.Exec{}.Run(ctx, proc.Cmd{Name: "git", Args: args, Dir: dir})
-		if err != nil || res.ExitCode != 0 || res.TimedOut || res.WaitDelayExceeded {
-			t.Fatalf("git %q: %v %s", args, err, res.Stderr)
-		}
-	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	git("-c", "core.autocrlf=false", "-c", "init.defaultBranch=main", "init", "-q")
-	git("config", "commit.gpgsign", "false")
-	git("commit", "-q", "--allow-empty", "-m", "chore: base")
-	git("tag", "base")
-	git("commit", "-q", "--allow-empty", "-m", msg)
-	t.Chdir(dir)
+	t.Setenv("GIT_CEILING_DIRECTORIES", r.Root)
+	t.Chdir(r.Dir)
 }
 
 func runHome(t *testing.T, home string, args ...string) result {
