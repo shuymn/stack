@@ -200,6 +200,9 @@ func TestParseHandoffs(t *testing.T) {
 		{`cmd --token="$(cat F)"`, []string{"$(cat F)"}},
 		{`cmd -H "Bearer $(cat F)"`, []string{"$(cat F)"}},
 		{`bash -c 'K="$(cat F)" cmd'`, []string{"$(cat F)"}},
+		{"bash <<'EOF'\nexport K=\"$(cat F)\"\nEOF\n", []string{"$(cat F)"}},
+		{"x; bash <<'EOF'\ncd d && K=\"$(cat F)\" cmd\nEOF\n", []string{"$(cat F)"}},
+		{"bash <<< 'K=\"$(cat F)\" cmd'", nil}, // a here-string body is not mapped
 		{`cmd "$(cat F)"`, nil},
 		{`cmd -- "$(cat F)"`, nil},
 		{`cmd -- --token "$(cat F)"`, nil},

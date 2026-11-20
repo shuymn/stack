@@ -185,6 +185,9 @@ func TestSecretsBash(t *testing.T) {
 		`grep -r KEY "$HOME/.t3/userdata/secrets"`,
 		"cat <<'EOF'\n.dev.vars\nEOF",
 		"cut -d= -f1 app/.dev.vars",
+		"bash <<'EOF'\ncat .dev.vars\nEOF",
+		"bash <<EOF\nK=\"$(cat .dev.vars)\" cmd $X\nEOF",
+		`make switch <<< "$(cat .dev.vars)"`,
 	}
 	for _, cmd := range deny {
 		d, ok := f.bash(cmd)
@@ -198,6 +201,7 @@ func TestSecretsBash(t *testing.T) {
 		`cmd -H "Bearer $(cat ~/.t3/userdata/secrets/token)"`,
 		"cat .dev.vars.example",
 		"ls .t3/userdata/secrets-example",
+		"bash <<'EOF'\ncd app\nexport K=\"$(cat ~/.t3/userdata/secrets/token)\"\nwrangler deploy\nEOF",
 	}
 	for _, cmd := range allow {
 		d, ok := f.bash(cmd)

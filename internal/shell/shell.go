@@ -174,18 +174,19 @@ func (w *walker) stmt(sc scope, s *syntax.Stmt, cwd string, depth int, piped boo
 	if piped {
 		stdin.Kind = StdinDynamic
 	}
+	stdinBase := -1 // offset of a heredoc body in the top-level command, when it maps there
 	for _, r := range s.Redirs {
 		w.substs(sc, r.Word, cwd, depth)
 		w.substs(sc, r.Hdoc, cwd, depth)
 		if in, ok := redirStdin(r); ok {
-			stdin = in
+			stdin, stdinBase = in, hdocBase(sc, r, in)
 		}
 	}
 	switch c := s.Cmd.(type) {
 	case nil:
 		return cwd
 	case *syntax.CallExpr:
-		return w.call(sc, c, stdin, cwd, depth)
+		return w.call(sc, c, stdin, stdinBase, cwd, depth)
 	case *syntax.BinaryCmd:
 		switch c.Op { //nolint:exhaustive // Pipe and PipeAll share the default
 		case syntax.AndStmt:
@@ -292,6 +293,23 @@ func loopCwd(n syntax.Node, cwd string) string {
 		return ""
 	}
 	return cwd
+}
+
+// hdocBase returns the offset of a heredoc body in the top-level command when the body is one
+// literal whose source text is exactly in.Text, else -1.
+func hdocBase(sc scope, r *syntax.Redirect, in Stdin) int {
+	if in.Kind != StdinText || r.Hdoc == nil || sc.base < 0 || len(r.Hdoc.Parts) != 1 {
+		return -1
+	}
+	lit, ok := r.Hdoc.Parts[0].(*syntax.Lit)
+	if !ok {
+		return -1
+	}
+	off := int(lit.ValuePos.Offset())
+	if off+len(in.Text) > len(sc.src) || sc.src[off:off+len(in.Text)] != in.Text {
+		return -1
+	}
+	return sc.base + off
 }
 
 // redirStdin reports the stdin a redirect binds, if it binds fd 0.
@@ -421,7 +439,14 @@ func isHandoff(c *syntax.CmdSubst) bool {
 var assignWordRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*\+?=`)
 
 // call walks a simple command and returns the cwd after it succeeds.
-func (w *walker) call(sc scope, c *syntax.CallExpr, stdin Stdin, cwd string, depth int) string {
+func (w *walker) call(
+	sc scope,
+	c *syntax.CallExpr,
+	stdin Stdin,
+	stdinBase int,
+	cwd string,
+	depth int,
+) string {
 	for _, a := range c.Assigns {
 		w.assign(sc, a, cwd, depth)
 	}
@@ -452,7 +477,7 @@ func (w *walker) call(sc scope, c *syntax.CallExpr, stdin Stdin, cwd string, dep
 	w.res.Calls = append(w.res.Calls, call)
 
 	if depth < maxDepth {
-		w.nested(sc, c.Args[start:], call, depth)
+		w.nested(sc, c.Args[start:], call, stdinBase, depth)
 	}
 	switch name {
 	case "cd":
@@ -484,8 +509,9 @@ func (w *walker) flagHandoffs(sc scope, raw []*syntax.Word, argv []Word) {
 }
 
 // nested walks the script a call runs from a literal: `bash -c '<s>'`, `eval '<s>'`, or a shell
-// reading a literal heredoc or here-string on stdin.
-func (w *walker) nested(sc scope, raw []*syntax.Word, call Call, depth int) {
+// reading a literal heredoc or here-string on stdin. stdinBase is the offset of that heredoc body in
+// the top-level command, or -1.
+func (w *walker) nested(sc scope, raw []*syntax.Word, call Call, stdinBase, depth int) {
 	switch call.Name() {
 	case "eval":
 		texts := make([]string, 0, len(call.Args)-1)
@@ -511,9 +537,9 @@ func (w *walker) nested(sc scope, raw []*syntax.Word, call Call, depth int) {
 				w.script(scope{src: src, base: literalBase(sc, raw[i], src)}, call.Cwd, depth+1)
 			}
 		case i >= len(call.Args) && call.Stdin.Kind == StdinText:
-			// A heredoc body's offsets are not tracked through the redirect; handoffs in it are
-			// dropped, so the secrets rule scans it whole.
-			w.script(scope{src: call.Stdin.Text, base: -1}, call.Cwd, depth+1)
+			// stdinBase is -1 for a body with expansions; handoffs in it are then dropped and the
+			// secrets rule scans it whole.
+			w.script(scope{src: call.Stdin.Text, base: stdinBase}, call.Cwd, depth+1)
 		}
 	}
 }
