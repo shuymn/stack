@@ -84,6 +84,7 @@ var commands = []*command{
 		path:    []string{"hook", "claude", "session-start"},
 		summary: "SessionStart hook: export STACK_SESSION_ID; restore kits on compact",
 		hook:    true,
+		run:     runSessionStart,
 	},
 	{
 		path:    []string{"hook", "claude", "pre-tool-use"},

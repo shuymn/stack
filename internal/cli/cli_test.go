@@ -159,9 +159,9 @@ func TestHooksExitZeroSilently(t *testing.T) {
 		if r.code != exitOK || r.stdout != "" || r.stderr != "" {
 			t.Errorf("hook %s = %+v, want exit 0 and no output", sub, r)
 		}
+		// Empty stdin is not a payload (session-start) or the hook is not implemented yet.
 		r = run(t, map[string]string{"STACK_DEBUG": "1"}, "hook", "claude", sub)
-		if r.code != exitOK || r.stdout != "" ||
-			!strings.Contains(r.stderr, "not implemented yet") {
+		if r.code != exitOK || r.stdout != "" || r.stderr == "" {
 			t.Errorf("hook %s with STACK_DEBUG=1 = %+v", sub, r)
 		}
 	}
