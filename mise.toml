@@ -1,0 +1,22 @@
+min_version = "2026.10.3"
+
+[settings]
+lockfile_platforms = ["macos-arm64", "linux-x64", "windows-x64"]
+minimum_release_age = "1d"
+
+[tool_config]
+locked = true
+
+# Each tool tracks its major version; mise.lock pins the exact versions and
+# .github/workflows/mise-update.yml advances it.
+[tools]
+go = "1"
+golangci-lint = "2"
+lefthook = "2"
+actionlint = "1"
+betterleaks = "1"
+"github:suzuki-shunsuke/ghalint" = "1"
+# No Windows release. Windows is a CI-only runtime target, and without this
+# restriction mise on Windows still resolves the tool while installing go.
+"github:shuymn/pommitlint" = { version = "2", os = ["macos", "linux"] }
+"github:babarot/gh-infra" = "0"

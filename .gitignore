@@ -1,0 +1,7 @@
+/stack
+/stack.exe
+/dist/
+/.cache/
+.DS_Store
+*.out
+coverage.txt

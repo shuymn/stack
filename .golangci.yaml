@@ -1,0 +1,62 @@
+version: "2"
+linters:
+  default: all
+  disable:
+    - depguard
+    - cyclop
+    - exhaustruct
+    - exhaustruct_v5
+    - forbidigo
+    - funlen
+    - godot
+    - ireturn
+    - lll
+    - nlreturn
+    - paralleltest
+    - varnamelen
+    - wsl
+    - gocognit
+    - contextcheck
+    - wsl_v5
+    - noinlineerr
+    - gochecknoglobals
+    - goconst
+    - gomodguard
+    - testpackage
+  settings:
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    mnd:
+      ignored-numbers:
+        - "0o600"
+        - "0o644"
+        - "0o700"
+        - "0o755"
+    wrapcheck:
+      ignore-package-globs:
+        - github.com/shuymn/stack/*
+  exclusions:
+    presets:
+      - comments
+      - std-error-handling
+      - common-false-positives
+      - legacy
+    rules:
+      - linters:
+          - err113
+          - noctx
+        path: _test\.go
+      - linters:
+          - gosec
+        path: _test\.go
+        text: G204
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+    - golines
+  exclusions:
+    warn-unused: true

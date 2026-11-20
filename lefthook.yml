@@ -1,0 +1,29 @@
+assert_lefthook_installed: true
+glob_matcher: doublestar
+no_tty: true
+output: [summary, failure, execution_out]
+
+pre-commit:
+  parallel: true
+  commands:
+    gofmt:
+      glob: "**/*.go"
+      run: mise exec -- gofmt -l {staged_files} | grep . && exit 1 || exit 0
+    actionlint:
+      glob: ".github/workflows/*.{yml,yaml}"
+      run: mise exec -- actionlint
+    ghalint:
+      glob: ".github/workflows/*.{yml,yaml}"
+      run: mise exec -- ghalint run
+    betterleaks:
+      run: mise exec -- betterleaks git --pre-commit --staged --redact --no-banner --verbose
+
+commit-msg:
+  commands:
+    pommitlint:
+      run: mise exec -- pommitlint lint --edit {1}
+
+pre-push:
+  commands:
+    test:
+      run: mise exec -- scripts/test
