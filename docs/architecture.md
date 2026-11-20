@@ -91,7 +91,7 @@ cycle = ["observe", "jev-classify", "improve"]
 
 ## 6. Migration Roadmap
 
-1. **Phase 1 (dotfiles immediate cleanup):** Stop ordinary-session misfires (`startup`/`resume` auto-injection, `Stop` block, `~/.t3/worktrees/` worker guess) and remove wolf-crying denies (`deny-rm.sh`, overly broad `git`/`deploy` rules) in `/Users/shuymn/.dotfiles`.
+1. **Phase 1 (dotfiles immediate cleanup):** Stop ordinary-session misfires (`startup`/`resume` auto-injection, `Stop` block, `~/.t3/worktrees/` worker guess) and remove wolf-crying denies (`deny-rm.sh`, overly broad `git`/`deploy` rules) in `shuymn/dotfiles`.
 2. **Phase 2 (`shuymn/stack` Go core):** Implement `kit open/close`, `hook claude session-start/pre-tool-use`, `pr merge`, `check public`, `budget status`, `run` with unit/fixture tests passing on macOS, Linux, and Windows CI. Wire into dotfiles and delete legacy Python hooks.
 3. **Phase 3 (retire legacy `kaizen` & switch `cycle`):** Implement minimal `extensions/observe` and `extensions/improve` (with `writing.md`), switch `launchd` to `stack run cycle`, retire `apply.py`/`ready.py`/old `improve.py`/`.claude/kaizen-managed`, and update `skills/` (`attention.md`, `commit-pr.md`, `retro.md`), `agents/steward.md`, and `statusline.sh.tmpl`.
 4. **Phase 4 (Jev extensions):** Add `jev-classify` -> `jev-semantic` -> `jev-router` with `fixtures/` and `--replay` verification.
