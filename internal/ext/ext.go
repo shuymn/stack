@@ -285,7 +285,36 @@ func evaluate(name string, res proc.Result, runErr error, timeout time.Duration)
 	return r
 }
 
-var errResponse = errors.New("malformed")
+var (
+	errResponse    = errors.New("malformed")
+	errContextType = errors.New("context is not a string")
+	errFindingType = errors.New("findings is not an array")
+)
+
+// contextField and findingsField check every occurrence while decoding, so a later key that
+// encoding/json matches to the same field (another case, or a duplicate) cannot overwrite an
+// earlier malformed value before it is checked. Unmarshal passes null to them as well.
+type contextField struct{ value string }
+
+func (c *contextField) UnmarshalJSON(b []byte) error {
+	if b[0] != '"' {
+		return errContextType
+	}
+	if err := json.Unmarshal(b, &c.value); err != nil {
+		return fmt.Errorf("context: %w", err)
+	}
+	return nil
+}
+
+type findingsField json.RawMessage
+
+func (f *findingsField) UnmarshalJSON(b []byte) error {
+	if b[0] != '[' {
+		return errFindingType
+	}
+	*f = append((*f)[:0], b...)
+	return nil
+}
 
 // parse decodes one response object followed by nothing but white space. stdout must be UTF-8;
 // context, when present, must be a string and findings, when present, an array (null is neither).
@@ -295,9 +324,9 @@ func parse(stdout []byte) (Result, error) {
 		return Result{}, fmt.Errorf("%w: not UTF-8", errResponse)
 	}
 	var resp struct {
-		Status   string          `json:"status"`
-		Context  json.RawMessage `json:"context"`
-		Findings json.RawMessage `json:"findings"`
+		Status   string        `json:"status"`
+		Context  contextField  `json:"context"`
+		Findings findingsField `json:"findings"`
 	}
 	dec := json.NewDecoder(bytes.NewReader(stdout))
 	if err := dec.Decode(&resp); errors.Is(err, io.EOF) {
@@ -313,19 +342,9 @@ func parse(stdout []byte) (Result, error) {
 	default:
 		return Result{}, fmt.Errorf("%w: unknown status %q", errResponse, resp.Status)
 	}
-	r := Result{Status: resp.Status, Findings: json.RawMessage("[]")}
-	if resp.Context != nil {
-		if bytes.TrimSpace(resp.Context)[0] != '"' {
-			return Result{}, fmt.Errorf("%w: context is not a string", errResponse)
-		}
-		if err := json.Unmarshal(resp.Context, &r.Context); err != nil {
-			return Result{}, fmt.Errorf("%w: context: %w", errResponse, err)
-		}
-	}
+	r := Result{Status: resp.Status, Context: resp.Context.value, Findings: json.RawMessage("[]")}
 	if resp.Findings != nil {
-		if r.Findings = bytes.TrimSpace(resp.Findings); r.Findings[0] != '[' {
-			return Result{}, fmt.Errorf("%w: findings is not an array", errResponse)
-		}
+		r.Findings = json.RawMessage(resp.Findings)
 	}
 	return r, nil
 }

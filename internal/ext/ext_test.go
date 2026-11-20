@@ -202,6 +202,9 @@ func TestEvaluateStrictResponse(t *testing.T) {
 		{`{"status":"pass","context":1}`, StatusWarn, "", "context is not a string"},
 		{`{"status":"pass","context":"C","findings":null}`, StatusWarn, "", "findings is not an array"},
 		{`{"status":"pass","findings":"x"}`, StatusWarn, "", "findings is not an array"},
+		{`{"status":"pass","context":123,"Context":"OK"}`, StatusWarn, "", "context is not a string"},
+		{`{"status":"pass","context":null,"context":"OK"}`, StatusWarn, "", "context is not a string"},
+		{`{"status":"pass","findings":null,"Findings":[]}`, StatusWarn, "", "findings is not an array"},
 		{`{"status":"pass","context":"C\u00e9"}`, StatusPass, "C\u00e9", ""},
 		{`{"status":"block"}`, StatusBlock, "", ""},
 	} {
