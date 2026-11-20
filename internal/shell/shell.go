@@ -348,6 +348,8 @@ func redirStdin(r *syntax.Redirect) (Stdin, bool) {
 			return Stdin{Kind: StdinText, Text: wd.Text + "\n"}, true
 		}
 		return Stdin{Kind: StdinDynamic}, true
+	case syntax.DplIn: // `<&N` copies another fd, `<&-` closes stdin: not statically known
+		return Stdin{Kind: StdinDynamic}, true
 	default:
 		return Stdin{}, false
 	}

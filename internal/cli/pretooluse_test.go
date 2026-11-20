@@ -245,6 +245,28 @@ func TestPreToolUseInheritedStdinCwd(t *testing.T) {
 	}
 }
 
+// TestPreToolUseStdinDupOrClose checks that `<&N`, `0<&N` and `<&-` replace an inherited stdin
+// with an unknown one instead of keeping the stale `< F`.
+func TestPreToolUseStdinDupOrClose(t *testing.T) {
+	home := strings.Join([]string{"", "home", "dev"}, "/") // a local path, built at run time
+	cwd := t.TempDir()
+	for rel, content := range map[string]string{"body.md": "see " + home + "/x\n", "clean.md": "ok\n"} {
+		if err := os.WriteFile(filepath.Join(cwd, rel), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, redir := range []string{"<&3", "0<&3", "<&-"} {
+		cmd := "{ gh issue comment 1 -F - " + redir + "; } 3<clean.md <body.md"
+		r := runHookStdin(t, t.TempDir(), payload(t, cwd, "Bash", map[string]any{"command": cmd}))
+		if r.code != exitOK || r.stdout != "" {
+			t.Errorf("%q = %+v, want allow", cmd, r)
+		}
+	}
+	r := runHookStdin(t, t.TempDir(), payload(t, cwd, "Bash",
+		map[string]any{"command": "{ gh issue comment 1 -F - 2<&3; } 3<clean.md <body.md"}))
+	assertDeny(t, "a dup of another fd keeps stdin", r, "gh-publish")
+}
+
 func TestPreToolUseAllowsOrdinaryCommand(t *testing.T) {
 	r := runHookStdin(t, t.TempDir(),
 		payload(t, t.TempDir(), "Bash", map[string]any{"command": "git status"}))
