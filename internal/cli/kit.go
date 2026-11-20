@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/shuymn/stack/internal/config"
+	"github.com/shuymn/stack/internal/ext"
 	"github.com/shuymn/stack/internal/kit"
 	"github.com/shuymn/stack/internal/paths"
 	"github.com/shuymn/stack/internal/proc"
@@ -64,12 +64,13 @@ func runKitOpen(ctx context.Context, env Env, inv invocation) error {
 	if err != nil {
 		return err
 	}
-	cfg, warnings, err := config.Load(paths.ConfigFile(env.Home))
+	cfg, err := loadConfig(env)
 	if err != nil {
 		return err
 	}
-	for _, w := range warnings {
-		_, _ = fmt.Fprintf(env.Stderr, "stack: %s\n", w)
+	// A bad entry name is a config error found before anything changes.
+	if err := checkStageNames(env, ext.StageEntry, cfg.Stages.Entry); err != nil {
+		return err
 	}
 	root, err := filepath.Abs(paths.FromConfig(env.Home, cfg.Kit.Root))
 	if err != nil {
@@ -98,12 +99,18 @@ func runKitOpen(ctx context.Context, env Env, inv invocation) error {
 		Getenv:   env.Getenv,
 		Handover: cfg.Handover,
 	}
-	if _, err := fmt.Fprint(env.Stdout, kit.Join(r.Render(boardCtx, dir))); err != nil {
+	// The kit first, then each entry result as it completes: a slow extension never holds it back.
+	bw := &blockWriter{w: env.Stdout}
+	err = bw.write(r.Render(boardCtx, dir)...)
+	if err == nil {
+		err = writeEntryStage(ctx, env, cfg.Stages.Entry, bw)
+	}
+	if err != nil {
 		if id != "" {
-			return fmt.Errorf("write context: %w; %s is recorded, rerun `stack kit open %s` to "+
-				"print it", err, slug, slug)
+			return fmt.Errorf("%w; %s is recorded, rerun `stack kit open %s` to print it",
+				err, slug, slug)
 		}
-		return fmt.Errorf("write context: %w", err)
+		return err
 	}
 
 	if id == "" {

@@ -10,6 +10,8 @@ import (
 	"io"
 	"slices"
 	"strings"
+
+	"github.com/shuymn/stack/internal/ext"
 )
 
 // Exit codes shared by every command. Hook commands always exit exitOK.
@@ -23,8 +25,7 @@ var (
 	// ErrRefused marks a refusal, finding or block (exit 1). Every other command error exits 2.
 	ErrRefused = errors.New("refused")
 
-	errNotImplemented = errors.New("not implemented yet")
-	errArgs           = errors.New("wrong arguments")
+	errArgs = errors.New("wrong arguments")
 )
 
 // Env is everything a command may take from the process.
@@ -51,7 +52,7 @@ type command struct {
 	hook    bool
 	choices []string // allowed values of the first positional, when set
 	define  func(fs *flag.FlagSet)
-	run     func(ctx context.Context, env Env, inv invocation) error // nil: not implemented yet
+	run     func(ctx context.Context, env Env, inv invocation) error
 }
 
 func (c *command) name() string {
@@ -132,7 +133,7 @@ var commands = []*command{
 		args:    "<entry|outbound|cycle>",
 		flagDoc: "[--dry-run] [--replay FILE] [--ext NAME]... [--range R] [--prompt-file F]",
 		summary: "run the extensions of a stage",
-		choices: []string{"entry", "outbound", "cycle"},
+		choices: []string{ext.StageEntry, ext.StageOutbound, ext.StageCycle},
 		define: func(fs *flag.FlagSet) {
 			fs.Bool("dry-run", false, "")
 			fs.String("replay", "", "")
@@ -140,6 +141,7 @@ var commands = []*command{
 			fs.String("range", "", "")
 			fs.String("prompt-file", "", "")
 		},
+		run: runRun,
 	},
 }
 
@@ -182,12 +184,7 @@ func Run(ctx context.Context, args []string, env Env) int {
 		_, _ = fmt.Fprintf(env.Stderr, "%s: %v\nusage: %s\n", cmd.name(), err, cmd.synopsis())
 		return exitUsage
 	}
-	if cmd.run == nil {
-		err = errNotImplemented
-	} else {
-		err = cmd.run(ctx, env, inv)
-	}
-	if err != nil {
+	if err := cmd.run(ctx, env, inv); err != nil {
 		_, _ = fmt.Fprintf(env.Stderr, "%s: %v\n", cmd.name(), err)
 		return exitCode(err)
 	}
@@ -242,18 +239,14 @@ func runHook(ctx context.Context, cmd *command, args []string, env Env) int {
 			_, _ = fmt.Fprintf(env.Stderr, "%s: panic: %v\n", cmd.name(), r)
 		}
 	}() // a recovered panic returns the zero value, exitOK
-	err := errNotImplemented
-	if cmd.run != nil {
-		err = cmd.run(ctx, env, invocation{args: args})
-	}
-	if err != nil && debug {
+	if err := cmd.run(ctx, env, invocation{args: args}); err != nil && debug {
 		_, _ = fmt.Fprintf(env.Stderr, "%s: %v\n", cmd.name(), err)
 	}
 	return exitOK
 }
 
 // exitCode maps a command error: refusals exit 1, every other error (usage, input validation,
-// config, environment, not implemented) exits 2.
+// config, environment) exits 2.
 func exitCode(err error) int {
 	switch {
 	case err == nil:

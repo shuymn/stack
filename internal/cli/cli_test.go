@@ -82,19 +82,14 @@ func TestUnknownCommand(t *testing.T) {
 	}
 }
 
+// TestRouting checks that `run` reaches its command with interspersed flags. Not parallel: it
+// changes the working directory, so the dry run's git reads see no repository.
 func TestRouting(t *testing.T) {
-	tests := [][]string{
-		{"run", "entry"},
-		{"run", "--dry-run", "outbound", "--ext", "demo", "--range", "a..b", "--prompt-file", "p"},
-		{"run", "cycle", "--replay", "f.json"},
-	}
-	for _, args := range tests {
-		r := run(t, nil, args...)
-		name := strings.Join(args[:len(args)-1], " ")
-		if r.code != exitUsage || r.stdout != "" ||
-			!strings.Contains(r.stderr, "not implemented yet") {
-			t.Errorf("%s = %+v, want not implemented (exit 2)", name, r)
-		}
+	t.Chdir(t.TempDir())
+	r := run(t, nil, "run", "--dry-run", "outbound", "--ext", "demo", "--ext", "other")
+	if r.code != exitOK || !strings.HasPrefix(r.stdout, "stage: outbound\nplan:\n  demo -> ") ||
+		!strings.Contains(r.stdout, "\n  other -> ") {
+		t.Errorf("run --dry-run = %+v", r)
 	}
 }
 
@@ -113,8 +108,7 @@ func TestArgumentErrors(t *testing.T) {
 	}
 	for _, args := range tests {
 		r := run(t, nil, args...)
-		if r.code != exitUsage || r.stdout != "" || !strings.Contains(r.stderr, "usage: stack") ||
-			strings.Contains(r.stderr, "not implemented") {
+		if r.code != exitUsage || r.stdout != "" || !strings.Contains(r.stderr, "usage: stack") {
 			t.Errorf("%q = %+v, want a usage error (exit 2)", args, r)
 		}
 	}
@@ -173,7 +167,6 @@ func TestExitCode(t *testing.T) {
 	}{
 		{nil, exitOK},
 		{fmt.Errorf("check failed: %w", ErrRefused), exitRefused},
-		{errNotImplemented, exitUsage},
 		{errors.New("config broken"), exitUsage},
 	}
 	for _, tt := range tests {
