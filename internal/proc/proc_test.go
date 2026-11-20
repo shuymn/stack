@@ -7,8 +7,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -97,6 +99,33 @@ func TestFakeEmptyArgsMatchesOnlyNoArgs(t *testing.T) {
 		if err != nil || string(res.Stdout) != tc.want {
 			t.Errorf("args %q: stdout = %q, err = %v, want %q", tc.args, res.Stdout, err, tc.want)
 		}
+	}
+}
+
+// TestInstallCleanupWaitsForGrandchildExit checks that Install's cleanup
+// returns only after the grandchild process has exited. Under -race the
+// race detector delays the grandchild's exit, which exposes a cleanup that
+// returns early; on Windows the subtest's TempDir removal would then fail.
+func TestInstallCleanupWaitsForGrandchildExit(t *testing.T) {
+	var pid int
+	t.Run("run", func(t *testing.T) {
+		fake := proctest.Install(t, "fake", one(proctest.Response{Grandchild: grandchildLife}))
+		runner := proc.Exec{WaitDelay: testWaitDelay}
+		if _, err := runner.Run(context.Background(), proc.Cmd{Name: fake}); err != nil {
+			t.Fatal(err)
+		}
+		calls := proctest.Calls(t, fake)
+		if len(calls) != 1 || calls[0].GrandchildPID == 0 {
+			t.Fatalf("calls = %+v", calls)
+		}
+		pid = calls[0].GrandchildPID
+	})
+	if pid == 0 || runtime.GOOS == "windows" {
+		return
+	}
+	p, err := os.FindProcess(pid)
+	if err == nil && p.Signal(syscall.Signal(0)) == nil {
+		t.Fatalf("grandchild %d still running after cleanup", pid)
 	}
 }
 

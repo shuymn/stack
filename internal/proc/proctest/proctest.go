@@ -28,8 +28,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
-	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -38,7 +38,6 @@ const (
 	scenarioSuffix = ".proctest.json"
 	logSuffix      = ".proctest.log"
 	stopSuffix     = ".proctest.stop"
-	doneSuffix     = ".proctest.done."
 	grandchildEnv  = "STACK_PROCTEST_GRANDCHILD"
 
 	// NoMatchExit is the exit status of a fake whose scenario has no response
@@ -275,7 +274,7 @@ func spawnGrandchild(exe string, life time.Duration) (int, error) {
 }
 
 // runGrandchild holds the inherited stdout and stderr until its lifetime ends
-// or Install's cleanup creates the stop file, then records that it is done.
+// or Install's cleanup creates the stop file.
 func runGrandchild(life string) int {
 	d, err := time.ParseDuration(life)
 	if err != nil || d <= 0 {
@@ -285,23 +284,22 @@ func runGrandchild(life string) int {
 	if err != nil {
 		return 1
 	}
-	base := trimExe(exe)
+	stop := trimExe(exe) + stopSuffix
 	deadline := time.Now().Add(d)
 	for time.Now().Before(deadline) {
-		if _, err := os.Stat(base + stopSuffix); err == nil {
+		if _, err := os.Stat(stop); err == nil {
 			break
 		}
 		time.Sleep(grandchildPoll)
 	}
-	done := base + doneSuffix + strconv.Itoa(os.Getpid())
-	if err := os.WriteFile(done, nil, 0o600); err != nil {
-		return 1
-	}
 	return 0
 }
 
-// stopGrandchildren signals every grandchild of the fake at base to exit and
-// waits until each has recorded that it is done.
+// stopGrandchildren asks every grandchild of the fake at base to exit and
+// waits until each process has actually exited, so the fake's directory can
+// be removed (Windows cannot delete a running image, and a process can still
+// run after its last line of Go code, e.g. during the race detector's exit
+// delay).
 func stopGrandchildren(tb testing.TB, base string) {
 	tb.Helper()
 	calls, err := readCalls(base)
@@ -309,31 +307,58 @@ func stopGrandchildren(tb testing.TB, base string) {
 		tb.Errorf("proctest: %v", err)
 		return
 	}
-	var pids []int
+	// Take the handles before asking the processes to exit, so a reused PID
+	// is not mistaken for a grandchild (Windows handle, Linux pidfd).
+	var procs []*os.Process
 	for _, c := range calls {
-		if c.GrandchildPID != 0 {
-			pids = append(pids, c.GrandchildPID)
+		if c.GrandchildPID == 0 {
+			continue
 		}
+		p, err := os.FindProcess(c.GrandchildPID)
+		if err != nil {
+			continue // Already gone.
+		}
+		procs = append(procs, p)
 	}
-	if len(pids) == 0 {
+	if len(procs) == 0 {
 		return
 	}
 	if err := os.WriteFile(base+stopSuffix, nil, 0o600); err != nil {
 		tb.Errorf("proctest: %v", err)
-		return
 	}
 	deadline := time.Now().Add(cleanupWait)
-	for _, pid := range pids {
-		done := base + doneSuffix + strconv.Itoa(pid)
-		for {
-			if _, err := os.Stat(done); err == nil {
-				break
-			}
-			if time.Now().After(deadline) {
-				tb.Errorf("proctest: grandchild %d did not stop within %s", pid, cleanupWait)
-				return
-			}
-			time.Sleep(grandchildPoll)
+	for _, p := range procs {
+		if !waitGone(p, deadline) {
+			tb.Errorf("proctest: grandchild %d did not exit within %s", p.Pid, cleanupWait)
+		}
+		_ = p.Release()
+	}
+}
+
+// waitGone waits until p, which is not a child of this process, has exited.
+func waitGone(p *os.Process, deadline time.Time) bool {
+	if runtime.GOOS == "windows" {
+		// On Windows any process can be waited for through its handle.
+		exited := make(chan struct{})
+		go func() {
+			_, _ = p.Wait()
+			close(exited)
+		}()
+		timer := time.NewTimer(time.Until(deadline))
+		defer timer.Stop()
+		select {
+		case <-exited:
+			return true
+		case <-timer.C:
+			return false
 		}
 	}
+	// On Unix a non-child cannot be waited for; poll until signal 0 fails.
+	for p.Signal(syscall.Signal(0)) == nil {
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(grandchildPoll)
+	}
+	return true
 }
