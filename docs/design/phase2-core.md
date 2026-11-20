@@ -83,7 +83,7 @@ outside the kit dir is no longer followed (legacy read it) and renders as an unr
 | Home | `os.UserHomeDir()` (`$HOME`; `%USERPROFILE%` on Windows) |
 | Config | `~/.config/stack/config.toml` (Windows: `%USERPROFILE%\.config\stack\config.toml`). Literal §5 path, not `os.UserConfigDir`, so handover paths in §5 stay valid. XDG vars are not consulted. |
 | State root | `~/.local/state/stack` |
-| Kit root | `[kit].root`, default `~/.local/state/stack/kits`; kit dir `<root>/<slug>` |
+| Kit root | `[kit].root`, default `~/.local/state/stack/kits`; a relative root is resolved against the config file's directory, as handover paths are, so `kit open` and compact name the same dir from any cwd; kit dir `<root>/<slug>` |
 | Session kits | `~/.local/state/stack/sessions/<id>.kits` + `<id>.lock`; no config key, no GC (files are tiny) |
 | Improve stamp | `~/.local/state/stack/improve/YYYY-Www` (Phase 3; not used in core) |
 
@@ -201,7 +201,8 @@ error. Hook commands always exit `0`.
 ### 4.1 `stack kit open <slug>` / `stack kit close <slug>`
 
 - Inputs: `$STACK_SESSION_ID`, config, kit dir.
-- `open`: validates slug (exit 2); creates `<root>/<slug>/` (0o700) if absent; prints the kit context (§4.1.1) to
+- `open`: validates slug (exit 2); creates `<root>/<slug>/` (0o700) if absent, `<root>` resolved as in §2.1 (a
+  relative one against the config file's directory, never the cwd); prints the kit context (§4.1.1) to
   stdout. With a valid `STACK_SESSION_ID`, adds the slug to `sessions/<id>.kits` (one slug per line, de-duplicated,
   order kept). Without it (PowerShell sessions, environments without the hook): prints the context, writes
   `stack: STACK_SESSION_ID unset; <slug> not recorded and will not be restored after compaction` to stderr, records
@@ -238,7 +239,8 @@ Stdin: SessionStart payload. Env: `CLAUDE_ENV_FILE`.
 
 1. **Export, every event.** For any `source` (`startup`, `resume`, `clear`, `compact`, `fork`, or a future value) with
    a valid `session_id`, when Claude Code provides `CLAUDE_ENV_FILE`, append one line
-   `export STACK_SESSION_ID='<id>'`. When `CLAUDE_ENV_FILE` is unset or empty (e.g. PowerShell sessions, §2.3), append
+   `export STACK_SESSION_ID='<id>'`, preceded by a newline when the file does not end in one (so a last line
+   without one cannot swallow the assignment). When `CLAUDE_ENV_FILE` is unset or empty (e.g. PowerShell sessions, §2.3), append
    nothing and continue (a compact still runs step 2); `kit open` then takes its unrecorded path (§4.1). Repeated lines for the same id are harmless
    (the last assignment is the value). Ordinary `--resume`/`--continue` keep the session id and so its `.kits`;
    `--fork-session` (`source: "fork"`) starts a new id with no kits. Nothing is printed except on `compact`
@@ -248,8 +250,10 @@ Stdin: SessionStart payload. Env: `CLAUDE_ENV_FILE`.
    worker part below is still restored. Independently, if the session is a worker (step 3), restore the worker body (frontmatter
    stripped, CRLF-tolerant) and the original brief (`orchestration-context.py:276-300`). A broken transcript
    loses only the brief; an unreadable kit loses only its blocks (`orchestration-context.py:288-300`). No extensions
-   run. One deadline of 40 s covers all boards (`orchestration-context.py:47`); once it passes, no further board is
-   launched and each remaining one gets `[board skipped: deadline]`.
+   run. Boards run after everything else is placed (step 5), each only while its block can still fit; one that cannot
+   is not launched and leaves `[board omitted: context limit: <path>]` when that fits. One deadline of 40 s covers all
+   boards (`orchestration-context.py:47`); once it passes, no further board is launched and each remaining one gets
+   `[board skipped: deadline]`. A board's leading repeat of the state of any restored kit is dropped, as legacy did.
 3. **Worker detection** (`docs/architecture.md:57`), any of: a line of the first prompt starts with `[worker].marker`;
    `cwd` passes `IsAgentWorktree`; `agent_type` in `[worker].agent_types`. `agent_type` is an auxiliary signal: it is
    present when the session itself runs as that agent (`claude --agent …`); in-process subagents are not assumed to
@@ -260,12 +264,18 @@ Stdin: SessionStart payload. Env: `CLAUDE_ENV_FILE`.
    lines are the prompt; an array with no text block but a `tool_result` block is skipped (next record); any other
    array yields `""`. A malformed line ends the read with no brief.
 5. **Budget: 9,500 chars** (`orchestration-context.py:43`), counting everything emitted: block tags, path headers
-   and markers included. Allocated in priority order: (1) the worker rules body, whole when it fits, else cut at its tail with `[...cut N chars]` (legacy puts rules first);
+   and markers included. Chars are UTF-16 code units, the string length Claude Code compares with its 10,000-char
+   hook output limit; cuts fall on code-point boundaries. Before any text is placed, the brief reserves
+   `[brief omitted: context limit]`, a `.kits` failure its marker, and every `NORTH.md`/`state.md` block of every kit
+   `[state omitted: context limit: <path>]` (bare kit markers such as `[new kit: …]` reserve themselves), so no kit or
+   brief disappears silently; a reserved marker is replaced only by a longer rendering. Then, in priority order: (1) the worker rules body, whole when it fits, else cut at its tail with `[...cut N chars]` (legacy puts rules first);
    (2) the brief, verbatim if it fits in the remainder, else cut at its tail and ended with `[...cut N chars]`;
-   (3) per kit in `.kits` order its `NORTH.md`/`state.md`/items blocks, each capped at 4,500 chars as legacy;
-   (4) handover and board blocks. Display order is rules, brief, kits. A block that does not fit is cut with the same
-   marker, or replaced by `[<kind> omitted: context limit]` when not even its tags fit; the space for these markers is
-   reserved before lower-priority text is placed.
+   (3) kits: first, per kit in `.kits` order, the block header and the first 600 chars of each of its
+   `NORTH.md`/`state.md` blocks, so with several kits every kit keeps its start; then, again in `.kits` order, the
+   rest of those blocks and the items blocks, each capped at 4,500 chars as legacy; (4) the handover block, which
+   appears once per compact, not per kit, and the board blocks. Display order is rules, brief, then per kit its state,
+   items and board blocks, then the handover. A block that does not fit is cut with the same marker, or keeps its
+   omitted marker when not even its tags fit. A later pass never shrinks text an earlier pass placed.
 
 Settings wiring (dotfiles): `SessionStart`, no matcher, exec form (argv, no shell) of the pinned Claude Code
 version, `timeout: 60`, failure-continue (`onFailure: "continue"` where that version supports it) so a launch failure
@@ -616,7 +626,7 @@ those callers.
 | C17 | The renderer shall select the handover by `[handover]` order and render unreadable parts as markers. | `kit.TestRender` | T3 beats herdr; `HERDR_ENV=0` → none, `=1` → herdr; out-of-kit symlink → marker; board `.cmd` on Windows → marker |
 | C18 | For every source, when `CLAUDE_ENV_FILE` is provided, session-start shall append the export line; it shall print nothing except on compact. | `session.TestExport` | sources incl. `fork`; sourcing the file yields the id; stdout empty; `CLAUDE_ENV_FILE` unset → nothing written, exit 0, and a compact worker payload still restores the worker part |
 | C19 | When source is `compact`, session-start shall render the kits of that id only, without extensions. | `session.TestCompact` | resume→compact (same id) restores; fork→compact (new id) restores nothing; close then compact → absent; `.kits` lock held → kits omitted, worker part still restored; fake `stack-<name>` on `PATH` never invoked |
-| C20 | For a detected worker, compact shall restore body and brief within the 9,500-char budget in the stated priority. | `session.TestWorker` | each signal alone; string, block-array, tool_result-first and CRLF transcripts; rules whole and long brief verbatim with kits cut; a brief alone over 9,500 chars → rules whole, brief cut with marker, total incl. tags and markers ≤ 9,500; a rules body alone over 9,500 → rules cut with marker, nothing else, total ≤ 9,500; broken transcript keeps kits; unreadable kit keeps brief |
+| C20 | For a detected worker, compact shall restore body and brief within the 9,500-char budget in the stated priority. | `session.TestWorker`, `session.TestMultiKitReservation`, `session.TestReservedMarkers`, `session.TestBudgetUTF16` | each signal alone; string, block-array, tool_result-first and CRLF transcripts; rules whole and long brief verbatim with kits cut; a brief alone over 9,500 chars → rules whole, brief cut with marker, total incl. tags and markers ≤ 9,500; a rules body alone over 9,500 → rules cut with marker, then only the brief and kit omitted markers, total ≤ 9,500; broken transcript keeps kits; unreadable kit keeps brief; several kits (`NORTH.md` and `state.md`) → each file keeps its header and first 600 chars when they fit, else its omitted marker naming its path; `.kits locked` and brief markers survive a long brief or rules; budget counted in UTF-16 units |
 | C21 | `ext` shall skip missing extensions, warn on unrunnable/timeout/WaitDelay/truncated/malformed output, reject non-component names, and aggregate block > warn > pass. | `ext.TestRun*` (proctest) | valid JSON then hang → warn; JSON and exit per case; mixed statuses; `--ext ../x` → exit 2; Windows: only `stack-x.cmd` on PATH → warn not runnable; a `.cmd` earlier on PATH than `stack-x.exe` → the `.exe` runs |
 | C22 | `--replay` shall send the fixture request, compare `expect`, and reject a stage mismatch. | `cli.TestRunReplay` | match → expected status; status mismatch → 1; stage mismatch → 2; fake's stdin log equals the fixture request |
 | C23 | If any pre-merge step fails, then `pr merge` shall not invoke `gh pr merge`. | `merge.TestRefusals` (argv log) | one fake scenario per step; checks query OID ≠ `H` refuses; confirmed-empty vs query-error distinguished |

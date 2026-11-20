@@ -454,6 +454,15 @@ func TestLocations(t *testing.T) {
 			KitDir(filepath.Join(state, "kits"), "demo"),
 			filepath.Join(state, "kits", "demo"),
 		},
+		"FromConfig relative": {
+			FromConfig(home, "kits"),
+			filepath.Join(home, ".config", "stack", "kits"),
+		},
+		"FromConfig tilde": {FromConfig(home, "~/k"), filepath.Join(home, "k")},
+		"FromConfig absolute": {
+			FromConfig(home, filepath.Join(state, "kits")),
+			filepath.Join(state, "kits"),
+		},
 	}
 	for name, c := range checks {
 		if c[0] != c[1] {

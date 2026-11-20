@@ -71,7 +71,7 @@ func runKitOpen(ctx context.Context, env Env, inv invocation) error {
 	for _, w := range warnings {
 		_, _ = fmt.Fprintf(env.Stderr, "stack: %s\n", w)
 	}
-	root, err := filepath.Abs(paths.Expand(env.Home, cfg.Kit.Root))
+	root, err := filepath.Abs(paths.FromConfig(env.Home, cfg.Kit.Root))
 	if err != nil {
 		return fmt.Errorf("kit root: %w", err)
 	}
