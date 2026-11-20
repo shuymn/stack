@@ -44,7 +44,10 @@ func TestExpand(t *testing.T) {
 		{"~/", home},
 		{"~/x/../y", home + sep + filepath.FromSlash("x/../y")},
 		{`~\x`, home + sep + "x"},
-		{"~/.config/stack/config.toml", home + sep + filepath.FromSlash(".config/stack/config.toml")},
+		{
+			"~/.config/stack/config.toml",
+			home + sep + filepath.FromSlash(".config/stack/config.toml"),
+		},
 		{"~user", "~user"},
 		{"~user/x", "~user/x"},
 		{"x/~", "x/~"},
