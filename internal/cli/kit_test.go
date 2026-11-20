@@ -23,13 +23,6 @@ import (
 // lockHolderEnv makes the re-executed test binary hold a `.kits` lock (TestMain).
 const lockHolderEnv = "STACK_CLI_TEST_HOLD_LOCK"
 
-func TestMain(m *testing.M) {
-	if path := os.Getenv(lockHolderEnv); path != "" {
-		os.Exit(holdLock(path))
-	}
-	os.Exit(m.Run())
-}
-
 // holdLock takes the lock at path, prints "locked" and holds it until stdin closes.
 func holdLock(path string) int {
 	lock := flock.New(path)

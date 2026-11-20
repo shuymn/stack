@@ -10,10 +10,6 @@ import (
 	"github.com/shuymn/stack/internal/gittest"
 )
 
-func TestMain(m *testing.M) {
-	os.Exit(gittest.Main(m))
-}
-
 // checkRepo makes a fixture repository with an empty base commit tagged `base` and one commit on top
 // whose message is msg, and changes into it. The git that stack runs inherits the process
 // environment, so the process gets the fixture's git variables and no inherited ones.
