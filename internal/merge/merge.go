@@ -254,30 +254,33 @@ func autoMerge(ctx context.Context, o Options, c github.Client, pr int, method, 
 	deadline := now().Add(AutoWait)
 	var stop, lastErr string
 	announced := false
-	for stop == "" {
+	for attempt := 0; ; attempt++ {
 		left := deadline.Sub(now())
-		switch {
-		case ctx.Err() != nil:
-			stop = "stack pr merge was stopped"
-			continue
-		case left <= 0:
-			stop = fmt.Sprintf("not merged within %s", AutoWait)
-			if lastErr != "" {
-				stop += " (last read-back: " + lastErr + ")"
+		if attempt > 0 {
+			if ctx.Err() != nil {
+				stop = "stack pr merge was stopped"
+				break
 			}
-			continue
+			if left <= 0 {
+				stop = fmt.Sprintf("not merged within %s", AutoWait)
+				if lastErr != "" {
+					stop += " (last " + lastErr + ")"
+				}
+				break
+			}
 		}
-		readCtx, cancel := context.WithTimeout(ctx, left)
-		back, err := c.AutoReadBack(readCtx, pr)
-		cancel()
-		switch {
-		case err != nil:
-			lastErr = err.Error()
-		case back.State == "MERGED":
+		back, err := readAuto(ctx, c, pr, left)
+		if err == nil && back.State == "MERGED" {
 			if done, err := judgeMerged(o, pr, head, back, res); done {
 				return err
 			}
-			lastErr = "read back " + back.String()
+		}
+		if stop = autoStop(ctx, head, back, err, res); stop != "" {
+			break
+		}
+		switch {
+		case err != nil:
+			lastErr = err.Error()
 		case back.State == "OPEN" && back.HeadRefOid == head:
 			lastErr = ""
 			if !announced {
@@ -285,13 +288,8 @@ func autoMerge(ctx context.Context, o Options, c github.Client, pr int, method, 
 				_, _ = fmt.Fprintf(o.Stderr, "stack pr merge: waiting up to %s for GitHub to "+
 					"merge PR %d on %s\n", AutoWait, pr, head)
 			}
-		case back.State == "OPEN" && github.IsFullSHA(back.HeadRefOid):
-			stop = "the head moved to " + back.HeadRefOid
-			continue
-		case back.State == "CLOSED":
-			stop = "the PR was closed"
-			continue
 		default:
+			// A MERGED read without a full merge OID, or a state stack does not know.
 			lastErr = "read back " + back.String()
 		}
 		_ = wait(ctx, min(AutoPoll, deadline.Sub(now())))
@@ -316,6 +314,52 @@ func autoMerge(ctx context.Context, o Options, c github.Client, pr int, method, 
 		return refuse("PR %d is not merged; auto-merge disabled: %s", pr, why)
 	}
 	return autoUnknown(pr, "read back %s (auto-merge %s); %s", back, onOff(back.AutoMerge), why)
+}
+
+// readAuto reads the PR back within left. The first read also runs after a stop, on a deadline of
+// its own, since the submission may already have merged.
+func readAuto(
+	ctx context.Context,
+	c github.Client,
+	pr int,
+	left time.Duration,
+) (github.Readback, error) {
+	if ctx.Err() != nil {
+		ctx, left = context.WithoutCancel(ctx), min(left, readBackTimeout)
+	}
+	ctx, cancel := context.WithTimeout(ctx, left)
+	defer cancel()
+	back, err := c.AutoReadBack(ctx, pr)
+	if err != nil {
+		return back, fmt.Errorf("read back: %w", err)
+	}
+	return back, nil
+}
+
+// autoStop names the stop condition a read that is not a merge meets, or returns "" to keep
+// waiting.
+func autoStop(
+	ctx context.Context,
+	head string,
+	back github.Readback,
+	readErr error,
+	res github.MergeResult,
+) string {
+	switch {
+	case ctx.Err() != nil:
+		return "stack pr merge was stopped"
+	case !res.OK():
+		return "gh pr merge --auto failed"
+	case readErr != nil:
+		return ""
+	case back.State == "OPEN" && back.HeadRefOid == head && !back.AutoMerge:
+		return "no auto-merge request is active on " + head
+	case back.State == "OPEN" && back.HeadRefOid != head && github.IsFullSHA(back.HeadRefOid):
+		return "the head moved to " + back.HeadRefOid
+	case back.State == "CLOSED":
+		return "the PR was closed"
+	}
+	return ""
 }
 
 // judgeMerged decides a MERGED read-back: merged on head with a full merge OID succeeds, merged on

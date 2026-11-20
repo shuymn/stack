@@ -208,11 +208,32 @@ func repeatN[T any](n int, v T) []T {
 	return out
 }
 
+// autoTest is one TestAuto case.
+type autoTest struct {
+	name   string
+	tc     autoCase
+	code   int
+	stdout string
+	// want are substrings of the error, or of stderr on success.
+	want   []string
+	argv   [][]string
+	sleeps []time.Duration
+}
+
 // TestAuto covers C28: --auto submits only after steps 1-8 pass, succeeds only on a read-back of
-// MERGED on the checked head with a full merge OID, and on every stop condition disables
-// auto-merge and decides by a final read-back.
+// MERGED on the checked head with a full merge OID, and on every stop condition attempts to
+// disable auto-merge and decides by a final read-back.
 func TestAuto(t *testing.T) {
 	t.Parallel()
+	for _, tt := range autoTests() {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			checkAuto(t, tt, runAuto(t, tt.tc))
+		})
+	}
+}
+
+func autoTests() []autoTest {
 	merged := "MERGED " + head + " " + mergeOID + "\n"
 	openAuto := rb("OPEN", head, "", true)
 	openOff := rb("OPEN", head, "", false)
@@ -222,16 +243,7 @@ func TestAuto(t *testing.T) {
 	stopped := "PR 7 is not merged; auto-merge disabled: stack pr merge was stopped"
 	unknownAuto := "result unknown for PR 7 — auto-merge may still be enabled; " +
 		"check the PR before retrying"
-	tests := []struct {
-		name   string
-		tc     autoCase
-		code   int
-		stdout string
-		// want are substrings of the error, or of stderr on success.
-		want   []string
-		argv   [][]string
-		sleeps []time.Duration
-	}{
+	return []autoTest{
 		{
 			name: "existing request refused",
 			tc:   autoCase{view: `{"enabledAt":"2026-01-01T00:00:00Z"}`},
@@ -272,6 +284,29 @@ func TestAuto(t *testing.T) {
 			code: 0, stdout: merged,
 			want: []string{"GraphQL: timeout", "PR 7 is merged, but gh pr merge exited 1"},
 			argv: seq(autoMergeCall, autoRead),
+		},
+		{
+			name: "non-zero gh then open disables without polling",
+			tc: autoCase{
+				merge: proctest.Response{Stderr: "GraphQL: timeout\n", Exit: 1},
+				polls: []proctest.Response{openAuto},
+				final: openOff,
+			},
+			code: 1,
+			want: []string{
+				"PR 7 is not merged; auto-merge disabled: gh pr merge --auto failed; " +
+					"gh pr merge --auto exited 1",
+			},
+			argv: seq(autoMergeCall, autoRead, autoDisable, autoRead),
+		},
+		{
+			name: "open on the head with no request stops",
+			tc:   autoCase{polls: []proctest.Response{openOff}, final: openOff},
+			code: 1,
+			want: []string{
+				"PR 7 is not merged; auto-merge disabled: no auto-merge request is active on " + head,
+			},
+			argv: seq(autoMergeCall, autoRead, autoDisable, autoRead),
 		},
 		{
 			name: "merged other head",
@@ -319,14 +354,51 @@ func TestAuto(t *testing.T) {
 			code: 1,
 			want: []string{
 				"PR 7 is not merged; auto-merge disabled: not merged within 15m0s " +
-					"(last read-back: gh failed: pr view: exit 1: HTTP 502)",
+					"(last read back: gh failed: pr view: exit 1: HTTP 502)",
 			},
 			argv: seq(append(append([][]string{autoMergeCall}, repeatN(45, autoRead)...),
 				autoDisable, autoRead)...),
 			sleeps: repeatN(45, 20*time.Second),
 		},
 		{
-			name: "disable fails",
+			name: "disable fails then open with no request",
+			tc: autoCase{
+				disable: proctest.Response{Stderr: "HTTP 502\n", Exit: 1},
+				polls:   []proctest.Response{rb("OPEN", other, "", true)},
+				final:   rb("OPEN", head, "", false),
+			},
+			code: 1,
+			want: []string{
+				"PR 7 is not merged; auto-merge disabled: the head moved to " + other,
+				"--disable-auto exited 1",
+			},
+			argv: seq(autoMergeCall, autoRead, autoDisable, autoRead),
+		},
+		{
+			name: "disable fails then unreadable request",
+			tc: autoCase{
+				disable: proctest.Response{Stderr: "HTTP 502\n", Exit: 1},
+				polls:   []proctest.Response{rb("OPEN", other, "", true)},
+				final: proctest.Response{
+					Stdout: `{"state":"OPEN","headRefOid":"` + head + `","mergeCommit":null}`,
+				},
+			},
+			code: 1,
+			want: []string{unknownAuto, "no autoMergeRequest field", "--disable-auto exited 1"},
+			argv: seq(autoMergeCall, autoRead, autoDisable, autoRead),
+		},
+		{
+			name: "disable fails then merged",
+			tc: autoCase{
+				disable: proctest.Response{Stderr: "HTTP 502\n", Exit: 1},
+				polls:   []proctest.Response{rb("CLOSED", head, "", false)},
+				final:   rb("MERGED", head, mergeOID, false),
+			},
+			code: 0, stdout: merged,
+			argv: seq(autoMergeCall, autoRead, autoDisable, autoRead),
+		},
+		{
+			name: "disable fails then active request",
 			tc: autoCase{
 				disable: proctest.Response{Stderr: "HTTP 502\n", Exit: 1},
 				polls:   []proctest.Response{rb("OPEN", other, "", true)},
@@ -371,42 +443,40 @@ func TestAuto(t *testing.T) {
 				polls: []proctest.Response{openAuto}, final: openOff, stopInMerge: true,
 			},
 			code: 1, want: []string{stopped},
-			argv: seq(autoMergeCall, autoDisable, autoRead),
+			argv: seq(autoMergeCall, autoRead, autoDisable, autoRead),
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			out := runAuto(t, tt.tc)
-			if got := exitCode(out.err); got != tt.code {
-				t.Errorf("exit = %d (err %v), want %d", got, out.err, tt.code)
-			}
-			if out.stdout != tt.stdout {
-				t.Errorf("stdout = %q, want %q", out.stdout, tt.stdout)
-			}
-			text := out.stderr
-			if out.err != nil {
-				text = out.err.Error()
-				if strings.Contains(text, "\n") {
-					t.Errorf("reason spans lines: %q", text)
-				}
-			}
-			for _, w := range tt.want {
-				if !strings.Contains(text, w) {
-					t.Errorf("got %q, want it to contain %q", text, w)
-				}
-			}
-			if !slices.EqualFunc(out.gh, tt.argv, slices.Equal) {
-				i := 0
-				for i < min(len(out.gh), len(tt.argv)) && slices.Equal(out.gh[i], tt.argv[i]) {
-					i++
-				}
-				t.Errorf("gh argv: %d calls, want %d; first difference at call %d: got %q",
-					len(out.gh), len(tt.argv), i, out.gh[i:min(i+1, len(out.gh))])
-			}
-			if !slices.Equal(out.sleeps, tt.sleeps) {
-				t.Errorf("sleeps = %v, want %v", out.sleeps, tt.sleeps)
-			}
-		})
+}
+
+func checkAuto(t *testing.T, tt autoTest, out autoOutcome) {
+	t.Helper()
+	if got := exitCode(out.err); got != tt.code {
+		t.Errorf("exit = %d (err %v), want %d", got, out.err, tt.code)
+	}
+	if out.stdout != tt.stdout {
+		t.Errorf("stdout = %q, want %q", out.stdout, tt.stdout)
+	}
+	text := out.stderr
+	if out.err != nil {
+		text = out.err.Error()
+		if strings.Contains(text, "\n") {
+			t.Errorf("reason spans lines: %q", text)
+		}
+	}
+	for _, w := range tt.want {
+		if !strings.Contains(text, w) {
+			t.Errorf("got %q, want it to contain %q", text, w)
+		}
+	}
+	if !slices.EqualFunc(out.gh, tt.argv, slices.Equal) {
+		i := 0
+		for i < min(len(out.gh), len(tt.argv)) && slices.Equal(out.gh[i], tt.argv[i]) {
+			i++
+		}
+		t.Errorf("gh argv: %d calls, want %d; first difference at call %d: got %q",
+			len(out.gh), len(tt.argv), i, out.gh[i:min(i+1, len(out.gh))])
+	}
+	if !slices.Equal(out.sleeps, tt.sleeps) {
+		t.Errorf("sleeps = %v, want %v", out.sleeps, tt.sleeps)
 	}
 }
