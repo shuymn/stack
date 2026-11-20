@@ -126,25 +126,30 @@ rule off (§4.3). There is no toggle for the other rules.
 
 ### 2.2 Processes (`internal/proc`)
 
-`Runner` interface: `Run(ctx, Cmd{Name, Args, Dir, Env, Stdin, MaxStdout}) (Result, error)` and
-`Stream(ctx, Cmd, func(io.Reader) error) error` for unbounded output (`check public`). The real runner sets
-`cmd.WaitDelay` (2 s): its clock starts when the context ends or when `Wait` observes the child's exit, and then it
-closes the pipes so a child whose grandchild still holds them cannot hang `stack`. `WaitDelay` neither kills descendants nor stops their I/O; on Windows killing the child leaves grandchildren
-running. `Result` reports `TimedOut` (context deadline), `WaitDelayExceeded` (`exec.ErrWaitDelay`) and `Truncated`
-(stdout over `MaxStdout`, 1 MiB default), and callers evaluate these **before** using stdout.
+`Runner` interface: `Run(ctx, Cmd{Name, Args, Dir, Env, Stdin []byte, Stderr io.Writer, MaxStdout}) (Result, error)`
+and `Stream(ctx, Cmd, func(io.Reader) error) error` for unbounded output (`check public`). Stdin is in memory, so
+feeding it cannot block past the bounds below. `Stderr`, when set, receives all of stderr as it arrives (extensions
+pass it through, §4.7); otherwise `Run` captures up to 64 KiB. The runner owns the stdio pipes: when the context ends
+it kills the child, and once the child has exited it waits at most `WaitDelay` (2 s) for the pipes, then closes its
+ends so a child whose grandchild still holds them cannot hang `stack`. This neither kills descendants nor stops their
+I/O; on Windows killing the child leaves grandchildren running. `Result` reports `TimedOut` (killed at the context
+deadline, `ExitCode` -1 on every OS), `WaitDelayExceeded` (a pipe cut after `WaitDelay`, independent of the exit
+status) and `Truncated` (stdout over `MaxStdout`, 1 MiB default), and callers evaluate these **before** using stdout.
 
-`ResolveExecutable(dir, name)`: Unix — regular file with any `x` bit. Windows — only `<name>.exe` is runnable; a
-`<name>` without extension or with `.cmd`/`.bat`/`.ps1` is "found but not runnable" (`os/exec` does not run batch
-files reliably). `LookPathExe(name)` (extensions) walks `PATH` itself: on Unix the first runnable `name`; on Windows
+`ResolveExecutable(dir, name)`: Unix — regular file this process may execute (effective permission, as
+`exec.LookPath` checks it). Windows — only `<name>.exe` is runnable; a `<name>` without extension or with
+`.cmd`/`.bat`/`.ps1` is "found but not runnable" (`os/exec` does not run batch files reliably). A directory or a dangling
+symlink under the name is also not runnable, and a stat error other than "does not exist" (e.g. an unsearchable `.claude`) is
+"cannot verify", never "absent", so merge-check refuses on it. `LookPathExe(name)` (extensions) walks `PATH` itself: on Unix the first runnable `name`; on Windows
 the first `name.exe` (never `PATHEXT`, so a `.cmd` is not picked), and if none exists but `name`, `name.cmd`,
-`name.bat` or `name.ps1` does, "found but not runnable". Relative `PATH` entries (incl. empty and `.`) are skipped,
-as `exec.ErrDot` does. Per caller: kit board → `[board not runnable on this OS: <path>]` marker, skipped;
+`name.bat` or `name.ps1` does, "found but not runnable". Relative `PATH` entries (incl. empty and `.`) are skipped and the
+walk continues (Go's `exec.LookPath` instead returns `exec.ErrDot` for such a match). Per caller: kit board → `[board not runnable on this OS: <path>]` marker, skipped;
 `.claude/merge-check` → merge refused; extension → `warn` result with a synthetic finding. Shelled-out commands are
 `gh`, `git`, the kit board, `.claude/merge-check`, and extensions (`stack-<name>`).
 
 ### 2.3 Hook IO (`internal/hookio`)
 
-Decodes the stdin JSON (cap 8 MiB) into the fields core reads: `session_id`, `transcript_path`, `cwd`,
+Decodes the whole stdin JSON (no size cap, so a large valid payload is still judged) into the fields core reads: `session_id`, `transcript_path`, `cwd`,
 `hook_event_name`, `source`, `agent_type`, `tool_name`, `tool_input` (kept as `json.RawMessage`, decoded per tool).
 Output is buffered and written once at the end:
 
@@ -512,9 +517,10 @@ those callers.
   decision and, for denies, the rule name in the reason.
 - **Real git:** `checkpub` tests create temp repos (`git init`, `-c core.autocrlf=false`, fixed author env).
 - **Fake executables:** `proctest.Install(t, "gh", scenario)` copies the test binary to `t.TempDir()/gh[.exe]` and
-  returns its absolute path. Each package's `TestMain` calls `proctest.Main()` before `m.Run`; when
-  `STACK_FAKE_SCENARIO` is set it answers argv from a JSON scenario (`argv → stdout, stderr, exit, sleep, spawn
-  grandchild`) and appends argv and stdin to a log the test asserts on. Code under test receives the resolved path
+  returns its absolute path. Each package's `TestMain` calls `proctest.Main()` before `m.Run`; a copy that finds its
+  JSON scenario file next to its own executable answers argv from it (`argv → stdout, stderr, exit, sleep, spawn
+  grandchild`) and appends argv and stdin to a log the test asserts on. Detection does not use the environment, so a
+  fake still works when the code under test replaces `Cmd.Env`. Code under test receives the resolved path
   through the `Runner`/lookup seam; tests that must change `PATH` (discovery) are not parallel, because setting `PATH`
   in `Cmd.Env` does not change the parent's `PATH` lookup. The same helper fakes extensions and boards.
 - **Processes:** the inherited-pipe test spawns a grandchild that keeps stdout open after the child exits and

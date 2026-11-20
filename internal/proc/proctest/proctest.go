@@ -1,0 +1,373 @@
+// Package proctest installs fake executables for tests by copying the test
+// binary itself.
+//
+// Install copies the running test binary to <dir>/<name> (<name>.exe on
+// Windows) and writes the scenario next to it. When the copy runs, Main, which
+// each package's TestMain must call before m.Run, finds that scenario beside
+// its own executable, answers from it and exits instead of running tests.
+// Detection does not depend on the environment, so a fake still works when the
+// code under test replaces Cmd.Env or finds the fake through PATH.
+//
+// Each call is appended to a log next to the fake; Calls reads it. A response
+// may spawn a grandchild that inherits stdin, stdout and stderr, never reads
+// stdin, and outlives the fake.
+// Install's cleanup asks every grandchild to exit and waits for it, so the
+// test's temporary directory can be removed (on Windows a running image cannot
+// be deleted). Tests that change PATH to find fakes must not run in parallel.
+package proctest
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"slices"
+	"strings"
+	"syscall"
+	"testing"
+	"time"
+)
+
+const (
+	scenarioSuffix = ".proctest.json"
+	logSuffix      = ".proctest.log"
+	stopSuffix     = ".proctest.stop"
+	grandchildEnv  = "STACK_PROCTEST_GRANDCHILD"
+
+	// noMatchExit is the exit status of a fake whose scenario has no response
+	// for its argv.
+	noMatchExit = 97
+
+	defaultGrandchildLife = 30 * time.Second
+	grandchildPoll        = 10 * time.Millisecond
+	cleanupWait           = 10 * time.Second
+)
+
+// Response is one scripted answer. The fake performs, in order: read stdin
+// (unless NoStdin), spawn the grandchild, log the call, write stdout and
+// stderr, sleep, exit.
+type Response struct {
+	// Args matches the arguments after argv[0] exactly; nil matches any call
+	// and an empty non-nil slice matches only a call without arguments.
+	// Serialised without omitempty so the two stay distinct.
+	Args   []string `json:"args"`
+	Stdout string   `json:"stdout,omitempty"`
+	Stderr string   `json:"stderr,omitempty"`
+	Exit   int      `json:"exit,omitempty"`
+	// Sleep delays the exit after writing output.
+	Sleep time.Duration `json:"sleep,omitempty"`
+	// NoStdin leaves stdin unread.
+	NoStdin bool `json:"noStdin,omitempty"`
+	// Grandchild, when positive, starts a process that holds the fake's
+	// stdin, stdout and stderr open, without reading stdin, for at most this
+	// long, or until cleanup.
+	Grandchild time.Duration `json:"grandchild,omitempty"`
+}
+
+// Scenario lists responses; the first whose Args match is used.
+type Scenario struct {
+	Responses []Response `json:"responses"`
+}
+
+// Call is one logged invocation of a fake.
+type Call struct {
+	Args  []string `json:"args"`
+	Stdin string   `json:"stdin"`
+	// GrandchildPID is the PID of the spawned grandchild, or zero.
+	GrandchildPID int `json:"grandchildPid,omitempty"`
+}
+
+var mainCalled bool
+
+// Main must be called from TestMain before m.Run. In a fake or grandchild it
+// runs the scenario and exits; in the test binary itself it returns.
+func Main() {
+	mainCalled = true
+	if life := os.Getenv(grandchildEnv); life != "" {
+		os.Exit(runGrandchild(life))
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	base := trimExe(exe)
+	data, err := os.ReadFile(base + scenarioSuffix)
+	if err != nil {
+		return
+	}
+	os.Exit(runFake(exe, base, data))
+}
+
+// Install copies the test binary as a fake named name into a new temporary
+// directory and returns the fake's absolute path.
+func Install(tb testing.TB, name string, s Scenario) string {
+	tb.Helper()
+	return InstallAt(tb, tb.TempDir(), name, s)
+}
+
+// InstallAt is Install into dir, so several fakes can share one PATH entry.
+func InstallAt(tb testing.TB, dir, name string, s Scenario) string {
+	tb.Helper()
+	if !mainCalled {
+		tb.Fatal("proctest: call proctest.Main from TestMain before m.Run")
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		tb.Fatalf("proctest: %v", err)
+	}
+	dst, err := filepath.Abs(filepath.Join(dir, trimExe(name)))
+	if err != nil {
+		tb.Fatalf("proctest: %v", err)
+	}
+	base := dst
+	if runtime.GOOS == "windows" {
+		dst += ".exe"
+	}
+	data, err := json.Marshal(s)
+	if err != nil {
+		tb.Fatalf("proctest: %v", err)
+	}
+	if err := copyExecutable(exe, dst); err != nil {
+		tb.Fatalf("proctest: %v", err)
+	}
+	if err := os.WriteFile(base+scenarioSuffix, data, 0o600); err != nil {
+		tb.Fatalf("proctest: %v", err)
+	}
+	tb.Cleanup(func() { stopGrandchildren(tb, base) })
+	return dst
+}
+
+// Calls returns the logged calls of the fake at path, oldest first.
+func Calls(tb testing.TB, path string) []Call {
+	tb.Helper()
+	calls, err := readCalls(trimExe(path))
+	if err != nil {
+		tb.Fatalf("proctest: %v", err)
+	}
+	return calls
+}
+
+func readCalls(base string) ([]Call, error) {
+	data, err := os.ReadFile(base + logSuffix)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read call log: %w", err)
+	}
+	var calls []Call
+	sc := bufio.NewScanner(bytes.NewReader(data))
+	sc.Buffer(nil, len(data)+1)
+	for sc.Scan() {
+		var c Call
+		if err := json.Unmarshal(sc.Bytes(), &c); err != nil {
+			return nil, fmt.Errorf("decode call log: %w", err)
+		}
+		calls = append(calls, c)
+	}
+	return calls, nil
+}
+
+func copyExecutable(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("open test binary: %w", err)
+	}
+	defer func() { _ = in.Close() }()
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o700)
+	if err != nil {
+		return fmt.Errorf("create fake: %w", err)
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		return fmt.Errorf("copy fake: %w", err)
+	}
+	if err := out.Close(); err != nil {
+		return fmt.Errorf("close fake: %w", err)
+	}
+	return nil
+}
+
+func trimExe(path string) string {
+	if ext := filepath.Ext(path); strings.EqualFold(ext, ".exe") {
+		return strings.TrimSuffix(path, ext)
+	}
+	return path
+}
+
+func runFake(exe, base string, data []byte) int {
+	var s Scenario
+	if err := json.Unmarshal(data, &s); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "proctest: scenario: %v\n", err)
+		return noMatchExit
+	}
+	args := os.Args[1:]
+	resp, ok := match(s, args)
+	call := Call{Args: args}
+	if !ok || !resp.NoStdin {
+		stdin, _ := io.ReadAll(os.Stdin)
+		call.Stdin = string(stdin)
+	}
+	if ok && resp.Grandchild > 0 {
+		pid, err := spawnGrandchild(exe, resp.Grandchild)
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "proctest: grandchild: %v\n", err)
+			return noMatchExit
+		}
+		call.GrandchildPID = pid
+	}
+	if err := appendCall(base, call); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "proctest: log: %v\n", err)
+		return noMatchExit
+	}
+	if !ok {
+		_, _ = fmt.Fprintf(os.Stderr, "proctest: no response for %q\n", args)
+		return noMatchExit
+	}
+	_, _ = io.WriteString(os.Stdout, resp.Stdout)
+	_, _ = io.WriteString(os.Stderr, resp.Stderr)
+	time.Sleep(resp.Sleep)
+	return resp.Exit
+}
+
+func match(s Scenario, args []string) (Response, bool) {
+	for _, r := range s.Responses {
+		if r.Args == nil || slices.Equal(r.Args, args) {
+			return r, true
+		}
+	}
+	return Response{}, false
+}
+
+func appendCall(base string, c Call) error {
+	line, err := json.Marshal(c)
+	if err != nil {
+		return fmt.Errorf("encode call: %w", err)
+	}
+	f, err := os.OpenFile(base+logSuffix, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
+	if err != nil {
+		return fmt.Errorf("open call log: %w", err)
+	}
+	if _, err := f.Write(append(line, '\n')); err != nil {
+		_ = f.Close()
+		return fmt.Errorf("write call log: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("close call log: %w", err)
+	}
+	return nil
+}
+
+// spawnGrandchild starts the fake's own binary in grandchild mode with the
+// fake's stdout and stderr, and leaves it running.
+func spawnGrandchild(exe string, life time.Duration) (int, error) {
+	// The grandchild outlives this process on purpose; it ends itself.
+	cmd := exec.CommandContext(context.Background(), exe)
+	cmd.Env = append(os.Environ(), grandchildEnv+"="+life.String())
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		return 0, fmt.Errorf("start: %w", err)
+	}
+	pid := cmd.Process.Pid
+	_ = cmd.Process.Release()
+	return pid, nil
+}
+
+// runGrandchild holds the inherited stdout and stderr until its lifetime ends
+// or Install's cleanup creates the stop file.
+func runGrandchild(life string) int {
+	d, err := time.ParseDuration(life)
+	if err != nil || d <= 0 {
+		d = defaultGrandchildLife
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return 1
+	}
+	stop := trimExe(exe) + stopSuffix
+	deadline := time.Now().Add(d)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(stop); err == nil {
+			break
+		}
+		time.Sleep(grandchildPoll)
+	}
+	return 0
+}
+
+// stopGrandchildren asks every grandchild of the fake at base to exit and
+// waits until each process has actually exited, so the fake's directory can
+// be removed (Windows cannot delete a running image, and a process can still
+// run after its last line of Go code, e.g. during the race detector's exit
+// delay).
+func stopGrandchildren(tb testing.TB, base string) {
+	tb.Helper()
+	calls, err := readCalls(base)
+	if err != nil {
+		tb.Errorf("proctest: %v", err)
+		return
+	}
+	// Take the handles before asking the processes to exit, so a reused PID
+	// is not mistaken for a grandchild (Windows handle, Linux pidfd).
+	var procs []*os.Process
+	for _, c := range calls {
+		if c.GrandchildPID == 0 {
+			continue
+		}
+		p, err := os.FindProcess(c.GrandchildPID)
+		if err != nil {
+			continue // Already gone.
+		}
+		procs = append(procs, p)
+	}
+	if len(procs) == 0 {
+		return
+	}
+	if err := os.WriteFile(base+stopSuffix, nil, 0o600); err != nil {
+		tb.Errorf("proctest: %v", err)
+	}
+	deadline := time.Now().Add(cleanupWait)
+	for _, p := range procs {
+		if !waitGone(p, deadline) {
+			tb.Errorf("proctest: grandchild %d did not exit within %s", p.Pid, cleanupWait)
+		}
+		_ = p.Release()
+	}
+}
+
+// waitGone waits until p, which is not a child of this process, has exited.
+func waitGone(p *os.Process, deadline time.Time) bool {
+	if runtime.GOOS == "windows" {
+		// On Windows any process can be waited for through its handle.
+		exited := make(chan struct{})
+		go func() {
+			_, _ = p.Wait()
+			close(exited)
+		}()
+		timer := time.NewTimer(time.Until(deadline))
+		defer timer.Stop()
+		select {
+		case <-exited:
+			return true
+		case <-timer.C:
+			return false
+		}
+	}
+	// On Unix a non-child cannot be waited for; poll until signal 0 fails.
+	for p.Signal(syscall.Signal(0)) == nil {
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(grandchildPoll)
+	}
+	return true
+}
