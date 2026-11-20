@@ -136,7 +136,7 @@ func Check(ctx context.Context, o Options) error {
 	if o.Env == nil {
 		o.Env = os.Environ()
 	}
-	o.Env = dropRepoVars(o.Env)
+	o.Env = DropRepoVars(o.Env)
 	top, err := o.toplevel(ctx)
 	if err != nil {
 		return err
@@ -216,8 +216,9 @@ func (o Options) commit(ctx context.Context, s *scanner, sha string) error {
 		}))
 }
 
-// dropRepoVars returns env without the repository-location variables.
-func dropRepoVars(env []string) []string {
+// DropRepoVars returns env without the repository-location variables (GIT_DIR, GIT_WORK_TREE, …),
+// which a git hook exports; git then finds the repository from its working directory.
+func DropRepoVars(env []string) []string {
 	return slices.DeleteFunc(slices.Clone(env), func(kv string) bool {
 		name, _, _ := strings.Cut(kv, "=")
 		return slices.ContainsFunc(
@@ -344,6 +345,12 @@ func isLineBreak(r rune) bool {
 		return true
 	}
 	return false
+}
+
+// FindTerms returns the private terms of list that occur in s as case-insensitive substrings, in
+// list order.
+func FindTerms(list []string, s string) []string {
+	return newTerms(list).find(s)
 }
 
 // terms matches private terms as case-insensitive substrings.
