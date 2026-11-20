@@ -33,7 +33,7 @@ func run(t *testing.T, env map[string]string, args ...string) result {
 func TestVersion(t *testing.T) {
 	for _, arg := range []string{"--version", "-v"} {
 		r := run(t, nil, arg)
-		if r.code != ExitOK || r.stdout != "v1.2.3\n" || r.stderr != "" {
+		if r.code != exitOK || r.stdout != "v1.2.3\n" || r.stderr != "" {
 			t.Errorf("%s = %+v", arg, r)
 		}
 	}
@@ -42,12 +42,12 @@ func TestVersion(t *testing.T) {
 func TestUsage(t *testing.T) {
 	for _, arg := range []string{"help", "--help", "-h"} {
 		r := run(t, nil, arg)
-		if r.code != ExitOK || !strings.Contains(r.stdout, "stack pr merge <pr> <head-sha>") {
+		if r.code != exitOK || !strings.Contains(r.stdout, "stack pr merge <pr> <head-sha>") {
 			t.Errorf("%s = %+v", arg, r)
 		}
 	}
 	r := run(t, nil)
-	if r.code != ExitUsage || r.stdout != "" || !strings.Contains(r.stderr, "usage: stack") {
+	if r.code != exitUsage || r.stdout != "" || !strings.Contains(r.stderr, "usage: stack") {
 		t.Errorf("no args = %+v", r)
 	}
 }
@@ -66,7 +66,7 @@ func TestUnknownCommand(t *testing.T) {
 	}
 	for _, tt := range tests {
 		r := run(t, nil, tt.args...)
-		if r.code != ExitUsage || r.stdout != "" || !strings.Contains(r.stderr, tt.want) {
+		if r.code != exitUsage || r.stdout != "" || !strings.Contains(r.stderr, tt.want) {
 			t.Errorf("%q = %+v, want exit 2 and %q", tt.args, r, tt.want)
 		}
 	}
@@ -91,7 +91,7 @@ func TestRouting(t *testing.T) {
 	for _, args := range tests {
 		r := run(t, nil, args...)
 		name := strings.Join(args[:len(args)-1], " ")
-		if r.code != ExitUsage || r.stdout != "" ||
+		if r.code != exitUsage || r.stdout != "" ||
 			!strings.Contains(r.stderr, "not implemented yet") {
 			t.Errorf("%s = %+v, want not implemented (exit 2)", name, r)
 		}
@@ -113,7 +113,7 @@ func TestArgumentErrors(t *testing.T) {
 	}
 	for _, args := range tests {
 		r := run(t, nil, args...)
-		if r.code != ExitUsage || r.stdout != "" || !strings.Contains(r.stderr, "usage: stack") ||
+		if r.code != exitUsage || r.stdout != "" || !strings.Contains(r.stderr, "usage: stack") ||
 			strings.Contains(r.stderr, "not implemented") {
 			t.Errorf("%q = %+v, want a usage error (exit 2)", args, r)
 		}
@@ -121,12 +121,7 @@ func TestArgumentErrors(t *testing.T) {
 }
 
 func TestRunRepeatedExtReachesDispatch(t *testing.T) {
-	var cmd *command
-	for _, c := range commands {
-		if slices.Equal(c.path, []string{"run"}) {
-			cmd = c
-		}
-	}
+	cmd, _, _ := route([]string{"run"})
 	orig := cmd.run
 	t.Cleanup(func() { cmd.run = orig })
 	var got invocation
@@ -136,7 +131,7 @@ func TestRunRepeatedExtReachesDispatch(t *testing.T) {
 	}
 
 	r := run(t, nil, "run", "--ext", "first", "entry", "--ext=second")
-	if r.code != ExitOK {
+	if r.code != exitOK {
 		t.Fatalf("run = %+v", r)
 	}
 	ext, ok := got.flags.Lookup("ext").Value.(*stringList)
@@ -152,7 +147,7 @@ func TestRunRepeatedExtReachesDispatch(t *testing.T) {
 
 func TestCommandHelp(t *testing.T) {
 	r := run(t, nil, "pr", "merge", "--help")
-	if r.code != ExitOK || !strings.HasPrefix(r.stdout, "usage: stack pr merge <pr> <head-sha>") {
+	if r.code != exitOK || !strings.HasPrefix(r.stdout, "usage: stack pr merge <pr> <head-sha>") {
 		t.Fatalf("pr merge --help = %+v", r)
 	}
 }
@@ -160,11 +155,11 @@ func TestCommandHelp(t *testing.T) {
 func TestHooksExitZeroSilently(t *testing.T) {
 	for _, sub := range []string{"session-start", "pre-tool-use"} {
 		r := run(t, nil, "hook", "claude", sub, "unexpected")
-		if r.code != ExitOK || r.stdout != "" || r.stderr != "" {
+		if r.code != exitOK || r.stdout != "" || r.stderr != "" {
 			t.Errorf("hook %s = %+v, want exit 0 and no output", sub, r)
 		}
 		r = run(t, map[string]string{"STACK_DEBUG": "1"}, "hook", "claude", sub)
-		if r.code != ExitOK || r.stdout != "" ||
+		if r.code != exitOK || r.stdout != "" ||
 			!strings.Contains(r.stderr, "not implemented yet") {
 			t.Errorf("hook %s with STACK_DEBUG=1 = %+v", sub, r)
 		}
@@ -176,10 +171,10 @@ func TestExitCode(t *testing.T) {
 		err  error
 		want int
 	}{
-		{nil, ExitOK},
-		{fmt.Errorf("check failed: %w", ErrRefused), ExitRefused},
-		{errNotImplemented, ExitUsage},
-		{errors.New("config broken"), ExitUsage},
+		{nil, exitOK},
+		{fmt.Errorf("check failed: %w", ErrRefused), exitRefused},
+		{errNotImplemented, exitUsage},
+		{errors.New("config broken"), exitUsage},
 	}
 	for _, tt := range tests {
 		if got := exitCode(tt.err); got != tt.want {

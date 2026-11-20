@@ -57,9 +57,6 @@ func TestLoadMissingFile(t *testing.T) {
 	if !reflect.DeepEqual(cfg, want5()) {
 		t.Fatalf("Load(missing) =\n%+v\nwant\n%+v", cfg, want5())
 	}
-	if !cfg.Safety.DenyPencilGenerate {
-		t.Fatal("deny_pencil_generate default is not true")
-	}
 }
 
 func TestLoadFullDefaultFile(t *testing.T) {

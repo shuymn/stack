@@ -12,8 +12,8 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// SupportedVersion is the only accepted value of the top-level `version` key.
-const SupportedVersion = 1
+// supportedVersion is the only accepted value of the top-level `version` key.
+const supportedVersion = 1
 
 // ErrInvalid marks a config file that cannot be used: a syntax or type error, an unsupported
 // version, or a file that cannot be read.
@@ -66,7 +66,7 @@ type Stages struct {
 // Defaults returns the §5 defaults. Each call returns fresh slices.
 func Defaults() Config {
 	return Config{
-		Version: SupportedVersion,
+		Version: supportedVersion,
 		Kit:     Kit{Root: "~/.local/state/stack/kits"},
 		Worker: Worker{
 			AgentTypes: []string{"opus-worker"},
@@ -130,9 +130,9 @@ func Load(path string) (Config, []string, error) {
 	cfg := Defaults()
 	d := decoder{md: &md, known: map[string]bool{}}
 	d.field(top, "version", &cfg.Version)
-	if d.err == nil && cfg.Version != SupportedVersion {
+	if d.err == nil && cfg.Version != supportedVersion {
 		return Config{}, nil, fmt.Errorf("%w: %s: key version: unsupported value %d (want %d)",
-			ErrInvalid, path, cfg.Version, SupportedVersion)
+			ErrInvalid, path, cfg.Version, supportedVersion)
 	}
 
 	kit := d.section(top, "kit")

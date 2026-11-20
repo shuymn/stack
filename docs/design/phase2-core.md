@@ -90,10 +90,12 @@ outside the kit dir is no longer followed (legacy read it) and renders as an unr
 - `Expand(p)`: only `~`, `~/…`, `~\…` expand with `Home`; `~user` is left verbatim.
   Config values use this form only. Shell words carry whether their leading `~` was unquoted (§4.3): only an unquoted
   one expands, as in bash; `'~'` names a directory called `~`.
-- `Resolve(cwd, p)`: `Expand` (when allowed), then on Windows the Git Bash forms are mapped **before** any
-  `filepath.IsAbs` call (which would treat a Git Bash `/` as relative to the current drive): `/` is the Git Bash root, which is not a drive root and is not translated: `Resolve` returns it as the
+- `Resolve(cwd, p)`: `Expand` (when allowed), then on Windows the Git Bash forms (one leading `/`) are mapped
+  **before** absolute-path classification, which `paths` does itself per OS rather than with `filepath.IsAbs` (that
+  would treat a Git Bash `/` as relative to the current drive): `/` is the Git Bash root, which is not a drive root and is not translated: `Resolve` returns it as the
   marker `ShellRoot` (rmroot treats it as a root; file reads under it are unknown and skipped). `/<drive>` and
-  `/<drive>/…` → `<drive>:\…`; finally a relative path is joined to `cwd`; a Windows drive-relative `C:x` is unknown. Neither function removes `..` lexically, because past a symlink that would name another file; only `Norm` cleans, for comparison. After `cd /` the known cwd is
+  `/<drive>/…` → `<drive>:\…`, except that a path whose `..` climbs above the drive mount is classified by its
+  cleaned form (`/c/..` is `ShellRoot`); finally a relative path is joined to `cwd`; a Windows drive-relative `C:x` is unknown. Neither function removes `..` lexically, because past a symlink that would name another file; only `Norm` cleans, for comparison. After `cd /` the known cwd is
   unknown on Windows.
   `check public` file arguments use the same function, so the `/c/…` and `~` forms Git Bash passes open the real file.
 - `Same(a, b)` / `Within(p, root)` / `HasComponent(p, name)`: compare slash-normalised paths **by component**, so
@@ -110,8 +112,9 @@ outside the kit dir is no longer followed (legacy read it) and renders as an unr
 
 Config parsing uses `github.com/BurntSushi/toml` (§3). Missing file = defaults. TOML syntax error: non-hook commands
 exit 2 citing the file and the line from `toml.ParseError`. `version` other than `1` (valid TOML): exit 2 citing the
-file and the key `version`. Hooks use defaults in both cases. Unknown keys: one stderr warning per key from
-`MetaData.Undecoded()` (non-hook commands only). Arrays replace defaults (`stages.entry = []` disables entry
+file and the key `version`. Hooks use defaults in both cases. Each schema key is decoded by its exact name
+(BurntSushi matches struct fields case-insensitively); every other key in `MetaData.Keys()`, case variants included,
+is ignored with one stderr warning (non-hook commands only). Arrays replace defaults (`stages.entry = []` disables entry
 extensions).
 
 `[handover]` keeps file order via `MetaData.Keys()`; the first active key wins, so `T3CODE_THREAD_ID` beats
@@ -162,7 +165,7 @@ SessionStart receives no `CLAUDE_ENV_FILE`, so `STACK_SESSION_ID` is unset and `
 
 | Need | Choice | Alternatives considered | Reason |
 |---|---|---|---|
-| TOML | `github.com/BurntSushi/toml` | `pelletier/go-toml/v2` | Both TOML 1.0; BurntSushi gives `MetaData.Undecoded()` (unknown-key warnings), `MetaData.Keys()` order (`[handover]` precedence), `ParseError` line numbers, no transitive deps. |
+| TOML | `github.com/BurntSushi/toml` | `pelletier/go-toml/v2` | Both TOML 1.0; BurntSushi gives `MetaData.Keys()` (exact-key unknown-key warnings and `[handover]` order), `Primitive` per-key decoding, `ParseError` line numbers, no transitive deps. |
 | Bash command analysis | `mvdan.cc/sh/v3/syntax` | legacy regex splitting (`guard-agent-actions.py:53-66`) | The regex split breaks inside quotes and loses heredoc bodies. The `shfmt` AST gives calls, assignments, redirects, heredocs and `$(…)`. `Word.Lit()` returns only unquoted literals, so `shell` evaluates a word as static when it consists of `Lit`, `SglQuoted` and `DblQuoted` parts holding only literals; any expansion makes the word dynamic. Parsing follows bash's input unit: bash reads and executes a whole input line (with any heredoc bodies it opens) before reading the next, and a syntax error anywhere in a line stops that line from running. So the command is parsed whole; on a syntax error it is re-parsed up to the end of the last complete line before the error line (heredoc bodies attached), and only those statements are judged; the error line and later text are not judged as calls. No regex fallback (it would restore the false positives). |
 | `.kits` lock | `github.com/gofrs/flock` | hand-rolled `LockFileEx` / `flock(2)` behind build tags; `O_EXCL` lock file with stale reclaim | An OS lock is released when the process exits, so no time-based reclaim (which could break a live writer) is needed. flock wraps both OS calls behind one API with `TryLockContext`, is widely used, and keeps this repo free of build-tagged lock code; hand-rolling it would duplicate that for no gain. |
 | CLI flags | stdlib `flag` + an interspersed-args helper | `spf13/cobra`, `spf13/pflag` | Seven commands, few flags; `stack pr merge 12 abc --squash` needs flags after positionals. The helper keeps a value flag's next token as its value even when it starts with `-` (`--body "--x"`) and treats every token after `--` as positional. |
@@ -378,7 +381,7 @@ no non-zero exit for "over" (`docs/architecture.md:36`). Kit root missing: print
 `~/.claude/attention/items.json` and prose sizes are out of scope: legacy `attention-budget.py status` keeps serving
 kaizen until Phase 3; `--json` is decided together with the `statusline.sh.tmpl` caller.
 
-### 4.7 `stack run <entry|outbound|cycle> [--dry-run] [--replay FILE] [--ext NAME] [--range R] [--prompt-file F]`
+### 4.7 `stack run <entry|outbound|cycle> [--dry-run] [--replay FILE] [--ext NAME]... [--range R] [--prompt-file F]`
 
 - **Selection:** names from `[stages].<stage>` (defaults §5), or exactly `NAME` with `--ext` (repeatable).
 - **Names:** each name (config or `--ext`) must be a single file-name component matching `^[a-z0-9][a-z0-9-]*$`;
@@ -441,7 +444,7 @@ kaizen until Phase 3; `--json` is decided together with the `statusline.sh.tmpl`
 
 | Hazard class | Where it appears | Coverage |
 |---|---|---|
-| `~` / home forms | config values, `--body-file ~/x`, `rm -rf '~'`, secrets entries, worker body, Git Bash `/`, `/c`, `/c/Users/…` | `paths.Expand` for config (USERPROFILE on Windows); shell words expand only an unquoted `~`; `paths.Resolve` maps Git Bash forms before `filepath.IsAbs`; `~user` untouched |
+| `~` / home forms | config values, `--body-file ~/x`, `rm -rf '~'`, secrets entries, worker body, Git Bash `/`, `/c`, `/c/Users/…` | `paths.Expand` for config (USERPROFILE on Windows); shell words expand only an unquoted `~`; `paths.Resolve` maps Git Bash forms before its own absolute-path check; `~user` untouched |
 | Separators / case | payload paths on Windows (`C:\…`), case-insensitive FS | component comparison; case fold on darwin/windows only |
 | Symlinked secret dir | `Read` of a link into the secrets dir | `EvalSymlinks` on Read/NotebookRead. Bash use through a link is a static-scope gap. |
 | CRLF | worker body frontmatter, `.kits`, private-terms, handover files, transcripts | readers trim `\r`; added-line splitting keeps bare CR by design; temp repos use `core.autocrlf=false` (Windows runners default to `true`) |

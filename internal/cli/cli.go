@@ -12,11 +12,11 @@ import (
 	"strings"
 )
 
-// Exit codes shared by every command. Hook commands always exit ExitOK.
+// Exit codes shared by every command. Hook commands always exit exitOK.
 const (
-	ExitOK      = 0
-	ExitRefused = 1
-	ExitUsage   = 2
+	exitOK      = 0
+	exitRefused = 1
+	exitUsage   = 2
 )
 
 var (
@@ -139,15 +139,15 @@ var commands = []*command{
 func Run(ctx context.Context, args []string, env Env) int {
 	if len(args) == 0 {
 		writeUsage(env.Stderr, nil)
-		return ExitUsage
+		return exitUsage
 	}
 	switch args[0] {
 	case "--version", "-v":
 		_, _ = fmt.Fprintln(env.Stdout, env.Version)
-		return ExitOK
+		return exitOK
 	case "help", "--help", "-h":
 		writeUsage(env.Stdout, nil)
-		return ExitOK
+		return exitOK
 	}
 
 	cmd, rest, prefix := route(args)
@@ -159,7 +159,7 @@ func Run(ctx context.Context, args []string, env Env) int {
 				strings.Join(prefix, " "))
 		}
 		writeUsage(env.Stderr, prefix)
-		return ExitUsage
+		return exitUsage
 	}
 	if cmd.hook {
 		return runHook(ctx, cmd, rest, env)
@@ -168,11 +168,11 @@ func Run(ctx context.Context, args []string, env Env) int {
 	inv, err := parse(cmd, rest)
 	if errors.Is(err, flag.ErrHelp) {
 		_, _ = fmt.Fprintf(env.Stdout, "usage: %s\n", cmd.synopsis())
-		return ExitOK
+		return exitOK
 	}
 	if err != nil {
 		_, _ = fmt.Fprintf(env.Stderr, "%s: %v\nusage: %s\n", cmd.name(), err, cmd.synopsis())
-		return ExitUsage
+		return exitUsage
 	}
 	if cmd.run == nil {
 		err = errNotImplemented
@@ -183,25 +183,26 @@ func Run(ctx context.Context, args []string, env Env) int {
 		_, _ = fmt.Fprintf(env.Stderr, "%s: %v\n", cmd.name(), err)
 		return exitCode(err)
 	}
-	return ExitOK
+	return exitOK
 }
 
 // route finds the command named by the leading words of args. When none matches, prefix is the
 // longest group of commands that the leading words name, or nil when even the first word is unknown.
 func route(args []string) (*command, []string, []string) {
-	var prefix []string
+	longest := 0
 	for _, c := range commands {
 		n := len(c.path)
 		if len(args) >= n && slices.Equal(args[:n], c.path) {
 			return c, args[n:], nil
 		}
-		for i := 1; i < n && i <= len(args); i++ {
-			if slices.Equal(args[:i], c.path[:i]) && i > len(prefix) {
-				prefix = slices.Clone(c.path[:i])
-			}
+		for i := longest + 1; i < n && i <= len(args) && slices.Equal(args[:i], c.path[:i]); i++ {
+			longest = i
 		}
 	}
-	return nil, nil, prefix
+	if longest == 0 {
+		return nil, nil, nil
+	}
+	return nil, nil, args[:longest]
 }
 
 func parse(cmd *command, args []string) (invocation, error) {
@@ -232,7 +233,7 @@ func runHook(ctx context.Context, cmd *command, args []string, env Env) int {
 		if r := recover(); r != nil && debug {
 			_, _ = fmt.Fprintf(env.Stderr, "%s: panic: %v\n", cmd.name(), r)
 		}
-	}() // a recovered panic returns the zero value, ExitOK
+	}() // a recovered panic returns the zero value, exitOK
 	err := errNotImplemented
 	if cmd.run != nil {
 		err = cmd.run(ctx, env, invocation{args: args})
@@ -240,7 +241,7 @@ func runHook(ctx context.Context, cmd *command, args []string, env Env) int {
 	if err != nil && debug {
 		_, _ = fmt.Fprintf(env.Stderr, "%s: %v\n", cmd.name(), err)
 	}
-	return ExitOK
+	return exitOK
 }
 
 // exitCode maps a command error: refusals exit 1, every other error (usage, input validation,
@@ -248,11 +249,11 @@ func runHook(ctx context.Context, cmd *command, args []string, env Env) int {
 func exitCode(err error) int {
 	switch {
 	case err == nil:
-		return ExitOK
+		return exitOK
 	case errors.Is(err, ErrRefused):
-		return ExitRefused
+		return exitRefused
 	default:
-		return ExitUsage
+		return exitUsage
 	}
 }
 

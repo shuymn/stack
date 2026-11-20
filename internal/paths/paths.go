@@ -300,16 +300,12 @@ func ValidSessionID(id string) bool {
 // IsAgentWorktree reports whether p has a component ending in `-worktrees` followed by a component
 // `agent-<name>` with a non-empty name.
 func IsAgentWorktree(p string) bool {
-	return isAgentWorktree(norm(p, isWindows, false))
-}
-
-func isAgentWorktree(np string) bool {
-	comps := strings.Split(np, "/")
-	for i := range len(comps) - 1 {
-		if strings.HasSuffix(comps[i], "-worktrees") && len(comps[i+1]) > len("agent-") &&
-			strings.HasPrefix(comps[i+1], "agent-") {
+	afterWorktrees := false
+	for c := range strings.SplitSeq(norm(p, isWindows, false), "/") {
+		if afterWorktrees && len(c) > len("agent-") && strings.HasPrefix(c, "agent-") {
 			return true
 		}
+		afterWorktrees = strings.HasSuffix(c, "-worktrees")
 	}
 	return false
 }
