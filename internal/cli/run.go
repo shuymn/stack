@@ -85,11 +85,16 @@ func stageNames(env Env, inv invocation, stage string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	return names, checkStageNames(env, stage, names)
+}
+
+// checkStageNames reports an invalid name configured under [stages].<stage> as a config error.
+func checkStageNames(env Env, stage string, names []string) error {
 	if err := ext.CheckNames(names); err != nil {
-		return nil, fmt.Errorf("%w: %s: [stages].%s: %w", config.ErrInvalid,
+		return fmt.Errorf("%w: %s: [stages].%s: %w", config.ErrInvalid,
 			paths.ConfigFile(env.Home), stage, err)
 	}
-	return names, nil
+	return nil
 }
 
 // replayRequest reads a --replay fixture whose request stage must be stage.

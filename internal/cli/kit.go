@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/shuymn/stack/internal/config"
 	"github.com/shuymn/stack/internal/ext"
 	"github.com/shuymn/stack/internal/kit"
 	"github.com/shuymn/stack/internal/paths"
@@ -70,9 +69,8 @@ func runKitOpen(ctx context.Context, env Env, inv invocation) error {
 		return err
 	}
 	// A bad entry name is a config error found before anything changes.
-	if err := ext.CheckNames(cfg.Stages.Entry); err != nil {
-		return fmt.Errorf("%w: %s: [stages].entry: %w", config.ErrInvalid,
-			paths.ConfigFile(env.Home), err)
+	if err := checkStageNames(env, ext.StageEntry, cfg.Stages.Entry); err != nil {
+		return err
 	}
 	root, err := filepath.Abs(paths.FromConfig(env.Home, cfg.Kit.Root))
 	if err != nil {

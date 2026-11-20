@@ -10,6 +10,8 @@ import (
 	"io"
 	"slices"
 	"strings"
+
+	"github.com/shuymn/stack/internal/ext"
 )
 
 // Exit codes shared by every command. Hook commands always exit exitOK.
@@ -131,7 +133,7 @@ var commands = []*command{
 		args:    "<entry|outbound|cycle>",
 		flagDoc: "[--dry-run] [--replay FILE] [--ext NAME]... [--range R] [--prompt-file F]",
 		summary: "run the extensions of a stage",
-		choices: []string{"entry", "outbound", "cycle"},
+		choices: []string{ext.StageEntry, ext.StageOutbound, ext.StageCycle},
 		define: func(fs *flag.FlagSet) {
 			fs.Bool("dry-run", false, "")
 			fs.String("replay", "", "")

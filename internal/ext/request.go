@@ -110,13 +110,14 @@ func ParseReplay(data []byte) (Replay, error) {
 	var req struct {
 		Stage *string `json:"stage"`
 	}
-	if trimmed := bytes.TrimSpace(doc.Request); len(trimmed) == 0 || trimmed[0] != '{' {
+	request := bytes.TrimSpace(doc.Request)
+	if len(request) == 0 || request[0] != '{' {
 		return Replay{}, fmt.Errorf("%w: request is not an object", ErrReplay)
 	}
-	if err := json.Unmarshal(doc.Request, &req); err != nil || req.Stage == nil {
+	if err := json.Unmarshal(request, &req); err != nil || req.Stage == nil {
 		return Replay{}, fmt.Errorf("%w: request.stage is not a string", ErrReplay)
 	}
-	r := Replay{Request: bytes.TrimSpace(doc.Request), Stage: *req.Stage}
+	r := Replay{Request: request, Stage: *req.Stage}
 	if doc.Expect != nil {
 		switch doc.Expect.Status {
 		case StatusPass, StatusWarn, StatusBlock:
