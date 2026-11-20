@@ -252,16 +252,30 @@ func TestAuto(t *testing.T) {
 	}
 }
 
-func autoTests() []autoTest {
-	merged := "MERGED " + head + " " + mergeOID + "\n"
-	openAuto := rb("OPEN", head, "", true)
-	openOff := rb("OPEN", head, "", false)
-	failing := proctest.Response{Stderr: "HTTP 502\n", Exit: 1}
-	pre := autoPre()
-	seq := func(tail ...[]string) [][]string { return append(slices.Clone(pre), tail...) }
-	stopped := "PR 7 is not merged; auto-merge disabled: stack pr merge was stopped"
-	unknownAuto := "result unknown for PR 7 — auto-merge may still be enabled; " +
+// Fixtures shared by the TestAuto cases.
+const (
+	autoMerged  = "MERGED " + head + " " + mergeOID + "\n"
+	autoStopped = "PR 7 is not merged; auto-merge disabled: stack pr merge was stopped"
+	unknownAuto = "result unknown for PR 7 — auto-merge may still be enabled; " +
 		"check the PR before retrying"
+)
+
+var (
+	openAuto    = rb("OPEN", head, "", true)
+	openOff     = rb("OPEN", head, "", false)
+	autoFailing = proctest.Response{Stderr: "HTTP 502\n", Exit: 1}
+)
+
+// seq is the argv of steps 3-8 followed by tail.
+func seq(tail ...[]string) [][]string { return append(autoPre(), tail...) }
+
+func autoTests() []autoTest {
+	return append(submitTests(), stopTests()...)
+}
+
+// submitTests are the cases up to a verified merge or a refusal without a stop condition.
+func submitTests() []autoTest {
+	merged, failing := autoMerged, autoFailing
 	return []autoTest{
 		{
 			name: "existing request refused",
@@ -352,6 +366,13 @@ func autoTests() []autoTest {
 			want: []string{"GraphQL: timeout", "PR 7 is merged, but gh pr merge exited 1"},
 			argv: seq(autoMergeCall, autoRead),
 		},
+	}
+}
+
+// stopTests are the cases that end in a stop condition, the disable and the final read-back.
+func stopTests() []autoTest {
+	merged, failing, stopped := autoMerged, autoFailing, autoStopped
+	return []autoTest{
 		{
 			name: "non-zero gh then open disables without polling",
 			tc: autoCase{
