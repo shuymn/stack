@@ -339,8 +339,10 @@ inside a checkout of the PR's repo; allowed from agent worktrees too (approval i
 exit 2; later refusals exit 1 with a one-line reason on stderr.
 
 1. `<pr>` decimal; `<head-sha>` 7–40 hex (`merge-pr:21-22`); `GH_REPO` unset (`merge-pr:23`); at most one method;
-   `--subject`/`--body` contain no `publictext` local path.
-2. `git rev-parse --show-toplevel` (empty when outside a repo); `gh` runs with this cwd throughout.
+   `--subject`/`--body` contain no `publictext` local path and no configured private term.
+2. `git rev-parse --show-toplevel`; running inside a checkout is a precondition, so when it fails or prints nothing
+   (e.g. started in the `.git` directory) the merge is refused before any `gh` call. `gh` runs with this cwd
+   throughout.
 3. `gh pr view <pr> --json headRefOid,baseRefName,state,isDraft,mergeable`, retried 5× at 3 s while
    `mergeable == UNKNOWN` (`merge-pr:42-46`); `headRefOid` starts with `<head-sha>`; `OPEN`; not draft;
    `MERGEABLE`. From here on the **full** `headRefOid` (`H`) is the checked SHA.
@@ -350,20 +352,23 @@ exit 2; later refusals exit 1 with a one-line reason on stderr.
 6. `<root>/.claude/merge-check <pr> <H>`: absent → continue; present but not runnable on this OS (incl. a
    non-executable file on Unix) → refuse; non-zero → refuse (`merge-pr:69-71`). A placed check is treated as
    required; legacy skipped a non-executable one.
-7. Checks of `H`: `gh api graphql` with `repository(owner,name){ object(oid: H){ ... on Commit { oid
-   statusCheckRollup { contexts(first: 100, after: $c) { totalCount pageInfo nodes { CheckRun{name status
+7. `gh api graphql … isMergeQueueEnabled` must be `false` (`merge-pr:173-176`).
+8. Checks of `H`, read last, right before the merge, so a rerun during the earlier steps is seen: `gh api graphql`
+   with `repository(owner,name){ object(oid: H){ ... on Commit { oid statusCheckRollup { contexts(first: 100, after: $c) { totalCount pageInfo nodes { CheckRun{name status
    conclusion} StatusContext{context state} } } } } } }`, paging to the end. The response `oid` must equal `H`. Every
    CheckRun must be `COMPLETED` with conclusion `SUCCESS`, `NEUTRAL` or `SKIPPED`; every StatusContext `SUCCESS`.
    A confirmed empty set (commit found, rollup `null` or `totalCount 0`) refuses unless `--allow-no-checks`; any query
    error refuses. Chosen over `gh pr checks` (reads whatever head the PR has at that moment and returns no SHA) and
    over REST `commits/{sha}/check-runs` + `/status` (two paginated calls) because one query is pinned to `H` and
    covers both check runs and commit statuses (`merge-pr:161-170`).
-8. `gh api graphql … isMergeQueueEnabled` must be `false` (`merge-pr:173-176`).
 9. `gh pr merge <pr> <method> --match-head-commit H [--delete-branch] [--subject S] [--body B]`; GitHub rejects the
-   merge if the head moved after step 7. Then, **whatever its exit code**, read back
-   `gh pr view <pr> --json state,headRefOid,mergeCommit` (`merge-pr:189-207`). `MERGED`, `headRefOid == H` and a
-   merge OID that is a full SHA (40 or 64 lower-case hex) → stdout `MERGED <H> <merge-oid>`, exit 0, plus a stderr note if `gh pr merge` exited non-zero
-   (e.g. branch deletion failed after the merge), so the caller does not retry. Otherwise exit 1 with the read-back.
+   merge if the head moved after step 8. Then, **whatever its exit code**, read back
+   `gh pr view <pr> --json state,headRefOid,mergeCommit` (`merge-pr:189-207`) on its own 30 s deadline, also when
+   SIGINT/SIGTERM (which cancel the context and kill the running child) arrived after `gh pr merge` started.
+   `MERGED`, `headRefOid == H` and a merge OID that is a full SHA (40 or 64 lower-case hex) → stdout
+   `MERGED <H> <merge-oid>`, exit 0, plus a stderr note if `gh pr merge` exited non-zero (e.g. branch deletion failed
+   after the merge), so the caller does not retry. `OPEN` → exit 1, not merged. A failed read-back or any other
+   state → exit 1 with `result unknown — check the PR before retrying`, never an invitation to retry.
 
 No config needed. Not done: owner-only list, chezmoi lookup, shallow-unshallow, base-moved recheck (all served the
 list), and the delegated-worktree refusal.

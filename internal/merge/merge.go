@@ -32,6 +32,8 @@ const (
 	defaultRetryDelay = 3 * time.Second
 	// DefaultMergeCheckTimeout bounds `.claude/merge-check`, which may run benchmarks.
 	DefaultMergeCheckTimeout = 30 * time.Minute
+	// readBackTimeout bounds the read-back, which runs even after stack was told to stop.
+	readBackTimeout = 30 * time.Second
 )
 
 var (
@@ -39,6 +41,8 @@ var (
 	ErrInvalid = errors.New("invalid argument")
 	// ErrRefused reports a step that refused the merge or could not be verified (exit 1).
 	ErrRefused = errors.New("refused")
+	// ErrUnknown, with ErrRefused, reports that the merge call ran but its outcome is not confirmed.
+	ErrUnknown = errors.New("result unknown")
 
 	prRe   = regexp.MustCompile(`^[0-9]+$`)
 	headRe = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
@@ -145,13 +149,15 @@ func Run(ctx context.Context, o Options) error {
 	}
 	c := o.Client
 
+	// The repository's merge-check lives in the checkout, so running inside one is a precondition.
 	root, err := c.Toplevel(ctx)
 	if err != nil {
 		return refuse("could not find the repository: %v", err)
 	}
-	if root != "" {
-		c.Dir = filepath.FromSlash(root)
+	if root == "" {
+		return refuse("not inside a checkout of the PR's repository: run stack pr merge there")
 	}
+	c.Dir = filepath.FromSlash(root)
 
 	head, err := checkPR(ctx, c, r, o.retryDelay())
 	if err != nil {
@@ -174,13 +180,7 @@ func Run(ctx context.Context, o Options) error {
 		}
 	}
 
-	if root != "" {
-		if err := mergeCheck(ctx, o, c, r.pr, head); err != nil {
-			return err
-		}
-	}
-
-	if err := checkChecks(ctx, c, repo, head, o.AllowNoChecks); err != nil {
+	if err := mergeCheck(ctx, o, c, r.pr, head); err != nil {
 		return err
 	}
 
@@ -192,13 +192,25 @@ func Run(ctx context.Context, o Options) error {
 		return refuse("the base merges through a merge queue, which stack pr merge does not handle")
 	}
 
-	res := c.Merge(ctx, r.pr, r.method, head, o.Merge, o.Stderr)
-	back, err := c.ReadBack(ctx, r.pr)
-	if err != nil {
-		return refuse("gh pr merge %s; could not read PR %d back: %v", res, r.pr, err)
+	// The checks are read last, right before the merge, so a rerun during the steps above is seen.
+	if err := checkChecks(ctx, c, repo, head, o.AllowNoChecks); err != nil {
+		return err
 	}
-	if back.State != "MERGED" || back.HeadRefOid != head || !github.IsFullSHA(back.MergeOID) {
+
+	res := c.Merge(ctx, r.pr, r.method, head, o.Merge, o.Stderr)
+	// The merge may have happened even when stack is being stopped: read back on a short deadline
+	// of its own.
+	backCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), readBackTimeout)
+	defer cancel()
+	back, err := c.ReadBack(backCtx, r.pr)
+	if err != nil {
+		return unknown(r.pr, "gh pr merge %s; the read-back failed: %v", res, err)
+	}
+	switch {
+	case back.State == "OPEN":
 		return refuse("PR %d is not merged on %s (%s); gh pr merge %s", r.pr, head, back, res)
+	case back.State != "MERGED" || back.HeadRefOid != head || !github.IsFullSHA(back.MergeOID):
+		return unknown(r.pr, "read back %s, not MERGED on %s; gh pr merge %s", back, head, res)
 	}
 	if _, err := fmt.Fprintf(o.Stdout, "MERGED %s %s\n", head, back.MergeOID); err != nil {
 		return fmt.Errorf("write result: %w", err)
@@ -216,6 +228,13 @@ func (o Options) retryDelay() time.Duration {
 		return defaultRetryDelay
 	}
 	return o.RetryDelay
+}
+
+// unknown reports a merge attempt whose outcome the read-back cannot confirm: a refusal that tells
+// the caller to look at the PR instead of retrying.
+func unknown(pr int, format string, args ...any) error {
+	return fmt.Errorf("%w: %w for PR %d — check the PR before retrying: %s", ErrRefused,
+		ErrUnknown, pr, fmt.Sprintf(format, args...))
 }
 
 func refuse(format string, args ...any) error {

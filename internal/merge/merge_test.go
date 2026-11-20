@@ -2,6 +2,7 @@ package merge
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -115,6 +116,10 @@ type setup struct {
 	before func(t *testing.T, dir string)
 	// git replaces the git executable.
 	git string
+	// stop cancels the run's context shortly after the merge call starts.
+	stop bool
+	// outside makes git report that the directory is not in a work tree.
+	outside bool
 }
 
 // run executes Run in a fixture repository with a fake gh answering s.
@@ -140,9 +145,21 @@ func run(t *testing.T, s scenario, st setup) outcome {
 	}
 	gh := proctest.Install(t, "gh", sc)
 	var stdout, stderr bytes.Buffer
-	o.Client = github.Client{Runner: proc.Exec{}, Gh: gh, Git: st.git, Dir: r.Dir, Env: r.Env}
+	if st.outside {
+		st.git = proctest.Install(t, "git", proctest.Scenario{Responses: []proctest.Response{{
+			Args:   []string{"rev-parse", "--show-toplevel"},
+			Stderr: "fatal: this operation must be run in a work tree\n", Exit: 128,
+		}}})
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	var runner proc.Runner = proc.Exec{}
+	if st.stop {
+		runner = stopAtMerge{cancel: cancel}
+	}
+	o.Client = github.Client{Runner: runner, Gh: gh, Git: st.git, Dir: r.Dir, Env: r.Env}
 	o.Stdout, o.Stderr = &stdout, &stderr
-	err := Run(t.Context(), o)
+	err := Run(ctx, o)
 	return outcome{err, stdout.String(), stderr.String(), proctest.Calls(t, gh)}
 }
 
@@ -354,6 +371,13 @@ func TestRefusals(t *testing.T) {
 			setup: setup{git: filepath.Join(os.TempDir(), "stack-missing-git", "git")},
 			want:  "could not find the repository", calls: -1,
 		},
+		{
+			// git exits 128 outside a work tree, e.g. when started inside the .git directory.
+			name:  "outside a checkout",
+			s:     okResponses(),
+			setup: setup{outside: true},
+			want:  "not inside a checkout of the PR's repository", calls: -1,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -537,6 +561,7 @@ func TestMerge(t *testing.T) {
 			if len(merges) != 1 || !slices.Equal(merges[0], tt.argv) {
 				t.Errorf("merge calls = %q, want exactly %q", merges, tt.argv)
 			}
+			assertChecksLast(t, out.gh)
 			if !sawChecks {
 				t.Errorf("checks query not pinned to the full head: %+v", out.gh)
 			}
@@ -545,6 +570,26 @@ func TestMerge(t *testing.T) {
 				t.Errorf("stderr = %q, want gh's output and no note", out.stderr)
 			}
 		})
+	}
+}
+
+// assertChecksLast asserts that every call between the first checks query and the merge call is a
+// checks query of head, so a rerun during the other steps is seen before merging.
+func assertChecksLast(t *testing.T, calls []proctest.Call) {
+	t.Helper()
+	first := slices.IndexFunc(calls, func(c proctest.Call) bool {
+		return slices.Equal(c.Args, github.ChecksArgs(repo, head, ""))
+	})
+	mergeAt := slices.IndexFunc(calls, func(c proctest.Call) bool {
+		return len(c.Args) > 1 && c.Args[0] == "pr" && c.Args[1] == "merge"
+	})
+	if first < 0 || mergeAt < first {
+		t.Fatalf("checks query at %d, merge at %d: %+v", first, mergeAt, calls)
+	}
+	for _, c := range calls[first:mergeAt] {
+		if !slices.Contains(c.Args, "oid="+head) {
+			t.Errorf("call %q runs between the checks query and the merge", c.Args)
+		}
 	}
 }
 
@@ -583,39 +628,53 @@ func TestReadback(t *testing.T) {
 			t.Errorf("err = %v, stdout = %q", out.err, out.stdout)
 		}
 	})
+	unknownMsg := "result unknown for PR 7 — check the PR before retrying"
 	for _, tt := range []struct {
 		name  string
 		merge proctest.Response
 		back  proctest.Response
-		want  string
+		// unknown marks an outcome the read-back cannot confirm.
+		unknown bool
+		want    string
 	}{
 		{
-			"open after a non-zero exit", failedMerge, readback("OPEN", head, ""),
+			"open after a non-zero exit", failedMerge, readback("OPEN", head, ""), false,
 			"PR 7 is not merged on " + head + " (OPEN " + head + "); gh pr merge exited 1",
 		},
 		{
 			"merged on another head",
 			proctest.Response{},
-			readback("MERGED", other, mergeOID),
-			"(MERGED " + other + " " + mergeOID + ")",
+			readback("MERGED", other, mergeOID), true,
+			"read back MERGED " + other + " " + mergeOID + ", not MERGED on " + head,
 		},
-		{"empty merge OID", proctest.Response{}, readback("MERGED", head, ""), "(MERGED " + head + ")"},
+		{
+			"closed",
+			proctest.Response{},
+			readback("CLOSED", head, ""), true,
+			"read back CLOSED " + head + ",",
+		},
+		{
+			"empty merge OID",
+			proctest.Response{},
+			readback("MERGED", head, ""), true,
+			"read back MERGED " + head + ",",
+		},
 		{
 			"short merge OID",
 			proctest.Response{},
-			readback("MERGED", head, mergeOID[:9]),
-			"(MERGED " + head + " " + mergeOID[:9] + ")",
+			readback("MERGED", head, mergeOID[:9]), true,
+			"read back MERGED " + head + " " + mergeOID[:9] + ",",
 		},
 		{
 			"upper-case merge OID",
 			proctest.Response{},
-			readback("MERGED", head, strings.ToUpper(mergeOID)),
-			"is not merged",
+			readback("MERGED", head, strings.ToUpper(mergeOID)), true, "not MERGED on " + head,
 		},
 		{
 			"read-back fails", failedMerge,
 			proctest.Response{Stderr: "timeout", Exit: 1},
-			"gh pr merge exited 1; could not read PR 7 back",
+			true,
+			"gh pr merge exited 1; the read-back failed",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -624,8 +683,70 @@ func TestReadback(t *testing.T) {
 			if !errors.Is(out.err, ErrRefused) || !strings.Contains(out.err.Error(), tt.want) {
 				t.Errorf("err = %v, want a refusal containing %q", out.err, tt.want)
 			}
-			if out.stdout != "" {
-				t.Errorf("stdout = %q", out.stdout)
+			if got := errors.Is(out.err, ErrUnknown); got != tt.unknown ||
+				got != strings.Contains(out.err.Error(), unknownMsg) {
+				t.Errorf("err = %v, want unknown %v with %q", out.err, tt.unknown, unknownMsg)
+			}
+			if strings.Contains(out.err.Error(), "retry)") || out.stdout != "" {
+				t.Errorf("err = %v, stdout = %q", out.err, out.stdout)
+			}
+		})
+	}
+}
+
+// stopAtMerge cancels the context of the run shortly after the merge call starts, as SIGINT or
+// SIGTERM does through cmd/stack.
+type stopAtMerge struct {
+	proc.Exec
+
+	cancel func()
+}
+
+func (s stopAtMerge) Run(ctx context.Context, c proc.Cmd) (proc.Result, error) {
+	if len(c.Args) > 1 && c.Args[0] == "pr" && c.Args[1] == "merge" {
+		time.AfterFunc(300*time.Millisecond, s.cancel)
+	}
+	return s.Exec.Run(ctx, c)
+}
+
+// TestStopDuringMerge: a stop after the merge call started kills it and still reads the PR back.
+func TestStopDuringMerge(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name   string
+		back   string
+		stdout string
+		want   string
+	}{
+		{"merged", "MERGED", "MERGED " + head + " " + mergeOID + "\n", ""},
+		{"open", "OPEN", "", "PR 7 is not merged on " + head},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			s := with(okResponses(), kMerge, proctest.Response{Sleep: 20 * time.Second})
+			s[kReadBack] = proctest.Response{
+				Stdout: `{"state":"` + tt.back + `","headRefOid":"` + head +
+					`","mergeCommit":{"oid":"` + mergeOID + `"}}`,
+			}
+			start := time.Now()
+			out := run(t, s, setup{stop: true})
+			if time.Since(start) > 15*time.Second {
+				t.Errorf("the stop did not kill the merge call (%s)", time.Since(start))
+			}
+			if !slices.ContainsFunc(out.gh, func(c proctest.Call) bool {
+				return slices.Equal(c.Args, argv("merge", github.MergeArgs{})[kReadBack])
+			}) {
+				t.Errorf("no read-back after the stop: %+v", out.gh)
+			}
+			if out.stdout != tt.stdout || tt.want == "" && out.err != nil ||
+				tt.want != "" && (out.err == nil || !strings.Contains(out.err.Error(), tt.want)) {
+				t.Errorf(
+					"err = %v, stdout = %q; want %q, %q",
+					out.err,
+					out.stdout,
+					tt.want,
+					tt.stdout,
+				)
 			}
 		})
 	}
