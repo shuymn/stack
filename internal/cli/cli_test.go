@@ -84,8 +84,6 @@ func TestUnknownCommand(t *testing.T) {
 
 func TestRouting(t *testing.T) {
 	tests := [][]string{
-		{"pr", "merge", "12", "abc", "--squash"},
-		{"pr", "merge", "--delete-branch", "12", "--body", "--x", "abc", "--merge=false"},
 		{"budget", "status"},
 		{"run", "entry"},
 		{"run", "--dry-run", "outbound", "--ext", "demo", "--range", "a..b", "--prompt-file", "p"},

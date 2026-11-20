@@ -105,6 +105,7 @@ var commands = []*command{
 			fs.String("body", "", "")
 			fs.Bool("allow-no-checks", false, "")
 		},
+		run: runPrMerge,
 	},
 	{
 		path:    []string{"check", "public"},

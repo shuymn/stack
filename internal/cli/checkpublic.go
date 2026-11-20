@@ -22,18 +22,7 @@ func runCheckPublic(ctx context.Context, env Env, inv invocation) error {
 	if err := checkpub.ValidRange(rng); err != nil {
 		return err
 	}
-	if env.Home == "" {
-		return errNoHome
-	}
-	cfgPath := paths.ConfigFile(env.Home)
-	cfg, warnings, err := config.Load(cfgPath)
-	if err != nil {
-		return err
-	}
-	for _, w := range warnings {
-		_, _ = fmt.Fprintf(env.Stderr, "stack: %s\n", w)
-	}
-	terms, err := checkpub.ReadTerms(paths.Expand(env.Home, cfg.Safety.PrivateTerms))
+	terms, err := privateTerms(env)
 	if err != nil {
 		return err
 	}
@@ -69,6 +58,21 @@ func runCheckPublic(ctx context.Context, env Env, inv invocation) error {
 		return fmt.Errorf("%w: %w", ErrRefused, err)
 	}
 	return err
+}
+
+// privateTerms loads the config, printing its warnings, and reads the configured private terms.
+func privateTerms(env Env) ([]string, error) {
+	if env.Home == "" {
+		return nil, errNoHome
+	}
+	cfg, warnings, err := config.Load(paths.ConfigFile(env.Home))
+	if err != nil {
+		return nil, err
+	}
+	for _, w := range warnings {
+		_, _ = fmt.Fprintf(env.Stderr, "stack: %s\n", w)
+	}
+	return checkpub.ReadTerms(paths.Expand(env.Home, cfg.Safety.PrivateTerms))
 }
 
 // readInputFile reads a --title-file or --body-file argument, resolving `~` and, on Windows, the Git
