@@ -82,6 +82,24 @@ func TestRunFakeGh(t *testing.T) {
 	}
 }
 
+func TestFakeEmptyArgsMatchesOnlyNoArgs(t *testing.T) {
+	t.Parallel()
+
+	fake := proctest.Install(t, "fake", proctest.Scenario{Responses: []proctest.Response{
+		{Args: []string{}, Stdout: "no args"},
+		{Args: []string{"view"}, Stdout: "view"},
+	}})
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{{nil, "no args"}, {[]string{"view"}, "view"}} {
+		res, err := proc.Exec{}.Run(context.Background(), proc.Cmd{Name: fake, Args: tc.args})
+		if err != nil || string(res.Stdout) != tc.want {
+			t.Errorf("args %q: stdout = %q, err = %v, want %q", tc.args, res.Stdout, err, tc.want)
+		}
+	}
+}
+
 // TestLookPathExeRunsFake changes PATH, so it must not run in parallel.
 func TestLookPathExeRunsFake(t *testing.T) {
 	dir := t.TempDir()

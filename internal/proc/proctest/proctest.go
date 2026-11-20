@@ -53,8 +53,10 @@ const (
 // Response is one scripted answer. The fake performs, in order: read stdin,
 // spawn the grandchild, log the call, write stdout and stderr, sleep, exit.
 type Response struct {
-	// Args matches the arguments after argv[0] exactly; nil matches any.
-	Args   []string `json:"args,omitempty"`
+	// Args matches the arguments after argv[0] exactly; nil matches any call
+	// and an empty non-nil slice matches only a call without arguments.
+	// Serialised without omitempty so the two stay distinct.
+	Args   []string `json:"args"`
 	Stdout string   `json:"stdout,omitempty"`
 	Stderr string   `json:"stderr,omitempty"`
 	Exit   int      `json:"exit,omitempty"`
