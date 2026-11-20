@@ -230,12 +230,12 @@ func (w *walker) stmt(sc scope, s *syntax.Stmt, cwd string, depth int, in input)
 		body := loopCwd(c, cwd)
 		w.stmts(sc, c.Cond, body, depth, in)
 		w.stmts(sc, c.Do, body, depth, in)
-		return unchanged(body, cwd)
+		return body // loopCwd returns cwd or unknown
 	case *syntax.ForClause:
 		w.substs(sc, c.Loop, cwd, depth)
 		body := loopCwd(c, cwd)
 		w.stmts(sc, c.Do, body, depth, in)
-		return unchanged(body, cwd)
+		return body // loopCwd returns cwd or unknown
 	case *syntax.CaseClause:
 		w.substs(sc, c.Word, cwd, depth)
 		after := cwd
@@ -286,13 +286,6 @@ func (w *walker) ifClause(sc scope, c *syntax.IfClause, cwd string, depth int, i
 		}
 	}
 	return after
-}
-
-func unchanged(body, cwd string) string {
-	if body != cwd {
-		return ""
-	}
-	return cwd
 }
 
 // loopCwd is the cwd a loop body starts with: unknown when the loop changes directory, since a later
@@ -793,9 +786,9 @@ func skipMiseExec(words []Word, i int) (int, bool) {
 		(words[i+1].Text != "exec" && words[i+1].Text != "x") {
 		return i, false
 	}
-	for j, w := range words[i+1:] {
-		if w.Static && w.Text == "--" {
-			return i + 1 + j + 1, true
+	for j := i + 1; j < len(words); j++ {
+		if words[j].Static && words[j].Text == "--" {
+			return j + 1, true
 		}
 	}
 	return i, false

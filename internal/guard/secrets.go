@@ -232,13 +232,16 @@ func literalPrefix(pattern string) string {
 // secretsBash denies a command whose text mentions a secret anywhere outside the handoff ranges:
 // in words, quotes, heredoc bodies and an unparsable tail alike.
 func secretsBash(command string, handoffs []shell.Range, opts Options) (Decision, bool) {
-	masked := []byte(command)
-	for _, r := range handoffs {
-		for i := r.Start; i < r.End && i < len(masked); i++ {
-			masked[i] = ' '
+	text := command
+	if len(handoffs) > 0 {
+		masked := []byte(command)
+		for _, r := range handoffs {
+			for i := r.Start; i < r.End && i < len(masked); i++ {
+				masked[i] = ' '
+			}
 		}
+		text = string(masked)
 	}
-	text := string(masked)
 	for _, s := range secrets(opts) {
 		if mentions(text, s.text) {
 			return deny(RuleSecrets, "the command mentions the secret %q. %s", s.entry,
