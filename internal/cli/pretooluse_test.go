@@ -197,6 +197,11 @@ func TestPreToolUseRegressions(t *testing.T) {
 			map[string]any{"command": "gh pr create --dry-run=false -t t --body '" + home + "/x'"},
 			"gh-publish",
 		},
+		{
+			"Pencil call through a constant index", "mcp__pencil__execute",
+			map[string]any{"input": `await api["Generate"]({prompt: "logo"})`},
+			"pencil",
+		},
 	}
 	for _, tt := range tests {
 		r := runHookStdin(t, t.TempDir(), payload(t, t.TempDir(), tt.tool, tt.input))

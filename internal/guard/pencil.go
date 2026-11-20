@@ -100,8 +100,28 @@ func calleeName(x js.IExpr) string {
 		case *js.Var:
 			return string(y.Data)
 		}
+	case *js.IndexExpr: // x["Generate"](…) or x[`Generate`](…): a constant property
+		switch y := x.Y.(type) {
+		case *js.LiteralExpr:
+			if y.TokenType == js.StringToken {
+				return unquote(y.Data)
+			}
+		case *js.TemplateExpr:
+			if y.Tag == nil && len(y.List) == 0 {
+				return unquote(y.Tail)
+			}
+		}
 	}
 	return ""
+}
+
+// unquote strips the quotes of a JavaScript string or template literal. Escapes are kept as
+// written: a name spelled with escapes is not matched.
+func unquote(b []byte) string {
+	if len(b) < 2 {
+		return ""
+	}
+	return string(b[1 : len(b)-1])
 }
 
 // generateToken is the token fallback: an identifier starting with generate followed by `(`,
