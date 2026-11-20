@@ -187,7 +187,11 @@ func TestSecretsBash(t *testing.T) {
 		"cut -d= -f1 app/.dev.vars",
 		"bash <<'EOF'\ncat .dev.vars\nEOF",
 		"bash <<EOF\nK=\"$(cat .dev.vars)\" cmd $X\nEOF",
-		`make switch <<< "$(cat .dev.vars)"`,
+		`printf '%s\n' "$(cat .dev.vars)"`,
+		`echo "$(cat .dev.vars)" > out.txt`,
+		`echo "$(cat .dev.vars)" 2>&1 | cat`,
+		`cmd | echo "$(cat .dev.vars)"`,
+		`cmd <<< "pw: $(cat .dev.vars)"`,
 	}
 	for _, cmd := range deny {
 		d, ok := f.bash(cmd)
@@ -202,6 +206,9 @@ func TestSecretsBash(t *testing.T) {
 		"cat .dev.vars.example",
 		"ls .t3/userdata/secrets-example",
 		"bash <<'EOF'\ncd app\nexport K=\"$(cat ~/.t3/userdata/secrets/token)\"\nwrangler deploy\nEOF",
+		`make switch SUDO="sudo -S -p ''" <<< "$(cat ~/.t3/userdata/secrets/pw)" > /tmp/log 2>&1`,
+		`printf '%s\n' "$(cat ~/.t3/userdata/secrets/pw)" | sudo -S -p '' -v && { sudo true; }`,
+		`echo "$(cat .dev.vars)" | wrangler secret put KEY`,
 	}
 	for _, cmd := range allow {
 		d, ok := f.bash(cmd)
@@ -296,6 +303,8 @@ func TestRawMerge(t *testing.T) {
 		"mise exec -- gh pr merge 1",
 		"echo $(gh pr merge 1)",
 		"gh pr merge 1\nif (",
+		"ids=$(gh api graphql -f query='query{viewer{id}}'); for t in ${(f)ids}; do echo $t; done; " +
+			"gh pr merge 877 --merge --auto 2>&1 | tail -2",
 		"gh api -X PUT /repos/o/r/pulls/1/merge",
 		"gh api -X PUT repos/o/r/pulls/1/merge",
 		"gh api --method put repos/o/r/pulls/1/merge -f merge_method=squash",

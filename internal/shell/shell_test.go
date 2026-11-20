@@ -172,6 +172,15 @@ func TestParseSyntaxError(t *testing.T) {
 		{"gh a\ngh b; if", [][]string{{"gh", "a"}}},
 		{"gh a; if", nil},
 		{"gh a\ngh b\n)", [][]string{{"gh", "a"}, {"gh", "b"}}},
+		// zsh-only syntax: bash rejects the line, zsh (the Bash tool's shell here) runs it.
+		{"for t in ${(f)ids}; do gh a $t; done; gh pr merge 1", [][]string{
+			{"gh", "a", "$"}, {"gh", "pr", "merge", "1"},
+		}},
+		{
+			"gh a\nfor t in ${(f)ids}; do :; done; gh b\n)",
+			[][]string{{"gh", "a"}, {":"}, {"gh", "b"}},
+		},
+		{"gh a\ngh b ${(f\n)", [][]string{{"gh", "a"}}},
 		{"gh a <<'EOF'\nx\nEOF\ngh b 'unterminated", [][]string{{"gh", "a"}}},
 	}
 	for _, tt := range tests {
@@ -203,6 +212,16 @@ func TestParseHandoffs(t *testing.T) {
 		{"bash <<'EOF'\nexport K=\"$(cat F)\"\nEOF\n", []string{"$(cat F)"}},
 		{"x; bash <<'EOF'\ncd d && K=\"$(cat F)\" cmd\nEOF\n", []string{"$(cat F)"}},
 		{"bash <<< 'K=\"$(cat F)\" cmd'", nil}, // a here-string body is not mapped
+		{`cmd <<< "$(cat F)"`, []string{"$(cat F)"}},
+		{`cmd <<< $(cat F) > log`, []string{"$(cat F)"}},
+		{`cmd <<< "pw $(cat F)"`, nil},
+		{`printf '%s\n' "$(cat F)" | sudo -S -v`, []string{"$(cat F)"}},
+		{`echo "$(cat F)" | cmd | tail -1`, []string{"$(cat F)"}},
+		{`printf '%s\n' "$(cat F)" && cmd`, nil},
+		{`echo "$(cat F)" > out`, nil},
+		{`echo "$(cat F)" 2>&1 | cmd`, nil},
+		{`cmd | echo "$(cat F)"`, nil},
+		{`printf "$(cat F | tee x)" | cmd`, nil},
 		{`cmd "$(cat F)"`, nil},
 		{`cmd -- "$(cat F)"`, nil},
 		{`cmd -- --token "$(cat F)"`, nil},

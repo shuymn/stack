@@ -1,9 +1,10 @@
 // Package shell turns a Bash tool command into the simple commands it statically runs.
 //
-// Parsing follows bash's input unit: bash reads and runs a whole input line (with the heredoc bodies
-// it opens) before reading the next, and a syntax error stops its line from running. So the command
-// is parsed whole; on a syntax error it is parsed again up to the end of the last line before the
-// error line, and only those statements are returned.
+// Parsing follows the shell's input unit: bash and zsh read and run a whole input line (with the
+// heredoc bodies it opens) before reading the next, and a syntax error stops its line from running.
+// So the command is parsed whole, as bash and, if that fails, as zsh (the Bash tool runs the user's
+// shell); when both fail it is parsed again up to the end of the last line before the error line,
+// and only those statements are returned.
 //
 // For each simple command Parse returns its argv after stripping the `env`, `command`, `nohup`,
 // `time` and `mise exec --` wrappers and leading assignments; each word marked static or dynamic; its
@@ -13,7 +14,8 @@
 //
 // Parse also returns the source ranges of handoff substitutions: a `$(…)` whose whole body is exactly
 // one `cat F` or `< F` with one static operand and no other redirect, which is (part of) the value
-// word of a variable assignment or of a flag.
+// word of a variable assignment or of a flag, the whole word of a here-string, or an argument of an
+// `echo`/`printf` without redirects whose output feeds a pipe.
 package shell
 
 import (
@@ -114,16 +116,19 @@ func (w *walker) script(sc scope, cwd string, depth int) {
 	w.stmts(sc, parseLines(sc.src), cwd, depth)
 }
 
-// parseLines parses src; on a syntax error it parses again up to the end of the line before the error
-// line, until a prefix parses or nothing is left.
+// parseLines parses src as bash and, when that fails, as zsh: the Bash tool runs the user's shell,
+// which may be zsh, so a line only zsh accepts (`${(f)x}`) still runs. When both fail it parses again
+// up to the end of the line before the later error line, until a prefix parses or nothing is left.
 func parseLines(src string) []*syntax.Stmt {
 	for src != "" {
-		f, err := syntax.NewParser(syntax.Variant(syntax.LangBash)).
-			Parse(strings.NewReader(src), "")
-		if err == nil {
-			return f.Stmts
+		line := 0
+		for _, lang := range []syntax.LangVariant{syntax.LangBash, syntax.LangZsh} {
+			f, err := syntax.NewParser(syntax.Variant(lang)).Parse(strings.NewReader(src), "")
+			if err == nil {
+				return f.Stmts
+			}
+			line = max(line, errLine(err))
 		}
-		line := errLine(err)
 		if line <= 1 {
 			return nil
 		}
@@ -170,18 +175,7 @@ func (w *walker) stmts(sc scope, list []*syntax.Stmt, cwd string, depth int) str
 // stmt walks one statement and returns the cwd after it succeeds ("" when unknown). piped is set when
 // its stdin is a pipe.
 func (w *walker) stmt(sc scope, s *syntax.Stmt, cwd string, depth int, piped bool) string {
-	stdin := Stdin{}
-	if piped {
-		stdin.Kind = StdinDynamic
-	}
-	stdinBase := -1 // offset of a heredoc body in the top-level command, when it maps there
-	for _, r := range s.Redirs {
-		w.substs(sc, r.Word, cwd, depth)
-		w.substs(sc, r.Hdoc, cwd, depth)
-		if in, ok := redirStdin(r); ok {
-			stdin, stdinBase = in, hdocBase(sc, r, in)
-		}
-	}
+	stdin, stdinBase := w.redirs(sc, s.Redirs, cwd, depth, piped)
 	switch c := s.Cmd.(type) {
 	case nil:
 		return cwd
@@ -203,6 +197,11 @@ func (w *walker) stmt(sc scope, s *syntax.Stmt, cwd string, depth int, piped boo
 			}
 			return cwd
 		default: // pipes: each side runs in a subshell
+			if args, ok := pipeFeeder(c.X); ok {
+				for _, a := range args {
+					w.handoffs(sc, a)
+				}
+			}
 			w.stmt(sc, c.X, cwd, depth, piped)
 			w.stmt(sc, c.Y, cwd, depth, true)
 			return cwd
@@ -413,6 +412,63 @@ func (w *walker) handoffs(sc scope, wd *syntax.Word) {
 		}
 	}
 	visit(wd.Parts)
+}
+
+// redirs walks a statement's redirects and returns its stdin and, for a heredoc body that maps to
+// the top-level command, the body's offset there (else -1). piped is set when stdin is a pipe.
+func (w *walker) redirs(
+	sc scope,
+	list []*syntax.Redirect,
+	cwd string,
+	depth int,
+	piped bool,
+) (Stdin, int) {
+	stdin, base := Stdin{}, -1
+	if piped {
+		stdin.Kind = StdinDynamic
+	}
+	for _, r := range list {
+		w.substs(sc, r.Word, cwd, depth)
+		w.substs(sc, r.Hdoc, cwd, depth)
+		if in, ok := redirStdin(r); ok {
+			stdin, base = in, hdocBase(sc, r, in)
+		}
+		if r.Op == syntax.WordHdoc && soleSubst(r.Word) {
+			w.handoffs(sc, r.Word) // `cmd <<< "$(cat F)"`: the value goes to cmd's stdin only
+		}
+	}
+	return stdin, base
+}
+
+// soleSubst reports whether wd is exactly one command substitution, bare or double-quoted.
+func soleSubst(wd *syntax.Word) bool {
+	if wd == nil || len(wd.Parts) != 1 {
+		return false
+	}
+	switch p := wd.Parts[0].(type) {
+	case *syntax.CmdSubst:
+		return true
+	case *syntax.DblQuoted:
+		_, ok := p.Parts[0].(*syntax.CmdSubst)
+		return len(p.Parts) == 1 && ok
+	default:
+		return false
+	}
+}
+
+// pipeFeeder returns the arguments of s when s is an `echo` or `printf` call without redirects, so
+// its only output goes into the pipe it feeds (`printf '%s\n' "$(cat F)" | sudo -S …`).
+func pipeFeeder(s *syntax.Stmt) ([]*syntax.Word, bool) {
+	c, ok := s.Cmd.(*syntax.CallExpr)
+	if !ok || len(s.Redirs) > 0 || len(c.Assigns) > 0 || len(c.Args) < 2 {
+		return nil, false
+	}
+	switch c.Args[0].Lit() {
+	case "echo", "printf":
+		return c.Args[1:], true
+	default:
+		return nil, false
+	}
 }
 
 // isHandoff reports whether c is `$(cat F)` or `$(< F)` with one static operand and nothing else.
