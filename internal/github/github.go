@@ -81,6 +81,8 @@ type PR struct {
 	State       string `json:"state"`
 	IsDraft     bool   `json:"isDraft"`
 	Mergeable   string `json:"mergeable"`
+	// AutoMerge reports an active auto-merge request; only PRViewAuto reads it.
+	AutoMerge bool `json:"-"`
 }
 
 // Repo is the repository gh resolves from the working directory.
@@ -117,6 +119,8 @@ type Readback struct {
 	HeadRefOid string
 	// MergeOID is the merge commit, or empty.
 	MergeOID string
+	// AutoMerge reports an active auto-merge request; only AutoReadBack reads it.
+	AutoMerge bool
 }
 
 func (r Readback) String() string {
@@ -125,6 +129,8 @@ func (r Readback) String() string {
 
 // MergeArgs are the optional arguments of `gh pr merge`.
 type MergeArgs struct {
+	// Auto asks gh to merge now if GitHub allows it, otherwise to enable auto-merge.
+	Auto         bool
 	DeleteBranch bool
 	// Subject and Body are passed when non-nil, also when empty.
 	Subject *string
@@ -179,6 +185,38 @@ func (c Client) PRView(ctx context.Context, pr int) (PR, error) {
 	err := c.ghJSON(ctx, &v, "pr", "view", strconv.Itoa(pr),
 		"--json", "headRefOid,baseRefName,state,isDraft,mergeable")
 	return v, err
+}
+
+// PRViewAuto is PRView that also reads whether an auto-merge request is active.
+func (c Client) PRViewAuto(ctx context.Context, pr int) (PR, error) {
+	var v struct {
+		PR
+
+		AutoMergeRequest json.RawMessage `json:"autoMergeRequest"`
+	}
+	err := c.ghJSON(ctx, &v, "pr", "view", strconv.Itoa(pr),
+		"--json", "headRefOid,baseRefName,state,isDraft,mergeable,autoMergeRequest")
+	if err != nil {
+		return PR{}, err
+	}
+	if v.AutoMerge, err = autoMergeActive(v.AutoMergeRequest); err != nil {
+		return PR{}, err
+	}
+	return v.PR, nil
+}
+
+// autoMergeActive decodes the autoMergeRequest field: null means none, an object an active
+// request, and a missing field or any other value cannot be trusted.
+func autoMergeActive(raw json.RawMessage) (bool, error) {
+	switch {
+	case len(raw) == 0:
+		return false, fmt.Errorf("%w: pr view: no autoMergeRequest field", ErrGh)
+	case string(raw) == "null":
+		return false, nil
+	case raw[0] == '{':
+		return true, nil
+	}
+	return false, fmt.Errorf("%w: pr view: unexpected autoMergeRequest %s", ErrGh, raw)
 }
 
 // RepoView reads the repository's name and allowed merge methods.
@@ -377,7 +415,11 @@ func (c Client) MergeQueueEnabled(ctx context.Context, repo Repo, pr int) (bool,
 // MergeArgv is the argv of `gh pr merge` on the checked head. Values use the `--flag=value` form,
 // so a subject or body starting with `-` stays a value.
 func MergeArgv(pr int, method, head string, a MergeArgs) []string {
-	args := []string{"pr", "merge", strconv.Itoa(pr), "--" + method, "--match-head-commit", head}
+	args := []string{"pr", "merge", strconv.Itoa(pr), "--" + method}
+	if a.Auto {
+		args = append(args, "--auto")
+	}
+	args = append(args, "--match-head-commit", head)
 	if a.DeleteBranch {
 		args = append(args, "--delete-branch")
 	}
@@ -412,23 +454,63 @@ func (c Client) Merge(
 	return MergeResult{ExitCode: res.ExitCode, TimedOut: res.TimedOut, Err: err}
 }
 
+// DisableAutoArgv is the argv of `gh pr merge --disable-auto`.
+func DisableAutoArgv(pr int) []string {
+	return []string{"pr", "merge", strconv.Itoa(pr), "--disable-auto"}
+}
+
+// DisableAuto runs `gh pr merge --disable-auto` and forwards its output to log. Like Merge, its
+// outcome is a result: the caller reads the PR back whatever happened.
+func (c Client) DisableAuto(ctx context.Context, pr int, log io.Writer) MergeResult {
+	res, err := c.run(ctx, c.timeout(), proc.Cmd{
+		Name: c.gh(), Args: DisableAutoArgv(pr), Stderr: log,
+	})
+	if len(res.Stdout) > 0 {
+		_, _ = log.Write(res.Stdout)
+	}
+	return MergeResult{ExitCode: res.ExitCode, TimedOut: res.TimedOut, Err: err}
+}
+
+// readback is the JSON of a read-back.
+type readback struct {
+	State       string `json:"state"`
+	HeadRefOid  string `json:"headRefOid"`
+	MergeCommit *struct {
+		OID string `json:"oid"`
+	} `json:"mergeCommit"`
+	AutoMergeRequest json.RawMessage `json:"autoMergeRequest"`
+}
+
+func (v readback) result() Readback {
+	r := Readback{State: v.State, HeadRefOid: v.HeadRefOid}
+	if v.MergeCommit != nil {
+		r.MergeOID = v.MergeCommit.OID
+	}
+	return r
+}
+
 // ReadBack reads the PR's state, head and merge commit.
 func (c Client) ReadBack(ctx context.Context, pr int) (Readback, error) {
-	var v struct {
-		State       string `json:"state"`
-		HeadRefOid  string `json:"headRefOid"`
-		MergeCommit *struct {
-			OID string `json:"oid"`
-		} `json:"mergeCommit"`
-	}
+	var v readback
 	err := c.ghJSON(ctx, &v, "pr", "view", strconv.Itoa(pr),
 		"--json", "state,headRefOid,mergeCommit")
 	if err != nil {
 		return Readback{}, err
 	}
-	r := Readback{State: v.State, HeadRefOid: v.HeadRefOid}
-	if v.MergeCommit != nil {
-		r.MergeOID = v.MergeCommit.OID
+	return v.result(), nil
+}
+
+// AutoReadBack is ReadBack that also reads whether an auto-merge request is active.
+func (c Client) AutoReadBack(ctx context.Context, pr int) (Readback, error) {
+	var v readback
+	err := c.ghJSON(ctx, &v, "pr", "view", strconv.Itoa(pr),
+		"--json", "state,headRefOid,mergeCommit,autoMergeRequest")
+	if err != nil {
+		return Readback{}, err
+	}
+	r := v.result()
+	if r.AutoMerge, err = autoMergeActive(v.AutoMergeRequest); err != nil {
+		return Readback{}, err
 	}
 	return r, nil
 }
