@@ -36,16 +36,21 @@ func TestResolveUnix(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Owner-only checks assume a non-root user; root may execute any file
+	// with an x bit.
+	if os.Geteuid() == 0 {
+		t.Skip("effective-permission cases need a non-root user")
+	}
 	cases := []struct {
 		name     string
 		want     error
 		wantPath bool
 	}{
 		{name: "board", wantPath: true},
-		{name: "group-only", wantPath: true},
+		{name: "group-only", want: ErrNotRunnable, wantPath: true},
 		{name: "link", wantPath: true},
 		{name: "plain", want: ErrNotRunnable, wantPath: true},
-		{name: "subdir", want: ErrNotFound},
+		{name: "subdir", want: ErrNotRunnable, wantPath: true},
 		{name: "missing", want: ErrNotFound},
 		{name: "board.exe", want: ErrNotFound},
 	}
@@ -68,6 +73,7 @@ func TestResolveWindows(t *testing.T) {
 	cases := []struct {
 		name  string
 		files []string
+		dirs  []string
 		want  error
 		path  string
 	}{
@@ -79,12 +85,19 @@ func TestResolveWindows(t *testing.T) {
 		{name: "board", files: []string{"board.bat"}, want: ErrNotRunnable, path: "board.bat"},
 		{name: "board", files: []string{"board.ps1"}, want: ErrNotRunnable, path: "board.ps1"},
 		{name: "board", files: []string{"board.com"}, want: ErrNotFound},
+		{name: "board", dirs: []string{"board.exe"}, want: ErrNotRunnable, path: "board.exe"},
+		{name: "board", dirs: []string{"board"}, want: ErrNotRunnable, path: "board"},
 		{name: "board", want: ErrNotFound},
 	}
 	for _, tc := range cases {
 		dir := t.TempDir()
 		for _, f := range tc.files {
 			touch(t, filepath.Join(dir, f), 0o600)
+		}
+		for _, d := range tc.dirs {
+			if err := os.Mkdir(filepath.Join(dir, d), 0o700); err != nil {
+				t.Fatal(err)
+			}
 		}
 		path, err := resolve("windows", dir, tc.name)
 		if !errors.Is(err, tc.want) || (tc.want == nil && err != nil) {
@@ -97,6 +110,36 @@ func TestResolveWindows(t *testing.T) {
 		if path != want {
 			t.Errorf("%s %v: path = %q, want %q", tc.name, tc.files, path, want)
 		}
+	}
+}
+
+// TestResolveUnverifiable covers a candidate stat cannot check: it must not
+// read as absent, because merge-check treats absence as a pass.
+func TestResolveUnverifiable(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs Unix directory permissions enforced for a non-root user")
+	}
+
+	dir := filepath.Join(t.TempDir(), ".claude")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	touch(t, filepath.Join(dir, "merge-check"), 0o700)
+	if err := os.Chmod(dir, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	for _, goos := range []string{"linux", "windows"} {
+		path, err := resolve(goos, dir, "merge-check")
+		if !errors.Is(err, ErrUnverifiable) || path == "" {
+			t.Errorf("%s: path = %q, err = %v, want ErrUnverifiable with the path", goos, path, err)
+		}
+	}
+	path, err := lookPath("linux", []string{dir}, "merge-check")
+	if !errors.Is(err, ErrUnverifiable) || path == "" {
+		t.Errorf("lookPath: path = %q, err = %v, want ErrUnverifiable", path, err)
 	}
 }
 
@@ -154,12 +197,12 @@ func TestLookPathSkipsRelativeEntries(t *testing.T) {
 
 func TestLookPathUnixSkipsNotRunnable(t *testing.T) {
 	t.Parallel()
-	if runtime.GOOS == "windows" {
-		t.Skip("execute bits are not meaningful on Windows")
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs Unix execute bits enforced for a non-root user")
 	}
 
 	first, second := t.TempDir(), t.TempDir()
-	touch(t, filepath.Join(first, "stack-x"), 0o600)
+	touch(t, filepath.Join(first, "stack-x"), 0o610) // executable by the group only
 	touch(t, filepath.Join(second, "stack-x"), 0o700)
 	path, err := lookPath("linux", []string{first, second}, "stack-x")
 	if err != nil || path != filepath.Join(second, "stack-x") {

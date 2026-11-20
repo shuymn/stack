@@ -133,9 +133,11 @@ closes the pipes so a child whose grandchild still holds them cannot hang `stack
 running. `Result` reports `TimedOut` (context deadline), `WaitDelayExceeded` (`exec.ErrWaitDelay`) and `Truncated`
 (stdout over `MaxStdout`, 1 MiB default), and callers evaluate these **before** using stdout.
 
-`ResolveExecutable(dir, name)`: Unix — regular file with any `x` bit. Windows — only `<name>.exe` is runnable; a
-`<name>` without extension or with `.cmd`/`.bat`/`.ps1` is "found but not runnable" (`os/exec` does not run batch
-files reliably). `LookPathExe(name)` (extensions) walks `PATH` itself: on Unix the first runnable `name`; on Windows
+`ResolveExecutable(dir, name)`: Unix — regular file this process may execute (effective permission, as
+`exec.LookPath` checks it). Windows — only `<name>.exe` is runnable; a `<name>` without extension or with
+`.cmd`/`.bat`/`.ps1` is "found but not runnable" (`os/exec` does not run batch files reliably). A directory under the
+name is also not runnable, and a stat error other than "does not exist" (e.g. an unsearchable `.claude`) is
+"cannot verify", never "absent", so merge-check refuses on it. `LookPathExe(name)` (extensions) walks `PATH` itself: on Unix the first runnable `name`; on Windows
 the first `name.exe` (never `PATHEXT`, so a `.cmd` is not picked), and if none exists but `name`, `name.cmd`,
 `name.bat` or `name.ps1` does, "found but not runnable". Relative `PATH` entries (incl. empty and `.`) are skipped,
 as `exec.ErrDot` does. Per caller: kit board → `[board not runnable on this OS: <path>]` marker, skipped;
