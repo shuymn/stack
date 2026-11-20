@@ -480,9 +480,9 @@ kaizen until Phase 3; `--json` is decided together with the `statusline.sh.tmpl`
 - **Response (stdout):** `{"status":"pass|warn|block","context":string,"findings":[…]}`; `findings` kept as raw
   JSON. Evaluation order: `TimedOut`, `WaitDelayExceeded`, `Truncated` → **warn** even if the bytes received so far
   are valid JSON; only then parse. Non-JSON, trailing garbage, unknown status, crash without a valid response →
-  **warn**. Every warn carries a synthetic finding `{"extension":<name>,"error":<reason>}`. The exit code is ignored
+  **warn**. Every warn core produces carries a synthetic finding `{"extension":<name>,"error":<reason>}`. The exit code is ignored
   when stdout is a valid response.
-- **Aggregation:** `block > warn > pass`; zero extensions run = `pass`. Stdout:
+- **Aggregation:** `block > warn > pass`; no result (all skipped) = `pass`. Stdout:
   `{"stage","status","results":[{"name","status","context","findings","error"}],"skipped":[…]}`. Exit: `pass`/`warn`
   0, `block` 1. Warn-not-block for broken extensions and listing `skipped` are design choices of this doc.
 - `--dry-run`: print the resolved plan (`name → path | skipped | not runnable`) and the request, run no extension,

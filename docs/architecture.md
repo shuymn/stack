@@ -34,13 +34,39 @@ stack hook claude pre-tool-use                     # Deny secrets read, local pa
 stack pr merge <pr> <head-sha> [--merge|--squash|--rebase] ...   # Verify checked head SHA, all checks passing, optional .claude/merge-check
 stack check public <range> [--title-file F --body-file F --branch B]
 stack budget status                                # Display-only byte & attention item counts
-stack run <entry|outbound|cycle> [--dry-run] [--replay FILE] [--ext NAME]
+stack run <entry|outbound|cycle> [--dry-run] [--replay FILE] [--ext NAME]... [--range R] [--prompt-file F]
 ```
 
 ### Extension Protocol (Process Boundary)
-Used only for optional extensions (`observe`, `improve`, `jev-*`).
-- `stdin`: JSON `{ "stage": "entry|outbound|cycle", "repo": "...", "range": "...", "prompt": "..." }`
-- `stdout`: JSON `{ "status": "pass|warn|block", "context": "...", "findings": [...] }`
+Used only for optional extensions (`observe`, `improve`, `jev-*`). Core never imports or inspects `extensions/`; it
+talks to an extension only through this contract. Details (validation commands, usage errors, plan format, replay
+fixtures) are in `docs/design/phase2-core.md` §4.7.
+- **Evolution:** existing fields, types, defaults, statuses, stages and meanings are kept. New fields are optional,
+  safe to ignore and distinct from existing keys (also case-insensitively); a new stage runs only when selected. An
+  incompatible change needs an explicit protocol selection that keeps this contract for current extensions. No
+  version field until a second dialect exists.
+- **Discovery:** `<name>` matches `^[a-z0-9][a-z0-9-]*$`; names come from `[stages].<stage>`, or only from the
+  repeatable `--ext NAME` for `stack run`, and run in that order. Core picks the first runnable `stack-<name>` in the
+  absolute `PATH` entries (on Windows `stack-<name>.exe`; `PATHEXT` is ignored). A missing name is skipped without a
+  warning and listed under `skipped` (or in the `--dry-run` plan).
+- **Invocation:** no arguments; cwd is the invoker's; the environment is inherited, with `STACK_STAGE` set to the
+  stage; `STACK_SESSION_ID` is passed through when set.
+- `stdin`: one UTF-8 JSON object, read to EOF: `{ "stage": "entry|outbound|cycle", "repo": "...", "range": "...",
+  "prompt": "..." }`. `repo` is the Git top-level of the cwd or `""`; `range` is `--range R`, else for outbound the
+  literal `@{upstream}..HEAD` when an upstream exists, else `""`; `prompt` is the `--prompt-file` contents or `""`
+  (`kit open` sends both empty). `--replay` sends the fixture's request object as is. Extensions ignore unknown
+  fields.
+- `stdout`: one UTF-8 JSON object of at most 1 MiB: `{ "status": "pass|warn|block", "context": "...", "findings":
+  [...] }`. `status` is required; `context` (a string) and `findings` (an array) may be omitted and default to `""`
+  and `[]`; unknown fields are ignored. For a run that completes with a valid response the exit code is ignored.
+  stderr is forwarded to core's stderr with `[<name>] ` before each line.
+- **Limits and failures:** one deadline per stage shared by its extensions (entry 10 s, outbound 120 s, cycle 30
+  min). A lookup or start failure, the deadline (including an extension left unstarted), a pipe still open after
+  exit, oversized stdout or an invalid response becomes `warn` with a synthetic finding; a broken extension never
+  yields `block`.
+- **Result:** statuses aggregate as `block > warn > pass` (no result = `pass`). `stack run` exits 1 on `block`, else
+  0; with a replay `expect`, 0 or 1 reports match or mismatch. `stack kit open` shows entry results without
+  enforcing their status.
 
 ## 4. Three Named Stages & Session Lifecycle
 
@@ -57,7 +83,7 @@ Used only for optional extensions (`observe`, `improve`, `jev-*`).
 - **Worker detection:** `agent_type == "opus-worker"`, `WORKER_LINE` in first prompt, or `-worktrees/agent-*` only. Never guess from `~/.t3/worktrees/`.
 
 ### Optional Jev (System One) Extensions
-- **Opt-out:** Active when `TYPESAFE_API_KEY` / config is present; silently skipped when absent.
+- **Opt-out:** Active when `TYPESAFE_API_KEY` / config is present. An installed `jev-*` that lacks its key or config opts out by answering `{"status":"pass"}` with no context.
 - `jev-router` (S1): scores `references/*.md` for Just-in-Time injection.
 - `jev-semantic` (S2): flags meta-duty regression or unsupported claims at CI/PR.
 - `jev-classify` (S3): batch-classifies 7-day transcripts for corrections/drift and pre-filters memory duplicates.
