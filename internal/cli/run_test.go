@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -305,6 +306,55 @@ func TestKitOpenEntryStage(t *testing.T) {
 	otherDir := filepath.Join(home, ".local", "state", "stack", "kits", "other")
 	if _, err := os.Stat(otherDir); !os.IsNotExist(err) {
 		t.Fatalf("kit dir created despite a config error: %v", err)
+	}
+}
+
+// chunkWriter records each write and calls onWrite before the first one.
+type chunkWriter struct {
+	chunks  []string
+	onWrite func()
+}
+
+func (w *chunkWriter) Write(b []byte) (int, error) {
+	if len(w.chunks) == 0 && w.onWrite != nil {
+		w.onWrite()
+	}
+	w.chunks = append(w.chunks, string(b))
+	return len(b), nil
+}
+
+// TestKitOpenWritesKitFirst covers `kit open` writing the kit before any entry extension starts
+// and then each entry result as it completes, in the bytes of one joined render.
+func TestKitOpenWritesKitFirst(t *testing.T) {
+	bin, _ := extBin(t)
+	first := fakeExt(t, bin, "first", `{"status":"pass","context":"ONE"}`)
+	second := fakeExt(t, bin, "second", `{"status":"warn","context":"TWO"}`)
+	home := t.TempDir()
+	writeFile(t, filepath.Join(home, ".config", "stack", "config.toml"),
+		[]byte("[stages]\nentry = [\"first\", \"second\"]\n"))
+	kitDir := filepath.Join(home, ".local", "state", "stack", "kits", "demo")
+
+	var startedBeforeKit int
+	stdout := &chunkWriter{onWrite: func() {
+		startedBeforeKit = len(proctest.Calls(t, first)) + len(proctest.Calls(t, second))
+	}}
+	var stderr strings.Builder
+	code := Run(t.Context(), []string{"kit", "open", "demo"}, Env{
+		Stdout: stdout,
+		Stderr: &stderr,
+		Getenv: func(k string) string { return map[string]string{"STACK_SESSION_ID": "s1"}[k] },
+		Home:   home,
+	})
+	kitText := "[new kit: " + kitDir + "; write state.md here]\n"
+	want := []string{
+		kitText,
+		"\n<extension-context path=" + strconv.Quote(first) + ">\nONE\n</extension-context>\n",
+		"\n<extension-context path=" + strconv.Quote(second) +
+			">\n[extension second: warn: warn]\nTWO\n</extension-context>\n",
+	}
+	if code != exitOK || startedBeforeKit != 0 || !slices.Equal(stdout.chunks, want) {
+		t.Fatalf("kit open = %d, %d started before the kit, chunks %q\nwant %q\nstderr %s",
+			code, startedBeforeKit, stdout.chunks, want, stderr.String())
 	}
 }
 

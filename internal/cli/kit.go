@@ -99,14 +99,18 @@ func runKitOpen(ctx context.Context, env Env, inv invocation) error {
 		Getenv:   env.Getenv,
 		Handover: cfg.Handover,
 	}
-	blocks := r.Render(boardCtx, dir)
-	blocks = append(blocks, entryBlocks(ctx, env, cfg.Stages.Entry)...)
-	if _, err := fmt.Fprint(env.Stdout, kit.Join(blocks)); err != nil {
+	// The kit first, then each entry result as it completes: a slow extension never holds it back.
+	bw := &blockWriter{w: env.Stdout}
+	err = bw.write(r.Render(boardCtx, dir)...)
+	if err == nil {
+		err = writeEntryStage(ctx, env, cfg.Stages.Entry, bw)
+	}
+	if err != nil {
 		if id != "" {
-			return fmt.Errorf("write context: %w; %s is recorded, rerun `stack kit open %s` to "+
-				"print it", err, slug, slug)
+			return fmt.Errorf("%w; %s is recorded, rerun `stack kit open %s` to print it",
+				err, slug, slug)
 		}
-		return fmt.Errorf("write context: %w", err)
+		return err
 	}
 
 	if id == "" {

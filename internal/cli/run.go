@@ -188,10 +188,32 @@ func extOptions(env Env) ext.Options {
 	return o
 }
 
-// entryBlocks runs the entry stage after `kit open` with an empty range and prompt and returns each
-// result that has something to show as a block in the kit renderer's format. block is shown, not
-// enforced. names must be valid.
-func entryBlocks(ctx context.Context, env Env, names []string) []kit.Block {
+// blockWriter writes kit blocks as they become known, in the bytes kit.Join gives for all of them.
+type blockWriter struct {
+	w       io.Writer
+	started bool
+}
+
+func (b *blockWriter) write(blocks ...kit.Block) error {
+	if len(blocks) == 0 {
+		return nil
+	}
+	s := kit.Join(blocks)
+	if b.started {
+		s = "\n" + s
+	}
+	b.started = true
+	if _, err := io.WriteString(b.w, s); err != nil {
+		return fmt.Errorf("write context: %w", err)
+	}
+	return nil
+}
+
+// writeEntryStage runs the entry stage after `kit open` with an empty range and prompt and writes
+// each result that has something to show, as soon as it completes, as a block in the kit
+// renderer's format. block is shown, not enforced. names must be valid. After a write error no
+// further extension starts.
+func writeEntryStage(ctx context.Context, env Env, names []string, bw *blockWriter) error {
 	plans := ext.Resolve(names)
 	var request []byte
 	if ext.AnyToRun(plans) {
@@ -200,16 +222,20 @@ func entryBlocks(ctx context.Context, env Env, names []string) []kit.Block {
 			request, err = json.Marshal(req)
 		}
 		if err != nil {
-			return []kit.Block{{Body: fmt.Sprintf("[entry extensions skipped: %v]", err)}}
+			return bw.write(kit.Block{Body: fmt.Sprintf("[entry extensions skipped: %v]", err)})
 		}
 	}
-	var blocks []kit.Block
-	for _, r := range ext.Run(ctx, extOptions(env), ext.StageEntry, request, plans).Results {
-		if r.Status != ext.StatusPass || r.Context != "" {
-			blocks = append(blocks, resultBlock(r))
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var werr error
+	ext.Stream(ctx, extOptions(env), ext.StageEntry, request, plans, func(r ext.Result) {
+		if werr == nil && (r.Status != ext.StatusPass || r.Context != "") {
+			if werr = bw.write(resultBlock(r)); werr != nil {
+				cancel()
+			}
 		}
-	}
-	return blocks
+	})
+	return werr
 }
 
 // resultBlock renders one extension result: its context in an `extension-context` block naming
