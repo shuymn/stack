@@ -23,7 +23,7 @@ mise exec -- scripts/test
 
 - `docs/architecture.md` is the canonical design specification (v10).
 - **Minimal core (`cmd/stack`, `internal/`):** Zero runtime dependencies on `extensions/`. Must work cleanly with no extensions configured.
-- **Hard safety boundaries only:** Only guard irreversible, near-zero-false-positive hazards (secrets read, local paths in public text, raw `gh pr merge`). Do not reintroduce over-defensive mechanisms (owner-only merge lists, `readonly_` live locks, self-defending budget ratchets, recovery state machines, or broad wolf-crying denies).
+- **Hard safety boundaries only:** Only guard irreversible, near-zero-false-positive hazards (secrets read, local paths in public text, raw `gh pr merge`, recursive `rm` of `/`, home, a drive root, or a `.git` directory; plus the owner's Pencil Generate deny, on unless disabled). Do not reintroduce over-defensive mechanisms (owner-only merge lists, `readonly_` live locks, self-defending budget ratchets, recovery state machines, or broad wolf-crying denies).
 - **Skills live in `shuymn/dotfiles`:** Do not duplicate `home/dot_claude/skills/` here; this repo owns the execution CLI (`stack`), optional `extensions/`, and `--replay` `fixtures/`.
 - Commit messages follow Conventional Commits.
 - Pin every GitHub Action by full commit SHA with a version comment, and add any new action or reusable workflow to `selected_actions.patterns_allowed` in `.github/infra.yaml`.
