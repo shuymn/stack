@@ -29,9 +29,9 @@ const (
 	lockTimeout = time.Second
 	// sourceCompact is the only source that prints context.
 	sourceCompact = "compact"
+	// boardCutBound bounds the characters cut from a board's output: proc caps its stdout at 1 MiB.
+	boardCutBound = 1 << 20
 )
-
-var errNoTranscript = errors.New("no transcript path")
 
 // Params is everything the hook reads.
 type Params struct {
@@ -74,55 +74,76 @@ func Start(ctx context.Context, p Params) ([]byte, []error) {
 	return out, errs
 }
 
-// Export appends `export STACK_SESSION_ID='<id>'` to file. An empty file name (Claude Code did not
-// provide one) writes nothing. The caller validates id, so it needs no quoting.
+// Export appends `export STACK_SESSION_ID='<id>'` to file, on a line of its own: a file not ending
+// in a newline gets one first, so its last line cannot swallow the assignment. An empty file name
+// (Claude Code did not provide one) writes nothing. The caller validates id, so it needs no quoting.
 func Export(file, id string) error {
 	if file == "" {
 		return nil
 	}
-	f, err := os.OpenFile(file, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	f, err := os.OpenFile(file, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return fmt.Errorf("open %s: %w", EnvFile, err)
 	}
-	_, werr := fmt.Fprintf(f, "export %s='%s'\n", IDVar, id)
+	line := fmt.Sprintf("export %s='%s'\n", IDVar, id)
+	last := make([]byte, 1)
+	if fi, err := f.Stat(); err == nil && fi.Size() > 0 {
+		if _, err := f.ReadAt(last, fi.Size()-1); err == nil && last[0] != '\n' {
+			line = "\n" + line
+		}
+	}
+	_, werr := f.WriteString(line)
 	if err := errors.Join(werr, f.Close()); err != nil {
 		return fmt.Errorf("write %s: %w", EnvFile, err)
 	}
 	return nil
 }
 
-// kitPieces are one kit's pieces: its state file and items pieces, then its board.
+// kitPieces is one kit as compact restores it: its dir, its rendered state blocks (NORTH.md,
+// state.md, items and markers) and their pieces, and its board pieces once boards ran.
 type kitPieces struct {
-	state []*piece
-	board []*piece
+	dir    string
+	blocks []kit.Block
+	state  []*piece
+	board  []*piece
 }
 
-// compact builds the compact context: worker rules and brief, then the kits of the session id, then
-// the handover, within Budget.
+// compact builds the compact context within Budget: worker rules and brief, then the kits of the
+// session id, then the handover. Before any text is placed, the brief and every kit state block
+// reserve their omitted markers (each naming its file), and a `.kits` failure its marker, so no
+// part disappears silently. Boards run last and only while their block can still fit.
 func compact(ctx context.Context, p Params, validID bool) (string, []error) {
 	var errs []error
 	rules, brief, werr := worker(p)
 	if werr != nil {
 		errs = append(errs, werr)
 	}
-	var locked *piece
+	r := kit.Renderer{Runner: p.Runner, Home: p.Home, Getenv: p.Getenv, Handover: p.Config.Handover}
 	var kits []kitPieces
 	var handover []*piece
 	if validID && p.Home != "" {
 		var kerr error
-		locked, kits, handover, kerr = restoreKits(ctx, p)
+		kits, kerr = restoreKits(ctx, p)
 		if kerr != nil {
 			errs = append(errs, kerr)
+		}
+		if len(kits) > 0 && kits[0].dir != "" {
+			handover = pieces(r.HandoverBlocks())
 		}
 	}
 
 	a := newAllocator()
-	for _, pc := range []*piece{rules, brief, locked} {
-		if pc != nil {
-			a.place(pc, 0)
+	a.reserve(brief)
+	for _, k := range kits {
+		for _, pc := range k.state {
+			if pc.kind == kit.KindState || pc.head == "" {
+				a.reserve(pc)
+			}
 		}
 	}
-	for _, k := range kits { // reserve a start of every kit's state files first
+	a.place(rules, 0)
+	a.place(brief, 0)
+	for _, k := range kits { // the start of every kit's state files before any kit gets more
 		for _, pc := range k.state {
 			if pc.kind == kit.KindState {
 				a.place(pc, reserveChars)
@@ -137,19 +158,51 @@ func compact(ctx context.Context, p Params, validID bool) (string, []error) {
 	for _, pc := range handover {
 		a.place(pc, 0)
 	}
-	for _, k := range kits {
-		for _, pc := range k.board {
-			a.place(pc, 0)
-		}
-	}
+	runBoards(ctx, a, r, kits)
 
-	display := []*piece{rules, brief, locked}
+	display := []*piece{rules, brief}
 	for _, k := range kits {
 		display = append(display, k.state...)
 		display = append(display, k.board...)
 	}
 	display = append(display, handover...)
 	return join(display), errs
+}
+
+// runBoards runs, in kit order under one deadline, each kit's board whose block can still fit the
+// budget, and places its output; a board that cannot fit is not launched and leaves an omitted
+// marker when that fits. A board's leading repeat of any rendered kit's state is dropped, as legacy
+// compact did.
+func runBoards(ctx context.Context, a *allocator, r kit.Renderer, kits []kitPieces) {
+	var prior []kit.Block
+	for _, k := range kits {
+		prior = append(prior, k.blocks...)
+	}
+	boardCtx, cancel := context.WithTimeout(ctx, kit.BoardDeadline)
+	defer cancel()
+	for i := range kits {
+		k := &kits[i]
+		if k.dir == "" {
+			continue
+		}
+		path, err := proc.ResolveExecutable(filepath.Join(k.dir, "bin"), "board")
+		if errors.Is(err, proc.ErrNotFound) {
+			continue
+		}
+		if err == nil {
+			probe := tagged("orchestration-board", path, "", kit.KindBoard)
+			least := cost(probe.head + "x" + cutMarker(boardCutBound) + probe.tail)
+			if a.room < least {
+				k.board = []*piece{{body: probe.minimal(), kind: kit.KindBoard}}
+				a.place(k.board[0], 0)
+				continue
+			}
+		}
+		k.board = pieces(r.BoardBlocks(boardCtx, k.dir, prior))
+		for _, pc := range k.board {
+			a.place(pc, 0)
+		}
+	}
 }
 
 // workerHeader opens the worker part, so the restored text is read as the source of truth.
@@ -160,7 +213,8 @@ const workerHeader = "A compaction summarized this conversation; the verbatim wo
 // carries the worker header. A transcript that cannot be read costs only the brief.
 func worker(p Params) (*piece, *piece, error) {
 	in, cfg := p.Input, p.Config.Worker
-	prompt, perr := "", errNoTranscript
+	var prompt string
+	var perr error
 	if in.TranscriptPath != "" {
 		prompt, perr = FirstPrompt(in.TranscriptPath)
 	}
@@ -171,7 +225,7 @@ func worker(p Params) (*piece, *piece, error) {
 		return nil, nil, nil
 	}
 
-	path := resolveConfigPath(p.Home, cfg.Body)
+	path := paths.FromConfig(p.Home, cfg.Body)
 	var rules *piece
 	if data, err := os.ReadFile(path); err != nil {
 		rules = &piece{body: workerHeader + "[unreadable: " + path + "]", kind: "worker rules"}
@@ -182,9 +236,6 @@ func worker(p Params) (*piece, *piece, error) {
 	var brief *piece
 	if perr == nil && prompt != "" {
 		brief = tagged("original-brief", "", prompt, "brief")
-	}
-	if errors.Is(perr, errNoTranscript) {
-		perr = nil
 	}
 	return rules, brief, perr
 }
@@ -213,51 +264,31 @@ func stripFrontmatter(s string) string {
 	return strings.TrimSpace(s)
 }
 
-// resolveConfigPath expands `~` in a configured path; a relative one is taken against the config
-// file's directory, like the handover paths.
-func resolveConfigPath(home, p string) string {
-	path := paths.Expand(home, p)
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(filepath.Dir(paths.ConfigFile(home)), path)
-	}
-	return path
-}
-
-// restoreKits renders the kits recorded for the session id whose dirs exist, and the handover once
-// when any kit rendered. A `.kits` lock not acquired within lockTimeout omits the kits with a
-// marker.
-func restoreKits(ctx context.Context, p Params) (*piece, []kitPieces, []*piece, error) {
+// restoreKits renders the state blocks of the kits recorded for the session id whose dirs exist.
+// A `.kits` lock not acquired within lockTimeout, or a `.kits` that cannot be read, yields one
+// dir-less kit holding only a marker.
+func restoreKits(ctx context.Context, p Params) ([]kitPieces, error) {
 	slugs, err := (kit.Store{Home: p.Home, Timeout: lockTimeout}).List(ctx, p.Input.SessionID)
 	switch {
 	case errors.Is(err, kit.ErrLocked):
-		return &piece{body: "[kits omitted: .kits locked]", kind: "kits"}, nil, nil, nil
+		return []kitPieces{{state: []*piece{{body: "[kits omitted: .kits locked]"}}}}, nil
 	case err != nil:
-		return &piece{body: "[kits omitted: .kits unreadable]", kind: "kits"}, nil, nil, err
+		return []kitPieces{{state: []*piece{{body: "[kits omitted: .kits unreadable]"}}}}, err
 	}
-	root, err := filepath.Abs(paths.Expand(p.Home, p.Config.Kit.Root))
+	root, err := filepath.Abs(paths.FromConfig(p.Home, p.Config.Kit.Root))
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("kit root: %w", err)
+		return nil, fmt.Errorf("kit root: %w", err)
 	}
-
-	boardCtx, cancel := context.WithTimeout(ctx, kit.BoardDeadline)
-	defer cancel()
-	r := kit.Renderer{Runner: p.Runner, Home: p.Home, Getenv: p.Getenv, Handover: p.Config.Handover}
 	var kits []kitPieces
 	for _, slug := range slugs {
 		dir := paths.KitDir(root, slug)
 		if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
 			continue
 		}
-		state := kit.StateBlocks(dir)
-		kits = append(kits, kitPieces{
-			state: pieces(state),
-			board: pieces(r.BoardBlocks(boardCtx, dir, state)),
-		})
+		blocks := kit.StateBlocks(dir)
+		kits = append(kits, kitPieces{dir: dir, blocks: blocks, state: pieces(blocks)})
 	}
-	if len(kits) == 0 {
-		return nil, nil, nil, nil
-	}
-	return nil, kits, pieces(r.HandoverBlocks()), nil
+	return kits, nil
 }
 
 func pieces(blocks []kit.Block) []*piece {

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"unicode/utf8"
+	"unicode/utf16"
 
 	"github.com/shuymn/stack/internal/config"
 	"github.com/shuymn/stack/internal/hookio"
@@ -133,8 +133,8 @@ func (f *fixture) start(in hookio.Input) (string, []error) {
 		f.t.Fatalf("hook output %q: wrong event", out)
 	}
 	ctx := doc.HookSpecificOutput.AdditionalContext
-	if n := utf8.RuneCountInString(ctx); n > Budget {
-		f.t.Fatalf("context is %d chars, over %d", n, Budget)
+	if n := len(utf16.Encode([]rune(ctx))); n > Budget { // what Claude Code measures
+		f.t.Fatalf("context is %d UTF-16 units, over %d", n, Budget)
 	}
 	return ctx, errs
 }

@@ -75,3 +75,26 @@ func TestSessionStart(t *testing.T) {
 		}
 	}
 }
+
+// A relative `[kit] root` names one dir, under the config file's dir, whatever the working dir.
+func TestRelativeKitRoot(t *testing.T) {
+	home := t.TempDir()
+	writeFile(t, filepath.Join(home, ".config", "stack", "config.toml"),
+		[]byte("[kit]\nroot = \"kits\"\n"))
+	env := map[string]string{"STACK_SESSION_ID": "s1"}
+	opened := t.TempDir()
+	t.Chdir(opened)
+	if r := runIn(t, home, env, "kit", "open", "demo"); r.code != exitOK {
+		t.Fatalf("kit open = %+v", r)
+	}
+	if _, err := os.Stat(filepath.Join(opened, "kits")); !os.IsNotExist(err) {
+		t.Fatalf("kit dir created under the working dir: %v", err)
+	}
+	writeFile(t, filepath.Join(home, ".config", "stack", "kits", "demo", "state.md"),
+		[]byte("DEMO STATE\n"))
+	t.Chdir(t.TempDir())
+	r := sessionStart(t, home, nil, `{"session_id":"s1","source":"compact"}`)
+	if !strings.Contains(r.stdout, "DEMO STATE") {
+		t.Fatalf("compact from another dir = %+v", r)
+	}
+}

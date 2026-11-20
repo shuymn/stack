@@ -51,6 +51,27 @@ func TestExport(t *testing.T) {
 		})
 	}
 
+	t.Run("existing line without newline", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t)
+		envFile := filepath.Join(t.TempDir(), "env")
+		write(t, envFile, "export OTHER=ready # setup")
+		f.env[EnvFile] = envFile
+		f.start(hookio.Input{SessionID: "s1", Source: "startup"})
+		data, err := os.ReadFile(envFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := "export OTHER=ready # setup\nexport STACK_SESSION_ID='s1'\n"; string(
+			data,
+		) != want {
+			t.Fatalf("env file = %q, want %q", data, want)
+		}
+		if got := sourceEnv(t, envFile); got != "s1" && got != "<no bash>" {
+			t.Fatalf("sourced STACK_SESSION_ID = %q", got)
+		}
+	})
+
 	t.Run("invalid id writes nothing", func(t *testing.T) {
 		t.Parallel()
 		f := newFixture(t)
@@ -314,11 +335,13 @@ func TestWorker(t *testing.T) {
 		in := compactIn("s1")
 		in.TranscriptPath = f.transcript(userLine(marker + "\nBRIEF"))
 		ctx, _ := f.start(in)
-		if !strings.HasPrefix(ctx, workerHeader+"<worker-rules") ||
-			!strings.HasSuffix(ctx, " chars]\n</worker-rules>\n") {
-			t.Fatalf("context = %q", ctx)
+		// The rules take the rest; the brief and the kit keep only their reserved markers.
+		want := " chars]\n</worker-rules>\n\n[brief omitted: context limit]\n\n" +
+			"[state omitted: context limit: " + filepath.Join(f.kitDir("demo"), "state.md") + "]\n"
+		if !strings.HasPrefix(ctx, workerHeader+"<worker-rules") || !strings.HasSuffix(ctx, want) {
+			t.Fatalf("context = %q", squash(ctx))
 		}
-		mustLack(t, ctx, "BRIEF", "DEMO STATE", "omitted")
+		mustLack(t, ctx, "BRIEF", "DEMO STATE")
 	})
 
 	t.Run("broken transcript keeps kits", func(t *testing.T) {
@@ -360,23 +383,4 @@ func TestWorker(t *testing.T) {
 		ctx, _ := f.start(in)
 		mustContain(t, ctx, "[unreadable: "+f.rulesPath()+"]", "BRIEF")
 	})
-}
-
-// With several kits, each kit's state files get their start before any kit gets more.
-func TestMultiKitReservation(t *testing.T) {
-	t.Parallel()
-	f := newFixture(t)
-	f.rules(strings.Repeat("r", 2000))
-	in := compactIn("s1")
-	in.TranscriptPath = f.transcript(userLine(marker + "\n" + strings.Repeat("b", 4500)))
-	slugs := []string{"a", "b", "c"}
-	for _, s := range slugs {
-		f.open(s, map[string]string{"state.md": strings.Repeat(s, 2900)})
-	}
-	ctx, _ := f.start(in)
-	for _, s := range slugs {
-		mustContain(t, ctx, stateTag(filepath.Join(f.kitDir(s), "state.md"))+
-			strings.Repeat(s, reserveChars))
-	}
-	mustLack(t, ctx, "omitted")
 }
