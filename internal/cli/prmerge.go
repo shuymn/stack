@@ -5,6 +5,8 @@ import (
 	"errors"
 	"flag"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/shuymn/stack/internal/checkpub"
 	"github.com/shuymn/stack/internal/github"
@@ -14,7 +16,13 @@ import (
 
 // runPrMerge implements `stack pr merge <pr> <head-sha>`. Invalid arguments, a local path or private
 // term in --subject/--body and an unusable config exit 2; every later refusal exits 1.
+//
+// SIGINT and SIGTERM cancel the run instead of ending the process, so the running child is killed
+// and a merge call that already started is still read back. Only this command catches them; every
+// other command keeps the default exit on signal.
 func runPrMerge(ctx context.Context, env Env, inv invocation) error {
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	o := merge.Options{
 		PR:            inv.args[0],
 		Head:          inv.args[1],
