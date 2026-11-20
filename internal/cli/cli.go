@@ -124,6 +124,7 @@ var commands = []*command{
 	{
 		path:    []string{"budget", "status"},
 		summary: "display kit sizes and attention item counts",
+		run:     runBudgetStatus,
 	},
 	{
 		path:    []string{"run"},
