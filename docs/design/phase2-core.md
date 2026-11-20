@@ -305,7 +305,8 @@ any `--`, as in `--token "$(cat F)"` or `-H "Bearer $(cat F)"`), determined from
 `echo`, `printf` or `cat` never get the flag-value form, so `echo -n "$(cat F)"` is not a handoff. Two stdin forms are
 handoffs too: the whole word of a here-string (`cmd <<< "$(cat F)"`), and an argument of an `echo`/`printf` without
 redirects whose output feeds a pipe (`printf '%s\n' "$(cat F)" | sudo -S …`); `echo`/`printf` writing to the terminal
-or a file is not. A here-string or quoted heredoc fed to `bash`/`sh`/`zsh` keeps the handoffs of its script.
+or a file is not. A quoted heredoc fed to `bash`/`sh`/`zsh` keeps the handoffs of its script; a script passed as a
+here-string (`bash <<< '…'`) does not, so a secret mentioned there is denied.
 
 | Rule | Tools | Decision |
 |---|---|---|
