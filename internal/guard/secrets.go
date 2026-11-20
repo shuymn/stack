@@ -144,7 +144,10 @@ func secretsFileTool(in hookio.Input, opts Options) (Decision, bool) {
 				secretsAdvice)
 		}
 	}
-	if glob != "" {
+	// A Grep glob starting with `!` excludes the files it matches (ripgrep's negation), so it never
+	// reads a secret; the path above is still judged on its own.
+	negated := in.ToolName == "Grep" && strings.HasPrefix(glob, "!")
+	if glob != "" && !negated {
 		if s, ok := secretGlob(list, glob, tin.Path, in.CWD, opts.Home); ok {
 			return deny(RuleSecrets, "%s pattern %q can match the secret %q. %s", in.ToolName,
 				glob, s.entry, secretsAdvice)

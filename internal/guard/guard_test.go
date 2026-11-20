@@ -153,6 +153,7 @@ func TestSecretsFileTools(t *testing.T) {
 		{"Grep.glob *.example", "Grep", map[string]any{"pattern": "KEY", "glob": "*.example"}},
 		{"Glob *.go", "Glob", map[string]any{"pattern": "**/*.go"}},
 		{"Glob .dev.vars.example", "Glob", map[string]any{"pattern": "**/.dev.vars.example"}},
+		{"Grep negated glob", "Grep", map[string]any{"pattern": "KEY", "glob": "!**/.dev.vars"}},
 	}
 	for _, tt := range allow {
 		d, ok := f.decide(tt.tool, tt.input)

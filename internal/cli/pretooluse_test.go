@@ -167,6 +167,16 @@ func TestPreToolUseRegressions(t *testing.T) {
 			map[string]any{"command": "command -p gh pr merge 1"},
 			"raw-merge",
 		},
+		{
+			"negated Grep glob excludes the secret", "Grep",
+			map[string]any{"pattern": "KEY", "glob": "!**/.dev.vars"},
+			"",
+		},
+		{
+			"negated Grep glob does not hide a secret path", "Grep",
+			map[string]any{"pattern": "KEY", "path": ".dev.vars", "glob": "!*.md"},
+			"secrets",
+		},
 	}
 	for _, tt := range tests {
 		r := runHookStdin(t, t.TempDir(), payload(t, t.TempDir(), tt.tool, tt.input))
