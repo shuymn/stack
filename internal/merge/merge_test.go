@@ -120,6 +120,8 @@ type setup struct {
 	stop bool
 	// outside makes git report that the directory is not in a work tree.
 	outside bool
+	// brokenStdout makes every write to stdout fail, as a closed pipe does.
+	brokenStdout bool
 }
 
 // run executes Run in a fixture repository with a fake gh answering s.
@@ -159,8 +161,29 @@ func run(t *testing.T, s scenario, st setup) outcome {
 	}
 	o.Client = github.Client{Runner: runner, Gh: gh, Git: st.git, Dir: r.Dir, Env: r.Env}
 	o.Stdout, o.Stderr = &stdout, &stderr
+	if st.brokenStdout {
+		o.Stdout = brokenWriter{}
+	}
 	err := Run(ctx, o)
 	return outcome{err, stdout.String(), stderr.String(), proctest.Calls(t, gh)}
+}
+
+// brokenWriter fails every write, as a pipe whose reader closed does.
+type brokenWriter struct{}
+
+func (brokenWriter) Write([]byte) (int, error) { return 0, errBrokenPipe }
+
+var errBrokenPipe = errors.New("broken pipe")
+
+// TestMergedWithBrokenStdout: a verified merge succeeds also when the result line cannot be written,
+// and the line goes to stderr instead.
+func TestMergedWithBrokenStdout(t *testing.T) {
+	t.Parallel()
+	out := run(t, okResponses(), setup{brokenStdout: true})
+	want := "stack pr merge: MERGED " + head + " " + mergeOID + " (writing stdout failed: broken pipe)\n"
+	if out.err != nil || !strings.HasSuffix(out.stderr, want) {
+		t.Errorf("err = %v, stderr = %q; want success and %q", out.err, out.stderr, want)
+	}
 }
 
 func with(s scenario, k string, resp proctest.Response) scenario {

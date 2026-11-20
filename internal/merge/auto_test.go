@@ -135,6 +135,7 @@ type autoCase struct {
 	final   proctest.Response
 	// cancelAt cancels the run during the nth sleep of the wait.
 	cancelAt                                       int
+	brokenStdout                                   bool
 	stopInMerge, cancelBeforeMerge, missingAtMerge bool
 }
 
@@ -196,6 +197,9 @@ func runAuto(t *testing.T, tc autoCase) autoOutcome {
 	var stdout, stderr bytes.Buffer
 	o.Client = github.Client{Runner: runner, Gh: runner.gh, Dir: r.Dir, Env: r.Env}
 	o.Stdout, o.Stderr = &stdout, &stderr
+	if tc.brokenStdout {
+		o.Stdout = brokenWriter{}
+	}
 	o.Now, o.Sleep = clock.Now, clock.Sleep
 	err := Run(ctx, o)
 	return autoOutcome{err, stdout.String(), stderr.String(), runner.calls, clock.sleeps}
@@ -324,6 +328,19 @@ func autoTests() []autoTest {
 			argv: seq(append(append([][]string{autoMergeCall}, repeatN(45, autoRead)...),
 				autoDisable, autoRead)...),
 			sleeps: repeatN(45, 20*time.Second),
+		},
+		{
+			name: "merged with a broken stdout",
+			tc: autoCase{
+				brokenStdout: true,
+				polls:        []proctest.Response{rb("MERGED", head, mergeOID, false)},
+			},
+			code: 0,
+			want: []string{
+				"stack pr merge: " + strings.TrimSuffix(merged, "\n") +
+					" (writing stdout failed: broken pipe)\n",
+			},
+			argv: seq(autoMergeCall, autoRead),
 		},
 		{
 			name: "non-zero gh then verified merge",

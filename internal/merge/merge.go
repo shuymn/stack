@@ -231,10 +231,13 @@ func Run(ctx context.Context, o Options) error {
 }
 
 // reportMerged writes the result line of a merge the read-back confirmed, plus a note when gh pr
-// merge did not exit cleanly, so the caller does not retry.
+// merge did not exit cleanly, so the caller does not retry. The merge happened, so it succeeds
+// also when stdout cannot be written; the line then goes to stderr, best effort.
 func reportMerged(o Options, pr int, head, mergeOID string, res github.MergeResult) error {
-	if _, err := fmt.Fprintf(o.Stdout, "MERGED %s %s\n", head, mergeOID); err != nil {
-		return fmt.Errorf("write result: %w", err)
+	line := fmt.Sprintf("MERGED %s %s", head, mergeOID)
+	if _, err := fmt.Fprintln(o.Stdout, line); err != nil {
+		_, _ = fmt.Fprintf(o.Stderr, "stack pr merge: %s (writing stdout failed: %v)\n", line,
+			oneLine(err.Error()))
 	}
 	if !res.OK() {
 		_, _ = fmt.Fprintf(o.Stderr, "stack pr merge: PR %d is merged, but gh pr merge %s "+
@@ -438,6 +441,11 @@ func (o Options) retryDelay() time.Duration {
 
 // unknown reports a merge attempt whose outcome the read-back cannot confirm: a refusal that tells
 // the caller to look at the PR instead of retrying.
+// oneLine collapses the whitespace of s, so a note stays on one line.
+func oneLine(s string) string {
+	return strings.Join(strings.Fields(s), " ")
+}
+
 func unknown(pr int, format string, args ...any) error {
 	return fmt.Errorf("%w: %w for PR %d — check the PR before retrying: %s", ErrRefused,
 		ErrUnknown, pr, fmt.Sprintf(format, args...))
