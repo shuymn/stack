@@ -181,6 +181,12 @@ func copyExecutable(src, dst string) error {
 		return fmt.Errorf("open test binary: %w", err)
 	}
 	defer func() { _ = in.Close() }()
+	// A process forked by a parallel test while the write descriptor is open
+	// keeps it until its exec, and running the fake then fails with ETXTBSY
+	// ("text file busy") on Linux. Holding ForkLock for reading keeps forks out
+	// of that window (golang/go#22315).
+	syscall.ForkLock.RLock()
+	defer syscall.ForkLock.RUnlock()
 	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o700)
 	if err != nil {
 		return fmt.Errorf("create fake: %w", err)
