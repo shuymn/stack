@@ -120,6 +120,36 @@ func TestArgumentErrors(t *testing.T) {
 	}
 }
 
+func TestRunRepeatedExtReachesDispatch(t *testing.T) {
+	var cmd *command
+	for _, c := range commands {
+		if slices.Equal(c.path, []string{"run"}) {
+			cmd = c
+		}
+	}
+	orig := cmd.run
+	t.Cleanup(func() { cmd.run = orig })
+	var got invocation
+	cmd.run = func(_ context.Context, _ Env, inv invocation) error {
+		got = inv
+		return nil
+	}
+
+	r := run(t, nil, "run", "--ext", "first", "entry", "--ext=second")
+	if r.code != ExitOK {
+		t.Fatalf("run = %+v", r)
+	}
+	ext, ok := got.flags.Lookup("ext").Value.(*stringList)
+	if !ok || !slices.Equal(*ext, []string{"first", "second"}) ||
+		!slices.Equal(got.args, []string{"entry"}) {
+		t.Fatalf(
+			"dispatched ext = %v, args = %q; want [first second], [entry]",
+			got.flags.Lookup("ext").Value,
+			got.args,
+		)
+	}
+}
+
 func TestCommandHelp(t *testing.T) {
 	r := run(t, nil, "pr", "merge", "--help")
 	if r.code != ExitOK || !strings.HasPrefix(r.stdout, "usage: stack pr merge <pr> <head-sha>") {

@@ -57,3 +57,18 @@ func parseInterspersed(fs *flag.FlagSet, args []string) ([]string, error) {
 	}
 	return positional, nil
 }
+
+// stringList is a repeatable flag: each occurrence appends a value.
+type stringList []string
+
+func (l *stringList) String() string {
+	if l == nil {
+		return ""
+	}
+	return strings.Join(*l, ",")
+}
+
+func (l *stringList) Set(v string) error {
+	*l = append(*l, v)
+	return nil
+}
