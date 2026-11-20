@@ -81,7 +81,14 @@ func TestResolve(t *testing.T) {
 		want   string
 		ok     bool
 	}{
-		{"relative joined to cwd", cwd, "a/../b", false, cwd + sep + "a/../b", true},
+		{
+			"relative joined to cwd",
+			cwd,
+			"a/../b",
+			false,
+			cwd + sep + filepath.FromSlash("a/../b"),
+			true,
+		},
 		{"tilde expanded", cwd, "~/x", true, home + sep + "x", true},
 		{"bare tilde expanded", cwd, "~", true, home, true},
 		{"quoted tilde is a name", cwd, "~", false, cwd + sep + "~", true},
@@ -177,7 +184,7 @@ func TestResolveKeepsComponents(t *testing.T) {
 	link := filepath.Join(dir, "link")
 	symlinked := os.Symlink(filepath.Join(target, "sub"), link) == nil
 	tests := []struct{ in, want string }{
-		{"link/../f.txt", dir + sep + "link/../f.txt"},
+		{"link/../f.txt", dir + sep + filepath.FromSlash("link/../f.txt")},
 		{link + sep + ".." + sep + "f.txt", link + sep + ".." + sep + "f.txt"},
 	}
 	for _, tt := range tests {
