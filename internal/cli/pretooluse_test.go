@@ -157,6 +157,16 @@ func TestPreToolUseRegressions(t *testing.T) {
 			map[string]any{"command": "gh pr create -t t -b $'see\\n" + home + "/x'"},
 			"gh-publish",
 		},
+		{
+			"command -v only looks the name up", "Bash",
+			map[string]any{"command": "command -v gh pr merge 1 && command -V rm -rf ~"},
+			"",
+		},
+		{
+			"command without -v still runs it", "Bash",
+			map[string]any{"command": "command -p gh pr merge 1"},
+			"raw-merge",
+		},
 	}
 	for _, tt := range tests {
 		r := runHookStdin(t, t.TempDir(), payload(t, t.TempDir(), tt.tool, tt.input))

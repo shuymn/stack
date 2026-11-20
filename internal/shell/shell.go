@@ -712,6 +712,9 @@ func stripWrappers(words []Word, assignLike []bool) (int, []int, bool) {
 			assigns = append(assigns, a...)
 			i = n
 		case "command":
+			if lookupOnly(words[i+1:]) {
+				return i, assigns, chdir // `command -v NAME` prints where NAME is; it never runs it
+			}
 			i = skipOpts(words, i+1, nil)
 		case "nohup":
 			i = skipOpts(words, i+1, nil)
@@ -728,6 +731,19 @@ func stripWrappers(words []Word, assignLike []bool) (int, []int, bool) {
 		}
 	}
 	return i, assigns, chdir
+}
+
+// lookupOnly reports whether the options of `command` (args after it) include -v or -V.
+func lookupOnly(args []Word) bool {
+	for _, a := range args {
+		if !a.Static || a.Text == "--" || len(a.Text) < 2 || a.Text[0] != '-' {
+			return false
+		}
+		if strings.ContainsAny(a.Text[1:], "vV") {
+			return true
+		}
+	}
+	return false
 }
 
 // skipOpts skips option words starting at i; withValue lists options that take the next word.

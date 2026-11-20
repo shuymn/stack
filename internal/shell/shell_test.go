@@ -53,6 +53,10 @@ func TestParseCalls(t *testing.T) {
 		{`env -- A=1 gh x`, [][]string{{"gh", "x"}}},
 		{`env -u A B=1 gh x`, [][]string{{"gh", "x"}}},
 		{`command -p nohup time -p gh x`, [][]string{{"gh", "x"}}},
+		{
+			`command -v gh x; command -pV gh y`,
+			[][]string{{"command", "-v", "gh", "x"}, {"command", "-pV", "gh", "y"}},
+		},
 		{`mise exec go@1 -- gh x`, [][]string{{"gh", "x"}}},
 		{`/opt/bin/gh.exe x`, [][]string{{"/opt/bin/gh.exe", "x"}}},
 		{`a && gh x || b; c | d`, [][]string{{"a"}, {"gh", "x"}, {"b"}, {"c"}, {"d"}}},
