@@ -234,42 +234,43 @@ func TestRunTimeoutGrandchildHoldsPipe(t *testing.T) {
 	}
 }
 
+// TestRunWaitDelayAfterChildExit checks that a pipe a grandchild holds after
+// the child exits is cut after WaitDelay and reported independently of the
+// exit status, so a caller cannot take the output it received as complete.
 func TestRunWaitDelayAfterChildExit(t *testing.T) {
 	t.Parallel()
 
-	fake := proctest.Install(
-		t,
-		"fake",
-		one(proctest.Response{Stdout: "done", Grandchild: grandchildLife}),
-	)
-	start := time.Now()
-	res, err := proc.Exec{WaitDelay: testWaitDelay}.Run(context.Background(), proc.Cmd{Name: fake})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if took := time.Since(start); took > grandchildLife/2 {
-		t.Fatalf("took %s, waited for the grandchild", took)
-	}
-	if !res.WaitDelayExceeded || res.TimedOut || res.ExitCode != 0 || string(res.Stdout) != "done" {
-		t.Fatalf("result = %+v, want WaitDelayExceeded with stdout", res)
-	}
-}
-
-// TestRunWaitDelayWithNonZeroExit checks that a held pipe is reported even
-// when the child also exits non-zero, so a caller cannot take the output it
-// received as complete.
-func TestRunWaitDelayWithNonZeroExit(t *testing.T) {
-	t.Parallel()
-
-	fake := proctest.Install(t, "fake", one(proctest.Response{
-		Stdout: `{"status":"pass"}`, Exit: 7, Grandchild: grandchildLife,
-	}))
-	res, err := proc.Exec{WaitDelay: testWaitDelay}.Run(context.Background(), proc.Cmd{Name: fake})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.ExitCode != 7 || !res.WaitDelayExceeded || res.TimedOut {
-		t.Fatalf("result = %+v, want exit 7 and WaitDelayExceeded", res)
+	for _, tc := range []struct {
+		name   string
+		stdout string
+		exit   int
+	}{
+		{name: "exit 0", stdout: "done"},
+		{name: "exit 7", stdout: `{"status":"pass"}`, exit: 7},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			fake := proctest.Install(t, "fake", one(proctest.Response{
+				Stdout: tc.stdout, Exit: tc.exit, Grandchild: grandchildLife,
+			}))
+			start := time.Now()
+			res, err := proc.Exec{
+				WaitDelay: testWaitDelay,
+			}.Run(
+				context.Background(),
+				proc.Cmd{Name: fake},
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if took := time.Since(start); took > grandchildLife/2 {
+				t.Fatalf("took %s, waited for the grandchild", took)
+			}
+			if !res.WaitDelayExceeded || res.TimedOut || res.ExitCode != tc.exit ||
+				string(res.Stdout) != tc.stdout {
+				t.Fatalf("result = %+v, want exit %d, WaitDelayExceeded and stdout", res, tc.exit)
+			}
+		})
 	}
 }
 
@@ -300,6 +301,35 @@ func TestRunStderrWriter(t *testing.T) {
 			len(res.Stderr),
 			res.StderrTruncated,
 		)
+	}
+}
+
+var errWriterClosed = errors.New("writer closed")
+
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) { return 0, errWriterClosed }
+
+// TestRunStderrWriteError checks that a failing stderr writer is reported
+// rather than silently dropping stderr, and that stdout is unaffected.
+func TestRunStderrWriteError(t *testing.T) {
+	t.Parallel()
+
+	fake := proctest.Install(t, "fake", proctest.Scenario{Responses: []proctest.Response{
+		{Stdout: "ok", Stderr: "diagnostic"},
+	}})
+	cmd := proc.Cmd{Name: fake, Stderr: failingWriter{}}
+	res, err := proc.Exec{}.Run(context.Background(), cmd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !errors.Is(res.StderrErr, errWriterClosed) || string(res.Stdout) != "ok" ||
+		res.ExitCode != 0 {
+		t.Fatalf("result = %+v, want StderrErr with stdout intact", res)
+	}
+	err = proc.Exec{}.Stream(context.Background(), cmd, func(io.Reader) error { return nil })
+	if !errors.Is(err, errWriterClosed) {
+		t.Fatalf("stream err = %v, want the stderr write error", err)
 	}
 }
 
@@ -370,13 +400,13 @@ func TestRunDefaultCap(t *testing.T) {
 	fake := proctest.Install(
 		t,
 		"fake",
-		one(proctest.Response{Stdout: strings.Repeat("x", proc.DefaultMaxStdout+1)}),
+		one(proctest.Response{Stdout: strings.Repeat("x", 1<<20+1)}),
 	)
 	res, err := proc.Exec{}.Run(context.Background(), proc.Cmd{Name: fake})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !res.Truncated || len(res.Stdout) != proc.DefaultMaxStdout || res.ExitCode != 0 {
+	if !res.Truncated || len(res.Stdout) != 1<<20 || res.ExitCode != 0 {
 		t.Fatalf("len = %d truncated = %v exit = %d", len(res.Stdout), res.Truncated, res.ExitCode)
 	}
 }

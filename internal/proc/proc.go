@@ -24,11 +24,11 @@ import (
 )
 
 const (
-	// DefaultWaitDelay bounds how long Run and Stream wait for the pipes after
+	// defaultWaitDelay bounds how long Run and Stream wait for the pipes after
 	// the child exits.
-	DefaultWaitDelay = 2 * time.Second
-	// DefaultMaxStdout caps captured stdout when Cmd.MaxStdout is zero.
-	DefaultMaxStdout = 1 << 20
+	defaultWaitDelay = 2 * time.Second
+	// defaultMaxStdout caps captured stdout when Cmd.MaxStdout is zero.
+	defaultMaxStdout = 1 << 20
 	// maxStderr caps stderr captured into Result.Stderr.
 	maxStderr = 64 << 10
 	// copyBuffer is the read size for pipes stack drains itself.
@@ -60,9 +60,12 @@ type Cmd struct {
 	Stdin []byte
 	// Stderr, when non-nil, receives the child's stderr as it arrives, without
 	// a cap, from a goroutine of the runner; Result.Stderr then stays empty.
-	// When nil, Run captures stderr into Result.Stderr up to 64 KiB.
+	// The writer must not block: pass os.Stderr or a prefixing wrapper of it.
+	// After a write error the rest of stderr is discarded and the error is
+	// reported (Result.StderrErr; joined into Stream's error). When nil, Run
+	// captures stderr into Result.Stderr up to 64 KiB.
 	Stderr io.Writer
-	// MaxStdout caps the stdout Run captures; zero means DefaultMaxStdout.
+	// MaxStdout caps the stdout Run captures; zero means 1 MiB.
 	MaxStdout int64
 }
 
@@ -88,6 +91,8 @@ type Result struct {
 	Truncated bool
 	// StderrTruncated reports captured stderr over its 64 KiB cap.
 	StderrTruncated bool
+	// StderrErr is the first error writing to Cmd.Stderr, or nil.
+	StderrErr error
 }
 
 // Runner runs subprocesses. Tests substitute fakes through this seam.
@@ -106,7 +111,7 @@ type Runner interface {
 
 // Exec is the os/exec Runner.
 type Exec struct {
-	// WaitDelay overrides DefaultWaitDelay when positive.
+	// WaitDelay overrides the 2 s default when positive.
 	WaitDelay time.Duration
 }
 
@@ -116,7 +121,7 @@ var _ Runner = Exec{}
 func (e Exec) Run(ctx context.Context, c Cmd) (Result, error) {
 	limit := c.MaxStdout
 	if limit <= 0 {
-		limit = DefaultMaxStdout
+		limit = defaultMaxStdout
 	}
 	stdout := &capWriter{limit: limit}
 	stderr, captured := stderrSink(c)
@@ -124,13 +129,14 @@ func (e Exec) Run(ctx context.Context, c Cmd) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	ch.io.Go(func() { drain(stdout, ch.stdout) })
+	ch.io.Go(func() { _ = drain(stdout, ch.stdout) })
 	overrun, waitErr := ch.finish(e.waitDelay())
 
 	res := Result{
 		Stdout:            stdout.bytes(),
 		ExitCode:          ch.cmd.ProcessState.ExitCode(),
 		WaitDelayExceeded: overrun,
+		StderrErr:         ch.stderrErr,
 		Truncated:         stdout.truncated(),
 	}
 	if captured != nil {
@@ -178,7 +184,7 @@ func (e Exec) Stream(parent context.Context, c Cmd, consume func(io.Reader) erro
 		// The rest of stdout is not wanted; stop the child.
 		cancel()
 	}
-	drain(io.Discard, ch.stdout)
+	_ = drain(io.Discard, ch.stdout)
 	ch.io.Done()
 	out := <-finished
 
@@ -206,6 +212,9 @@ func (e Exec) Stream(parent context.Context, c Cmd, consume func(io.Reader) erro
 	if out.overrun {
 		errs = append(errs, fmt.Errorf("stream %s: %w", c.Name, ErrWaitDelay))
 	}
+	if ch.stderrErr != nil {
+		errs = append(errs, fmt.Errorf("stream %s: forward stderr: %w", c.Name, ch.stderrErr))
+	}
 	return errors.Join(errs...)
 }
 
@@ -213,7 +222,7 @@ func (e Exec) waitDelay() time.Duration {
 	if e.WaitDelay > 0 {
 		return e.WaitDelay
 	}
-	return DefaultWaitDelay
+	return defaultWaitDelay
 }
 
 // child is a started subprocess whose stdio pipes stack owns.
@@ -228,6 +237,8 @@ type child struct {
 	ends []*os.File
 	// io counts the goroutines still reading or writing the pipes.
 	io sync.WaitGroup
+	// stderrErr is the stderr forwarding error; read after io is done.
+	stderrErr error
 }
 
 // start starts the child with stdout on a pipe the caller reads from
@@ -282,7 +293,7 @@ func (e Exec) start(ctx context.Context, c Cmd, stderr io.Writer) (*child, error
 	}
 	closeFiles(theirs)
 
-	ch.io.Go(func() { drain(stderr, errR) })
+	ch.io.Go(func() { ch.stderrErr = drain(stderr, errR) })
 	if inW != nil {
 		ch.io.Go(func() {
 			// A child that exits without reading makes Write fail; that is
@@ -311,10 +322,10 @@ func (ch *child) finish(delay time.Duration) (bool, error) {
 	case <-done:
 	case <-timer.C:
 		overrun = true
-		closeFiles(ch.ends)
-		<-done
 	}
+	// On overrun, closing ends the pipe goroutines; then wait for them.
 	closeFiles(ch.ends)
+	<-done
 	if err != nil {
 		return overrun, fmt.Errorf("wait: %w", err)
 	}
@@ -329,9 +340,10 @@ func stderrSink(c Cmd) (io.Writer, *capWriter) {
 	return captured, captured
 }
 
-// drain copies src to dst until EOF or a read error. After dst fails it keeps
-// reading, so the child never blocks on a full pipe.
-func drain(dst io.Writer, src io.Reader) {
+// drain copies src to dst until EOF or a read error and returns the first
+// write error. After dst fails it keeps reading, so the child never blocks on
+// a full pipe.
+func drain(dst io.Writer, src io.Reader) error {
 	buf := make([]byte, copyBuffer)
 	var writeErr error
 	for {
@@ -340,7 +352,10 @@ func drain(dst io.Writer, src io.Reader) {
 			_, writeErr = dst.Write(buf[:n])
 		}
 		if err != nil {
-			return
+			if writeErr != nil {
+				return fmt.Errorf("write: %w", writeErr)
+			}
+			return nil
 		}
 	}
 }
@@ -352,17 +367,15 @@ func closeFiles(files []*os.File) {
 }
 
 // capWriter keeps the first limit bytes and discards the rest, so the child
-// never blocks on a full pipe.
+// never blocks on a full pipe. Each capWriter has one writing goroutine and is
+// read only after finish has joined it.
 type capWriter struct {
-	mu    sync.Mutex
 	buf   bytes.Buffer
 	limit int64
 	over  bool
 }
 
 func (w *capWriter) Write(p []byte) (int, error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
 	room := w.limit - int64(w.buf.Len())
 	if int64(len(p)) > room {
 		w.over = true
@@ -374,13 +387,9 @@ func (w *capWriter) Write(p []byte) (int, error) {
 }
 
 func (w *capWriter) bytes() []byte {
-	w.mu.Lock()
-	defer w.mu.Unlock()
 	return bytes.Clone(w.buf.Bytes())
 }
 
 func (w *capWriter) truncated() bool {
-	w.mu.Lock()
-	defer w.mu.Unlock()
 	return w.over
 }
