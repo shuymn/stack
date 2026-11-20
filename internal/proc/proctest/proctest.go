@@ -9,7 +9,8 @@
 // code under test replaces Cmd.Env or finds the fake through PATH.
 //
 // Each call is appended to a log next to the fake; Calls reads it. A response
-// may spawn a grandchild that inherits stdout and stderr and outlives the fake.
+// may spawn a grandchild that inherits stdin, stdout and stderr, never reads
+// stdin, and outlives the fake.
 // Install's cleanup asks every grandchild to exit and waits for it, so the
 // test's temporary directory can be removed (on Windows a running image cannot
 // be deleted). Tests that change PATH to find fakes must not run in parallel.
@@ -40,9 +41,9 @@ const (
 	stopSuffix     = ".proctest.stop"
 	grandchildEnv  = "STACK_PROCTEST_GRANDCHILD"
 
-	// NoMatchExit is the exit status of a fake whose scenario has no response
+	// noMatchExit is the exit status of a fake whose scenario has no response
 	// for its argv.
-	NoMatchExit = 97
+	noMatchExit = 97
 
 	defaultGrandchildLife = 30 * time.Second
 	grandchildPoll        = 10 * time.Millisecond
@@ -205,7 +206,7 @@ func runFake(exe, base string, data []byte) int {
 	var s Scenario
 	if err := json.Unmarshal(data, &s); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "proctest: scenario: %v\n", err)
-		return NoMatchExit
+		return noMatchExit
 	}
 	args := os.Args[1:]
 	resp, ok := match(s, args)
@@ -218,17 +219,17 @@ func runFake(exe, base string, data []byte) int {
 		pid, err := spawnGrandchild(exe, resp.Grandchild)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "proctest: grandchild: %v\n", err)
-			return NoMatchExit
+			return noMatchExit
 		}
 		call.GrandchildPID = pid
 	}
 	if err := appendCall(base, call); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "proctest: log: %v\n", err)
-		return NoMatchExit
+		return noMatchExit
 	}
 	if !ok {
 		_, _ = fmt.Fprintf(os.Stderr, "proctest: no response for %q\n", args)
-		return NoMatchExit
+		return noMatchExit
 	}
 	_, _ = io.WriteString(os.Stdout, resp.Stdout)
 	_, _ = io.WriteString(os.Stderr, resp.Stderr)

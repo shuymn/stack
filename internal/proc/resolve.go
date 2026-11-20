@@ -118,7 +118,7 @@ func resolveWindows(dir, name string) (string, error) {
 	}
 	exe := filepath.Join(dir, base+".exe")
 	if err := statCandidate(exe, true); !errors.Is(err, ErrNotFound) {
-		return pathUnlessAbsent(exe, err), err
+		return exe, err
 	}
 	for _, suffix := range windowsNotRunnable {
 		path := filepath.Join(dir, name+suffix)

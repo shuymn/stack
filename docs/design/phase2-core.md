@@ -138,12 +138,12 @@ status) and `Truncated` (stdout over `MaxStdout`, 1 MiB default), and callers ev
 
 `ResolveExecutable(dir, name)`: Unix — regular file this process may execute (effective permission, as
 `exec.LookPath` checks it). Windows — only `<name>.exe` is runnable; a `<name>` without extension or with
-`.cmd`/`.bat`/`.ps1` is "found but not runnable" (`os/exec` does not run batch files reliably). A directory under the
-name is also not runnable, and a stat error other than "does not exist" (e.g. an unsearchable `.claude`) is
+`.cmd`/`.bat`/`.ps1` is "found but not runnable" (`os/exec` does not run batch files reliably). A directory or a dangling
+symlink under the name is also not runnable, and a stat error other than "does not exist" (e.g. an unsearchable `.claude`) is
 "cannot verify", never "absent", so merge-check refuses on it. `LookPathExe(name)` (extensions) walks `PATH` itself: on Unix the first runnable `name`; on Windows
 the first `name.exe` (never `PATHEXT`, so a `.cmd` is not picked), and if none exists but `name`, `name.cmd`,
-`name.bat` or `name.ps1` does, "found but not runnable". Relative `PATH` entries (incl. empty and `.`) are skipped,
-as `exec.ErrDot` does. Per caller: kit board → `[board not runnable on this OS: <path>]` marker, skipped;
+`name.bat` or `name.ps1` does, "found but not runnable". Relative `PATH` entries (incl. empty and `.`) are skipped and the
+walk continues (Go's `exec.LookPath` instead returns `exec.ErrDot` for such a match). Per caller: kit board → `[board not runnable on this OS: <path>]` marker, skipped;
 `.claude/merge-check` → merge refused; extension → `warn` result with a synthetic finding. Shelled-out commands are
 `gh`, `git`, the kit board, `.claude/merge-check`, and extensions (`stack-<name>`).
 

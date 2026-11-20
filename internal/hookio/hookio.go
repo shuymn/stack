@@ -14,15 +14,15 @@ import (
 	"runtime/debug"
 )
 
-// DebugEnv names the variable that, when exactly "1", sends swallowed hook
+// debugEnv names the variable that, when exactly "1", sends swallowed hook
 // errors to stderr.
-const DebugEnv = "STACK_DEBUG"
+const debugEnv = "STACK_DEBUG"
 
 var (
-	// ErrNotObject reports a payload that is valid JSON but not an object.
-	ErrNotObject = errors.New("hook input is not a JSON object")
-	// ErrPanic reports a recovered panic in a hook function.
-	ErrPanic = errors.New("hook panicked")
+	// errNotObject reports a payload that is valid JSON but not an object.
+	errNotObject = errors.New("hook input is not a JSON object")
+	// errPanic reports a recovered panic in a hook function.
+	errPanic = errors.New("hook panicked")
 )
 
 // Input holds the hook payload fields core reads. ToolInput stays raw and is
@@ -49,7 +49,7 @@ func Decode(r io.Reader) (Input, error) {
 	}
 	trimmed := bytes.TrimLeft(data, " \t\r\n")
 	if len(trimmed) == 0 || trimmed[0] != '{' {
-		return Input{}, ErrNotObject
+		return Input{}, errNotObject
 	}
 	var in Input
 	if err := json.Unmarshal(data, &in); err != nil {
@@ -98,7 +98,7 @@ func encode(h hookSpecificOutput) ([]byte, error) {
 
 // Debug reports whether getenv enables debug output for swallowed errors.
 func Debug(getenv func(string) string) bool {
-	return getenv(DebugEnv) == "1"
+	return getenv(debugEnv) == "1"
 }
 
 // FailOpen runs fn and writes its output to stdout in one write, only when fn
@@ -135,19 +135,17 @@ func Run(
 	})
 }
 
-func call(fn func() ([]byte, error)) ([]byte, error) {
-	var out []byte
-	err := ErrPanic
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				err = fmt.Errorf("%w: %v\n%s", ErrPanic, r, debug.Stack())
-			}
-		}()
-		out, err = fn()
+// call runs fn, turning a panic into an error. FailOpen drops the output on
+// every error, so a panic needs no separate output handling.
+//
+//nolint:nonamedreturns // recover can set the result only through named returns.
+func call(fn func() ([]byte, error)) (out []byte, err error) {
+	// Stays set when fn panics and recover returns nil (GODEBUG panicnil=1).
+	err = errPanic
+	defer func() {
+		if r := recover(); r != nil {
+			out, err = nil, fmt.Errorf("%w: %v\n%s", errPanic, r, debug.Stack())
+		}
 	}()
-	if errors.Is(err, ErrPanic) {
-		return nil, err
-	}
-	return out, err
+	return fn()
 }

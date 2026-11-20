@@ -56,7 +56,7 @@ func TestResolveUnix(t *testing.T) {
 	}
 	for _, tc := range cases {
 		path, err := resolve("linux", dir, tc.name)
-		if !errors.Is(err, tc.want) || (tc.want == nil && err != nil) {
+		if !errors.Is(err, tc.want) {
 			t.Errorf("%s: err = %v, want %v", tc.name, err, tc.want)
 		}
 		if wantPath := filepath.Join(dir, tc.name); tc.wantPath != (path == wantPath) {
@@ -100,7 +100,7 @@ func TestResolveWindows(t *testing.T) {
 			}
 		}
 		path, err := resolve("windows", dir, tc.name)
-		if !errors.Is(err, tc.want) || (tc.want == nil && err != nil) {
+		if !errors.Is(err, tc.want) {
 			t.Errorf("%s %v: err = %v, want %v", tc.name, tc.files, err, tc.want)
 		}
 		want := ""
@@ -183,9 +183,10 @@ func TestResolveUnverifiable(t *testing.T) {
 func TestResolveInvalidName(t *testing.T) {
 	t.Parallel()
 
+	dir := t.TempDir()
 	for _, name := range []string{"", ".", "..", "a/b", `a\b`, "c:x"} {
 		for _, goos := range []string{"linux", "windows"} {
-			if _, err := resolve(goos, t.TempDir(), name); !errors.Is(err, ErrInvalidName) {
+			if _, err := resolve(goos, dir, name); !errors.Is(err, ErrInvalidName) {
 				t.Errorf("%s %q: err = %v, want ErrInvalidName", goos, name, err)
 			}
 		}
