@@ -120,6 +120,7 @@ func TestPreToolUseMalformedStdin(t *testing.T) {
 
 // TestPreToolUseRegressions runs review findings through the CLI entry point. rule "" means allow.
 func TestPreToolUseRegressions(t *testing.T) {
+	home := strings.Join([]string{"", "home", "dev"}, "/") // a local path, built at run time
 	tests := []struct {
 		name, tool string
 		input      map[string]any
@@ -134,6 +135,27 @@ func TestPreToolUseRegressions(t *testing.T) {
 			"empty here-string before a secret read", "Bash",
 			map[string]any{"command": `: <<< ""; cat .dev.vars`},
 			"secrets",
+		},
+		{
+			"heredoc on a compound command reaches its gh call",
+			"Bash",
+			map[string]any{
+				"command": "{ gh issue comment 1 --body-file -; } <<'EOF'\nsee " + home + "/x\nEOF",
+			},
+			"gh-publish",
+		},
+		{
+			"heredoc on an if clause reaches its gh call",
+			"Bash",
+			map[string]any{
+				"command": "if true; then gh issue comment 1 -F -; fi <<'EOF'\nsee " + home + "/x\nEOF",
+			},
+			"gh-publish",
+		},
+		{
+			"ANSI-C quoted body", "Bash",
+			map[string]any{"command": "gh pr create -t t -b $'see\\n" + home + "/x'"},
+			"gh-publish",
 		},
 	}
 	for _, tt := range tests {

@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/shuymn/stack/internal/paths"
+	"mvdan.cc/sh/v3/expand"
 	"mvdan.cc/sh/v3/syntax"
 )
 
@@ -113,7 +114,7 @@ type scope struct {
 
 // script parses sc by input lines and walks the statements.
 func (w *walker) script(sc scope, cwd string, depth int) {
-	w.stmts(sc, parseLines(sc.src), cwd, depth)
+	w.stmts(sc, parseLines(sc.src), cwd, depth, noInput)
 }
 
 // parseLines parses src as bash and, when that fails, as zsh: the Bash tool runs the user's shell,
@@ -161,37 +162,49 @@ func lineEnd(src string, n int) int {
 	return off
 }
 
-// stmts walks a statement list. A statement that changes the cwd makes it unknown for the next one:
-// only `cd X && …` carries a known cwd forward.
-func (w *walker) stmts(sc scope, list []*syntax.Stmt, cwd string, depth int) string {
+// input is the stdin a statement inherits from its enclosing command, with the offset of a heredoc
+// body in the top-level command (-1 when it does not map there).
+type input struct {
+	stdin Stdin
+	base  int
+}
+
+var (
+	noInput    = input{base: -1}
+	pipedInput = input{stdin: Stdin{Kind: StdinDynamic}, base: -1}
+)
+
+// stmts walks a statement list with the inherited stdin in. A statement that changes the cwd makes it
+// unknown for the next one: only `cd X && …` carries a known cwd forward.
+func (w *walker) stmts(sc scope, list []*syntax.Stmt, cwd string, depth int, in input) string {
 	for _, s := range list {
-		if after := w.stmt(sc, s, cwd, depth, false); after != cwd {
+		if after := w.stmt(sc, s, cwd, depth, in); after != cwd {
 			cwd = ""
 		}
 	}
 	return cwd
 }
 
-// stmt walks one statement and returns the cwd after it succeeds ("" when unknown). piped is set when
-// its stdin is a pipe.
-func (w *walker) stmt(sc scope, s *syntax.Stmt, cwd string, depth int, piped bool) string {
-	stdin, stdinBase := w.redirs(sc, s.Redirs, cwd, depth, piped)
+// stmt walks one statement and returns the cwd after it succeeds ("" when unknown). in is the stdin
+// it inherits; its own redirects override it, and the result reaches the commands inside it.
+func (w *walker) stmt(sc scope, s *syntax.Stmt, cwd string, depth int, in input) string {
+	in = w.redirs(sc, s.Redirs, cwd, depth, in)
 	switch c := s.Cmd.(type) {
 	case nil:
 		return cwd
 	case *syntax.CallExpr:
-		return w.call(sc, c, stdin, stdinBase, cwd, depth)
+		return w.call(sc, c, in, cwd, depth)
 	case *syntax.BinaryCmd:
 		switch c.Op { //nolint:exhaustive // Pipe and PipeAll share the default
 		case syntax.AndStmt:
-			return w.stmt(sc, c.Y, w.stmt(sc, c.X, cwd, depth, piped), depth, false)
+			return w.stmt(sc, c.Y, w.stmt(sc, c.X, cwd, depth, in), depth, in)
 		case syntax.OrStmt:
-			x := w.stmt(sc, c.X, cwd, depth, piped)
+			x := w.stmt(sc, c.X, cwd, depth, in)
 			ycwd := cwd
 			if x != cwd {
 				ycwd = "" // `cd X || …`: unknown by design
 			}
-			y := w.stmt(sc, c.Y, ycwd, depth, false)
+			y := w.stmt(sc, c.Y, ycwd, depth, in)
 			if x != cwd || y != cwd {
 				return ""
 			}
@@ -202,26 +215,26 @@ func (w *walker) stmt(sc scope, s *syntax.Stmt, cwd string, depth int, piped boo
 					w.handoffs(sc, a)
 				}
 			}
-			w.stmt(sc, c.X, cwd, depth, piped)
-			w.stmt(sc, c.Y, cwd, depth, true)
+			w.stmt(sc, c.X, cwd, depth, in)
+			w.stmt(sc, c.Y, cwd, depth, pipedInput)
 			return cwd
 		}
 	case *syntax.Block:
-		return w.stmts(sc, c.Stmts, cwd, depth)
+		return w.stmts(sc, c.Stmts, cwd, depth, in)
 	case *syntax.Subshell:
-		w.stmts(sc, c.Stmts, cwd, depth)
+		w.stmts(sc, c.Stmts, cwd, depth, in)
 		return cwd
 	case *syntax.IfClause:
-		return w.ifClause(sc, c, cwd, depth)
+		return w.ifClause(sc, c, cwd, depth, in)
 	case *syntax.WhileClause:
 		body := loopCwd(c, cwd)
-		w.stmts(sc, c.Cond, body, depth)
-		w.stmts(sc, c.Do, body, depth)
+		w.stmts(sc, c.Cond, body, depth, in)
+		w.stmts(sc, c.Do, body, depth, in)
 		return unchanged(body, cwd)
 	case *syntax.ForClause:
 		w.substs(sc, c.Loop, cwd, depth)
 		body := loopCwd(c, cwd)
-		w.stmts(sc, c.Do, body, depth)
+		w.stmts(sc, c.Do, body, depth, in)
 		return unchanged(body, cwd)
 	case *syntax.CaseClause:
 		w.substs(sc, c.Word, cwd, depth)
@@ -230,13 +243,13 @@ func (w *walker) stmt(sc scope, s *syntax.Stmt, cwd string, depth int, piped boo
 			for _, p := range item.Patterns {
 				w.substs(sc, p, cwd, depth)
 			}
-			if w.stmts(sc, item.Stmts, cwd, depth) != cwd {
+			if w.stmts(sc, item.Stmts, cwd, depth, in) != cwd {
 				after = ""
 			}
 		}
 		return after
 	case *syntax.FuncDecl:
-		w.stmt(sc, c.Body, "", depth, false) // runs later, wherever it is called
+		w.stmt(sc, c.Body, "", depth, noInput) // runs later, wherever it is called
 		return cwd
 	case *syntax.DeclClause:
 		for _, a := range c.Args {
@@ -247,9 +260,9 @@ func (w *walker) stmt(sc scope, s *syntax.Stmt, cwd string, depth int, piped boo
 		if c.Stmt == nil {
 			return cwd
 		}
-		return w.stmt(sc, c.Stmt, cwd, depth, piped)
+		return w.stmt(sc, c.Stmt, cwd, depth, in)
 	case *syntax.CoprocClause:
-		w.stmt(sc, c.Stmt, cwd, depth, false)
+		w.stmt(sc, c.Stmt, cwd, depth, noInput)
 		return cwd
 	default: // let, [[ ]], (( )), …
 		w.substs(sc, c, cwd, depth)
@@ -257,11 +270,17 @@ func (w *walker) stmt(sc scope, s *syntax.Stmt, cwd string, depth int, piped boo
 	}
 }
 
-func (w *walker) ifClause(sc scope, c *syntax.IfClause, cwd string, depth int) string {
+func (w *walker) ifClause(sc scope, c *syntax.IfClause, cwd string, depth int, in input) string {
 	after := cwd
 	for ; c != nil; c = c.Else {
-		cond := w.stmts(sc, c.Cond, cwd, depth)
-		then := w.stmts(sc, c.Then, cond, depth) // walked even when the condition changed the cwd
+		cond := w.stmts(sc, c.Cond, cwd, depth, in)
+		then := w.stmts(
+			sc,
+			c.Then,
+			cond,
+			depth,
+			in,
+		) // walked even when the condition changed the cwd
 		if cond != cwd || then != cwd {
 			after = ""
 		}
@@ -366,12 +385,12 @@ func (w *walker) substs(sc scope, n syntax.Node, cwd string, depth int) {
 		switch x := n.(type) {
 		case *syntax.CmdSubst:
 			if depth < maxDepth {
-				w.stmts(sc, x.Stmts, cwd, depth+1)
+				w.stmts(sc, x.Stmts, cwd, depth+1, noInput)
 			}
 			return false
 		case *syntax.ProcSubst:
 			if depth < maxDepth {
-				w.stmts(sc, x.Stmts, cwd, depth+1)
+				w.stmts(sc, x.Stmts, cwd, depth+1, noInput)
 			}
 			return false
 		}
@@ -415,30 +434,26 @@ func (w *walker) handoffs(sc scope, wd *syntax.Word) {
 	visit(wd.Parts)
 }
 
-// redirs walks a statement's redirects and returns its stdin and, for a heredoc body that maps to
-// the top-level command, the body's offset there (else -1). piped is set when stdin is a pipe.
+// redirs walks a statement's redirects and returns its stdin: the inherited in, unless a redirect
+// binds fd 0, with the offset of a heredoc body that maps to the top-level command (else -1).
 func (w *walker) redirs(
 	sc scope,
 	list []*syntax.Redirect,
 	cwd string,
 	depth int,
-	piped bool,
-) (Stdin, int) {
-	stdin, base := Stdin{}, -1
-	if piped {
-		stdin.Kind = StdinDynamic
-	}
+	in input,
+) input {
 	for _, r := range list {
 		w.substs(sc, r.Word, cwd, depth)
 		w.substs(sc, r.Hdoc, cwd, depth)
-		if in, ok := redirStdin(r); ok {
-			stdin, base = in, hdocBase(sc, r, in)
+		if stdin, ok := redirStdin(r); ok {
+			in = input{stdin: stdin, base: hdocBase(sc, r, stdin)}
 		}
 		if r.Op == syntax.WordHdoc && soleSubst(r.Word) {
 			w.handoffs(sc, r.Word) // `cmd <<< "$(cat F)"`: the value goes to cmd's stdin only
 		}
 	}
-	return stdin, base
+	return in
 }
 
 // soleSubst reports whether wd is exactly one command substitution, bare or double-quoted.
@@ -498,15 +513,8 @@ func isHandoff(c *syntax.CmdSubst) bool {
 
 var assignWordRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*\+?=`)
 
-// call walks a simple command and returns the cwd after it succeeds.
-func (w *walker) call(
-	sc scope,
-	c *syntax.CallExpr,
-	stdin Stdin,
-	stdinBase int,
-	cwd string,
-	depth int,
-) string {
+// call walks a simple command reading in and returns the cwd after it succeeds.
+func (w *walker) call(sc scope, c *syntax.CallExpr, in input, cwd string, depth int) string {
 	for _, a := range c.Assigns {
 		w.assign(sc, a, cwd, depth)
 	}
@@ -529,7 +537,7 @@ func (w *walker) call(
 	if chdir {
 		cwd = ""
 	}
-	call := Call{Args: argv, Stdin: stdin, Cwd: cwd}
+	call := Call{Args: argv, Stdin: in.stdin, Cwd: cwd}
 	name := call.Name()
 	if name != "echo" && name != "printf" && name != "cat" {
 		w.flagHandoffs(sc, c.Args[start:], argv)
@@ -537,7 +545,7 @@ func (w *walker) call(
 	w.res.Calls = append(w.res.Calls, call)
 
 	if depth < maxDepth {
-		w.nested(sc, c.Args[start:], call, stdinBase, depth)
+		w.nested(sc, c.Args[start:], call, in.base, depth)
 	}
 	switch name {
 	case "cd":
@@ -789,10 +797,16 @@ func word(wd *syntax.Word) Word {
 		case *syntax.Lit:
 			b.WriteString(unescape(p.Value, false))
 		case *syntax.SglQuoted:
-			if p.Dollar {
+			if !p.Dollar {
+				b.WriteString(p.Value)
+				break
+			}
+			// ANSI-C `$'…'`: decoded by mvdan's expander, which needs no environment for it.
+			s, err := expand.Literal(nil, &syntax.Word{Parts: []syntax.WordPart{p}})
+			if err != nil {
 				static = false
 			}
-			b.WriteString(p.Value)
+			b.WriteString(s)
 		case *syntax.DblQuoted:
 			for _, q := range p.Parts {
 				lit, ok := q.(*syntax.Lit)

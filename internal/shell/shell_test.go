@@ -48,6 +48,7 @@ func TestParseCalls(t *testing.T) {
 		{`gh "a"'b'c`, [][]string{{"gh", "abc"}}},
 		{`gh a\ b "q\"x" "\a"`, [][]string{{"gh", "a b", `q"x`, `\a`}}},
 		{`gh $VAR "$X" "a${b}"`, [][]string{{"gh", "$", "$", "$"}}},
+		{`gh $'a\tb\n' x$'\x41'`, [][]string{{"gh", "a\tb\n", "xA"}}},
 		{`A=1 B=2 gh x`, [][]string{{"gh", "x"}}},
 		{`env -- A=1 gh x`, [][]string{{"gh", "x"}}},
 		{`env -u A B=1 gh x`, [][]string{{"gh", "x"}}},
@@ -158,6 +159,14 @@ func TestParseStdin(t *testing.T) {
 		{"gh x < $F", Stdin{Kind: StdinDynamic}},
 		{"cat b.md | gh x", Stdin{Kind: StdinDynamic}},
 		{"gh x 2< f", Stdin{}},
+		{"{ true; gh x; } <<'EOF'\nbody\nEOF\n", Stdin{Kind: StdinText, Text: "body\n"}},
+		{"(gh x) < b.md", Stdin{Kind: StdinFile, File: Word{Text: "b.md", Static: true}}},
+		{"for i in 1; do gh x; done <<< 'v'", Stdin{Kind: StdinText, Text: "v\n"}},
+		{
+			"{ gh x < f; } <<'EOF'\nbody\nEOF\n",
+			Stdin{Kind: StdinFile, File: Word{Text: "f", Static: true}},
+		},
+		{"{ cat b.md | gh x; } <<'EOF'\nbody\nEOF\n", Stdin{Kind: StdinDynamic}},
 	}
 	for _, tt := range tests {
 		c := find(t, Parse(tt.cmd, "", ""), "gh")
