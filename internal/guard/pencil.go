@@ -118,7 +118,7 @@ func calleeName(x js.IExpr) string {
 // unquote strips the quotes of a JavaScript string or template literal. Escapes are kept as
 // written: a name spelled with escapes is not matched.
 func unquote(b []byte) string {
-	if len(b) < 2 {
+	if len(b) < len(`""`) {
 		return ""
 	}
 	return string(b[1 : len(b)-1])
