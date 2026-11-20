@@ -15,8 +15,6 @@ import (
 // runPrMerge implements `stack pr merge <pr> <head-sha>`. Invalid arguments, a local path or private
 // term in --subject/--body and an unusable config exit 2; every later refusal exits 1.
 func runPrMerge(ctx context.Context, env Env, inv invocation) error {
-	set := map[string]bool{}
-	inv.flags.Visit(func(f *flag.Flag) { set[f.Name] = true })
 	o := merge.Options{
 		PR:            inv.args[0],
 		Head:          inv.args[1],
@@ -39,17 +37,16 @@ func runPrMerge(ctx context.Context, env Env, inv invocation) error {
 		}
 	}
 	o.Merge.DeleteBranch = boolFlagValue(inv.flags, "delete-branch")
-	for _, name := range []string{"subject", "body"} {
-		if !set[name] {
-			continue
-		}
-		v := inv.flags.Lookup(name).Value.String()
-		if name == "subject" {
+	// Visit sees only the flags given, so an explicit empty value stays distinct from none.
+	inv.flags.Visit(func(f *flag.Flag) {
+		v := f.Value.String()
+		switch f.Name {
+		case "subject":
 			o.Merge.Subject = &v
-		} else {
+		case "body":
 			o.Merge.Body = &v
 		}
-	}
+	})
 	// Arguments first, so a usage error does not depend on the config.
 	if err := merge.Validate(o); err != nil {
 		return err
