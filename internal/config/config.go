@@ -60,6 +60,7 @@ type Safety struct {
 type Stages struct {
 	Entry    []string
 	Outbound []string
+	Merged   []string
 	Cycle    []string
 }
 
@@ -85,6 +86,7 @@ func Defaults() Config {
 		Stages: Stages{
 			Entry:    []string{"jev-router"},
 			Outbound: []string{"jev-semantic"},
+			Merged:   []string{"audit-due"},
 			Cycle:    []string{"observe", "jev-classify", "improve"},
 		},
 	}
@@ -165,6 +167,7 @@ func Load(path string) (Config, []string, error) {
 	stages := d.section(top, "stages")
 	d.field(stages, "entry", &cfg.Stages.Entry)
 	d.field(stages, "outbound", &cfg.Stages.Outbound)
+	d.field(stages, "merged", &cfg.Stages.Merged)
 	d.field(stages, "cycle", &cfg.Stages.Cycle)
 
 	if d.err != nil {

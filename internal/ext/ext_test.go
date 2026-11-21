@@ -337,7 +337,7 @@ func TestRunAggregate(t *testing.T) {
 	}
 }
 
-// TestBlockDemotion covers C1: a block at entry or cycle is recorded as warn with its context and
+// TestBlockDemotion covers C1: a block at entry, merged or cycle is recorded as warn with its context and
 // findings kept, the stage finding appended and error set; outbound keeps block.
 func TestBlockDemotion(t *testing.T) {
 	t.Parallel()
@@ -345,7 +345,7 @@ func TestBlockDemotion(t *testing.T) {
 		Stdout: `{"status":"block","context":"STOP","findings":[{"rule":"x"}, {"n":1} ]}`,
 	})
 	bare := install(t, "bare", proctest.Response{Stdout: `{"status":"block"}`})
-	for _, stage := range []string{StageEntry, StageOutbound, StageCycle} {
+	for _, stage := range []string{StageEntry, StageOutbound, StageMerged, StageCycle} {
 		t.Run(stage, func(t *testing.T) {
 			t.Parallel()
 			// Not the stages' own deadlines: two fakes may start slowly on a loaded machine.
@@ -433,6 +433,7 @@ func TestNames(t *testing.T) {
 	for stage, want := range map[string][]string{
 		StageEntry:    {"jev-router"},
 		StageOutbound: {"jev-semantic"},
+		StageMerged:   {"audit-due"},
 		StageCycle:    {"observe", "jev-classify", "improve"},
 	} {
 		if got, err := Names(s, stage); err != nil || !slices.Equal(got, want) {

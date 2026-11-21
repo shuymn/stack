@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -101,6 +102,9 @@ type outcome struct {
 	stdout string
 	stderr string
 	gh     []proctest.Call
+	// git are the calls of the fake git of setup.fakeGit; dir is the fixture repository.
+	git []proctest.Call
+	dir string
 }
 
 // merged reports whether the fake gh saw a `gh pr merge` call.
@@ -122,6 +126,12 @@ type setup struct {
 	outside bool
 	// brokenStdout makes every write to stdout fail, as a closed pipe does.
 	brokenStdout bool
+	// fakeGit makes git a fake that prints the fixture's top level, slash-separated as git does.
+	fakeGit bool
+	// stdout also receives every write to stdout, after the outcome's buffer.
+	stdout io.Writer
+	// withCancel receives the cancel function of the run's context.
+	withCancel func(context.CancelFunc)
 }
 
 // run executes Run in a fixture repository with a fake gh answering s.
@@ -147,6 +157,11 @@ func run(t *testing.T, s scenario, st setup) outcome {
 	}
 	gh := proctest.Install(t, "gh", sc)
 	var stdout, stderr bytes.Buffer
+	if st.fakeGit {
+		st.git = proctest.Install(t, "git", proctest.Scenario{Responses: []proctest.Response{{
+			Args: []string{"rev-parse", "--show-toplevel"}, Stdout: filepath.ToSlash(r.Dir) + "\n",
+		}}})
+	}
 	if st.outside {
 		st.git = proctest.Install(t, "git", proctest.Scenario{Responses: []proctest.Response{{
 			Args:   []string{"rev-parse", "--show-toplevel"},
@@ -155,17 +170,30 @@ func run(t *testing.T, s scenario, st setup) outcome {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
+	if st.withCancel != nil {
+		st.withCancel(cancel)
+	}
 	var runner proc.Runner = proc.Exec{}
 	if st.stop {
 		runner = stopAtMerge{cancel: cancel}
 	}
 	o.Client = github.Client{Runner: runner, Gh: gh, Git: st.git, Dir: r.Dir, Env: r.Env}
 	o.Stdout, o.Stderr = &stdout, &stderr
+	if st.stdout != nil {
+		o.Stdout = io.MultiWriter(&stdout, st.stdout)
+	}
 	if st.brokenStdout {
 		o.Stdout = brokenWriter{}
 	}
 	err := Run(ctx, o)
-	return outcome{err, stdout.String(), stderr.String(), proctest.Calls(t, gh)}
+	out := outcome{
+		err: err, stdout: stdout.String(), stderr: stderr.String(),
+		gh: proctest.Calls(t, gh), dir: r.Dir,
+	}
+	if st.fakeGit {
+		out.git = proctest.Calls(t, st.git)
+	}
+	return out
 }
 
 // brokenWriter fails every write, as a pipe whose reader closed does.

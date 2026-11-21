@@ -29,14 +29,16 @@ func extBin(t *testing.T) (string, *gittest.Repo) {
 	return bin, r
 }
 
-// longEntryDeadline lifts the entry stage's 10 s deadline, meant for an interactive start, for
-// fakes that start slowly under -race on a loaded machine; the deadline paths have their own
+// longStageDeadlines lifts the 10 s deadlines of entry and merged, meant for an interactive start,
+// for fakes that start slowly under -race on a loaded machine; the deadline paths have their own
 // tests. Not parallel: it changes a package variable.
-func longEntryDeadline(t *testing.T) {
+func longStageDeadlines(t *testing.T) {
 	t.Helper()
-	saved := ext.Timeouts[ext.StageEntry]
-	ext.Timeouts[ext.StageEntry] = time.Minute
-	t.Cleanup(func() { ext.Timeouts[ext.StageEntry] = saved })
+	for _, stage := range []string{ext.StageEntry, ext.StageMerged} {
+		saved := ext.Timeouts[stage]
+		ext.Timeouts[stage] = time.Minute
+		t.Cleanup(func() { ext.Timeouts[stage] = saved })
+	}
 }
 
 func fakeExt(t *testing.T, bin, name, stdout string) string {
@@ -143,7 +145,7 @@ func TestRunCommand(t *testing.T) {
 // TestRunBlockExit covers C2: `stack run` exits 1 on block only at outbound, and a replay's
 // expect is compared with the aggregate after demotion.
 func TestRunBlockExit(t *testing.T) {
-	longEntryDeadline(t)
+	longStageDeadlines(t)
 	bin, _ := extBin(t)
 	fakeExt(t, bin, "blocker", `{"status":"block","context":"NO"}`)
 	home := t.TempDir()
@@ -159,6 +161,7 @@ func TestRunBlockExit(t *testing.T) {
 	}{
 		{"entry", "warn", exitOK},
 		{"outbound", "block", exitRefused},
+		{"merged", "warn", exitOK},
 		{"cycle", "warn", exitOK},
 	} {
 		res := runIn(t, home, nil, "run", tt.stage, "--ext", "blocker")
@@ -187,10 +190,11 @@ func TestRunBlockExit(t *testing.T) {
 	}
 }
 
-// TestRequestKits covers C3: a live entry request lists the session's open kits in `.kits` order,
-// [] without a valid id or under a held lock; outbound and cycle requests carry no kits.
+// TestRequestKits covers C3: a live entry or merged request lists the session's open kits in
+// `.kits` order, [] without a valid id or under a held lock; outbound and cycle requests carry no
+// kits, and a live `stack run merged` request no merge field.
 func TestRequestKits(t *testing.T) {
-	longEntryDeadline(t)
+	longStageDeadlines(t)
 	bin, _ := extBin(t)
 	logger := fakeExt(t, bin, "logger", `{"status":"pass"}`)
 	home := t.TempDir()
@@ -219,14 +223,19 @@ func TestRequestKits(t *testing.T) {
 
 	want := `[{"slug":"b","dir":` + strconv.Quote(filepath.Join(root, "b")) + `},` +
 		`{"slug":"a","dir":` + strconv.Quote(filepath.Join(root, "a")) + `}]`
-	if kits, _, res := lastKits(withID, "entry"); string(kits) != want ||
-		res.stderr != "[logger] note\n" {
-		t.Fatalf("kits = %s (%+v), want %s", kits, res, want)
-	}
-	for _, env := range []map[string]string{nil, {"STACK_SESSION_ID": "../x"}} {
-		if kits, _, _ := lastKits(env, "entry"); string(kits) != "[]" {
-			t.Errorf("kits with id %q = %s, want []", env["STACK_SESSION_ID"], kits)
+	for _, stage := range []string{"entry", "merged"} {
+		if kits, _, res := lastKits(withID, stage); string(kits) != want ||
+			res.stderr != "[logger] note\n" {
+			t.Fatalf("%s kits = %s (%+v), want %s", stage, kits, res, want)
 		}
+		for _, env := range []map[string]string{nil, {"STACK_SESSION_ID": "../x"}} {
+			if kits, _, _ := lastKits(env, stage); string(kits) != "[]" {
+				t.Errorf("%s kits with id %q = %s, want []", stage, env["STACK_SESSION_ID"], kits)
+			}
+		}
+	}
+	if calls := proctest.Calls(t, logger); strings.Contains(calls[len(calls)-1].Stdin, `"merge"`) {
+		t.Errorf("stack run merged request = %s, want no merge field", calls[len(calls)-1].Stdin)
 	}
 	for _, stage := range []string{"outbound", "cycle"} {
 		if kits, ok, _ := lastKits(withID, stage); ok {
@@ -266,7 +275,7 @@ func TestRequestKits(t *testing.T) {
 // TestRunEntryBrokenConfig: with --ext, a config that cannot be loaded costs only the kits, as
 // stack run did before entry requests carried them.
 func TestRunEntryBrokenConfig(t *testing.T) {
-	longEntryDeadline(t)
+	longStageDeadlines(t)
 	bin, _ := extBin(t)
 	demo := fakeExt(t, bin, "demo", `{"status":"pass"}`)
 	home := t.TempDir()
@@ -426,7 +435,7 @@ func TestRunReplay(t *testing.T) {
 // appending each context in the renderer's block format; a block is shown as a demoted warn.
 func TestKitOpenEntryStage(t *testing.T) {
 	bin, r := extBin(t)
-	longEntryDeadline(t)
+	longStageDeadlines(t)
 	router := fakeExt(t, bin, "jev-router", `{"status":"pass","context":"ROUTED"}`)
 	gate := fakeExt(t, bin, "gate", `{"status":"block","context":"STOP"}`)
 	fakeExt(t, bin, "quiet", `{"status":"pass"}`)

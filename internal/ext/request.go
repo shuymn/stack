@@ -29,8 +29,18 @@ type Request struct {
 	Repo   string `json:"repo"`
 	Range  string `json:"range"`
 	Prompt string `json:"prompt"`
-	// Kits is sent only by live entry requests: nil omits the key, an empty list sends [].
+	// Kits is sent only by live entry and merged requests: nil omits the key, an empty list
+	// sends [].
 	Kits *[]Kit `json:"kits,omitempty"`
+	// Merge is sent only by the merged requests of `stack pr merge`; nil omits the key.
+	Merge *Merge `json:"merge,omitempty"`
+}
+
+// Merge is the merge `stack pr merge` verified, in a merged request.
+type Merge struct {
+	PR   int    `json:"pr"`
+	Head string `json:"head"`
+	OID  string `json:"oid"`
 }
 
 // Kit is one open kit of the session, in a request's kits.

@@ -28,6 +28,7 @@ import (
 const (
 	StageEntry    = "entry"
 	StageOutbound = "outbound"
+	StageMerged   = "merged"
 	StageCycle    = "cycle"
 )
 
@@ -45,6 +46,7 @@ const Prefix = "stack-"
 const (
 	EntryTimeout    = 10 * time.Second
 	OutboundTimeout = 120 * time.Second
+	MergedTimeout   = 10 * time.Second
 	CycleTimeout    = 30 * time.Minute
 )
 
@@ -52,6 +54,7 @@ const (
 var Timeouts = map[string]time.Duration{
 	StageEntry:    EntryTimeout,
 	StageOutbound: OutboundTimeout,
+	StageMerged:   MergedTimeout,
 	StageCycle:    CycleTimeout,
 }
 
@@ -60,13 +63,13 @@ var severity = []string{StatusPass, StatusWarn, StatusBlock}
 
 // cannotBlock reports a stage whose semantic is inject or observe: a block there is demoted.
 func cannotBlock(stage string) bool {
-	return stage == StageEntry || stage == StageCycle
+	return stage == StageEntry || stage == StageMerged || stage == StageCycle
 }
 
 var (
 	// ErrInvalidName reports an extension name that is not a single lower-case file-name component.
 	ErrInvalidName = errors.New("invalid extension name")
-	// ErrUnknownStage reports a stage other than entry, outbound or cycle.
+	// ErrUnknownStage reports a stage other than entry, outbound, merged or cycle.
 	ErrUnknownStage = errors.New("unknown stage")
 
 	nameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
@@ -95,6 +98,8 @@ func Names(s config.Stages, stage string) ([]string, error) {
 		return s.Entry, nil
 	case StageOutbound:
 		return s.Outbound, nil
+	case StageMerged:
+		return s.Merged, nil
 	case StageCycle:
 		return s.Cycle, nil
 	default:
@@ -165,6 +170,19 @@ type Result struct {
 	Error string `json:"error"`
 	// Path is the executable that ran, empty when none did.
 	Path string `json:"-"`
+}
+
+// Marker is the warn marker of a result that is not pass, `[extension <name>: warn: <reason>]`
+// with its error as the reason, else its status; "" for pass.
+func (r Result) Marker() string {
+	if r.Status == StatusPass {
+		return ""
+	}
+	reason := r.Error
+	if reason == "" {
+		reason = r.Status
+	}
+	return fmt.Sprintf("[extension %s: %s: %s]", r.Name, StatusWarn, reason)
 }
 
 // Aggregate is the outcome of a stage.

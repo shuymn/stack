@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -133,9 +134,13 @@ type autoCase struct {
 	disable proctest.Response
 	polls   []proctest.Response
 	final   proctest.Response
+	// deadlineAt moves the clock to the wait's deadline after the nth sleep.
+	deadlineAt int
 	// cancelAt cancels the run during the nth sleep of the wait.
-	cancelAt                                       int
-	brokenStdout                                   bool
+	cancelAt     int
+	brokenStdout bool
+	// stdout also receives every write to stdout, after the outcome's buffer.
+	stdout                                         io.Writer
 	stopInMerge, cancelBeforeMerge, missingAtMerge bool
 }
 
@@ -188,15 +193,22 @@ func runAuto(t *testing.T, tc autoCase) autoOutcome {
 	for _, p := range tc.polls {
 		runner.polls = append(runner.polls, install(p))
 	}
-	clock := &fakeClock{now: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	clock := &fakeClock{now: start}
 	clock.onSleep = func(n int) {
 		if n == tc.cancelAt {
 			cancel()
+		}
+		if n == tc.deadlineAt {
+			clock.now = start.Add(AutoWait)
 		}
 	}
 	var stdout, stderr bytes.Buffer
 	o.Client = github.Client{Runner: runner, Gh: runner.gh, Dir: r.Dir, Env: r.Env}
 	o.Stdout, o.Stderr = &stdout, &stderr
+	if tc.stdout != nil {
+		o.Stdout = io.MultiWriter(&stdout, tc.stdout)
+	}
 	if tc.brokenStdout {
 		o.Stdout = brokenWriter{}
 	}

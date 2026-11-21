@@ -32,6 +32,7 @@ func want5() Config {
 		Stages: Stages{
 			Entry:    []string{"jev-router"},
 			Outbound: []string{"jev-semantic"},
+			Merged:   []string{"audit-due"},
 			Cycle:    []string{"observe", "jev-classify", "improve"},
 		},
 	}
@@ -82,6 +83,7 @@ deny_pencil_generate = true
 [stages]
 entry = ["jev-router"]
 outbound = ["jev-semantic"]
+merged = ["audit-due"]
 cycle = ["observe", "jev-classify", "improve"]
 `)
 	cfg, warnings, err := Load(p)
@@ -156,6 +158,7 @@ deny_pencil_generate = false
 
 [stages]
 entry = []
+merged = ["demo"]
 `)
 	cfg, warnings, err := Load(p)
 	if err != nil {
@@ -165,6 +168,7 @@ entry = []
 	want.Kit.Root = "/k"
 	want.Safety.DenyPencilGenerate = false
 	want.Stages.Entry = []string{}
+	want.Stages.Merged = []string{"demo"}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Fatalf("Load =\n%+v\nwant\n%+v", cfg, want)
 	}

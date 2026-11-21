@@ -132,10 +132,10 @@ var commands = []*command{
 	},
 	{
 		path:    []string{"run"},
-		args:    "<entry|outbound|cycle>",
+		args:    "<entry|outbound|merged|cycle>",
 		flagDoc: "[--dry-run] [--replay FILE] [--ext NAME]... [--range R] [--prompt-file F]",
 		summary: "run the extensions of a stage",
-		choices: []string{ext.StageEntry, ext.StageOutbound, ext.StageCycle},
+		choices: []string{ext.StageEntry, ext.StageOutbound, ext.StageMerged, ext.StageCycle},
 		define: func(fs *flag.FlagSet) {
 			fs.Bool("dry-run", false, "")
 			fs.String("replay", "", "")
