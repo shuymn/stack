@@ -126,11 +126,6 @@ var commands = []*command{
 		run: runCheckPublic,
 	},
 	{
-		path:    []string{"budget", "status"},
-		summary: "display kit sizes and attention item counts",
-		run:     runBudgetStatus,
-	},
-	{
 		path: []string{"run"},
 		args: "<entry|outbound|merged|cycle>",
 		flagDoc: "[--dry-run] [--replay FILE] [--ext NAME]... [--range R] [--prompt-file F] " +

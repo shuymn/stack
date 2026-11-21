@@ -95,7 +95,7 @@ func TestUnknownCommand(t *testing.T) {
 		{[]string{"kit", "shut", "x"}, "stack kit: missing or unknown subcommand"},
 		{[]string{"hook", "claude"}, "stack hook claude: missing or unknown subcommand"},
 		{[]string{"hook", "codex", "x"}, "stack hook: missing or unknown subcommand"},
-		{[]string{"budget"}, "stack budget: missing or unknown subcommand"},
+		{[]string{"budget", "status"}, `unknown command "budget"`}, // C12: removed
 	}
 	for _, tt := range tests {
 		r := run(t, nil, tt.args...)
@@ -104,7 +104,7 @@ func TestUnknownCommand(t *testing.T) {
 		}
 	}
 	if r := run(t, nil, "kit"); !strings.Contains(r.stderr, "stack kit open <slug>") ||
-		strings.Contains(r.stderr, "stack budget status") {
+		strings.Contains(r.stderr, "stack pr merge") {
 		t.Errorf("group usage not limited to the group: %q", r.stderr)
 	}
 }
@@ -129,7 +129,6 @@ func TestArgumentErrors(t *testing.T) {
 		{"pr", "merge", "12", "abc", "--subject"},
 		{"pr", "merge", "12", "abc", "--squash=maybe"},
 		{"check", "public"},
-		{"budget", "status", "extra"},
 		{"run", "nope"},
 		{"run"},
 	}
