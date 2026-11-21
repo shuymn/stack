@@ -291,7 +291,7 @@ func placeEntry(a *allocator, stderr io.Writer, results []ext.Result) []*piece {
 		if !shown {
 			continue
 		}
-		pc := pieces([]kit.Block{b})[0]
+		pc := blockPiece(b)
 		pc.omit = "[entry context omitted: context limit: " + r.Name + "]"
 		pc.cut = true
 		a.place(pc, blockLimit)
@@ -390,11 +390,15 @@ func restoreKits(ctx context.Context, p Params) ([]kitPieces, error) {
 func pieces(blocks []kit.Block) []*piece {
 	out := make([]*piece, len(blocks))
 	for i, b := range blocks {
-		if b.Tag == "" {
-			out[i] = &piece{body: b.Body, kind: b.Kind}
-		} else {
-			out[i] = tagged(b.Tag, b.Path, b.Body, b.Kind)
-		}
+		out[i] = blockPiece(b)
 	}
 	return out
+}
+
+// blockPiece is the piece of one kit block: a bare marker, or its body between its tags.
+func blockPiece(b kit.Block) *piece {
+	if b.Tag == "" {
+		return &piece{body: b.Body, kind: b.Kind}
+	}
+	return tagged(b.Tag, b.Path, b.Body, b.Kind)
 }

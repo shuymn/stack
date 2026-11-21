@@ -217,14 +217,9 @@ func TestRequestKits(t *testing.T) {
 		return kits, ok, res
 	}
 
-	want, err := json.Marshal([]ext.Kit{
-		{Slug: "b", Dir: filepath.Join(root, "b")},
-		{Slug: "a", Dir: filepath.Join(root, "a")},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if kits, _, res := lastKits(withID, "entry"); string(kits) != string(want) ||
+	want := `[{"slug":"b","dir":` + strconv.Quote(filepath.Join(root, "b")) + `},` +
+		`{"slug":"a","dir":` + strconv.Quote(filepath.Join(root, "a")) + `}]`
+	if kits, _, res := lastKits(withID, "entry"); string(kits) != want ||
 		res.stderr != "[logger] note\n" {
 		t.Fatalf("kits = %s (%+v), want %s", kits, res, want)
 	}
@@ -346,15 +341,11 @@ func TestRunDryRun(t *testing.T) {
 	block := fakeExt(t, bin, "blocker", `{"status":"block"}`)
 	res := runIn(t, t.TempDir(), nil, "run", "entry", "--dry-run", "--ext", "blocker",
 		"--ext", "absent")
-	req, err := json.Marshal(ext.Request{
-		Stage: "entry", Repo: strings.TrimSpace(r.Git("rev-parse", "--show-toplevel")),
-		Kits: &[]ext.Kit{},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	req := `{"stage":"entry","repo":` +
+		strconv.Quote(strings.TrimSpace(r.Git("rev-parse", "--show-toplevel"))) +
+		`,"range":"","prompt":"","kits":[]}`
 	want := "stage: entry\nplan:\n  blocker -> " + block + "\n  absent -> skipped\nrequest: " +
-		string(req) + "\n"
+		req + "\n"
 	if res.code != exitOK || res.stdout != want {
 		t.Fatalf("dry run = %+v\nwant %s", res, want)
 	}
@@ -451,15 +442,13 @@ func TestKitOpenEntryStage(t *testing.T) {
 		t.Fatalf("kit open = %+v\nwant prefix %s", res, want)
 	}
 	calls := proctest.Calls(t, router)
-	var req struct {
-		ext.Request
-
-		Kits []ext.Kit `json:"kits"`
-	}
+	var req map[string]json.RawMessage
+	var repo string
 	if len(calls) != 1 || json.Unmarshal([]byte(calls[0].Stdin), &req) != nil ||
-		req.Stage != "entry" || req.Range != "" || req.Prompt != "" ||
-		!sameFile(t, req.Repo, r.Dir) ||
-		!slices.Equal(req.Kits, []ext.Kit{{Slug: "demo", Dir: kitDir}}) {
+		json.Unmarshal(req["repo"], &repo) != nil || !sameFile(t, repo, r.Dir) ||
+		string(req["stage"]) != `"entry"` || string(req["range"]) != `""` ||
+		string(req["prompt"]) != `""` ||
+		string(req["kits"]) != `[{"slug":"demo","dir":`+strconv.Quote(kitDir)+`}]` {
 		t.Fatalf("entry request = %+v", calls)
 	}
 

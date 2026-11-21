@@ -1,7 +1,6 @@
 package session
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -89,14 +88,10 @@ func TestCompactEntry(t *testing.T) {
 			"\n\n<extension-context path="+strconv.Quote(demo)+">\nENTRY CTX\n</extension-context>"+
 				"\n\n<orchestration-handover", "HANDOVER")
 		calls := proctest.Calls(t, demo)
-		want, err := json.Marshal(ext.Request{Stage: ext.StageEntry, Kits: &[]ext.Kit{
-			{Slug: "b", Dir: f.kitDir("b")},
-			{Slug: "a", Dir: f.kitDir("a")},
-		}})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(calls) != 1 || calls[0].Stdin != string(want) ||
+		want := `{"stage":"entry","repo":"","range":"","prompt":"","kits":[` +
+			`{"slug":"b","dir":` + strconv.Quote(f.kitDir("b")) + `},` +
+			`{"slug":"a","dir":` + strconv.Quote(f.kitDir("a")) + `}]}`
+		if len(calls) != 1 || calls[0].Stdin != want ||
 			calls[0].Env[IDVar] != testID || calls[0].Env["STACK_STAGE"] != ext.StageEntry {
 			t.Fatalf("calls = %+v, want one with %s and %s=%s", calls, want, IDVar, testID)
 		}

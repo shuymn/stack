@@ -58,15 +58,9 @@ var Timeouts = map[string]time.Duration{
 // severity orders statuses for aggregation: block > warn > pass.
 var severity = []string{StatusPass, StatusWarn, StatusBlock}
 
-// cannotBlock lists the stages whose semantic is inject or observe: a block there is demoted.
-var cannotBlock = map[string]bool{
-	StageEntry: true,
-	StageCycle: true,
-}
-
-// CanBlock reports whether a block response at stage stays a block.
-func CanBlock(stage string) bool {
-	return !cannotBlock[stage]
+// cannotBlock reports a stage whose semantic is inject or observe: a block there is demoted.
+func cannotBlock(stage string) bool {
+	return stage == StageEntry || stage == StageCycle
 }
 
 var (
@@ -365,7 +359,7 @@ func parse(stdout []byte) (Result, error) {
 // the finding `{"extension":<name>,"error":"block is not allowed at stage <stage>"}` is appended
 // and error is set to that reason.
 func demote(stage string, r Result) Result {
-	if r.Status != StatusBlock || CanBlock(stage) {
+	if r.Status != StatusBlock || !cannotBlock(stage) {
 		return r
 	}
 	reason := "block is not allowed at stage " + stage
