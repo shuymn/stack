@@ -59,11 +59,11 @@ const (
 	latestSchema = 1
 
 	// §3.9 limits: gh calls 60 s each, the hook's own 5 s settings timeout, 4 replays at a time,
-	// 5,000 payloads.
+	// 100,000 payloads.
 	defaultGhTimeout     = 60 * time.Second
 	defaultGitTimeout    = 10 * time.Second
 	defaultReplayTimeout = 5 * time.Second
-	defaultReplayCap     = 5000
+	defaultReplayCap     = 100000
 	defaultReplayWorkers = 4
 	// reserveShare bounds a reserve that does not fit a short test budget.
 	reserveShare    = 4
