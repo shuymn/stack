@@ -7,9 +7,8 @@ A minimal, extensible Go CLI (`stack`) for personal AI coding agent orchestratio
 - **Minimal Go core (`cmd/stack`, `internal/`):**
   - `stack kit open <slug>` / `stack kit close <slug>`: Mid-session promote and handover via a single mechanism (`$STACK_SESSION_ID` + `<session_id>.kits`).
   - `stack hook claude session-start`: Exports `STACK_SESSION_ID` via `CLAUDE_ENV_FILE` on every start/resume/clear/compact; injects kit state and worker rules, then the entry extensions' contexts, **only on `compact`** (zero misfire on ordinary sessions).
-  - `stack hook claude pre-tool-use`: Minimal near-zero-false-positive guard (secrets read, local paths in `gh` write bodies, raw `gh pr merge` deny).
-  - `stack pr merge <pr> <head-sha>`: Merges only when head SHA matches and all checks pass (plus optional `.claude/merge-check`), then runs the `merged` extensions after the `MERGED` line.
-  - `stack check public`: Detects local paths (macOS/Linux/Windows) and private terms in commit ranges or PR/issue bodies.
+  - `stack hook claude pre-tool-use`: Denies a raw merge (`gh pr merge`, or a merge through `gh api`) so that `stack pr merge` stays the only merge path; allows everything else.
+  - `stack pr merge <pr> <head-sha>`: Merges only when head SHA matches and all checks pass (plus optional `.claude/merge-check`), then runs the `merged` extensions after the `MERGED` line. With `--subject` or `--body`, the outbound extensions listed in `[merge].message_checks` (default none) must pass before any `gh` call.
   - `stack run <entry|outbound|merged|cycle>`: Runs optional extensions over a uniform `stdin/stdout JSON` contract, with `--dry-run` and `--replay`.
 - **Optional extensions (`extensions/`):** `observe`, stateless `improve`, `public` (`stack-public`: the local-path and private-term check as an `outbound` extension, and `stack-public check <base>..<head>` for direct callers such as improve; reads `~/.config/stack/safety.toml`), `guard` (`stack-guard hook claude pre-tool-use`: the secrets, `gh` publish, catastrophic `rm` and Pencil Generate denies as a `PreToolUse` hook of its own; reads `~/.config/stack/safety.toml`), and opt-out System One (`jev`) extensions.
 - **Fixtures (`fixtures/`):** Positive/negative cases for `--replay` verification.
@@ -25,12 +24,12 @@ GOBIN="$HOME/.local/bin" go install ./cmd/stack ./extensions/observe/cmd/stack-o
 ```
 
 Install `stack-public` and `stack-improve` last, in this order. Improve's public check runs `stack-public check`,
-which reads `~/.config/stack/safety.toml` instead of the `[safety]` table of `config.toml`; a private-terms file
-named only in `config.toml` would otherwise drop out of the check.
+which reads `~/.config/stack/safety.toml`; `stack` reads no `[safety]` table (a leftover one in `config.toml` only
+gets an unknown-key warning), so a private-terms file named only there would drop out of the check.
 
-1. Write `~/.config/stack/safety.toml` from the effective `[safety]` table of `~/.config/stack/config.toml`: the
-   same keys (`secrets`, `private_terms`, `deny_pencil_generate`) at the top level, without the `[safety]` header
-   (a `[safety]` table in `safety.toml` is an unknown key, and the defaults apply). For example:
+1. Write `~/.config/stack/safety.toml` from the `[safety]` table of `~/.config/stack/config.toml`, if it has one:
+   the same keys (`secrets`, `private_terms`, `deny_pencil_generate`) at the top level, without the `[safety]`
+   header (a `[safety]` table in `safety.toml` is an unknown key, and the defaults apply). For example:
 
    ```toml
    private_terms = "~/.config/stack/private-terms"
@@ -38,7 +37,7 @@ named only in `config.toml` would otherwise drop out of the check.
    ```
 
    Compare custom `secrets` paths, a custom `private_terms` file and an explicit `deny_pencil_generate = false`; a
-   key left out takes the same default in both files. Keep the table in `config.toml` too: `stack` still reads it.
+   key left out takes the v10 default.
 2. Install `stack-public` and check that `command -v stack-public` finds it both in an interactive shell and on the
    scheduled job's `PATH`:
 
@@ -63,8 +62,12 @@ GOBIN="$HOME/.local/bin" go install ./extensions/guard/cmd/stack-guard
 
 `stack-guard` is a Claude Code hook of its own, not a stage extension: wire it as a separate `PreToolUse` entry
 (matcher `Bash|Read|NotebookRead|Grep|Glob|mcp__pencil__execute`, exec form `stack-guard hook claude pre-tool-use`,
-`timeout: 5`, `onFailure: "continue"`) and never list it in `[stages]`, where it prints usage and exits 2. Until
-the core hook drops its copy of the same rules, both hooks deny them.
+`timeout: 5`, `onFailure: "continue"`) and never list it in `[stages]`, where it prints usage and exits 2. The
+core hook no longer has these rules: without `stack-guard` wired, nothing denies them.
+
+To check `stack pr merge` messages for local paths and private terms, list `public` in `~/.config/stack/config.toml`
+(`[merge]` `message_checks = ["public"]`) with `stack-public` installed; a listed check that is missing or fails
+refuses the merge.
 
 Keep `public` first in `[stages].outbound` (the default order): its own 100 s limit, which answers `block` before
 the stage's 120 s deadline turns a slow check into a `warn`, holds only when no extension runs before it.
