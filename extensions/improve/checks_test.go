@@ -78,7 +78,8 @@ git replace HEAD "$safe"`)
 }
 
 // I10 with the real stack-public check (C21 of docs/design/core-stages.md): hits stop the PR, and
-// a stack-public that exits 2 or is not on PATH is a failed check with no Codex, push or PR.
+// a stack-public that exits 2, is not on PATH, is not executable or crashes is a failed check with
+// no Codex call, no push attempt (a pre-push hook logs each one) and no PR.
 func TestPublicCheck(t *testing.T) {
 	t.Parallel()
 	needBuilt(t)
@@ -107,6 +108,11 @@ func TestPublicCheck(t *testing.T) {
 		{name: "exit 2", edit: "alpha two\n", terms: "dir", outcome: "failed:check"},
 		{name: "broken safety.toml", edit: "alpha two\n", terms: "safety", outcome: "failed:check"},
 		{name: "not on PATH", edit: "alpha two\n", terms: "missing", outcome: "failed:check"},
+		{
+			name: "not executable", edit: "alpha two\n", terms: "not-executable",
+			outcome: "failed:check",
+		},
+		{name: "crashes", edit: "alpha two\n", terms: "crash", outcome: "failed:check"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -123,7 +129,15 @@ func TestPublicCheck(t *testing.T) {
 				f.write(".config/stack/safety.toml", "private_terms = [\n")
 			case "missing":
 				delete(f.tools, "stack-public")
+			case "not-executable":
+				f.tools["stack-public"] = f.write("bin/stack-public", "#!/bin/sh\nexit 0\n")
+			case "crash":
+				f.fake("stack-public", &fakeSpec{Kill: true}, proctest.Response{})
 			}
+			pushes := filepath.Join(f.repo.Root, "pushes")
+			hooks := filepath.Join(f.repo.Root, "hooks")
+			writeHook(t, hooks, "pre-push", "echo push >> '"+pushes+"'")
+			f.repo.Config("core.hooksPath", hooks)
 			out := tc.out
 			if out == nil {
 				out = change("e1")
@@ -143,6 +157,10 @@ func TestPublicCheck(t *testing.T) {
 				if len(f.calls("codex")) != 0 {
 					t.Fatal("codex ran")
 				}
+			}
+			_, err := os.Stat(pushes)
+			if published := strings.HasPrefix(tc.outcome, "pr "); published != (err == nil) {
+				t.Fatalf("push attempted = %v, want %v", err == nil, published)
 			}
 			if !strings.HasPrefix(tc.outcome, "pr ") {
 				if len(f.calls("codex")) != 0 {
