@@ -434,12 +434,12 @@ step's timeout is cut to what the deadline leaves after the reserve and the late
     `GIT_NO_REPLACE_OBJECTS=1`, so a replace ref cannot show the checks other objects than the push sends.
     1. *Commit.* Body = model body + `Evidence:` list of the cited URLs (`improve.py:617-621`); title and body are
        written to files once, after the commit and its hooks (step 12.2), and never rebuilt. The model and every
-       `git -C` on the candidate (commit, verify, checks, push) run only in this run's worktree, while the steps
-       before it (fetch, config read, `worktree add`/`remove`, `ls-remote`) run in the target checkout; a call
-       without a directory never starts. The title, body and other files in improve's private run directory are
-       created new (`O_CREATE|O_EXCL`), so an existing path there, a symlink included, is refused rather than
-       written through; that directory is not otherwise defended against the owner's hooks or the `stack` binary
-       deliberately replacing its files. `git -C <worktree> commit -a -F <msg>` with the owner's git
+       `git -C` on the candidate (commit, verify, checks, push) run only in this run's worktree, while the
+       repository-level operations (fetch, config read, `worktree add`/`remove`, `ls-remote`) run in the target
+       checkout; a call without a directory never starts. The files improve itself writes in its private run
+       directory (message, title, body, verdict schema) are created new (`O_CREATE|O_EXCL`), so an existing path
+       there, a symlink included, is refused rather than written through; that directory is not otherwise
+       defended against the owner's hooks or the `stack` binary deliberately replacing its files. `git -C <worktree> commit -a -F <msg>` with the owner's git
        configuration (signing included) and the repository's hooks; never `--no-verify`. Failure →
        `failed:commit`.
     2. *Pin.* `oid = git rev-parse --verify HEAD^{commit}` once; every later step names `oid`, never `HEAD`.
