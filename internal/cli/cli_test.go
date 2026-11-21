@@ -3,12 +3,16 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/shuymn/stack/internal/ghargs"
 )
 
 type result struct {
@@ -41,6 +45,29 @@ func TestVersion(t *testing.T) {
 		r := run(t, nil, arg)
 		if r.code != exitOK || r.stdout != "v1.2.3\n" || r.stderr != "" {
 			t.Errorf("%s = %+v", arg, r)
+		}
+	}
+}
+
+func TestVersionJSON(t *testing.T) {
+	for _, arg := range []string{"--version", "-v"} {
+		r := run(t, nil, arg, "--json")
+		if r.code != exitOK || r.stderr != "" {
+			t.Fatalf("%s --json = %+v", arg, r)
+		}
+		var got map[string]string
+		if err := json.Unmarshal([]byte(r.stdout), &got); err != nil {
+			t.Fatalf("%s --json stdout %q: %v", arg, r.stdout, err)
+		}
+		want := map[string]string{"version": "v1.2.3", "gh_model": ghargs.GhVersion}
+		if !maps.Equal(got, want) {
+			t.Errorf("%s --json = %v, want %v", arg, got, want)
+		}
+	}
+	// Any other trailing argument keeps the plain output, as before --json existed.
+	for _, args := range [][]string{{"--version", "--yaml"}, {"--version", "x", "--json"}} {
+		if r := run(t, nil, args...); r.code != exitOK || r.stdout != "v1.2.3\n" || r.stderr != "" {
+			t.Errorf("%q = %+v", args, r)
 		}
 	}
 }
