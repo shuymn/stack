@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -164,8 +165,8 @@ func limit(home string) (int, *Finding) {
 	if !ok || n < 1 {
 		return bad(fmt.Sprintf("merges = %v is not an integer >= 1", v))
 	}
-	if n > int64(^uint32(0)>>1) {
-		return bad(fmt.Sprintf("merges = %d is too large", n))
+	if n > math.MaxInt {
+		return bad(fmt.Sprintf("merges = %d is too large for this platform", n))
 	}
 	return int(n), nil
 }

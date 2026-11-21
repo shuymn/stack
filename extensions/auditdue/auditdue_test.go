@@ -238,7 +238,6 @@ func TestK(t *testing.T) {
 		"merges = -3\n",
 		"merges = \"2\"\n",
 		"merges = 2.5\n",
-		"merges = 99999999999\n",
 		"merges = [\n",
 	} {
 		t.Run("invalid "+strings.TrimSpace(cfg), func(t *testing.T) {
@@ -257,6 +256,14 @@ func TestK(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("beyond 32 bits", func(t *testing.T) {
+		home := newHome(t, "merges = 2147483648\n")
+		k := newKit(t, "demo", nil)
+		for _, r := range run(t, home, 3, k) {
+			wantResp(t, r, StatusPass, "")
+		}
+	})
 
 	t.Run("no merges key", func(t *testing.T) {
 		home := newHome(t, "other = 1\n")
