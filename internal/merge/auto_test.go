@@ -134,8 +134,7 @@ type autoCase struct {
 	disable proctest.Response
 	polls   []proctest.Response
 	final   proctest.Response
-	// cancelAt cancels the run during the nth sleep of the wait; deadlineAt moves the clock to
-	// the wait's deadline after the nth sleep.
+	// deadlineAt moves the clock to the wait's deadline after the nth sleep.
 	deadlineAt int
 	// cancelAt cancels the run during the nth sleep of the wait.
 	cancelAt     int
