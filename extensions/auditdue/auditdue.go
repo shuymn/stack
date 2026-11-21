@@ -6,7 +6,6 @@
 package auditdue
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -189,17 +188,12 @@ func count(kit Kit, oid string, k int) (string, []Finding) {
 	if err != nil {
 		return fail("cannot read the kit state: %v", err)
 	}
-	var findings []Finding
-	path := filepath.Join(kit.Dir, StateFile)
-	prev, existed, err := load(path)
-	switch {
-	case errors.Is(err, errCorrupt):
-		findings = append(findings, finding("%s is not valid (%v); replaced", StateFile, err))
-	case err != nil:
-		return fail("cannot read %s: %v", StateFile, err)
+	prev, existed, corrupt := load(filepath.Join(kit.Dir, StateFile))
+	if corrupt != nil && !errors.Is(corrupt, errCorrupt) {
+		return fail("cannot read %s: %v", StateFile, corrupt)
 	}
 	if existed && prev.OID == oid {
-		return "", findings
+		return "", nil
 	}
 	n := prev.Merges + 1
 	reason := ""
@@ -213,8 +207,13 @@ func count(kit Kit, oid string, k int) (string, []Finding) {
 	if reason != "" {
 		next.Merges = 0
 	}
+	// One finding per kit, from the save result: a repair is reported only once it is written.
 	if err := save(kit.Dir, next); err != nil {
-		return "", append(findings, finding("cannot write %s: %v", StateFile, err))
+		return fail("cannot write %s: %v", StateFile, err)
+	}
+	var findings []Finding
+	if corrupt != nil {
+		findings = []Finding{finding("%s was not valid (%v); replaced", StateFile, corrupt)}
 	}
 	if reason == "" {
 		return "", findings
@@ -259,12 +258,9 @@ func load(path string) (state, bool, error) {
 		State  *string `json:"state"`
 		OID    *string `json:"oid"`
 	}
-	dec := json.NewDecoder(bytes.NewReader(data))
-	if err := dec.Decode(&raw); err != nil {
+	// Unmarshal checks that the whole file is one JSON value.
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return state{}, false, fmt.Errorf("%w: %w", errCorrupt, err)
-	}
-	if dec.More() {
-		return state{}, false, fmt.Errorf("%w: trailing data", errCorrupt)
 	}
 	if raw.Merges == nil || raw.State == nil || raw.OID == nil || *raw.Merges < 0 {
 		return state{}, false, fmt.Errorf("%w: needs merges >= 0, state and oid", errCorrupt)

@@ -176,12 +176,13 @@ func TestSilent(t *testing.T) {
 }
 
 // C9: K merges since the last due line print one line and reset the count.
+// edit changes the kit state so that only the count condition can fire.
+func edit(t *testing.T, k Kit, oid string) {
+	t.Helper()
+	write(t, filepath.Join(k.Dir, "state.md"), "state before "+oid)
+}
+
 func TestK(t *testing.T) {
-	// edit changes the kit state so that only the count condition can fire.
-	edit := func(t *testing.T, k Kit, oid string) {
-		t.Helper()
-		write(t, filepath.Join(k.Dir, "state.md"), "state before "+oid)
-	}
 	run := func(t *testing.T, home string, merges int, k Kit) []Response {
 		t.Helper()
 		var out []Response
@@ -286,46 +287,49 @@ func TestK(t *testing.T) {
 		}
 	})
 
-	t.Run("two processes at once", func(t *testing.T) {
-		exe, err := os.Executable()
+	t.Run("two processes at once", testTwoProcesses)
+}
+
+// testTwoProcesses runs two processes on one kit at once, over several rounds.
+func testTwoProcesses(t *testing.T) {
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := newHome(t, "merges = 1000\n")
+	k := newKit(t, "demo", nil)
+	edit(t, k, "seed")
+	wantResp(t, merge(home, "seed", k), StatusPass, "")
+	for round := range 5 {
+		start := stored(t, k).Merges
+		edit(t, k, strconv.Itoa(round))
+		lines := twoAtOnce(t, exe, home, k, round)
+		data, err := os.ReadFile(filepath.Join(k.Dir, StateFile))
 		if err != nil {
 			t.Fatal(err)
 		}
-		home := newHome(t, "merges = 1000\n")
-		k := newKit(t, "demo", nil)
-		edit(t, k, "seed")
-		wantResp(t, merge(home, "seed", k), StatusPass, "")
-		for round := range 5 {
-			start := stored(t, k).Merges
-			edit(t, k, strconv.Itoa(round))
-			lines := twoAtOnce(t, exe, home, k, round)
-			data, err := os.ReadFile(filepath.Join(k.Dir, StateFile))
-			if err != nil {
-				t.Fatal(err)
-			}
-			var s state
-			if err := json.Unmarshal(data, &s); err != nil {
-				t.Fatalf("round %d: state file not valid JSON: %q", round, data)
-			}
-			// Overlapping reads count the pair once; one after the other, the second merge
-			// follows the first without a state update and is due by that rule, a reset.
-			switch {
-			case s.Merges == start+1 && len(lines) == 0:
-			case s.Merges == 0 && len(lines) == 1 && lines[s.OID] == dueState:
-			default:
-				t.Fatalf("round %d: from count %d to %+v with lines %v", round, start, s, lines)
-			}
+		var s state
+		if err := json.Unmarshal(data, &s); err != nil {
+			t.Fatalf("round %d: state file not valid JSON: %q", round, data)
 		}
-		entries, err := os.ReadDir(k.Dir)
-		if err != nil {
-			t.Fatal(err)
+		// Overlapping reads count the pair once; one after the other, the second merge
+		// follows the first without a state update and is due by that rule, a reset.
+		switch {
+		case s.Merges == start+1 && len(lines) == 0:
+		case s.Merges == 0 && len(lines) == 1 && lines[s.OID] == dueState:
+		default:
+			t.Fatalf("round %d: from count %d to %+v with lines %v", round, start, s, lines)
 		}
-		for _, e := range entries {
-			if e.Name() != StateFile && e.Name() != "state.md" {
-				t.Fatalf("leftover file %s", e.Name())
-			}
+	}
+	entries, err := os.ReadDir(k.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if e.Name() != StateFile && e.Name() != "state.md" {
+			t.Fatalf("leftover file %s", e.Name())
 		}
-	})
+	}
 }
 
 // twoAtOnce runs two child processes on one kit with different merge OIDs, both started before
@@ -481,6 +485,9 @@ func TestErrors(t *testing.T) {
 		`{"merges":1.5,"state":"","oid":""}`,
 		`{"merges":1,"state":""}`,
 		`{"merges":1,"state":"","oid":""} {}`,
+		// A stray closing delimiter after a valid object, with the incoming OID stored.
+		`{"merges":1,"state":"x","oid":"o1"}}`,
+		`{"merges":1,"state":"x","oid":"o1"}]`,
 	} {
 		t.Run("corrupt "+corrupt, func(t *testing.T) {
 			home := newHome(t, "")
@@ -488,8 +495,9 @@ func TestErrors(t *testing.T) {
 			got := merge(home, "o1", k)
 			wantResp(t, got, StatusWarn, "")
 			if len(got.Findings) != 1 || got.Findings[0].Where != "demo" ||
-				!strings.Contains(got.Findings[0].Detail, "kit demo") {
-				t.Fatalf("findings = %v, want one naming kit demo", got.Findings)
+				!strings.Contains(got.Findings[0].Detail, "kit demo") ||
+				!strings.Contains(got.Findings[0].Detail, "replaced") {
+				t.Fatalf("findings = %v, want one naming kit demo, replaced", got.Findings)
 			}
 			if s := stored(t, k); s.Merges != 1 || s.OID != "o1" {
 				t.Fatalf("replaced state = %+v, want a fresh count of 1", s)
@@ -532,6 +540,16 @@ func TestErrors(t *testing.T) {
 			t.Cleanup(func() { _ = os.Chmod(k.Dir, 0o700) })
 			return k
 		}
+		// A corrupt file whose repair fails: one finding, which does not claim a repair.
+		broken["corrupt in a read-only kit dir"] = func(t *testing.T) Kit {
+			t.Helper()
+			k := newKit(t, "broken", map[string]string{StateFile: "{broken"})
+			if err := os.Chmod(k.Dir, 0o500); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.Chmod(k.Dir, 0o700) })
+			return k
+		}
 	}
 	names := make([]string, 0, len(broken))
 	for name := range broken {
@@ -547,8 +565,9 @@ func TestErrors(t *testing.T) {
 			wantResp(t, got, StatusWarn, dueK(1, "good"))
 			if len(got.Findings) != 1 || got.Findings[0].Kind != kindKit ||
 				got.Findings[0].Where != "broken" ||
-				!strings.Contains(got.Findings[0].Detail, "kit broken") {
-				t.Fatalf("findings = %v, want one naming kit broken", got.Findings)
+				!strings.Contains(got.Findings[0].Detail, "kit broken") ||
+				strings.Contains(got.Findings[0].Detail, "replaced") {
+				t.Fatalf("findings = %v, want one naming kit broken, no repair", got.Findings)
 			}
 			if bad.Dir != "" {
 				entries, _ := os.ReadDir(bad.Dir)
