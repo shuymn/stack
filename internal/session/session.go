@@ -235,9 +235,9 @@ func runBoards(ctx context.Context, a *allocator, r kit.Renderer, kits []kitPiec
 
 // runEntry runs [stages].entry once when at least one kit was restored, with the restored kits and
 // the payload's session id, and places each result `kit open` would show, in stage order, capped
-// like a kit block. It starts only when its deadline, the earlier of EntryTimeout from now and the
-// hook's cut-off less the runner's pipe-reaping allowance, is at least entryMinimum away;
-// otherwise it leaves `[entry skipped: deadline]` when that fits. A result with no room left even
+// like a kit block. Before it checks or looks up any name, it requires its deadline, the earlier
+// of EntryTimeout from now and the hook's cut-off less the runner's pipe-reaping allowance, to be
+// at least entryMinimum away; otherwise it leaves `[entry skipped: deadline]` when that fits. A result with no room left even
 // for its omitted marker is reported on stderr.
 func runEntry(ctx context.Context, p Params, a *allocator, kits []kitPieces) []*piece {
 	refs := []ext.Kit{}
@@ -250,6 +250,14 @@ func runEntry(ctx context.Context, p Params, a *allocator, kits []kitPieces) []*
 	if len(refs) == 0 || len(names) == 0 {
 		return nil
 	}
+	// The clock first: past the cut-off nothing is checked, looked up or started.
+	now := p.now()
+	timeout := min(ext.EntryTimeout, p.Start.Add(cutoff).Sub(now)) - proc.DefaultWaitDelay
+	if timeout < entryMinimum {
+		pc := &piece{body: "[entry skipped: deadline]"}
+		a.place(pc, 0)
+		return []*piece{pc}
+	}
 	if err := ext.CheckNames(names); err != nil {
 		pc := &piece{body: fmt.Sprintf("[entry extensions skipped: %v]", err)}
 		a.place(pc, 0)
@@ -258,13 +266,6 @@ func runEntry(ctx context.Context, p Params, a *allocator, kits []kitPieces) []*
 	plans := ext.Resolve(names)
 	if !slices.ContainsFunc(plans, func(pl ext.Plan) bool { return !pl.Skipped() }) {
 		return nil
-	}
-	now := p.now()
-	timeout := min(ext.EntryTimeout, p.Start.Add(cutoff).Sub(now)) - proc.DefaultWaitDelay
-	if timeout < entryMinimum {
-		pc := &piece{body: "[entry skipped: deadline]"}
-		a.place(pc, 0)
-		return []*piece{pc}
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()

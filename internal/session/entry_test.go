@@ -170,6 +170,23 @@ func TestCompactEntryDeadline(t *testing.T) {
 		}
 	})
 
+	t.Run("after the cut-off nothing is looked up or started", func(t *testing.T) {
+		bin := pathDir(t)
+		demo := fakeEntry(t, bin, "demo", passWith("ENTRY CTX"))
+		f := newFixture(t)
+		// An invalid name would be reported if names were checked before the clock.
+		f.cfg.Stages.Entry = []string{"../bad", "demo"}
+		f.open("demo", map[string]string{"state.md": "DEMO STATE"})
+		start := time.Now().Add(-56 * time.Second)
+		f.params = func(p *Params) { p.Start = start }
+		ctx, _ := f.start(compactIn(testID))
+		mustContain(t, ctx, "DEMO STATE\n</orchestration-state>\n\n[entry skipped: deadline]\n")
+		mustLack(t, ctx, "entry extensions skipped")
+		if calls := proctest.Calls(t, demo); len(calls) != 0 {
+			t.Fatalf("extension started after the cut-off: %+v", calls)
+		}
+	})
+
 	t.Run("bounded by the time the boards left", func(t *testing.T) {
 		bin := pathDir(t)
 		// Its timeout proves it started; a loaded machine may kill it before it logs the call.
