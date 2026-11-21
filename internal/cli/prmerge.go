@@ -9,7 +9,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/shuymn/stack/internal/checkpub"
 	"github.com/shuymn/stack/internal/config"
 	"github.com/shuymn/stack/internal/ext"
 	"github.com/shuymn/stack/internal/github"
@@ -18,9 +17,10 @@ import (
 	"github.com/shuymn/stack/internal/proc"
 )
 
-// runPrMerge implements `stack pr merge <pr> <head-sha>`. Invalid arguments, a local path or private
-// term in --subject/--body and an unusable config exit 2; every later refusal exits 1. After a
-// verified merge it runs [stages].merged, whose results never change the exit code.
+// runPrMerge implements `stack pr merge <pr> <head-sha>`. Invalid arguments and an unusable config
+// exit 2, before any gh call; every later refusal exits 1, including a --subject/--body that a
+// [merge].message_checks extension blocks or could not check. After a verified merge it runs
+// [stages].merged, whose results never change the exit code.
 //
 // SIGINT and SIGTERM cancel the run instead of ending the process, so the running child is killed
 // and a merge call that already started is still read back; with --auto, auto-merge is disabled
@@ -70,23 +70,20 @@ func runPrMerge(ctx context.Context, env Env, inv invocation) error {
 	if err := merge.Validate(o); err != nil {
 		return err
 	}
-	// One config load supplies the private terms and [stages].merged.
+	// One config load, with or without message flags, supplies [merge].message_checks and
+	// [stages].merged.
 	cfg, err := loadConfig(env)
 	if err != nil {
-		return err
-	}
-	termsFile := paths.Expand(env.Home, cfg.Safety.PrivateTerms)
-	if o.Terms, err = checkpub.ReadTerms(termsFile); err != nil {
 		return err
 	}
 	if err := checkStageNames(env, ext.StageMerged, cfg.Stages.Merged); err != nil {
 		return err
 	}
-	// [merge].message_checks is validated with the rest of the config; nothing runs it yet.
 	if err := ext.CheckNames(cfg.Merge.MessageChecks); err != nil {
 		return fmt.Errorf("%w: %s: [merge].message_checks: %w", config.ErrInvalid,
 			paths.ConfigFile(env.Home), err)
 	}
+	o.MessageChecks = merge.MessageChecks{Names: cfg.Merge.MessageChecks, Ext: extOptions(env)}
 	lc := &lazyConfig{env: env, loaded: true, cfg: cfg}
 	o.Merged = merge.MergedStage{
 		Names: cfg.Stages.Merged,

@@ -5,7 +5,8 @@
 //
 // Each step refuses on anything it cannot verify; nothing after a refusal runs, so `gh pr merge` is
 // invoked only when every step passed. GitHub itself rejects the merge when the head moved after the
-// checks (`--match-head-commit`).
+// checks (`--match-head-commit`). A --subject or --body is checked only by the extensions of
+// [merge].message_checks, before the first gh call.
 //
 // With --auto, gh merges at once or enables auto-merge, both pinned to the checked head; the result
 // is read back until GitHub merges or a stop condition disables auto-merge again.
@@ -22,11 +23,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shuymn/stack/internal/checkpub"
 	"github.com/shuymn/stack/internal/ext"
 	"github.com/shuymn/stack/internal/github"
 	"github.com/shuymn/stack/internal/proc"
-	"github.com/shuymn/stack/internal/publictext"
 )
 
 const (
@@ -74,8 +73,8 @@ type Options struct {
 	AllowNoChecks bool
 	// GHRepo is the value of GH_REPO, which must be empty.
 	GHRepo string
-	// Terms are the private terms that --subject and --body must not contain.
-	Terms []string
+	// MessageChecks run on --subject and --body before any gh call.
+	MessageChecks MessageChecks
 
 	Client github.Client
 	// RetryDelay is the wait between PR reads while mergeability is UNKNOWN; zero means 3 s.
@@ -137,24 +136,6 @@ func validate(o Options) (request, error) {
 	if len(o.Methods) == 1 {
 		r.method = o.Methods[0]
 	}
-	var hits []string
-	for _, f := range []struct {
-		flag string
-		text *string
-	}{{"--subject", o.Merge.Subject}, {"--body", o.Merge.Body}} {
-		if f.text == nil {
-			continue
-		}
-		for _, h := range publictext.LocalPaths(*f.text) {
-			hits = append(hits, fmt.Sprintf("%s: local path '%s'", f.flag, h))
-		}
-		for _, t := range checkpub.FindTerms(o.Terms, *f.text) {
-			hits = append(hits, fmt.Sprintf("%s: private term '%s'", f.flag, t))
-		}
-	}
-	if len(hits) > 0 {
-		return r, fmt.Errorf("%w: %s", ErrInvalid, strings.Join(hits, "; "))
-	}
 	return r, nil
 }
 
@@ -178,6 +159,10 @@ func Run(ctx context.Context, o Options) error {
 	}
 	c.Dir = filepath.FromSlash(root)
 	o.repo = root
+
+	if err := checkMessage(ctx, o); err != nil {
+		return err
+	}
 
 	head, err := checkPR(ctx, c, r, o.retryDelay())
 	if err != nil {
