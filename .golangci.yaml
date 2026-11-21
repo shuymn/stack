@@ -28,10 +28,24 @@ linters:
         extensions:
           files:
             - "**/extensions/**"
+            - "!**/extensions/guard/**"
             - "!$test"
           deny:
             - pkg: github.com/shuymn/stack/internal
               desc: extensions use only the extension protocol and the documented CLI
+        extension-guard:
+          list-mode: lax
+          files:
+            - "**/extensions/guard/**"
+            - "!$test"
+          allow:
+            - github.com/shuymn/stack/internal/shell$
+            - github.com/shuymn/stack/internal/ghargs$
+            - github.com/shuymn/stack/internal/paths$
+            - github.com/shuymn/stack/internal/hookio$
+          deny:
+            - pkg: github.com/shuymn/stack/internal
+              desc: stack-guard shares only the shell, gh, path and hook packages with core
         extension-tests:
           list-mode: lax
           files:

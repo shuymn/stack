@@ -11,7 +11,7 @@ A minimal, extensible Go CLI (`stack`) for personal AI coding agent orchestratio
   - `stack pr merge <pr> <head-sha>`: Merges only when head SHA matches and all checks pass (plus optional `.claude/merge-check`), then runs the `merged` extensions after the `MERGED` line.
   - `stack check public`: Detects local paths (macOS/Linux/Windows) and private terms in commit ranges or PR/issue bodies.
   - `stack run <entry|outbound|merged|cycle>`: Runs optional extensions over a uniform `stdin/stdout JSON` contract, with `--dry-run` and `--replay`.
-- **Optional extensions (`extensions/`):** `observe`, stateless `improve`, `public` (`stack-public`: the local-path and private-term check as an `outbound` extension, and `stack-public check <base>..<head>` for direct callers such as improve; reads `~/.config/stack/safety.toml`), and opt-out System One (`jev`) extensions.
+- **Optional extensions (`extensions/`):** `observe`, stateless `improve`, `public` (`stack-public`: the local-path and private-term check as an `outbound` extension, and `stack-public check <base>..<head>` for direct callers such as improve; reads `~/.config/stack/safety.toml`), `guard` (`stack-guard hook claude pre-tool-use`: the secrets, `gh` publish, catastrophic `rm` and Pencil Generate denies as a `PreToolUse` hook of its own; reads `~/.config/stack/safety.toml`), and opt-out System One (`jev`) extensions.
 - **Fixtures (`fixtures/`):** Positive/negative cases for `--replay` verification.
 
 ## Install
@@ -53,6 +53,18 @@ named only in `config.toml` would otherwise drop out of the check.
    ```
 
 `stack-improve` embeds `extensions/improve/writing.md`; reinstall after changing it.
+
+Install `stack-guard` once `safety.toml` exists (step 1); before that it applies the defaults, without custom
+`secrets` entries:
+
+```sh
+GOBIN="$HOME/.local/bin" go install ./extensions/guard/cmd/stack-guard
+```
+
+`stack-guard` is a Claude Code hook of its own, not a stage extension: wire it as a separate `PreToolUse` entry
+(matcher `Bash|Read|NotebookRead|Grep|Glob|mcp__pencil__execute`, exec form `stack-guard hook claude pre-tool-use`,
+`timeout: 5`, `onFailure: "continue"`) and never list it in `[stages]`, where it prints usage and exits 2. Until
+the core hook drops its copy of the same rules, both hooks deny them.
 
 Keep `public` first in `[stages].outbound` (the default order): its own 100 s limit, which answers `block` before
 the stage's 120 s deadline turns a slow check into a `warn`, holds only when no extension runs before it.
