@@ -188,14 +188,18 @@ func TestMergedStage(t *testing.T) {
 	t.Run("auto final read-back after the wait deadline", func(t *testing.T) {
 		t.Parallel()
 		f := newStage(t, fakes)
+		// After the first OPEN answer the clock reaches the deadline: one poll, then the disable
+		// and the final read-back, which finds the merge.
 		out := runAuto(t, autoCase{
-			polls:  []proctest.Response{openAutoResponse()},
-			final:  rb("MERGED", head, mergeOID, false),
-			stdout: f.log,
-			opts:   func(o *Options) { o.Merged = f.stage(names, time.Minute, nil) },
+			polls:      []proctest.Response{openAutoResponse()},
+			final:      rb("MERGED", head, mergeOID, false),
+			deadlineAt: 1,
+			stdout:     f.log,
+			opts:       func(o *Options) { o.Merged = f.stage(names, time.Minute, nil) },
 		})
-		if n := len(out.gh); out.err != nil || n < 2 || !slices.Equal(out.gh[n-2], autoDisable) {
-			t.Fatalf("err = %v, gh = %q; want a success found after the disable", out.err, out.gh)
+		want := seq(autoMergeCall, autoRead, autoDisable, autoRead)
+		if out.err != nil || !slices.EqualFunc(out.gh, want, slices.Equal) {
+			t.Fatalf("err = %v, gh = %q; want %q", out.err, out.gh, want)
 		}
 		if out.stdout != mergedLine+results || !slices.Equal(f.log.texts(), order) {
 			t.Fatalf("stdout = %q, order %q", out.stdout, f.log.texts())
