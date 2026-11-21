@@ -27,6 +27,7 @@ type piece struct {
 	body       string
 	kind       string // names the piece in its omitted marker
 	path       string // names the piece's file in its omitted marker, when set
+	omit       string // replaces the omitted marker built from kind and path, when set
 	out        string
 }
 
@@ -54,10 +55,12 @@ func cutMarker(n int) string {
 	return fmt.Sprintf("\n[...cut %d chars]", n)
 }
 
-// minimal is the least p emits once it is due: a bare marker whole, a tagged piece its omitted
-// marker, which names its file when it has one.
+// minimal is the least p emits once it is due: its own omitted marker when set, else a bare
+// marker whole, a tagged piece its omitted marker, which names its file when it has one.
 func (p *piece) minimal() string {
 	switch {
+	case p.omit != "":
+		return p.omit
 	case p.head == "":
 		return p.body
 	case p.path != "":

@@ -112,8 +112,7 @@ func sourceEnv(t *testing.T, file string) string {
 	return string(out)
 }
 
-// C19: compact renders the kits of that id only, without extensions. Not parallel: one case
-// changes PATH.
+// C19: compact renders the kits of that id only. Whether extensions run is C4 (TestCompactEntry).
 func TestCompact(t *testing.T) {
 	t.Run("resume then compact restores; fork and close do not", func(t *testing.T) {
 		f := newFixture(t)
@@ -164,14 +163,8 @@ func TestCompact(t *testing.T) {
 		mustLack(t, ctx, "DEMO STATE")
 	})
 
-	t.Run("no extension runs; board, handover once", func(t *testing.T) {
+	t.Run("board, handover once", func(t *testing.T) {
 		f := newFixture(t)
-		bin := t.TempDir()
-		ext := proctest.InstallAt(t, bin, "stack-jev-router", proctest.Scenario{
-			Responses: []proctest.Response{{Stdout: `{"status":"pass","context":"EXT CONTEXT"}`}},
-		})
-		t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-
 		f.open("a", map[string]string{"state.md": "A STATE"})
 		f.open("b", map[string]string{"NORTH.md": "B NORTH", "state.md": "B STATE"})
 		f.open("gone", nil)
@@ -193,10 +186,7 @@ func TestCompact(t *testing.T) {
 		if n := strings.Count(ctx, "HANDOVER"); n != 1 {
 			t.Fatalf("handover appears %d times:\n%s", n, ctx)
 		}
-		mustLack(t, ctx, "EXT CONTEXT", f.kitDir("gone"))
-		if calls := proctest.Calls(t, ext); len(calls) != 0 {
-			t.Fatalf("extension called: %+v", calls)
-		}
+		mustLack(t, ctx, f.kitDir("gone"))
 	})
 }
 

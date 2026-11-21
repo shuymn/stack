@@ -22,17 +22,23 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// fixture is a fake home with config defaults; nothing touches the real home.
+// fixture is a fake home with config defaults, except that no entry extension is selected, so no
+// test runs an extension installed on the host; nothing touches the real home.
 type fixture struct {
 	t    *testing.T
 	home string
 	cfg  config.Config
 	env  map[string]string
+	// params, when set, adjusts the hook's parameters before it runs.
+	params func(*Params)
+	stderr strings.Builder
 }
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
-	return &fixture{t: t, home: t.TempDir(), cfg: config.Defaults(), env: map[string]string{}}
+	cfg := config.Defaults()
+	cfg.Stages.Entry = nil
+	return &fixture{t: t, home: t.TempDir(), cfg: cfg, env: map[string]string{}}
 }
 
 func write(t *testing.T, path, content string) {
@@ -110,13 +116,18 @@ func userLine(prompt string) string {
 // start runs the hook and returns its additionalContext ("" for no output) and swallowed errors.
 func (f *fixture) start(in hookio.Input) (string, []error) {
 	f.t.Helper()
-	out, errs := Start(f.t.Context(), Params{
+	p := Params{
 		Input:  in,
 		Home:   f.home,
 		Getenv: func(k string) string { return f.env[k] },
 		Config: f.cfg,
 		Runner: proc.Exec{},
-	})
+		Stderr: &f.stderr,
+	}
+	if f.params != nil {
+		f.params(&p)
+	}
+	out, errs := Start(f.t.Context(), p)
 	if out == nil {
 		return "", errs
 	}
