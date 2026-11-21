@@ -131,9 +131,10 @@ var commands = []*command{
 		run:     runBudgetStatus,
 	},
 	{
-		path:    []string{"run"},
-		args:    "<entry|outbound|merged|cycle>",
-		flagDoc: "[--dry-run] [--replay FILE] [--ext NAME]... [--range R] [--prompt-file F]",
+		path: []string{"run"},
+		args: "<entry|outbound|merged|cycle>",
+		flagDoc: "[--dry-run] [--replay FILE] [--ext NAME]... [--range R] [--prompt-file F] " +
+			"[--title-file F] [--body-file F] [--branch B]",
 		summary: "run the extensions of a stage",
 		choices: []string{ext.StageEntry, ext.StageOutbound, ext.StageMerged, ext.StageCycle},
 		define: func(fs *flag.FlagSet) {
@@ -142,6 +143,9 @@ var commands = []*command{
 			fs.Var(&stringList{}, "ext", "") // repeatable
 			fs.String("range", "", "")
 			fs.String("prompt-file", "", "")
+			fs.String("title-file", "", "")
+			fs.String("body-file", "", "")
+			fs.String("branch", "", "")
 		},
 		run: runRun,
 	},

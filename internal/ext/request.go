@@ -34,6 +34,11 @@ type Request struct {
 	Kits *[]Kit `json:"kits,omitempty"`
 	// Merge is sent only by the merged requests of `stack pr merge`; nil omits the key.
 	Merge *Merge `json:"merge,omitempty"`
+	// Title, Body and Branch are sent only by live outbound requests: the texts about to be
+	// published, each "" when absent; nil omits the key.
+	Title  *string `json:"title,omitempty"`
+	Body   *string `json:"body,omitempty"`
+	Branch *string `json:"branch,omitempty"`
 }
 
 // Merge is the merge `stack pr merge` verified, in a merged request.

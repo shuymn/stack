@@ -31,10 +31,11 @@ func want5() Config {
 		},
 		Stages: Stages{
 			Entry:    []string{"jev-router"},
-			Outbound: []string{"jev-semantic"},
+			Outbound: []string{"public", "jev-semantic"},
 			Merged:   []string{"audit-due"},
 			Cycle:    []string{"observe", "jev-classify", "improve"},
 		},
+		Merge: Merge{MessageChecks: []string{}},
 	}
 }
 
@@ -82,9 +83,12 @@ deny_pencil_generate = true
 
 [stages]
 entry = ["jev-router"]
-outbound = ["jev-semantic"]
+outbound = ["public", "jev-semantic"]
 merged = ["audit-due"]
 cycle = ["observe", "jev-classify", "improve"]
+
+[merge]
+message_checks = []
 `)
 	cfg, warnings, err := Load(p)
 	if err != nil || len(warnings) != 0 {
@@ -115,6 +119,7 @@ func TestLoadInvalid(t *testing.T) {
 			[]string{"handover"},
 		},
 		{"handover non-string value", "[handover]\nHERDR_ENV = 1\n", []string{"line 2"}},
+		{"message_checks string", "[merge]\nmessage_checks = \"public\"\n", []string{"line 2"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -159,6 +164,9 @@ deny_pencil_generate = false
 [stages]
 entry = []
 merged = ["demo"]
+
+[merge]
+message_checks = ["public"]
 `)
 	cfg, warnings, err := Load(p)
 	if err != nil {
@@ -169,6 +177,7 @@ merged = ["demo"]
 	want.Safety.DenyPencilGenerate = false
 	want.Stages.Entry = []string{}
 	want.Stages.Merged = []string{"demo"}
+	want.Merge.MessageChecks = []string{"public"}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Fatalf("Load =\n%+v\nwant\n%+v", cfg, want)
 	}

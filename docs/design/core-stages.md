@@ -242,6 +242,9 @@ asserted that no extension runs; only that assertion changes, §4.10).
   least one hit it always answers a valid `block`, with at least one hit line. Its own errors (a broken
   `safety.toml`, unreadable or non-UTF-8 private terms, a git failure, a range git cannot resolve) → `block` with
   the error as context, under the same cap: it fails closed by its own choice.
+  Stage mode stops its own git work 100 s after it starts and then answers `block` with the hits found so far, so
+  the answer reaches core before the 120 s stage deadline when `public` runs first (the default order). That limit
+  bounds git; `safety.toml` and the private-terms file are the owner's files on local disk and are read without one.
 - **CLI mode** `stack-public check <base>..<head> [--title-file F] [--body-file F] [--branch B]`: the same flags,
   stdout, stderr lines and exit codes (0 clean, 1 hits, 2 usage, input, config or git error) as `stack check public`
   today, every hit printed with no cap. Direct callers use this mode, so a missing binary fails closed (command not

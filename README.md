@@ -12,7 +12,7 @@ A minimal, extensible Go CLI (`stack`) for personal AI coding agent orchestratio
   - `stack check public`: Detects local paths (macOS/Linux/Windows) and private terms in commit ranges or PR/issue bodies.
   - `stack budget status`: Reports instruction prose sizes and attention item counts (display-only).
   - `stack run <entry|outbound|merged|cycle>`: Runs optional extensions over a uniform `stdin/stdout JSON` contract, with `--dry-run` and `--replay`.
-- **Optional extensions (`extensions/`):** `observe`, stateless `improve`, and opt-out System One (`jev`) extensions.
+- **Optional extensions (`extensions/`):** `observe`, stateless `improve`, `public` (`stack-public`: the local-path and private-term check as an `outbound` extension, and `stack-public check <base>..<head>` for direct callers such as improve; reads `~/.config/stack/safety.toml`), and opt-out System One (`jev`) extensions.
 - **Fixtures (`fixtures/`):** Positive/negative cases for `--replay` verification.
 
 ## Install
@@ -21,11 +21,42 @@ From this checkout, install `stack` and the extensions into one absolute directo
 runs, also on the job's `PATH`), so core finds each extension as `stack-<name>`:
 
 ```sh
-GOBIN="$HOME/.local/bin" go install ./cmd/stack ./extensions/observe/cmd/stack-observe ./extensions/improve/cmd/stack-improve \
+GOBIN="$HOME/.local/bin" go install ./cmd/stack ./extensions/observe/cmd/stack-observe \
   ./extensions/auditdue/cmd/stack-audit-due
 ```
 
+Install `stack-public` and `stack-improve` last, in this order. Improve's public check runs `stack-public check`,
+which reads `~/.config/stack/safety.toml` instead of the `[safety]` table of `config.toml`; a private-terms file
+named only in `config.toml` would otherwise drop out of the check.
+
+1. Write `~/.config/stack/safety.toml` from the effective `[safety]` table of `~/.config/stack/config.toml`: the
+   same keys (`secrets`, `private_terms`, `deny_pencil_generate`) at the top level, without the `[safety]` header
+   (a `[safety]` table in `safety.toml` is an unknown key, and the defaults apply). For example:
+
+   ```toml
+   private_terms = "~/.config/stack/private-terms"
+   deny_pencil_generate = true
+   ```
+
+   Compare custom `secrets` paths, a custom `private_terms` file and an explicit `deny_pencil_generate = false`; a
+   key left out takes the same default in both files. Keep the table in `config.toml` too: `stack` still reads it.
+2. Install `stack-public` and check that `command -v stack-public` finds it both in an interactive shell and on the
+   scheduled job's `PATH`:
+
+   ```sh
+   GOBIN="$HOME/.local/bin" go install ./extensions/public/cmd/stack-public
+   ```
+
+3. Only then install or reinstall `stack-improve`; without `stack-public` it stops at `failed:check`:
+
+   ```sh
+   GOBIN="$HOME/.local/bin" go install ./extensions/improve/cmd/stack-improve
+   ```
+
 `stack-improve` embeds `extensions/improve/writing.md`; reinstall after changing it.
+
+Keep `public` first in `[stages].outbound` (the default order): its own 100 s limit, which answers `block` before
+the stage's 120 s deadline turns a slow check into a `warn`, holds only when no extension runs before it.
 
 ## Cycle
 

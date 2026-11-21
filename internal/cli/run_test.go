@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -76,7 +77,7 @@ func TestRunNoExtensions(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	for stage, skipped := range map[string]string{
 		"entry":    `["jev-router"]`,
-		"outbound": `["jev-semantic"]`,
+		"outbound": `["public","jev-semantic"]`,
 		"cycle":    `["observe","jev-classify","improve"]`,
 	} {
 		r := run(t, nil, "run", stage)
@@ -116,7 +117,8 @@ func TestRunCommand(t *testing.T) {
 		t.Fatalf("calls = %+v", calls)
 	}
 	if req["stage"] != "outbound" || req["range"] != "@{upstream}..HEAD" || req["prompt"] != "" ||
-		!sameFile(t, req["repo"], r.Dir) || len(req) != 4 {
+		!sameFile(t, req["repo"], r.Dir) || req["title"] != "" || req["body"] != "" ||
+		req["branch"] != "" || len(req) != 7 {
 		t.Fatalf("request = %v", req)
 	}
 
@@ -147,7 +149,7 @@ func TestRunCommand(t *testing.T) {
 func TestRunBlockExit(t *testing.T) {
 	longStageDeadlines(t)
 	bin, _ := extBin(t)
-	fakeExt(t, bin, "blocker", `{"status":"block","context":"NO"}`)
+	blocker := fakeExt(t, bin, "blocker", `{"status":"block","context":"NO"}`)
 	home := t.TempDir()
 	replay := func(stage, expect string) string {
 		path := filepath.Join(t.TempDir(), stage+"-"+expect+".json")
@@ -187,6 +189,100 @@ func TestRunBlockExit(t *testing.T) {
 		if res.code != exitOK || decodeAggregate(t, res).Status != "warn" {
 			t.Errorf("replay %s expecting warn = %+v, want a match", tt.stage, res)
 		}
+	}
+	// The outbound text flags are usage errors at any other stage and with --replay.
+	text := filepath.Join(t.TempDir(), "text.md")
+	writeFile(t, text, []byte("x\n"))
+	calls := len(proctest.Calls(t, blocker))
+	for _, flag := range [][]string{
+		{"--title-file", text}, {"--body-file", text}, {"--branch", "b"}, {"--branch="},
+	} {
+		for _, stage := range []string{"entry", "merged", "cycle"} {
+			res := runIn(
+				t,
+				home,
+				nil,
+				append([]string{"run", stage, "--ext", "blocker"}, flag...)...)
+			if res.code != exitUsage || res.stdout != "" ||
+				!strings.Contains(res.stderr, "only for the outbound stage") {
+				t.Errorf("run %s %q = %+v, want exit 2", stage, flag, res)
+			}
+		}
+		res := runIn(t, home, nil, append([]string{
+			"run", "outbound", "--ext", "blocker",
+			"--replay", replay("outbound", "block"),
+		}, flag...)...)
+		if res.code != exitUsage || res.stdout != "" ||
+			!strings.Contains(res.stderr, "cannot be combined") {
+			t.Errorf("replay with %q = %+v, want exit 2", flag, res)
+		}
+	}
+	if n := len(proctest.Calls(t, blocker)); n != calls {
+		t.Errorf("the extension ran on a usage error: %d calls, want %d", n, calls)
+	}
+}
+
+// TestRunOutboundTexts covers C15: `stack run outbound` sends title, body and branch from
+// --title-file, --body-file and --branch; each is "" when absent or explicitly empty, `~` is
+// resolved against home, and a non-UTF-8 file exits 2 before any extension runs.
+func TestRunOutboundTexts(t *testing.T) {
+	bin, _ := extBin(t)
+	logger := fakeExt(t, bin, "logger", `{"status":"pass"}`)
+	home := t.TempDir()
+	writeFile(t, filepath.Join(home, "title.txt"), []byte("docs: title\n"))
+	writeFile(t, "body.md", []byte("Body \u00e9\n"))
+	writeFile(t, "empty.md", nil)
+	writeFile(t, "latin1.md", []byte("caf\xe9\n"))
+	texts := func(args ...string) (map[string]any, result) {
+		t.Helper()
+		res := runIn(
+			t,
+			home,
+			nil,
+			append([]string{"run", "outbound", "--ext", "logger"}, args...)...)
+		calls := proctest.Calls(t, logger)
+		var req map[string]any
+		if res.code != exitOK || json.Unmarshal([]byte(calls[len(calls)-1].Stdin), &req) != nil {
+			t.Fatalf("run %q = %+v, calls %+v", args, res, calls)
+		}
+		return map[string]any{"title": req["title"], "body": req["body"], "branch": req["branch"]},
+			res
+	}
+	for _, tt := range []struct {
+		args []string
+		want map[string]any
+	}{
+		{nil, map[string]any{"title": "", "body": "", "branch": ""}},
+		{
+			[]string{"--title-file", "~/title.txt", "--body-file", "body.md", "--branch", "kaizen/x"},
+			map[string]any{"title": "docs: title\n", "body": "Body \u00e9\n", "branch": "kaizen/x"},
+		},
+		{
+			[]string{"--title-file", "empty.md", "--body-file=empty.md", "--branch="},
+			map[string]any{"title": "", "body": "", "branch": ""},
+		},
+	} {
+		if got, _ := texts(tt.args...); !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("run %q texts = %v, want %v", tt.args, got, tt.want)
+		}
+	}
+	calls := len(proctest.Calls(t, logger))
+	for _, tt := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"--body-file", "latin1.md"}, "--body-file: cannot read"},
+		{[]string{"--title-file", "none.md"}, "--title-file: cannot read"},
+		{[]string{"--title-file="}, "--title-file: empty value"},
+	} {
+		res := runIn(t, home, nil,
+			append([]string{"run", "outbound", "--ext", "logger"}, tt.args...)...)
+		if res.code != exitUsage || res.stdout != "" || !strings.Contains(res.stderr, tt.want) {
+			t.Errorf("run %q = %+v, want exit 2 with %q", tt.args, res, tt.want)
+		}
+	}
+	if n := len(proctest.Calls(t, logger)); n != calls {
+		t.Errorf("the extension ran on an input error: %d calls, want %d", n, calls)
 	}
 }
 

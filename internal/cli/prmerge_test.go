@@ -184,4 +184,23 @@ func TestPrMergeMergedStage(t *testing.T) {
 		len(proctest.Calls(t, gh)) != n {
 		t.Fatalf("pr merge with an invalid merged name = %+v", res)
 	}
+
+	// [merge].message_checks loads without a warning and runs nothing yet (the fake gh answers
+	// only a merge without --body); an invalid name is a config error before any gh call.
+	writeFile(t, filepath.Join(home, ".config", "stack", "config.toml"),
+		[]byte("[stages]\nmerged = []\n[merge]\nmessage_checks = [\"demo\"]\n"))
+	demoCalls := len(proctest.Calls(t, demo))
+	res = runIn(t, home, nil, "pr", "merge", "7", prHead[:9], "--merge")
+	if res.code != exitOK || res.stdout != line || res.stderr != "" ||
+		len(proctest.Calls(t, demo)) != demoCalls {
+		t.Fatalf("pr merge with message_checks = %+v", res)
+	}
+	writeFile(t, filepath.Join(home, ".config", "stack", "config.toml"),
+		[]byte("[merge]\nmessage_checks = [\"../x\"]\n"))
+	n = len(proctest.Calls(t, gh))
+	if res := merge(); res.code != exitUsage ||
+		!strings.Contains(res.stderr, "[merge].message_checks") ||
+		len(proctest.Calls(t, gh)) != n {
+		t.Fatalf("pr merge with an invalid message check = %+v", res)
+	}
 }

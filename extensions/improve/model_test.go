@@ -363,7 +363,7 @@ func TestProposal(t *testing.T) {
 				f.repo.Git("for-each-ref", "--exclude=refs/remotes/origin/main") != refs {
 				t.Fatalf("a commit or ref was made: oid %q", st.OID)
 			}
-			if len(f.calls("stack")) != 0 || len(f.calls("codex")) != 0 {
+			if len(f.calls("stack-public")) != 0 || len(f.calls("codex")) != 0 {
 				t.Fatal("checks ran")
 			}
 			f.noPublish()

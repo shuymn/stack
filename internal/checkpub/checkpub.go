@@ -19,8 +19,8 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode/utf8"
 
+	"github.com/shuymn/stack/internal/input"
 	"github.com/shuymn/stack/internal/proc"
 	"github.com/shuymn/stack/internal/publictext"
 )
@@ -32,19 +32,12 @@ var (
 	// ErrFound reports that at least one hit was written.
 	ErrFound = errors.New("found text that must not be published")
 	// ErrInput reports an input file that cannot be used.
-	ErrInput = errors.New("cannot read")
+	ErrInput = input.ErrInput
 
 	errUsage = errors.New("RANGE must be <base>..<head>")
 	errGit   = errors.New("git failed")
 
 	shaRe = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
-
-	// repoVars point git at a repository. A git hook that runs `stack check public` exports some of
-	// them, so they are dropped and the repository is found from the working directory instead.
-	repoVars = []string{
-		"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY",
-		"GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE",
-	}
 )
 
 // Text is one piece of metadata to scan.
@@ -102,23 +95,11 @@ func ReadTerms(path string) ([]string, error) {
 	if err == nil && info.IsDir() {
 		return nil, fmt.Errorf("%w %s: is a directory", ErrInput, path)
 	}
-	text, err := ReadUTF8(path)
+	text, err := input.ReadUTF8(path)
 	if err != nil {
 		return nil, err
 	}
 	return parseTerms(text), nil
-}
-
-// ReadUTF8 reads a whole input file, which must be UTF-8.
-func ReadUTF8(path string) (string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("%w %s: %w", ErrInput, path, err)
-	}
-	if !utf8.Valid(data) {
-		return "", fmt.Errorf("%w %s: not UTF-8", ErrInput, path)
-	}
-	return string(data), nil
 }
 
 // Check scans the range and the metadata. It writes each distinct hit once, in order, and returns
@@ -136,7 +117,7 @@ func Check(ctx context.Context, o Options) error {
 	if o.Env == nil {
 		o.Env = os.Environ()
 	}
-	o.Env = DropRepoVars(o.Env)
+	o.Env = proc.DropRepoVars(o.Env)
 	top, err := o.toplevel(ctx)
 	if err != nil {
 		return err
@@ -214,18 +195,6 @@ func (o Options) commit(ctx context.Context, s *scanner, sha string) error {
 			}
 			return nil
 		}))
-}
-
-// DropRepoVars returns env without the repository-location variables (GIT_DIR, GIT_WORK_TREE, …),
-// which a git hook exports; git then finds the repository from its working directory.
-func DropRepoVars(env []string) []string {
-	return slices.DeleteFunc(slices.Clone(env), func(kv string) bool {
-		name, _, _ := strings.Cut(kv, "=")
-		return slices.ContainsFunc(
-			repoVars,
-			func(v string) bool { return strings.EqualFold(v, name) },
-		)
-	})
 }
 
 // toplevel returns the work tree that contains o.Dir.

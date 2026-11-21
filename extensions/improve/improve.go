@@ -552,7 +552,7 @@ func (s *state) gitCmd(dir string, args ...string) command {
 	}
 }
 
-// noReplace turns replace refs off for git and for the git `stack check public` runs.
+// noReplace turns replace refs off for git and for the git `stack-public check` runs.
 const noReplace = "GIT_NO_REPLACE_OBJECTS=1"
 
 // ghHost pins every gh call to github.com, whatever GH_HOST or gh's default host says.

@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/shuymn/stack/internal/checkpub"
+	"github.com/shuymn/stack/internal/config"
 	"github.com/shuymn/stack/internal/ext"
 	"github.com/shuymn/stack/internal/github"
 	"github.com/shuymn/stack/internal/merge"
@@ -41,7 +43,7 @@ func runPrMerge(ctx context.Context, env Env, inv invocation) error {
 			Runner: proc.Exec{},
 			// gh and git find the repository from the working directory, never from variables a git
 			// hook exported.
-			Env: checkpub.DropRepoVars(os.Environ()),
+			Env: proc.DropRepoVars(os.Environ()),
 		},
 	}
 	if env.Getenv != nil {
@@ -79,6 +81,11 @@ func runPrMerge(ctx context.Context, env Env, inv invocation) error {
 	}
 	if err := checkStageNames(env, ext.StageMerged, cfg.Stages.Merged); err != nil {
 		return err
+	}
+	// [merge].message_checks is validated with the rest of the config; nothing runs it yet.
+	if err := ext.CheckNames(cfg.Merge.MessageChecks); err != nil {
+		return fmt.Errorf("%w: %s: [merge].message_checks: %w", config.ErrInvalid,
+			paths.ConfigFile(env.Home), err)
 	}
 	lc := &lazyConfig{env: env, loaded: true, cfg: cfg}
 	o.Merged = merge.MergedStage{

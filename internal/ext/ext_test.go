@@ -432,7 +432,7 @@ func TestNames(t *testing.T) {
 	s := config.Defaults().Stages
 	for stage, want := range map[string][]string{
 		StageEntry:    {"jev-router"},
-		StageOutbound: {"jev-semantic"},
+		StageOutbound: {"public", "jev-semantic"},
 		StageMerged:   {"audit-due"},
 		StageCycle:    {"observe", "jev-classify", "improve"},
 	} {

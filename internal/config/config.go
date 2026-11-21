@@ -29,6 +29,7 @@ type Config struct {
 	Handover []HandoverEntry
 	Safety   Safety
 	Stages   Stages
+	Merge    Merge
 }
 
 // Kit is the `[kit]` table.
@@ -64,6 +65,12 @@ type Stages struct {
 	Cycle    []string
 }
 
+// Merge is the `[merge]` table.
+type Merge struct {
+	// MessageChecks lists the outbound extensions `stack pr merge` requires for --subject/--body.
+	MessageChecks []string
+}
+
 // Defaults returns the §5 defaults. Each call returns fresh slices.
 func Defaults() Config {
 	return Config{
@@ -85,10 +92,11 @@ func Defaults() Config {
 		},
 		Stages: Stages{
 			Entry:    []string{"jev-router"},
-			Outbound: []string{"jev-semantic"},
+			Outbound: []string{"public", "jev-semantic"},
 			Merged:   []string{"audit-due"},
 			Cycle:    []string{"observe", "jev-classify", "improve"},
 		},
+		Merge: Merge{MessageChecks: []string{}},
 	}
 }
 
@@ -169,6 +177,9 @@ func Load(path string) (Config, []string, error) {
 	d.field(stages, "outbound", &cfg.Stages.Outbound)
 	d.field(stages, "merged", &cfg.Stages.Merged)
 	d.field(stages, "cycle", &cfg.Stages.Cycle)
+
+	merge := d.section(top, "merge")
+	d.field(merge, "message_checks", &cfg.Merge.MessageChecks)
 
 	if d.err != nil {
 		return Config{}, nil, fmt.Errorf("%w: %s: %w", ErrInvalid, path, d.err)
