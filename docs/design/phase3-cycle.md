@@ -170,8 +170,8 @@ On Windows only the direct child is killed; no Phase 3 extension runs a paid or 
 
 These guarantees hold for the extension's own timeouts. When the extension itself is killed from outside (a
 `SIGKILL`, core's stage deadline, a shutdown), nothing kills its children's groups: they can outlive it, the run lock
-(§3.4 step 2) is released with the extension, and the next run reports the leftover worktree instead of removing it
-(step 8). Each extension's own deadline comes before core's (§3.9), so that path is abnormal.
+(§3.4 step 2) is released with the extension, and the next run that reaches §3.4 step 8 reports the leftover
+worktree instead of removing it. Each extension's own deadline comes before core's (§3.9), so that path is abnormal.
 
 Finding shape for both: `{"kind": "<slug>", "where": "<file:line | URL | path>", "detail": "<≤ 300 chars>"}`.
 
@@ -277,7 +277,9 @@ never see a partial file):
 `version` is this file's schema; timestamps are RFC 3339 UTC in whole seconds (`until` is the start time cut to the
 second), so `jq`'s `fromdateiso8601` reads them (§3.6). Last writer wins: two overlapping observe runs (a manual one
 and the job) can leave the older window as the file; improve's freshness bound (§3.4 step 6) still holds, so this is
-accepted.
+accepted. When writing `latest.json` fails, observe answers `warn` with the finding `latest-not-written`, and the
+job (§3.6) does not run improve: a file from an earlier run in the same second would otherwise pass its freshness
+check.
 
 ### 3.4 `stack-improve`
 
@@ -297,7 +299,9 @@ step's timeout is cut to what the deadline leaves after the reserve and the late
    `PUBLIC` and `nameWithOwner` equal to `<slug>` (case-insensitive), else `pass` "target is not a public GitHub
    repository" (gh error → `warn`). `<default>` = `defaultBranchRef.name`; there is no `base` setting. If
    `~/.claude/settings.json` lists `permissions.additionalDirectories`, `warn` and stop: they would widen the
-   file-tool boundary of step 9.
+   file-tool boundary of step 9. Only the standard configuration directory is supported: improve removes
+   `CLAUDE_CONFIG_DIR` from the environment of every `claude` it starts, so the settings it checks here and in the
+   credential guard are the ones Claude loads.
 2. **Run lock.** Non-blocking exclusive lock on `~/.local/state/stack/improve/lock` (`gofrs/flock`; released by the
    kernel if the process dies, so it never goes stale). Busy → `pass` "another improve run is active". The lock is
    held until step 13 has finished, i.e. through cleanup and stamp finalisation. It covers manual and scheduled runs
@@ -341,7 +345,7 @@ step's timeout is cut to what the deadline leaves after the reserve and the late
 9. **Model.** `claude -p --setting-sources user --strict-mcp-config --tools Read,Edit,Write,Grep,Glob
    --permission-mode acceptEdits --permission-prompts none --no-session-persistence --settings '<S>' --output-format
    json --json-schema <schema> --model claude-opus-5-5 --effort xhigh --max-budget-usd 50`, cwd = the worktree, no
-   `--add-dir`, environment inherited plus `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`, timeout from §3.9. `<S>` =
+   `--add-dir`, environment inherited minus `CLAUDE_CONFIG_DIR` (step 1) plus `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`, timeout from §3.9. `<S>` =
    `{"autoMemoryEnabled":false,"permissions":{"blockReadsOutsideWorkingDirectories":true,
    "blockWritesOutsideWorkingDirectories":true}}`: the file tools refuse paths outside the working directory in
    every permission mode (Claude Code permissions, "Block file-tool reads and writes outside the working
@@ -403,9 +407,12 @@ step's timeout is cut to what the deadline leaves after the reserve and the late
        `git diff-tree -r -z --no-renames --raw <base_oid> <oid>` must be status `M` with old and new mode `100644`
        and a path matching `paths`. Otherwise → `proposal:commit-scope` (a hook changed the index or the history).
     4. *Credential check.* The credential set of step 9 is matched against the published bytes: `git diff --text
-       <base_oid> <oid>`, the commit message of `oid` (`git show -s --format=%B <oid>`), and the title and body
-       files. A hit (a commit hook can add a value the model never wrote) → `proposal:credential`, before the public
-       check and the Codex check. `stack check public` alone does not cover it: a credential is not a private term.
+       --no-ext-diff --no-textconv --no-color <base_oid> <oid>` (as `internal/checkpub` reads diffs, so the owner's
+       diff drivers cannot hide bytes), the commit message of `oid` (`git show -s --encoding=UTF-8 --format=%B
+       <oid>`), and the title and body files; a failed read → `failed:check`. A hit → `proposal:credential`, before
+       the public check, the Codex check and any remote write. The guarantees differ by source: a value the model
+       wrote is stopped before any commit (step 9); a value a commit hook adds is already in the local commit and is
+       stopped before Codex and the push, and the commit is discarded with the worktree (step 13). `stack check public` alone does not cover it: a credential is not a private term.
     5. *Public check.* `stack check public <base_oid>..<oid> --title-file <t> --body-file <b> --branch improve/<W>`.
        Exit 1 → `proposal:public-check` (hits, redacted, in the stamp), exit 2 → `failed:check`.
     6. *Codex check* (§9 D1). If less time is left than the Codex timeout plus push and PR (§3.9) →
@@ -424,18 +431,20 @@ step's timeout is cut to what the deadline leaves after the reserve and the late
        `failed:push` with the porcelain line. `origin` is the target's own remote; a `pushurl` differing from the
        fetch URL is the owner's own configuration and is not checked.
     9. *PR.* `gh pr create --repo <slug> --base <default> --head improve/<W> --title <title> --body-file <b>` with
-       the checked bytes, then one read: `gh api 'repos/<slug>/pulls?state=all&head=<owner>:improve/<W>&per_page=100'`.
+       the checked bytes, then one read, made once per run whatever create returned and reused by step 10: `gh api 'repos/<slug>/pulls?state=all&head=<owner>:improve/<W>&per_page=100'`.
        The outcome is `pr <url>` (`pass`, URL in `context`) only when exactly one PR in that answer has
        `head.repo.full_name == <slug>` (case-insensitive), `head.ref == improve/<W>`, `head.sha == oid` and
        `base.ref == <default>`. `gh pr create` takes a branch name, not an OID, so its exit code alone does not
        prove which commit the PR holds.
     10. *Ambiguous result* (push or PR create fails without a clear rejection or times out, or the read of step 9
-       matches no PR). Read-only queries only: `git ls-remote origin refs/heads/improve/<W>` and the read of step 9.
-       A matching PR → `pr <url>`; the branch at `oid` and no PR at all for that head → `pushed-no-pr` with the exact
-       `gh pr create` command (title and body are in the stamp); anything else (a PR that differs in head repo, OID
-       or base, or a failed query) → `publish-unknown`, with what the queries showed recorded in the stamp. No
-       resend, no retry.
-13. **Cleanup.** `git worktree remove --force <work>/<W>` on every path after step 8 (the worktree is improve's own);
+       has no unique match). Read-only: `git ls-remote origin refs/heads/improve/<W>` plus the step 9 read (made now
+       only if step 9 never ran because the push was ambiguous). Exactly one matching PR → `pr <url>`; an empty read
+       and the branch at `oid` → `pushed-no-pr` with the exact `gh pr create` command (title and body are in the
+       stamp); several matches, a PR that differs in head repo, OID or base, or a failed query → `publish-unknown`,
+       with what the queries showed recorded in the stamp. No resend, no retry; only facts found before the deadline
+       are recorded.
+13. **Cleanup.** `git worktree remove --force <work>/<W>` only when this run's `git worktree add` succeeded (the
+    worktree is then improve's own); a failed add, for example on a leftover `<work>/<W>`, leaves the directory alone;
     a failure is a stderr line and a `leftover-worktree` finding, and later runs report it (step 8). Then step 10's
     stamp removal, if due; then the lock is released.
 
@@ -498,6 +507,8 @@ start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 obs=$(mktemp "$out/.observe.XXXXXX") || fail "mktemp failed"
 stack run cycle --ext observe >"$obs"; code=$?
 valid observe "$obs" "$code" || fail "observe: exit $code without a valid result"
+jq -e '[.results[].findings[]? | objects | select(.rule? == "latest-not-written")] | length == 0' "$obs" \
+  >/dev/null || fail "observe could not write latest.json"
 jq -e --arg s "$start" '.version == 1 and (.window.until | fromdateiso8601) >= ($s | fromdateiso8601)' \
   "$latest" >/dev/null 2>&1 || fail "observe did not write a fresh latest.json"
 imp=$(mktemp "$out/.improve.XXXXXX") || fail "mktemp failed"
@@ -516,7 +527,8 @@ A run is valid only when both calls exit 0 and each prints exactly one `cycle` o
 `warn` and whose only result is the expected extension, answered by itself (no synthetic `error`, a `pass`/`warn`
 status, a findings array), and observe has written a `latest.json` whose window ends at or after the job started.
 Improve runs only after a valid observe. Anything else, including core exit 2 (no output), an extension missing
-from `PATH` (core lists it under `skipped`), a crashed extension, or a stale `latest.json`, keeps the previous
+from `PATH` (core lists it under `skipped`), a crashed extension, an observe `latest-not-written` finding, or a
+stale `latest.json`, keeps the previous
 `last.json`, replaces `last-error` atomically and exits 2. A valid run merges the two results into one `cycle`
 object, replaces `last.json`, removes `last-error` and exits 0. Running the stages by name (`--ext`) leaves
 `[stages].cycle` unused by the job; `stack run cycle` itself works on every OS, and only this job is macOS-specific.
@@ -637,7 +649,7 @@ owner, not of the repository.
 | Option | Gains | Gives up | Reversibility |
 |---|---|---|---|
 | **One launchd job, two stage calls (`--ext observe`, then `--ext improve`) (chosen)** | improve has its own 30-min stage (model about 17 min); improve runs only after a valid, fresh observe; one job, one log, one `last.json`; no core change | the job names its extensions, so `[stages].cycle` is unused by it; the wrapper merges two aggregates | high: the wrapper alone changes |
-| Both in one `stack run cycle` (`[stages].cycle`) | uses the configured stage; one call | improve shares 30 min with observe (model about 12 min); an extension killed by core's deadline leaves its children (§3.1) | high |
+| Both in one `stack run cycle` (`[stages].cycle`) | uses the configured stage; one call | improve shares 30 min with observe and plans 29 min of its own, so core's deadline can kill it mid-publish, leaving its children (§3.1) | high |
 | Two launchd jobs | independent schedules | no order guarantee (after sleep, improve can fire before observe), two status paths | high |
 | `deadline` field in the request | core-computed budgets | a core change no Phase 3 extension needs | low |
 
@@ -773,10 +785,10 @@ I7); no remote write without enough time (I14); one run at a time (I5); a Codex 
 | P5 | When improve is enabled, it shall (a) attempt when its preconditions hold, (b) make at most one attempt with unknown or non-zero cost per ISO week, and (c) publish only when every gate passes. | (a) with improve enabled, public evidence, no open improve PR and no stamp this week, a run creates the stamp and starts the model; (b) a second run that week calls no model and reports the stamp; (c) a `pr <url>` outcome has a PR whose files are within `paths` and whose head is the stamp's `oid`; `no-change` and a Codex refusal (`proposal:codex*`) are valid outcomes with no push. The first approved run also records the real Claude and Codex durations, both timeouts, the cost or `unknown`, and the outcome | (a) inspect the stamp after the run; (b) rerun `stack run cycle --ext improve`; (c) `gh pr view --json files,headRefOid` against the stamp; durations from the log |
 | P6 | While `last.json` is not `pass`, is older than 36 h, or `last-error` exists, the statusline shall show the `cycle` segment; otherwise nothing. | segment text | edit a copy of `last.json`; touch it to an old date; write a `last-error` |
 | P7 | When the retirement PR is merged, no executable file or instruction of the dotfiles repository shall reference the retired kaizen scripts, `attention-budget.py` or `.claude/kaizen-managed`, and the old job shall not be loaded. | grep hits only in allowed places; `launchctl print …kaizen-cycle` fails | `git grep -nE 'scripts/kaizen/(cycle\|observe\|improve\|apply\|ready)\|attention-budget\|kaizen-managed\|public-check' -- ':!tests/test_claude_settings.py' ':!home/.chezmoiremove'`; allowed: the `docs/kaizen.md` pointer; `tests/test_claude_settings.py:31-32` is an intended absence check |
-| P8 | While improve runs, the owner's checkout shall be unchanged except `refs/remotes/origin/<default>` and Git's object and worktree metadata. | snapshots equal | before and after a manual improve run: `git status --porcelain=v2 -z --untracked-files=all` (no `--branch`: its ahead/behind header moves with remote-tracking refs), `git symbolic-ref -q HEAD`, `git rev-parse HEAD`, `git ls-files -s`, `git for-each-ref` without `refs/remotes/`, `git stash list`; diff the two snapshots; `git worktree list --porcelain` shows no entry left under `~/.local/state/stack/improve/work/` |
+| P8 | While improve runs, the owner's checkout shall be unchanged except `refs/remotes/origin/<default>` and Git's object and worktree metadata. | snapshots equal | before and after a manual improve run: `git status --porcelain=v2 -z --untracked-files=all` (no `--branch`: its ahead/behind header moves with remote-tracking refs), `git symbolic-ref -q HEAD`, `git rev-parse HEAD`, `git ls-files -s`, `git for-each-ref` without `refs/remotes/origin/<default>`, `git stash list`; diff the two snapshots; `git worktree list --porcelain` shows no entry left under `~/.local/state/stack/improve/work/` |
 | P9 | Where Linux or Windows is the runtime, `stack run cycle` shall not fail because of the cycle extensions. | both extensions in `.results` with empty `error`; observe `pass`/`warn` with sources `off`; improve `pass` | CI protocol test on all runners; `stack run cycle` on a Linux host |
 | P10 | When `stack-private-terms` runs, it shall write the same set of terms as before the port. | term sets equal (header line ignored) and file mode 0600 | regenerate before and after dotfiles PR 2; compare sorted non-comment lines |
-| P11 | When improve starts `claude` on the real machine, the model's effective input shall exclude project and local settings (including the main checkout's `additionalDirectories`) and auto memory. | the logged `claude` argv has `--setting-sources user`, the auto memory variable and `--settings` keys; with a dummy `additionalDirectories` entry in the main checkout's `.claude/settings.local.json` and a marker line in the repository's auto memory `MEMORY.md`, the model cannot read a file in that directory and does not see the marker | the first approved real run: before it, the owner adds both dummies and runs the logged argv once in an improve-style worktree with a probe prompt (read the file; quote any marker line), then removes both; this run is billed and needs the owner's approval like any paid run |
+| P11 | When improve starts `claude` on the real machine, the model's effective input shall exclude project and local settings (including the main checkout's `additionalDirectories`) and auto memory. | the logged `claude` argv has `--setting-sources user`, the auto memory variable and `--settings` keys; with a dummy `additionalDirectories` entry in the main checkout's `.claude/settings.local.json` and a marker line in the repository's auto memory `MEMORY.md`, the read of a file in that directory comes back as a refused tool result in the session's JSON output (not merely unmentioned), and the marker is absent; positive control: the same probe without `--setting-sources user` and the memory switches, in the same worktree, quotes the marker and reads the file | the first approved real run: before it, the owner adds both dummies and runs the logged argv once in an improve-style worktree with a probe prompt (read the file; quote any marker line), then removes both; this run is billed and needs the owner's approval like any paid run |
 
 ### 8.2 Plan layer
 
@@ -804,15 +816,15 @@ I7); no remote write without enough time (I14); one run at a time (I5); a Codex 
 | I8 | If the worktree has anything but modifications of existing `100644` files within `paths`, or evidence ids are not ⊆ brief ids, then improve shall record a proposal with the patch and not commit. | `improve.TestProposal` | add, delete, rename, mode change, type change (file → symlink), out-of-scope path, `**` boundary (`skills` vs `skills2`), empty diff with `change: true`, foreign id; `git rev-parse HEAD` still `base_oid` and no new ref |
 | I9 | Improve shall commit with the repository's hooks and the owner's config, without `--no-verify`. | `improve.TestCommit` (real git) | a failing `commit-msg` hook → `failed:commit` with patch; argv has no `--no-verify` |
 | I10 | Improve shall verify the pinned OID as one commit on `base_oid` changing only allowed existing files, run the credential check, `stack check public` and the Codex check on that OID and the fixed title and body, and push exactly that OID. | `improve.TestCommitScope` (real git), `improve.TestPublicCheck` (real `stack` built in `TestMain`) | a `pre-commit` hook that succeeds after staging an extra file → `proposal:commit-scope`, no push; HEAD moved after the check → pushed OID is still the pinned one; real `stack check public` with a dummy private term in the diff, message, title or body → `proposal:public-check`; exit 2 → `failed:check` |
-| I11 | Improve shall push only the pinned OID to a new `improve/<YYYY-Www>`, create one PR with the checked title and body, record a PR only when one read matches head repo, ref, OID and base, and on an ambiguous result report only what read-only queries show. | `improve.TestPublish` (bare remote + fake gh) | branch exists at an ancestor of `oid` (fast-forward possible) → `failed:push`; branch already at `oid` (Git's up-to-date, exit 0) → `failed:push`, no `gh pr create`; argv has `--porcelain --no-follow-tags --recurse-submodules=no`, and a tag on `oid` is not in the bare remote; `gh pr create` argv and body bytes equal the checked bytes; create succeeds but the read shows a fork's PR or another base at `oid` → `publish-unknown` with the read in the stamp; create fails but the read shows the matching PR → `pr <url>`; branch only → `pushed-no-pr`; query fails → `publish-unknown`; no second create |
-| I12 | Improve shall remove its worktree on every path after creating it, and shall report, not remove, a leftover worktree of an earlier run. | `improve.TestCleanup` | after success, proposal, failure; a leftover directory under `work/` → `leftover-worktree` finding naming it, directory and its files untouched; removal happens before the unbilled stamp removal |
-| I13 | Improve shall refuse to publish when an endpoint credential appears in the tree, the model output, or the pinned commit, title and body, and shall never write a credential value to a commit, PR, stamp, stderr or context. | `improve.TestCredential` | dummy `ANTHROPIC_AUTH_TOKEN` in env and in a settings fixture; model writes it into a file or the title → `proposal:credential`, no commit; a `commit-msg` hook appends it to the message, or a `pre-commit` hook writes it into an allowed file → `proposal:credential`, no `stack check public`, no codex, no push; fake `claude` prints it only on stderr → outcome unchanged, value redacted; grep of the stamp, captured stderr, the response and the bare remote finds no dummy value |
+| I11 | Improve shall push only the pinned OID to a new `improve/<YYYY-Www>`, create one PR with the checked title and body, record a PR only when one read matches head repo, ref, OID and base, and on an ambiguous result report only what read-only queries show. | `improve.TestPublish` (bare remote + fake gh) | branch exists at an ancestor of `oid` (fast-forward possible) → `failed:push`; branch already at `oid` (Git's up-to-date, exit 0) → `failed:push`, no `gh pr create`; argv has `--porcelain --no-follow-tags --recurse-submodules=no`, and a tag on `oid` is not in the bare remote; `gh pr create` argv and body bytes equal the checked bytes; create succeeds but the read shows a fork's PR or another base at `oid` → `publish-unknown` with the read in the stamp; create fails but the read shows the matching PR → `pr <url>`; two matching PRs → `publish-unknown`; branch only → `pushed-no-pr`; query fails → `publish-unknown`; no second create, and the fake gh log shows exactly one PR read per run |
+| I12 | Improve shall remove its worktree on every path after creating it, and shall report, not remove, a leftover worktree of an earlier run. | `improve.TestCleanup` | after success, proposal, failure; a leftover directory under `work/` → `leftover-worktree` finding naming it, directory and its files untouched; a leftover at this run's own `<work>/<W>` (same week, stamp released by the owner) → `git worktree add` fails, `failed:worktree`, the directory and its files untouched and no `worktree remove` in the git log; removal happens before the unbilled stamp removal |
+| I13 | Improve shall refuse to publish when an endpoint credential appears in the tree, the model output, or the pinned commit, title and body, and shall never write a credential value to a commit, PR, stamp, stderr or context. | `improve.TestCredential` | dummy `ANTHROPIC_AUTH_TOKEN` in env and in a settings fixture; model writes it into a file or the title → `proposal:credential`, no commit; a `commit-msg` hook appends it to the message, or a `pre-commit` hook writes it into an allowed file → local commit exists, `proposal:credential`, no `stack check public`, no codex, no push, the commit gone with the worktree; the same with a `diff.external` that prints nothing configured → still `proposal:credential`; fake `claude` prints it only on stderr → outcome unchanged, value redacted; grep of the stamp, captured stderr, the response and the bare remote finds no dummy value |
 | I14 | If the time left cannot cover the model minimum, or the Codex check, push and PR, improve shall stop before the model or before any remote write. | `improve.TestDeadline` (injected clock) | too little before the stamp → `pass`, no stamp; too little right before `claude` (slow worktree) → `failed:deadline`, no claude, stamp removed; too little before Codex → `failed:deadline`, no codex, no push; too little before push → no push |
 | I15 | Improve shall answer `pass` and call no model unless the target is a public GitHub repository equal to `origin`, and shall stop when the user settings add working directories. | `improve.TestTarget` | `PRIVATE`/`INTERNAL` → pass, no claude; name mismatch → pass; `additionalDirectories` set → warn, no claude |
 | I16 | If the Codex check reports a HIGH finding, exits non-zero, times out, or leaves a missing or invalid verdict, improve shall not push and not create a PR. | `improve.TestCodexGate` (real git, fake `codex`, fake `gh`) | the same pinned candidate in each of the five cases → `proposal:codex-high` or `proposal:codex`, patch in the stamp; the bare remote has no `improve/` ref and the `gh` log has no `pr create` |
 | D1 | `stack-private-terms` shall write the terms the legacy generator wrote, without importing `public-check`; `probe/build` shall keep excluding private strings without it. | `tests/test_stack_private_terms.py`, `tests/test_kaizen_probe.py` `BuildTest` | fixture host.toml with generic, role and owner values; hand-kept list; `.t3` fragments; term set equal to the legacy output for the same fixture; with `public-check` removed from the test checkout, a dummy private term in the test `HOME`'s generated terms file and in one filler item → that item excluded, the build passes, and no built file contains the term |
 | D2 | `comp_cycle` shall render each state of §3.7. | `tests/test_statusline.py` | absent; absent + plist → `cycle never`; absent + `last-error` → `cycle ✗`; unreadable; `.status` null (`{}`); warn with N; stale; `last-error` present with a valid `last.json` → `✗` appended; fresh pass → nothing |
-| D3 | `scripts/stack-cycle` shall run improve only after a valid observe with a fresh `latest.json`, replace `last.json` atomically only when both calls are valid, keep the previous one otherwise, remove `last-error` on success and replace it atomically on failure. | `tests/test_stack_cycle.py` (fake `stack`, `chezmoi`) | both valid → merged `last.json` with exactly two results, exit 0, no `last-error`; each of: non-zero exit with valid JSON, empty output, two JSON objects, `{}`, `stage` not `cycle`, `status` `block`, the extension only in `skipped`, a synthetic `error`, a result status outside pass/warn, findings not an array → previous file kept, `last-error` written, exit 2; observe invalid or `latest.json` not rewritten (window before the job start) → improve not run; `chezmoi source-path` failing or empty, unwritable state directory → exit 2 without running `stack`; the fake improve `stack` writes half its output and blocks on a FIFO, the test reads `last.json` (old bytes exactly) and `last-error` (absent or complete), then releases it |
+| D3 | `scripts/stack-cycle` shall run improve only after a valid observe with a fresh `latest.json`, replace `last.json` atomically only when both calls are valid, keep the previous one otherwise, remove `last-error` on success and replace it atomically on failure. | `tests/test_stack_cycle.py` (fake `stack`, `chezmoi`) | both valid → merged `last.json` with exactly two results, exit 0, no `last-error`; each of: non-zero exit with valid JSON, empty output, two JSON objects, `{}`, `stage` not `cycle`, `status` `block`, the extension only in `skipped`, a synthetic `error`, a result status outside pass/warn, findings not an array → previous file kept, `last-error` written, exit 2; observe invalid, `latest.json` not rewritten (window before the job start), or an observe `latest-not-written` finding with a same-second old `latest.json` → improve not run; `chezmoi source-path` failing or empty, unwritable state directory → exit 2 without running `stack`; the fake improve `stack` writes half its output and blocks on a FIFO, the test reads `last.json` (old bytes exactly) and `last-error` (absent or complete), then releases it; the same for a `last-error` write blocked half-way (old `last-error` or none, never partial) |
 
 ## 9. Owner Decisions
 
