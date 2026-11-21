@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/shuymn/stack/internal/ext"
 	"github.com/shuymn/stack/internal/gittest"
@@ -267,6 +268,11 @@ func TestRunReplay(t *testing.T) {
 // the renderer's block format; block is shown, not enforced.
 func TestKitOpenEntryStage(t *testing.T) {
 	bin, r := extBin(t)
+	// The entry deadline is for an interactive start, not for five fake processes under -race
+	// on a loaded machine; the deadline paths have their own tests.
+	saved := ext.Timeouts[ext.StageEntry]
+	ext.Timeouts[ext.StageEntry] = time.Minute
+	t.Cleanup(func() { ext.Timeouts[ext.StageEntry] = saved })
 	router := fakeExt(t, bin, "jev-router", `{"status":"pass","context":"ROUTED"}`)
 	gate := fakeExt(t, bin, "gate", `{"status":"block","context":"STOP"}`)
 	fakeExt(t, bin, "quiet", `{"status":"pass"}`)
