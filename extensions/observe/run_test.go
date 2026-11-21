@@ -248,11 +248,16 @@ func TestDeadline(t *testing.T) {
 			t.Errorf("status = %q", resp.Status)
 		}
 	})
-	// Replay runs to the deadline, so gh version is read before it.
+	// Replay runs to the deadline, so gh version is read before it. Before replay, three fakes
+	// start one after another (gh auth status, gh --version, stack --version --json), each a fresh
+	// copy of the test binary; under the full suite one such start was measured at 2-3 s on macOS,
+	// enough to use up replayBudget's 9 s work window. The longer budget leaves them that time; the
+	// test still lasts until the deadline, which is what proves the order.
+	const ghFirstBudget = 30 * time.Second
 	t.Run("gh version before replay", func(t *testing.T) {
 		t.Parallel()
 		f := newFixture(t)
-		f.opts.Budget, f.opts.Reserve = replayBudget, reserve
+		f.opts.Budget, f.opts.Reserve = ghFirstBudget, reserve
 		f.calls("r", bashCall(hourAgo, f.cwd, cmd("b"), "ok"))
 		f.fake("gh", ghAuthOK, ghVersion)
 		f.fake(
