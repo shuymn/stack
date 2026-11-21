@@ -21,9 +21,10 @@ const (
 )
 
 // fakeGh puts a fake gh that answers a passing merge of PR 7 at prHead first on PATH, inside a
-// fixture repository that becomes the working directory. viewHead is the head the PR reports.
+// fixture repository that becomes the working directory. viewHead is the head the PR reports;
+// mergeArgs follow the merge call's --match-head-commit (e.g. "--body=x").
 // Not parallel: it changes PATH and the working directory.
-func fakeGh(t *testing.T, viewHead string) string {
+func fakeGh(t *testing.T, viewHead string, mergeArgs ...string) string {
 	t.Helper()
 	r := gittest.New(t)
 	r.SetProcessEnv(t)
@@ -49,7 +50,8 @@ func fakeGh(t *testing.T, viewHead string) string {
 			`"conclusion":"SUCCESS"}]}}}}}}`),
 		resp(github.MergeQueueArgs(repo, 7),
 			`{"data":{"repository":{"pullRequest":{"isMergeQueueEnabled":false}}}}`),
-		resp([]string{"pr", "merge", "7", "--merge", "--match-head-commit", prHead}, ""),
+		resp(append([]string{"pr", "merge", "7", "--merge", "--match-head-commit", prHead},
+			mergeArgs...), ""),
 		resp([]string{"pr", "view", "7", "--json", "state,headRefOid,mergeCommit"},
 			`{"state":"MERGED","headRefOid":"`+prHead+`","mergeCommit":{"oid":"`+prMergeOID+`"}}`),
 	}})
@@ -86,7 +88,6 @@ func TestPrMerge(t *testing.T) {
 	t.Run("usage errors exit 2 before gh", func(t *testing.T) {
 		gh := fakeGh(t, prHead)
 		home := t.TempDir()
-		writeFile(t, filepath.Join(home, ".config", "stack", "private-terms"), []byte("Zebra\n"))
 		for _, tt := range []struct {
 			env  map[string]string
 			args []string
@@ -96,8 +97,6 @@ func TestPrMerge(t *testing.T) {
 			{nil, []string{"12", "abc", "--auto"}, "7-40 lower-case hex"},
 			{nil, []string{"7", prHead, "--merge", "--rebase"}, "pass one merge method"},
 			{map[string]string{"GH_REPO": "o/r"}, []string{"7", prHead}, "GH_REPO"},
-			{nil, []string{"7", prHead, "--body", "see /" + "home/bob/x"}, "--body: local path"},
-			{nil, []string{"7", prHead, "--subject", "zebra"}, "--subject: private term 'Zebra'"},
 		} {
 			r := runIn(t, home, tt.env, append([]string{"pr", "merge"}, tt.args...)...)
 			if r.code != exitUsage || !strings.Contains(r.stderr, tt.want) {
@@ -185,8 +184,8 @@ func TestPrMergeMergedStage(t *testing.T) {
 		t.Fatalf("pr merge with an invalid merged name = %+v", res)
 	}
 
-	// [merge].message_checks loads without a warning and runs nothing yet (the fake gh answers
-	// only a merge without --body); an invalid name is a config error before any gh call.
+	// [merge].message_checks loads without a warning and runs nothing without a message flag; an
+	// invalid name is a config error before any gh call.
 	writeFile(t, filepath.Join(home, ".config", "stack", "config.toml"),
 		[]byte("[stages]\nmerged = []\n[merge]\nmessage_checks = [\"demo\"]\n"))
 	demoCalls := len(proctest.Calls(t, demo))

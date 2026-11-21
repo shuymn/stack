@@ -1,7 +1,7 @@
 // Package public is the stack-public extension (docs/design/core-stages.md §4.4): the check for
 // local paths and private terms in what a push or a PR would publish. Without arguments it answers
 // one outbound request of the extension protocol; `stack-public check` is the CLI mode for direct
-// callers, with the flags, output and exit codes of the core's `stack check public`.
+// callers, with the flags, output and exit codes of the v10 core's `stack check public`.
 package public
 
 import (
@@ -26,7 +26,7 @@ const (
 
 const (
 	// diag prefixes the CLI mode's diagnostics and checkSynopsis is its usage line: both are the
-	// core command's, so a caller that switches from `stack check public` reads the same output
+	// v10 core command's, so a caller that switches from `stack check public` reads the same output
 	// (P9).
 	diag          = "stack check public"
 	checkSynopsis = diag + " <base>..<head> [--title-file F] [--body-file F] [--branch B]"

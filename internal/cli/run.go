@@ -29,6 +29,7 @@ var (
 	errEmptyFlag    = errors.New("empty value")
 	errExpect       = errors.New("aggregate status differs from the replay's expect")
 	errBlocked      = errors.New("block")
+	errNoHome       = errors.New("home directory unknown")
 )
 
 // runRun implements `stack run <stage>`: it runs the stage's extensions and prints the aggregate as

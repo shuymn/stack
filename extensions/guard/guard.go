@@ -3,8 +3,8 @@
 // docs/design/phase2-core.md §4.3 and allows everything else. Rules run in that order; the first
 // deny wins. Settings come from ~/.config/stack/safety.toml (§4.6).
 //
-// The rules are a copy of the core hook's (internal/guard), which keeps them until the core removal
-// (§7 PR 10); the drift test runs every golden through both binaries.
+// The rules were the core hook's until v11; the core hook (internal/guard) keeps only raw-merge, and
+// the golden test checks that it denies none of these.
 package guard
 
 import (

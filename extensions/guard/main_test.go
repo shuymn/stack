@@ -20,8 +20,8 @@ import (
 
 const isWindows = runtime.GOOS == "windows"
 
-// built holds the binaries TestMain builds: stack-guard, and the core stack for the drift and
-// two-hook checks.
+// built holds the binaries TestMain builds: stack-guard, and the core stack for the checks that it
+// leaves the moved rules alone and for the two-hook checks.
 var built struct {
 	stack, guard string
 	err          error

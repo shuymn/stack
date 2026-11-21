@@ -25,11 +25,11 @@ func rawMerge(calls []ghCall, opts Options) (Decision, bool) {
 		switch c.gh.Command {
 		case "pr merge":
 			if !c.gh.DisableAuto {
-				return deny(RuleRawMerge, "gh pr merge is not run directly. %s", mergeAdvice)
+				return deny("gh pr merge is not run directly. %s", mergeAdvice)
 			}
 		case "api":
 			if c.gh.Method == http.MethodPut && ghargs.IsPullMerge(c.gh.Endpoint) {
-				return deny(RuleRawMerge, "gh api PUT %s merges a pull request. %s",
+				return deny("gh api PUT %s merges a pull request. %s",
 					c.gh.Endpoint, mergeAdvice)
 			}
 			for _, q := range c.gh.Queries {
@@ -41,7 +41,7 @@ func rawMerge(calls []ghCall, opts Options) (Decision, bool) {
 					continue
 				}
 				if field, ok := graphqlMerge(text); ok {
-					return deny(RuleRawMerge, "gh api graphql runs the mutation field %s. %s",
+					return deny("gh api graphql runs the mutation field %s. %s",
 						field, mergeAdvice)
 				}
 			}

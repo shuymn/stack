@@ -24,11 +24,6 @@ func want5() Config {
 			{Env: "T3CODE_THREAD_ID", Path: "~/.config/stack/handover/t3.md"},
 			{Env: "HERDR_ENV", Path: "~/.config/stack/handover/herdr.md"},
 		},
-		Safety: Safety{
-			Secrets:            []string{"~/.t3/userdata/secrets", ".dev.vars"},
-			PrivateTerms:       "~/.config/stack/private-terms",
-			DenyPencilGenerate: true,
-		},
 		Stages: Stages{
 			Entry:    []string{"jev-router"},
 			Outbound: []string{"public", "jev-semantic"},
@@ -76,11 +71,6 @@ body = "~/.claude/agents/opus-worker.md"
 T3CODE_THREAD_ID = "~/.config/stack/handover/t3.md"
 HERDR_ENV = "~/.config/stack/handover/herdr.md"
 
-[safety]
-secrets = ["~/.t3/userdata/secrets", ".dev.vars"]
-private_terms = "~/.config/stack/private-terms"
-deny_pencil_generate = true
-
 [stages]
 entry = ["jev-router"]
 outbound = ["public", "jev-semantic"]
@@ -108,11 +98,7 @@ func TestLoadInvalid(t *testing.T) {
 		{"syntax error", "version = 1\n[kit]\nroot = = \"x\"\n", []string{":3:"}},
 		{"unsupported version", "version = 2\n", []string{"key version", "2"}},
 		{"version zero", "version = 0\n", []string{"key version"}},
-		{
-			"type error",
-			"version = 1\n[safety]\ndeny_pencil_generate = \"no\"\n",
-			[]string{"line 3"},
-		},
+		{"type error", "version = 1\n[kit]\nroot = 1\n", []string{"line 3"}},
 		{
 			"handover table value",
 			"[handover]\nT3CODE_THREAD_ID.path = \"t.md\"\n",
@@ -133,9 +119,6 @@ func TestLoadInvalid(t *testing.T) {
 					t.Errorf("error %q does not contain %q", err, w)
 				}
 			}
-			if got := LoadForHook(p); !reflect.DeepEqual(got, want5()) {
-				t.Errorf("LoadForHook = %+v, want §5 defaults", got)
-			}
 		})
 	}
 
@@ -143,9 +126,6 @@ func TestLoadInvalid(t *testing.T) {
 		dir := t.TempDir()
 		if _, _, err := Load(dir); !errors.Is(err, ErrInvalid) {
 			t.Fatalf("Load(dir) error = %v, want ErrInvalid", err)
-		}
-		if got := LoadForHook(dir); !reflect.DeepEqual(got, want5()) {
-			t.Errorf("LoadForHook(dir) = %+v, want §5 defaults", got)
 		}
 	})
 }
@@ -174,7 +154,6 @@ message_checks = ["public"]
 	}
 	want := want5()
 	want.Kit.Root = "/k"
-	want.Safety.DenyPencilGenerate = false
 	want.Stages.Entry = []string{}
 	want.Stages.Merged = []string{"demo"}
 	want.Merge.MessageChecks = []string{"public"}
@@ -182,7 +161,11 @@ message_checks = ["public"]
 		t.Fatalf("Load =\n%+v\nwant\n%+v", cfg, want)
 	}
 	slices.Sort(warnings)
-	wantWarnings := []string{p + ": unknown key kit.extra", p + ": unknown key mystery"}
+	// [safety] moved to stack-guard and stack-public: a leftover table only warns.
+	wantWarnings := []string{
+		p + ": unknown key kit.extra", p + ": unknown key mystery",
+		p + ": unknown key safety", p + ": unknown key safety.deny_pencil_generate",
+	}
 	if !slices.Equal(warnings, wantWarnings) {
 		t.Fatalf("warnings = %q, want %q", warnings, wantWarnings)
 	}
@@ -193,10 +176,6 @@ func TestLoadExactKeys(t *testing.T) {
 
 [kit]
 ROOT = "scratch"
-
-[safety]
-deny_pencil_generate = true
-Deny_Pencil_Generate = false
 
 [Stages]
 entry = []
@@ -214,7 +193,6 @@ entry = []
 		p + ": unknown key Stages.entry",
 		p + ": unknown key VERSION",
 		p + ": unknown key kit.ROOT",
-		p + ": unknown key safety.Deny_Pencil_Generate",
 	}
 	if !slices.Equal(warnings, want) {
 		t.Fatalf("warnings = %q, want %q", warnings, want)
@@ -244,7 +222,7 @@ T3CODE_THREAD_ID = "t.md"
 
 func TestDefaultsAreFresh(t *testing.T) {
 	a := Defaults()
-	a.Safety.Secrets[0] = "changed"
+	a.Worker.AgentTypes[0] = "changed"
 	a.Handover[0].Env = "changed"
 	if !reflect.DeepEqual(Defaults(), want5()) {
 		t.Fatal("mutating one Defaults() result changed the next")

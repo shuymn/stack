@@ -460,8 +460,6 @@ func assertRefused(t *testing.T, out outcome, want string) {
 
 func TestInvalidArguments(t *testing.T) {
 	t.Parallel()
-	local := "/" + "home" + "/bob/notes"
-	str := func(s string) *string { return &s }
 	tests := []struct {
 		name string
 		opts func(*Options)
@@ -482,16 +480,6 @@ func TestInvalidArguments(t *testing.T) {
 			func(o *Options) { o.Methods = []string{"merge", "squash"} },
 			"--merge --squash",
 		},
-		{
-			"subject local path",
-			func(o *Options) { o.Merge.Subject = str("see " + local) },
-			"--subject: local path '" + "/" + "home" + "/bob/'",
-		},
-		{
-			"body private term",
-			func(o *Options) { o.Terms = []string{"Zebra"}; o.Merge.Body = str("about zebra") },
-			"--body: private term 'Zebra'",
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -504,23 +492,6 @@ func TestInvalidArguments(t *testing.T) {
 				t.Errorf("gh calls = %+v, want none", out.gh)
 			}
 		})
-	}
-}
-
-// TestMessageLocalPath covers C26's second half: --subject/--body with a local path refuse, also in
-// Windows form, and gh is never called.
-func TestMessageLocalPath(t *testing.T) {
-	t.Parallel()
-	win := `C:\` + `Users\erin\x`
-	for _, o := range []func(*Options){
-		func(o *Options) { s := win; o.Merge.Body = &s },
-		func(o *Options) { s := "/" + "Users/a/"; o.Merge.Subject = &s },
-	} {
-		out := run(t, okResponses(), setup{opts: o})
-		if !errors.Is(out.err, ErrInvalid) || !strings.Contains(out.err.Error(), "local path") ||
-			len(out.gh) != 0 {
-			t.Errorf("err = %v, gh calls %+v; want a local-path refusal before gh", out.err, out.gh)
-		}
 	}
 }
 

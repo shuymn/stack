@@ -381,25 +381,37 @@ func TestReplayRealHook(t *testing.T) {
 	f := newFixture(t)
 	f.tools["stack"] = built.stack
 	f.fromTestdata("decisions.jsonl", ".claude/projects/-p/d.jsonl", f.cwd)
-	// A recorded no-deny the current rules deny, with a local path the deny reason quotes.
+	// A recorded no-deny the current rules deny, with a local path in its input.
 	local := "/home/" + "someone" + "/run.log"
 	f.calls(
 		"new",
 		bashCall(
 			hourAgo,
 			f.cwd,
-			cmd(`gh pr create --title t --body "log at `+local+`"`),
-			"https://x/1",
+			cmd(`gh pr merge 1 --body "log at `+local+`"`),
+			"merged",
 		),
 	)
 	resp, l := f.run()
-	// Compared: the two recorded stack denies (unchanged), the no-deny ls (unchanged) and the gh call.
-	if l.Replay != (ReplayTotals{Compared: 4, Changed: 1, ChangedByKind: ChangeKinds{NewDeny: 1}}) {
+	// Compared: the two recorded secrets denies, which the core hook no longer makes (the rule
+	// moved to stack-guard, docs/design/core-stages.md §4.5), the no-deny ls (unchanged) and the gh
+	// call.
+	want := ReplayTotals{
+		Compared: 4, Changed: 3, ChangedByKind: ChangeKinds{NewDeny: 1, LostDeny: 2},
+	}
+	if l.Replay != want {
 		t.Errorf("replay = %+v, findings %+v", l.Replay, resp.Findings)
 	}
-	got := findings(resp, kindReplayChange)
-	if len(got) != 1 || got[0].Detail != "Bash: no-deny -> deny:gh-publish" {
-		t.Fatalf("findings = %+v", got)
+	details := make([]string, 0, 3)
+	for _, f := range findings(resp, kindReplayChange) {
+		details = append(details, f.Detail)
+	}
+	slices.Sort(details)
+	if !slices.Equal(details, []string{
+		"Bash: deny:secrets -> no-deny", "Bash: no-deny -> deny:raw-merge",
+		"Read: deny:secrets -> no-deny",
+	}) {
+		t.Fatalf("findings = %q", details)
 	}
 	data := mustJSON(t, resp)
 	if strings.Contains(string(data), "someone") {
