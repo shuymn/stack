@@ -225,8 +225,9 @@ func TestCompactEntryDeadline(t *testing.T) {
 		f := newFixture(t)
 		f.cfg.Stages.Entry = []string{"first", "second"}
 		f.open("demo", map[string]string{"state.md": "DEMO STATE"})
-		// 5 s for the extension: a fake's start under load must not use it all before it spawns.
-		cut := cutoffIn(f, 7*time.Second)
+		// The cut-off as far as the 10 s cap: the extension gets the whole 8 s, since a fake's
+		// start under a full suite's load can take seconds before it spawns and logs.
+		cut := cutoffIn(f, ext.EntryTimeout)
 
 		ctx, _ := f.start(compactIn(testID))
 		// Killed at the deadline, the extension's pipes are reaped within the allowance, so the
