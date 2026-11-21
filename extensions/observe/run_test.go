@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -332,5 +333,120 @@ func TestProtocol(t *testing.T) {
 				t.Errorf("latest.json: %v", err)
 			}
 		})
+	}
+}
+
+// TestDeadlineInSteps cuts the work deadline in the middle of a step: the step stops there and
+// its source is timeout, and nothing is published once the whole deadline has passed.
+func TestDeadlineInSteps(t *testing.T) {
+	t.Parallel()
+	const lines = 2000
+	t.Run("transcript scan", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t)
+		recs := make([]map[string]any, 0, lines)
+		for range lines {
+			recs = append(recs, user("x", hourAgo, true))
+		}
+		f.transcript("s", recs...)
+		// Enough checks to walk into the file, far fewer than its lines.
+		s := f.state(expireAfter(20))
+		s.source("transcripts", s.transcripts)
+		if st := s.latest.Sources["transcripts"]; st.Status != srcTimeout || st.Records >= lines {
+			t.Errorf("transcripts = %+v, want timeout before the end of the file", st)
+		}
+	})
+	t.Run("ledgers", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t)
+		f.write(".claude/review-ledgers/x.md", strings.Repeat("- 2026-11-20 r: ok\n", lines))
+		s := f.state(expireAfter(20))
+		s.source("ledgers", s.ledgers)
+		if st := s.latest.Sources["ledgers"]; st.Status != srcTimeout || st.Records >= lines {
+			t.Errorf("ledgers = %+v, want timeout before the end of the file", st)
+		}
+	})
+	t.Run("replay preparation", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t)
+		f.calls("r", bashCall(hourAgo, filepath.Join(f.cwd, "gone"), cmd("a"), "ok"),
+			bashCall(hourAgo, f.cwd, cmd("b"), "ok"))
+		stack := f.fake("stack", proctest.Response{})
+		s := f.state(t.Context())
+		s.source("transcripts", s.transcripts)
+		s.work = expireAfter(0)
+		s.source("replay", s.replay)
+		if st := s.latest.Sources["replay"]; st.Status != srcTimeout ||
+			s.latest.Replay != (ReplayTotals{TruncatedTime: 2}) {
+			t.Errorf("replay %+v %+v, want both calls cut before preparation", st, s.latest.Replay)
+		}
+		if calls := proctest.Calls(t, stack); len(calls) != 0 {
+			t.Errorf("hook runs = %d", len(calls))
+		}
+	})
+	t.Run("a source returning after the deadline", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t)
+		work, cancel := context.WithCancel(t.Context())
+		s := f.state(work)
+		s.source("ledgers", func(*Source) error {
+			cancel()
+			return nil
+		})
+		if st := s.latest.Sources["ledgers"]; st.Status != srcTimeout {
+			t.Errorf("ledgers = %+v, want timeout", st)
+		}
+	})
+	t.Run("no write after the deadline", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t)
+		s := f.state(t.Context())
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		path := latestPath(f.home)
+		if s.publish(ctx, path) {
+			t.Fatal("published after the deadline")
+		}
+		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("latest.json written: %v", err)
+		}
+		if len(s.findings) != 1 || s.findings[0].Kind != kindLatestMissing {
+			t.Errorf("findings = %+v", s.findings)
+		}
+	})
+}
+
+// TestDigestKeepsCounts: with every signal at its excerpt limit, the counts and replay totals
+// still fit the context, and excerpts fill the rest.
+func TestDigestKeepsCounts(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	s := f.state(t.Context())
+	for _, name := range sourceNames {
+		s.latest.Sources[name] = &Source{Status: srcOK}
+	}
+	for _, sg := range signals {
+		for i := range 4 {
+			s.add(sg.name, fmt.Sprintf("w%d", i), strings.Repeat("e", excerptLen), now, "owner", "")
+		}
+	}
+	s.latest.Replay = ReplayTotals{
+		Compared: 30, Changed: 25,
+		ChangedByKind: ChangeKinds{NewDeny: 21, LostDeny: 3, RuleChanged: 1},
+	}
+	s.latest.Gh.Installed, s.latest.Gh.Model = "v2.105.0", "v2.105.0"
+	got := s.digest(latestPath(f.home), true)
+	for _, want := range []string{
+		"\nreplay: compared 30, changed 25 (new_deny 21, lost_deny 3, rule_changed 1),",
+		"\ngh: installed v2.105.0, modelled v2.105.0",
+		"signals: owner-reply 4, revert 4",
+		"\n  owner-reply: ",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("context lacks %q:\n%s", want, got)
+		}
+	}
+	if n := len([]rune(got)); n > contextLen || n < contextLen-excerptLen {
+		t.Errorf("context has %d chars, want excerpts to fill up to %d", n, contextLen)
 	}
 }

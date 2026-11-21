@@ -31,16 +31,20 @@ func (s *state) t3(st *Source) error {
 	}
 	db := filepath.Join(s.o.Home, ".t3", "userdata", "statev2.sqlite")
 	info, err := os.Lstat(db)
+	if errors.Is(err, fs.ErrNotExist) {
+		return errors.New("t3 database missing") //nolint:err113 // a fixed per-cause summary
+	}
 	if err != nil {
-		return fmt.Errorf("t3 database: %w", err)
+		return errors.New("t3 database unreadable") //nolint:err113 // a fixed per-cause summary
 	}
 	if !info.Mode().IsRegular() {
-		return fmt.Errorf("%s: not a regular file", db) //nolint:err113 // a one-off diagnostic
+		//nolint:err113 // a fixed per-cause summary
+		return errors.New("t3 database is not a regular file")
 	}
 	st.Files = 1
 	sqlite, err := s.o.LookPath("sqlite3")
 	if err != nil {
-		return fmt.Errorf("sqlite3: %w", err)
+		return errors.New("sqlite3 not found") //nolint:err113 // a fixed per-cause summary
 	}
 	var threads []struct {
 		ThreadID string `json:"thread_id"`    //nolint:tagliatelle // SQL column
@@ -52,8 +56,8 @@ func (s *state) t3(st *Source) error {
 	roots := map[string]bool{}
 	for _, th := range threads {
 		var payload any
-		if err := json.Unmarshal([]byte(th.Payload), &payload); err != nil {
-			return fmt.Errorf("thread %s payload: %w", th.ThreadID, err)
+		if json.Unmarshal([]byte(th.Payload), &payload) != nil {
+			return fmt.Errorf("sqlite3 %w: a thread payload is not JSON", errOutput)
 		}
 		if rootThread(payload) {
 			roots[th.ThreadID] = true
@@ -144,7 +148,11 @@ func rootThread(payload any) bool {
 	return ok && l["relationshipToParent"] == nil && l["parentThreadId"] == nil
 }
 
-// sqlite runs one read-only query; empty output is no rows.
+// errOutput marks a child that exited 0 with output observe cannot use.
+var errOutput = errors.New("unexpected output")
+
+// sqlite runs one read-only query; empty output is no rows (real sqlite3 prints nothing for zero
+// rows and exits non-zero on an error). A diagnostic on stderr fails the query even at exit 0.
 func (s *state) sqlite(bin, db, query string, into any) error {
 	out := s.child(command{
 		name: bin, args: []string{"-readonly", "-json", db, query}, timeout: s.o.ghTimeout,
@@ -153,13 +161,16 @@ func (s *state) sqlite(bin, db, query string, into any) error {
 		return fmt.Errorf("sqlite3: %w", s.work.Err())
 	}
 	if !out.ok() {
-		return fmt.Errorf("sqlite3: %s", out.describe()) //nolint:err113 // a one-off diagnostic
+		return fmt.Errorf("sqlite3 failed: %s", out.describe()) //nolint:err113 // fixed summary
+	}
+	if len(bytes.TrimSpace(out.stderr)) > 0 {
+		return errors.New("sqlite3 failed: error on stderr") //nolint:err113 // fixed summary
 	}
 	if len(bytes.TrimSpace(out.stdout)) == 0 {
 		return nil
 	}
-	if err := json.Unmarshal(out.stdout, into); err != nil {
-		return fmt.Errorf("sqlite3 output: %w", err)
+	if !opens(out.stdout, '[') || json.Unmarshal(out.stdout, into) != nil {
+		return fmt.Errorf("sqlite3 %w", errOutput)
 	}
 	return nil
 }
@@ -170,21 +181,18 @@ const maxFirstLine = 16 << 20
 
 // codex adds the cwd of each Codex session started in the window (observe.py:266-297).
 func (s *state) codex(st *Source) error {
-	root := filepath.Join(s.o.Home, ".codex", "sessions")
-	if _, err := os.Lstat(root); errors.Is(err, fs.ErrNotExist) {
-		return errOff
+	root, err := walkRoot(filepath.Join(s.o.Home, ".codex", "sessions"))
+	if err != nil {
+		return fmt.Errorf("codex sessions %w", err)
 	}
-	// A symlinked root (a dotfiles layout) is walked; links below it are not followed.
-	if resolved, err := filepath.EvalSymlinks(root); err == nil {
-		root = resolved
-	}
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	// Links below the root are not followed.
+	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if werr := s.work.Err(); werr != nil {
 			return fmt.Errorf("codex: %w", werr)
 		}
 		if err != nil {
 			if path == root {
-				return err
+				return errors.New("codex sessions root unreadable") //nolint:err113 // summary
 			}
 			st.unreadable = append(st.unreadable, unreadable(path, err))
 			return nil
@@ -196,7 +204,7 @@ func (s *state) codex(st *Source) error {
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("walk %s: %w", root, err)
+		return fmt.Errorf("walk codex sessions: %w", err)
 	}
 	return nil
 }
@@ -282,13 +290,16 @@ func (s *state) ledgers(st *Source) error {
 	}
 	paths, err := filepath.Glob(filepath.Join(root, "*.md"))
 	if err != nil {
-		return fmt.Errorf("ledgers: %w", err)
+		return errors.New("review-ledgers unreadable") //nolint:err113 // a fixed per-cause summary
 	}
 	if _, err := os.ReadDir(root); err != nil {
-		return fmt.Errorf("ledgers: %w", err)
+		return errors.New("review-ledgers unreadable") //nolint:err113 // a fixed per-cause summary
 	}
 	slices.Sort(paths)
 	for _, path := range paths {
+		if err := s.work.Err(); err != nil {
+			return fmt.Errorf("ledgers: %w", err)
+		}
 		st.Files++
 		info, err := os.Lstat(path)
 		if err == nil && !info.Mode().IsRegular() {
@@ -304,6 +315,9 @@ func (s *state) ledgers(st *Source) error {
 			continue
 		}
 		for i, line := range strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n") {
+			if err := s.work.Err(); err != nil {
+				return fmt.Errorf("ledgers: %w", err)
+			}
 			if line == "" {
 				continue
 			}

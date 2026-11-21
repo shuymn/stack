@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 )
 
 // Statuses of a response and of a source.
@@ -149,6 +150,8 @@ type Source struct {
 	// ReposRead is set for gh only: the repositories read completely before the first error.
 	ReposRead  *int     `json:"repos_read,omitempty"`
 	unreadable []string `json:"-"`
+	// skipped counts transcript lines longer than maxLine.
+	skipped int `json:"-"`
 }
 
 // Tally counts T3 and transcript user turns.
@@ -168,6 +171,17 @@ type ReplayTotals struct {
 	Unrecoverable int `json:"unrecoverable"`
 	TruncatedCap  int `json:"truncated_cap"`
 	TruncatedTime int `json:"truncated_time"`
+	// ChangedByKind splits changed by the three change kinds of §3.3 replay step 3.
+	ChangedByKind ChangeKinds `json:"changed_by_kind"`
+}
+
+// ChangeKinds counts replay changes per kind.
+//
+//nolint:tagliatelle // latest.json uses snake_case (design §3.3).
+type ChangeKinds struct {
+	NewDeny     int `json:"new_deny"`
+	LostDeny    int `json:"lost_deny"`
+	RuleChanged int `json:"rule_changed"`
 }
 
 // Latest is the latest.json document (schema version 1).
@@ -203,6 +217,8 @@ type state struct {
 	refs       map[string]bool
 	t3Sessions map[string]bool
 	calls      []*toolCall
+	// strs interns the cwd, session id and tool name strings of calls.
+	strs map[string]string
 }
 
 // Run observes the window ending now and returns the protocol response. It never answers block.
@@ -217,7 +233,7 @@ func Run(ctx context.Context, o Options) Response {
 	s := &state{
 		o: o, since: until.Add(-window), until: until, work: work,
 		seen: map[string]bool{}, cwds: map[string]int{}, refs: map[string]bool{},
-		t3Sessions: map[string]bool{},
+		t3Sessions: map[string]bool{}, strs: map[string]string{},
 	}
 	s.latest.Version = latestSchema
 	s.latest.Window.Since, s.latest.Window.Until = iso(s.since), iso(s.until)
@@ -241,15 +257,26 @@ func Run(ctx context.Context, o Options) Response {
 	s.guarded("gh-version", func() { s.ghVersion() })
 
 	path := latestPath(o.Home)
-	written := false
-	if data, err := marshalLatest(s.latest); err != nil {
-		s.finding(kindLatestMissing, path, "cannot encode latest.json: "+err.Error())
-	} else if err := writeLatest(path, data); err != nil {
-		s.finding(kindLatestMissing, path, err.Error())
-	} else {
-		written = true
+	return s.response(path, s.publish(ctx, path))
+}
+
+// publish writes latest.json unless the deadline has passed before the write starts; a write
+// already started runs to its end (a local file's sync and rename are not interruptible).
+func (s *state) publish(ctx context.Context, path string) bool {
+	if ctx.Err() != nil {
+		s.finding(kindLatestMissing, path, "deadline passed before writing latest.json")
+		return false
 	}
-	return s.response(path, written)
+	data, err := marshalLatest(s.latest)
+	if err != nil {
+		s.finding(kindLatestMissing, path, "cannot encode latest.json: "+err.Error())
+		return false
+	}
+	if err := writeLatest(path, data); err != nil {
+		s.finding(kindLatestMissing, path, err.Error())
+		return false
+	}
+	return true
 }
 
 func (o Options) withDefaults() Options {
@@ -297,7 +324,8 @@ func (o Options) withDefaults() Options {
 var errOff = errors.New("off")
 
 // source runs one source under the work deadline and records its status. A source not started
-// or not finished by the deadline is timeout; an error is fail; unreadable files fail it too.
+// or not finished by the deadline is timeout, even when it returns without an error after it; an
+// error is fail; unreadable files fail it too.
 func (s *state) source(name string, fn func(*Source) error) {
 	st := &Source{Status: srcOK}
 	if name == "gh" {
@@ -316,7 +344,7 @@ func (s *state) source(name string, fn func(*Source) error) {
 	switch {
 	case errors.Is(err, errOff):
 		st.Status = srcOff
-	case errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled):
+	case isDeadline(err) || s.work.Err() != nil:
 		st.Status = srcTimeout
 		st.Error = "deadline passed"
 	case err != nil:
@@ -362,8 +390,16 @@ func (s *state) progress(name string, st *Source, start time.Time) {
 		st.Records,
 		time.Since(start).Seconds(),
 	)
+	if st.skipped > 0 {
+		msg += fmt.Sprintf(" [%d lines over %d MiB skipped]", st.skipped, maxLine/mib)
+	}
 	if st.Error != "" {
 		msg += ": " + st.Error
+	}
+	if name == "replay" {
+		k := s.latest.Replay.ChangedByKind
+		msg += fmt.Sprintf(" [changed: new_deny %d, lost_deny %d, rule_changed %d]",
+			k.NewDeny, k.LostDeny, k.RuleChanged)
 	}
 	_, _ = fmt.Fprintln(s.o.Stderr, msg)
 }
@@ -427,7 +463,9 @@ func (s *state) response(path string, written bool) Response {
 	return Response{Status: status, Context: s.digest(path, written), Findings: findings}
 }
 
-// digest is the English context: window, sources, tally, signals, replay and gh versions.
+// digest is the English context. The counts come first (window, sources, tally, per-signal
+// counts, replay totals, gh versions, latest.json); the excerpts, up to 3 per signal, fill what
+// is left of the 4,000 characters.
 func (s *state) digest(path string, written bool) string {
 	var b strings.Builder
 	l := &s.latest
@@ -445,6 +483,9 @@ func (s *state) digest(path string, written bool) string {
 			if st.ReposRead != nil {
 				fmt.Fprintf(&b, ", repos read %d", *st.ReposRead)
 			}
+			if st.skipped > 0 {
+				fmt.Fprintf(&b, ", long lines skipped %d", st.skipped)
+			}
 			b.WriteString(")")
 		}
 		if st.Error != "" {
@@ -454,43 +495,64 @@ func (s *state) digest(path string, written bool) string {
 	b.WriteString("\n")
 	fmt.Fprintf(&b, "owner tally: owner %d, synthetic %d, unknown %d\n",
 		l.Tally.Owner, l.Tally.Synthetic, l.Tally.Unknown)
+	counts := map[string]int{}
+	excerpts := map[string][]string{}
+	for _, it := range l.Items {
+		counts[it.Signal]++
+		if len(excerpts[it.Signal]) < maxExcerpts {
+			excerpts[it.Signal] = append(excerpts[it.Signal], fmt.Sprintf("%q", it.Excerpt))
+		}
+	}
 	b.WriteString("signals:")
 	for i, sg := range signals {
-		n := 0
-		for _, it := range l.Items {
-			if it.Signal == sg.name {
-				n++
-			}
-		}
 		sep := ","
 		if i == 0 {
 			sep = ""
 		}
-		fmt.Fprintf(&b, "%s %s %d", sep, sg.name, n)
+		fmt.Fprintf(&b, "%s %s %d", sep, sg.name, counts[sg.name])
 	}
 	b.WriteString("\n")
-	for _, sg := range signals {
-		var ex []string
-		for _, it := range l.Items {
-			if it.Signal == sg.name && len(ex) < maxExcerpts {
-				ex = append(ex, fmt.Sprintf("%q", it.Excerpt))
-			}
-		}
-		if len(ex) > 0 {
-			fmt.Fprintf(&b, "  %s: %s\n", sg.name, strings.Join(ex, " | "))
-		}
-	}
 	r := l.Replay
-	fmt.Fprintf(&b, "replay: compared %d, changed %d, not_comparable %d, unrecoverable %d, "+
-		"truncated_cap %d, truncated_time %d\n", r.Compared, r.Changed, r.NotComparable,
-		r.Unrecoverable, r.TruncatedCap, r.TruncatedTime)
+	k := r.ChangedByKind
+	fmt.Fprintf(
+		&b,
+		"replay: compared %d, changed %d (new_deny %d, lost_deny %d, rule_changed %d), "+
+			"not_comparable %d, unrecoverable %d, truncated_cap %d, truncated_time %d\n",
+		r.Compared,
+		r.Changed,
+		k.NewDeny,
+		k.LostDeny,
+		k.RuleChanged,
+		r.NotComparable,
+		r.Unrecoverable,
+		r.TruncatedCap,
+		r.TruncatedTime,
+	)
 	fmt.Fprintf(&b, "gh: installed %s, modelled %s\n", l.Gh.Installed, l.Gh.Model)
 	if written {
-		fmt.Fprintf(&b, "latest.json: %s\n", path)
+		fmt.Fprintf(&b, "latest.json: %s", path)
 	} else {
-		fmt.Fprintf(&b, "latest.json: not written (%s)\n", path)
+		fmt.Fprintf(&b, "latest.json: not written (%s)", path)
 	}
-	return truncate(strings.TrimRight(b.String(), "\n"), contextLen)
+	text := truncate(b.String(), contextLen)
+	room := contextLen - utf8.RuneCountInString(text)
+	var ex strings.Builder
+	for _, sg := range signals {
+		quoted := excerpts[sg.name]
+		if len(quoted) == 0 {
+			continue
+		}
+		line := fmt.Sprintf("\n  %s: %s", sg.name, strings.Join(quoted, " | "))
+		if n := utf8.RuneCountInString(line); n > room {
+			if room > len("\n  ")+len(sg.name)+len(": …") {
+				ex.WriteString(truncate(line, room))
+			}
+			break
+		}
+		ex.WriteString(line)
+		room -= utf8.RuneCountInString(line)
+	}
+	return text + ex.String()
 }
 
 const unknown = "unknown"

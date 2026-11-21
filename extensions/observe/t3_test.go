@@ -207,6 +207,10 @@ func TestT3Unavailable(t *testing.T) {
 	}{
 		{"no .t3: off", func(*fixture) {}, srcOff, 1},
 		{"sqlite3 missing", func(f *fixture) { f.write(".t3/userdata/statev2.sqlite", "") }, srcFail, 1},
+		{"sqlite3 error at exit 0", func(f *fixture) {
+			f.write(".t3/userdata/statev2.sqlite", "")
+			f.fake("sqlite3", proctest.Response{Stderr: "Error: query failed\n"})
+		}, srcFail, 1},
 		{"database missing", func(f *fixture) {
 			f.write(".t3/other", "")
 			f.fake("sqlite3", proctest.Response{Stdout: "[]"})

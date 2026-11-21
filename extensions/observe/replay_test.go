@@ -2,6 +2,7 @@ package observe
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -24,10 +25,7 @@ func TestRecordedDecision(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
 	path := f.fromTestdata("decisions.jsonl", ".claude/projects/-p/d.jsonl", f.cwd)
-	s := &state{
-		o: f.opts.withDefaults(), since: now.Add(-window), until: now, seen: map[string]bool{},
-		cwds: map[string]int{}, refs: map[string]bool{}, t3Sessions: map[string]bool{},
-	}
+	s := f.state(t.Context())
 	if err := s.scanTranscript(path, false, &Source{}); err != nil {
 		t.Fatal(err)
 	}
@@ -50,6 +48,9 @@ func TestRecordedDecision(t *testing.T) {
 
 	for _, tc := range []struct{ tool, text, want string }{
 		{"Bash", "PreToolUse:Bash hook error: [stack hook claude pre-tool-use]: stack guard (rmroot): rm", "deny:rmroot"},
+		// Not a rule id: never copied into a finding.
+		{"Bash", "PreToolUse:Bash hook error: stack guard (" + probePath + "): x", decOtherDeny},
+		{"Bash", "PreToolUse:Bash hook error: stack guard (Secrets): x", decOtherDeny},
 		{"Read", "PreToolUse:Bash hook error: stack guard (secrets): x", decOtherDeny}, // another tool's prefix
 		{"Bash", "PreToolUse:Bash hook error: stack guard secrets", decOtherDeny},
 		{"Bash", "Exit code 1\nPreToolUse:Bash hook error: stack guard (secrets): x", decNoDeny},
@@ -81,7 +82,7 @@ func bashCall(at time.Time, cwd string, input map[string]any, resultText string)
 	if resultText == "" {
 		return []map[string]any{a}
 	}
-	return []map[string]any{a, result(a, 0, resultText)}
+	return []map[string]any{a, result(a, resultText)}
 }
 
 func cmd(c string) map[string]any { return map[string]any{"command": c} }
@@ -139,14 +140,17 @@ func TestReplay(t *testing.T) {
 			bashCall(at, f.cwd, map[string]any{"command": 7}, "ok"),                // unrecoverable
 			[]map[string]any{
 				edit,
-				result(edit, 0, "ok"),
+				result(edit, "ok"),
 			}, // not guard-wired
 		)
 		stack := f.fake("stack", stackModel, proctest.Response{
 			Args: []string{"hook", "claude", "pre-tool-use"}, Stdout: denyJSONSecrets,
 		})
 		resp, l := f.run()
-		want := ReplayTotals{Compared: 4, Changed: 3, Unrecoverable: 3}
+		want := ReplayTotals{
+			Compared: 4, Changed: 3, Unrecoverable: 3,
+			ChangedByKind: ChangeKinds{NewDeny: 2, RuleChanged: 1},
+		}
 		if l.Replay != want {
 			t.Errorf("replay = %+v, want %+v", l.Replay, want)
 		}
@@ -212,7 +216,7 @@ func TestReplay(t *testing.T) {
 		) {
 			t.Errorf("findings = %q", got)
 		}
-		if l.Replay != (ReplayTotals{Compared: 2, Changed: 1}) {
+		if l.Replay != (ReplayTotals{Compared: 2, Changed: 1, ChangedByKind: ChangeKinds{LostDeny: 1}}) {
 			t.Errorf("replay = %+v", l.Replay)
 		}
 	})
@@ -223,7 +227,14 @@ func TestReplay(t *testing.T) {
 			Stdout: strings.Replace(denyJSONSecrets, "stack guard (secrets)", "other", 1),
 		},
 		"failed open": {Stderr: "stack hook: decode hook input: boom\n"},
-		"timeout":     {Sleep: 10 * time.Second},
+		// The hook's diagnostic lies past the stderr cap: what was kept cannot say it is absent.
+		"stderr past its cap": {
+			Stderr: strings.Repeat("x", maxStderr) + "\nstack hook: decode hook input: boom\n",
+		},
+		"rule id not a rule": {
+			Stdout: strings.Replace(denyJSONSecrets, "(secrets)", "("+probePath+")", 1),
+		},
+		"timeout": {Sleep: 10 * time.Second},
 	}
 	for name, r := range notComparable {
 		t.Run(name, func(t *testing.T) {
@@ -248,6 +259,70 @@ func TestReplay(t *testing.T) {
 		_, l := f.run()
 		if l.Replay != (ReplayTotals{NotComparable: 1}) {
 			t.Errorf("replay = %+v", l.Replay)
+		}
+	})
+	t.Run("stack missing: off", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t)
+		f.calls("r", bashCall(hourAgo, f.cwd, cmd("b"), guardDenySecrets))
+		_, l := f.run()
+		if l.Sources["replay"].Status != srcOff || l.Replay != (ReplayTotals{}) {
+			t.Errorf("replay %+v %+v", l.Sources["replay"], l.Replay)
+		}
+	})
+}
+
+// TestReplayInputs covers what decides whether a record is replayed and in which order.
+func TestReplayInputs(t *testing.T) {
+	t.Parallel()
+	t.Run("input the guard cannot judge: unrecoverable, not run", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t)
+		denied := "PreToolUse:%s hook error: stack guard (secrets): x"
+		tools := []tool{
+			{"Read", map[string]any{}},
+			{"Read", map[string]any{"file_path": 7}},
+			{"NotebookRead", map[string]any{"cell_id": "c"}},
+			{"Grep", map[string]any{"pattern": "x", "path": 7}},
+			{"Glob", map[string]any{"path": "."}},
+			{"mcp__pencil__execute", map[string]any{"input": 7}},
+		}
+		recs := make([][]map[string]any, 0, len(tools))
+		for _, tl := range tools {
+			a := assistant(hourAgo, f.cwd, tl)
+			recs = append(recs, []map[string]any{a, result(a, fmt.Sprintf(denied, tl.name))})
+		}
+		f.calls("r", recs...)
+		stack := f.fake("stack", stackModel, proctest.Response{
+			Args: []string{"hook", "claude", "pre-tool-use"},
+		})
+		resp, l := f.run()
+		if l.Replay != (ReplayTotals{Unrecoverable: 6}) ||
+			len(findings(resp, kindReplayChange)) != 0 {
+			t.Errorf("replay = %+v, findings %+v", l.Replay, resp.Findings)
+		}
+		for _, c := range proctest.Calls(t, stack) {
+			if c.Stdin != "" {
+				t.Errorf("the hook ran for %s", c.Stdin)
+			}
+		}
+	})
+	t.Run("missing or null result: unknown, not compared", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t)
+		contents := []any{nil, noContent, map[string]any{"text": "x"}}
+		recs := make([][]map[string]any, 0, len(contents))
+		for _, content := range contents {
+			a := assistant(hourAgo, f.cwd, tool{"Bash", cmd("b")})
+			recs = append(recs, []map[string]any{a, result(a, content)})
+		}
+		f.calls("r", recs...)
+		f.fake("stack", stackModel, proctest.Response{
+			Args: []string{"hook", "claude", "pre-tool-use"}, Stdout: denyJSONSecrets,
+		})
+		resp, l := f.run()
+		if l.Replay != (ReplayTotals{}) || len(findings(resp, kindReplayChange)) != 0 {
+			t.Errorf("replay = %+v, findings %+v", l.Replay, resp.Findings)
 		}
 	})
 	t.Run("cap", func(t *testing.T) {
@@ -275,13 +350,26 @@ func TestReplay(t *testing.T) {
 			t.Errorf("replayed %q, want only the newest call", stdin)
 		}
 	})
-	t.Run("stack missing: off", func(t *testing.T) {
+	t.Run("cap keeps the newest by full timestamp", func(t *testing.T) {
 		t.Parallel()
 		f := newFixture(t)
-		f.calls("r", bashCall(hourAgo, f.cwd, cmd("b"), guardDenySecrets))
-		_, l := f.run()
-		if l.Sources["replay"].Status != srcOff || l.Replay != (ReplayTotals{}) {
-			t.Errorf("replay %+v %+v", l.Sources["replay"], l.Replay)
+		f.opts.replayCap = 1
+		f.calls("r", bashCall(hourAgo.Add(100*time.Millisecond), f.cwd, cmd("older"), "ok"),
+			bashCall(hourAgo.Add(900*time.Millisecond), f.cwd, cmd("newer"), "ok"))
+		stack := f.fake(
+			"stack",
+			stackModel,
+			proctest.Response{Args: []string{"hook", "claude", "pre-tool-use"}},
+		)
+		f.run()
+		var stdin []string
+		for _, c := range proctest.Calls(t, stack) {
+			if c.Stdin != "" {
+				stdin = append(stdin, c.Stdin)
+			}
+		}
+		if len(stdin) != 1 || !strings.Contains(stdin[0], `"newer"`) {
+			t.Errorf("replayed %q, want only the newest call", stdin)
 		}
 	})
 }
@@ -306,7 +394,7 @@ func TestReplayRealHook(t *testing.T) {
 	)
 	resp, l := f.run()
 	// Compared: the two recorded stack denies (unchanged), the no-deny ls (unchanged) and the gh call.
-	if l.Replay != (ReplayTotals{Compared: 4, Changed: 1}) {
+	if l.Replay != (ReplayTotals{Compared: 4, Changed: 1, ChangedByKind: ChangeKinds{NewDeny: 1}}) {
 		t.Errorf("replay = %+v, findings %+v", l.Replay, resp.Findings)
 	}
 	got := findings(resp, kindReplayChange)

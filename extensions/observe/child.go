@@ -20,9 +20,8 @@ const (
 	maxStdout = 32 << 20
 	// maxStderr caps captured stderr.
 	maxStderr = 64 << 10
-	// readBuffer is the pipe read size; describeLen caps stderr in a diagnostic.
-	readBuffer  = 32 << 10
-	describeLen = 200
+	// readBuffer is the pipe read size.
+	readBuffer = 32 << 10
 )
 
 // errStart reports a child that never started.
@@ -62,31 +61,34 @@ type outcome struct {
 	stdout, stderr []byte
 	exit           int
 	timedOut       bool
-	truncated      bool
+	// truncated: stdout passed maxStdout; stderrCut: stderr passed maxStderr; pipesCut: the pipes
+	// were closed at pipeGrace before they reached EOF.
+	truncated, stderrCut, pipesCut bool
 	// err is non-nil when the child did not start (wrapping errStart) or its pipes failed.
 	err error
 }
 
 // ok reports a child that exited 0 on its own with complete output.
 func (o outcome) ok() bool {
-	return o.err == nil && !o.timedOut && !o.truncated && o.exit == 0
+	return o.err == nil && !o.timedOut && !o.truncated && !o.pipesCut && o.exit == 0
 }
 
-// describe summarises a failed outcome for an error message.
+// describe summarises a failed outcome by its cause only. The child's stderr is never quoted: it
+// can hold local paths and inputs, and the summary reaches findings, context and latest.json.
 func (o outcome) describe() string {
 	switch {
+	case errors.Is(o.err, errStart):
+		return "did not start"
 	case o.err != nil:
-		return o.err.Error()
+		return "wait failed"
 	case o.timedOut:
 		return "timed out"
 	case o.truncated:
 		return "output too large"
+	case o.pipesCut:
+		return "output not fully read"
 	default:
-		msg := strings.TrimSpace(string(o.stderr))
-		if len(msg) > describeLen {
-			msg = msg[:describeLen]
-		}
-		return fmt.Sprintf("exit %d: %s", o.exit, msg)
+		return fmt.Sprintf("exit %d", o.exit)
 	}
 }
 
@@ -168,9 +170,11 @@ func run(ctx context.Context, c command) outcome {
 		io.Wait()
 		close(done)
 	}()
+	pipesCut := false
 	select {
 	case <-done:
 	case <-time.After(pipeGrace):
+		pipesCut = true
 		closeAll(ours...)
 		<-done
 	}
@@ -182,6 +186,8 @@ func run(ctx context.Context, c command) outcome {
 		exit:      cmd.ProcessState.ExitCode(),
 		timedOut:  timedOut,
 		truncated: stdout.over,
+		stderrCut: stderr.over,
+		pipesCut:  pipesCut,
 	}
 	if timedOut {
 		out.exit = -1

@@ -3,6 +3,7 @@ package observe
 import (
 	"cmp"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -50,21 +51,20 @@ func (s *state) ghEnv() []string {
 	return append(slices.Clone(s.o.Env), ghEnvVars...)
 }
 
-// ghJSON runs gh and decodes its stdout; any failure is the source's first gh error.
-func (s *state) ghJSON(gh string, args []string, into any) error {
+// ghJSON runs gh and decodes its stdout, which must be a JSON value of the shape open ('{' for
+// an object, '[' for a list); any failure is the source's first gh error, a fixed per-cause
+// summary that never quotes gh's output.
+func (s *state) ghJSON(gh string, args []string, open byte, into any) error {
+	cmd := strings.Join(args[:2], " ")
 	out := s.child(command{name: gh, args: args, env: s.ghEnv(), timeout: s.o.ghTimeout})
 	if out.timedOut && s.work.Err() != nil {
-		return fmt.Errorf("gh %s: %w", strings.Join(args[:2], " "), s.work.Err())
+		return fmt.Errorf("gh %s: %w", cmd, s.work.Err())
 	}
 	if !out.ok() {
-		//nolint:err113 // a one-off diagnostic
-		return fmt.Errorf("gh %s: %s", strings.Join(args[:2], " "), out.describe())
+		return fmt.Errorf("gh %s failed: %s", cmd, out.describe()) //nolint:err113 // fixed summary
 	}
-	if len(strings.TrimSpace(string(out.stdout))) == 0 {
-		return nil
-	}
-	if err := json.Unmarshal(out.stdout, into); err != nil {
-		return fmt.Errorf("gh %s: %w", strings.Join(args[:2], " "), err)
+	if !opens(out.stdout, open) || json.Unmarshal(out.stdout, into) != nil {
+		return fmt.Errorf("gh %s: %w", cmd, errOutput)
 	}
 	return nil
 }
@@ -90,7 +90,7 @@ type ghRun struct {
 func (s *state) gh(st *Source) error {
 	gh, err := s.o.LookPath("gh")
 	if err != nil {
-		return fmt.Errorf("gh: %w", err)
+		return errors.New("gh not found") //nolint:err113 // a fixed per-cause summary
 	}
 	if auth := s.child(command{
 		name: gh, args: []string{"auth", "status"}, env: s.ghEnv(), timeout: s.o.ghTimeout,
@@ -98,7 +98,7 @@ func (s *state) gh(st *Source) error {
 		if s.work.Err() != nil {
 			return fmt.Errorf("gh auth status: %w", s.work.Err())
 		}
-		s.finding(kindGhAuth, "gh auth status", "gh is not authenticated: "+auth.describe())
+		s.finding(kindGhAuth, "gh auth status", "gh auth failed: "+auth.describe())
 	}
 	weights := map[string]int{}
 	if git, err := s.o.LookPath("git"); err == nil {
@@ -148,9 +148,13 @@ func (s *state) ghRepo(gh, repo, day string, st *Source) ([]Item, error) {
 	if err := s.ghJSON(
 		gh,
 		[]string{"repo", "view", repo, "--json", "visibility,defaultBranchRef"},
+		'{',
 		&view,
 	); err != nil {
 		return nil, err
+	}
+	if view.Visibility == "" {
+		return nil, fmt.Errorf("gh repo view: %w", errOutput)
 	}
 	prov := "synthetic"
 	if strings.EqualFold(view.Visibility, "PUBLIC") {
@@ -164,7 +168,7 @@ func (s *state) ghRepo(gh, repo, day string, st *Source) ([]Item, error) {
 	if err := s.ghJSON(gh, []string{
 		"pr", "list", "-R", repo, "--state", "merged", "--search", "merged:>=" + day,
 		"--limit", "200", "--json", "number,title,body,mergedAt,url",
-	}, &prs); err != nil {
+	}, '[', &prs); err != nil {
 		return nil, err
 	}
 	st.Records += len(prs)
@@ -228,7 +232,7 @@ func (s *state) ghRepo(gh, repo, day string, st *Source) ([]Item, error) {
 		"100",
 		"--json",
 		"displayTitle,createdAt,url,workflowName",
-	}, &runs); err != nil {
+	}, '[', &runs); err != nil {
 		return nil, err
 	}
 	for _, r := range runs {

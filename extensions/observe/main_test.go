@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -70,6 +71,31 @@ func needBuilt(t *testing.T) {
 	if built.err != nil {
 		t.Fatalf("building the test binaries failed: %v", built.err)
 	}
+}
+
+// probePath stands for a private local path in child output and tool inputs; no JSON observe
+// writes may contain it.
+var probePath = "/" + "private" + "/probe/hosts.yml"
+
+// expiring is a work deadline that passes after a number of Err calls, so a test can cut a step
+// in the middle deterministically.
+type expiring struct {
+	context.Context //nolint:containedctx // the parent of a test deadline
+
+	left atomic.Int64
+}
+
+func expireAfter(n int64) *expiring {
+	e := &expiring{Context: context.Background()}
+	e.left.Store(n)
+	return e
+}
+
+func (e *expiring) Err() error {
+	if e.left.Add(-1) < 0 {
+		return context.DeadlineExceeded
+	}
+	return nil
 }
 
 // now is the fixed end of every test window; the fixtures' records are on the day before.
@@ -156,6 +182,16 @@ func (f *fixture) fromTestdata(file, rel, cwd string) string {
 	return f.write(rel, text)
 }
 
+// state is a run's state over the fixture window with work as its deadline, for unit tests.
+func (f *fixture) state(work context.Context) *state {
+	return &state{
+		o: f.opts.withDefaults(), since: now.Add(-window), until: now, work: work,
+		seen: map[string]bool{}, cwds: map[string]int{}, refs: map[string]bool{},
+		t3Sessions: map[string]bool{}, strs: map[string]string{},
+		latest: Latest{Sources: map[string]*Source{}, Items: []Item{}},
+	}
+}
+
 func (f *fixture) run() (Response, Latest) {
 	f.t.Helper()
 	resp := Run(context.Background(), f.opts)
@@ -215,9 +251,14 @@ func ts(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05.000Z") 
 var hourAgo = now.Add(-time.Hour)
 
 func user(text string, at time.Time, human bool) map[string]any {
+	return userContent(text, at, human)
+}
+
+// userContent is a user record with any message content.
+func userContent(content any, at time.Time, human bool) map[string]any {
 	r := map[string]any{
 		"type": "user", "timestamp": ts(at), "cwd": "/w",
-		"message": map[string]any{"role": "user", "content": text},
+		"message": map[string]any{"role": "user", "content": content},
 	}
 	if human {
 		r["origin"] = map[string]any{"kind": "human"}
@@ -249,16 +290,23 @@ func assistant(at time.Time, cwd string, tools ...tool) map[string]any {
 	}
 }
 
-// result answers the tool_use id of an assistant record built by assistant.
-func result(a map[string]any, i int, content string) map[string]any {
-	blocks, _ := a["message"].(map[string]any)["content"].([]any)
-	id, _ := blocks[i].(map[string]any)["id"].(string)
+// noContent makes result leave the tool_result content out.
+var noContent = new(struct{})
+
+// result answers the first tool_use of an assistant record built by assistant with content.
+func result(a map[string]any, content any) map[string]any {
+	message, _ := a["message"].(map[string]any)
+	blocks, _ := message["content"].([]any)
+	first, _ := blocks[0].(map[string]any)
+	id, _ := first["id"].(string)
+	block := map[string]any{"type": "tool_result", "tool_use_id": id, "content": content}
+	if content == noContent {
+		delete(block, "content")
+	}
 	return map[string]any{
 		"type": "user", "timestamp": a["timestamp"], "cwd": a["cwd"],
-		"message": map[string]any{"role": "user", "content": []any{
-			map[string]any{"type": "tool_result", "tool_use_id": id, "content": content},
-		}},
-		"toolUseResult": content,
+		"message":       map[string]any{"role": "user", "content": []any{block}},
+		"toolUseResult": "result",
 	}
 }
 

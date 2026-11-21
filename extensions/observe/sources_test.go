@@ -110,7 +110,7 @@ func TestSourceIsolation(t *testing.T) {
 		!strings.Contains(tr.Error, "not a regular file") {
 		t.Errorf("transcripts = %+v, want fail listing the link", tr)
 	}
-	if l.Sources["t3"].Status != srcFail || !strings.Contains(l.Sources["t3"].Error, "locked") {
+	if l.Sources["t3"].Status != srcFail || l.Sources["t3"].Error != "sqlite3 failed: exit 1" {
 		t.Errorf("t3 = %+v, want fail", l.Sources["t3"])
 	}
 	if got := excerpts(
@@ -138,6 +138,38 @@ func TestSourceIsolation(t *testing.T) {
 
 func TestGhFailureKeepsReposRead(t *testing.T) {
 	t.Parallel()
+	viewB := []string{"repo", "view", "o/b", "--json", "visibility,defaultBranchRef"}
+	for _, tc := range []struct {
+		name  string
+		view  proctest.Response
+		error string
+	}{
+		{"exit 1", proctest.Response{Stderr: probePath + "\n", Exit: 1}, "gh repo view failed: exit 1"},
+		{"empty output", proctest.Response{}, "gh repo view: unexpected output"},
+		{"a list for the repo", proctest.Response{Stdout: "[]"}, "gh repo view: unexpected output"},
+		{"no visibility", proctest.Response{Stdout: "{}"}, "gh repo view: unexpected output"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			tc.view.Args = viewB
+			ghFailureKeepsReposRead(t, tc.view, tc.error)
+		})
+	}
+	t.Run("pr list not a list", func(t *testing.T) {
+		t.Parallel()
+		ghFailureKeepsReposRead(t, ghView("o/b", "PUBLIC"), "gh pr list: unexpected output",
+			ghPRs("o/b", "null"))
+	})
+}
+
+// ghFailureKeepsReposRead runs gh over o/a (read in full) and o/b, whose repo view answers viewB.
+func ghFailureKeepsReposRead(
+	t *testing.T,
+	viewB proctest.Response,
+	wantErr string,
+	more ...proctest.Response,
+) {
+	t.Helper()
 	f := newFixture(t)
 	f.fake("git", proctest.Response{
 		Args:   []string{"-C", f.cwd, "config", "--get", "remote.origin.url"},
@@ -148,29 +180,24 @@ func TestGhFailureKeepsReposRead(t *testing.T) {
 	f.transcript("a1", assistant(hourAgo, f.cwd, editTool))
 	f.transcript("a2", assistant(hourAgo, f.cwd, editTool))
 	f.transcript("b1", assistant(hourAgo, other, editTool))
-	f.fake(
-		"gh",
+	responses := make([]proctest.Response, 0, 6+len(more))
+	responses = append(responses,
 		ghAuthOK,
 		ghView("o/a", "PRIVATE"),
-		ghPRs(
-			"o/a",
-			`[{"number":1,"title":"Revert y","mergedAt":"`+ts(
-				hourAgo,
-			)+`","url":"https://github.com/o/a/pull/1"}]`,
-		),
+		ghPRs("o/a", `[{"number":1,"title":"Revert y","mergedAt":"`+ts(hourAgo)+
+			`","url":"https://github.com/o/a/pull/1"}]`),
 		ghRuns("o/a", "[]"),
-		proctest.Response{
-			Args:   []string{"repo", "view", "o/b", "--json", "visibility,defaultBranchRef"},
-			Stderr: "HTTP 502\n", Exit: 1,
-		},
+		viewB,
 		ghVersion,
 	)
+	f.fake("gh", append(responses, more...)...)
 	f.fake("stack", stackModel)
 	resp, l := f.run()
 	gh := l.Sources["gh"]
-	if gh.Status != srcFail || *gh.ReposRead != 1 || !strings.Contains(gh.Error, "HTTP 502") {
-		t.Fatalf("gh = %+v, want fail after one repo", gh)
+	if gh.Status != srcFail || *gh.ReposRead != 1 || gh.Error != wantErr {
+		t.Fatalf("gh = %+v, want fail after one repo with %q", gh, wantErr)
 	}
+	noProbe(t, f, resp)
 	if got := signalItems(l, "revert"); len(got) != 1 || got[0].Provenance != "synthetic" {
 		t.Errorf("items of the repo read before the error = %+v", got)
 	}
@@ -184,7 +211,7 @@ func TestGhAuthFinding(t *testing.T) {
 	f := newFixture(t)
 	f.fake(
 		"gh",
-		proctest.Response{Args: []string{"auth", "status"}, Stderr: "not logged in\n", Exit: 1},
+		proctest.Response{Args: []string{"auth", "status"}, Stderr: probePath + "\n", Exit: 1},
 		ghVersion,
 	)
 	f.fake("stack", stackModel)
@@ -192,10 +219,10 @@ func TestGhAuthFinding(t *testing.T) {
 	if got := findings(
 		resp,
 		kindGhAuth,
-	); len(got) != 1 ||
-		!strings.Contains(got[0].Detail, "not logged in") {
+	); len(got) != 1 || got[0].Detail != "gh auth failed: exit 1" {
 		t.Fatalf("gh-auth findings = %+v", got)
 	}
+	noProbe(t, f, resp)
 	if resp.Status != StatusWarn || l.Sources["gh"].Status != srcOK {
 		t.Errorf("status %q, gh %+v", resp.Status, l.Sources["gh"])
 	}
@@ -249,15 +276,17 @@ func TestWindow(t *testing.T) {
 	// An unterminated last line is still being written.
 	partial := jsonl(t, user("task", hourAgo, true), assistant(hourAgo, "/w"))
 	tail := strings.TrimSuffix(jsonl(t, user("unterminated", hourAgo, true)), "\n")
-	f.write(".claude/projects/-p/partial.jsonl", partial+tail)
+	f.write(".claude/projects/-p/partial.jsonl", partial+"{not json\n"+tail)
 	_, l := f.run()
 	got := excerpts(signalItems(l, "owner-reply"))
 	want := []string{"appended reply", "at since"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("owner-reply = %q, want %q", got, want)
 	}
-	if st := l.Sources["transcripts"]; st.Status != srcOK || st.Files != 3 {
-		t.Errorf("transcripts = %+v, want ok with 3 files", st)
+	// Records in the window: bounds 2 (task, at since), late 2, partial 1; the text-only
+	// assistant turns are not parsed, the malformed line is skipped.
+	if st := l.Sources["transcripts"]; st.Status != srcOK || st.Files != 3 || st.Records != 5 {
+		t.Errorf("transcripts = %+v, want ok with 3 files and 5 records", st)
 	}
 	if l.Window.Since != "2026-11-14T00:00:00Z" || l.Window.Until != "2026-11-21T00:00:00Z" {
 		t.Errorf("window = %+v", l.Window)
@@ -433,6 +462,15 @@ func TestReferenceUnreadNeedsTranscripts(t *testing.T) {
 	if got := signalItems(l, "reference-unread"); len(got) != 0 {
 		t.Fatalf("reference-unread with transcripts %s: %+v", l.Sources["transcripts"].Status, got)
 	}
+	broken := f.write(".claude/projects", "broken") // a root that is not a directory
+	_, l = f.run()
+	if st := l.Sources["transcripts"]; st.Status != srcFail ||
+		len(signalItems(l, "reference-unread")) != 0 {
+		t.Fatalf("transcripts root a file: %+v, items %+v", st, l.Items)
+	}
+	if err := os.Remove(broken); err != nil {
+		t.Fatal(err)
+	}
 	f.transcript("ok", user("task", hourAgo, true))
 	target := f.write("target.jsonl", "")
 	if err := os.Symlink(
@@ -484,6 +522,18 @@ func TestCodexAndLedgers(t *testing.T) {
 	}
 }
 
+// noProbe fails when the response or latest.json contains probePath.
+func noProbe(t *testing.T, f *fixture, resp Response) {
+	t.Helper()
+	if data := mustJSON(t, resp); strings.Contains(string(data), "probe") {
+		t.Errorf("the response quotes child output: %s", data)
+	}
+	if data, err := os.ReadFile(latestPath(f.home)); err != nil ||
+		strings.Contains(string(data), "probe") {
+		t.Errorf("latest.json quotes child output (err %v)", err)
+	}
+}
+
 func filepathJSON(p string) string {
 	return strings.ReplaceAll(p, `\`, `\\`)
 }
@@ -491,3 +541,42 @@ func filepathJSON(p string) string {
 // editTool makes an assistant record that is parsed (a text-only turn is skipped unparsed, so its
 // cwd is not read; legacy observe.py:133-135).
 var editTool = tool{"Edit", map[string]any{"file_path": "x"}}
+
+// TestOwnerTurnNeedsText: a human user record whose content is null or not text is no typed
+// input, so it is neither an owner turn nor an owner-reply.
+func TestOwnerTurnNeedsText(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	f.transcript("s", user("task", hourAgo, true), assistant(hourAgo, "/w"),
+		userContent(nil, hourAgo, true), userContent(7, hourAgo, true))
+	_, l := f.run()
+	if l.Tally.Owner != 1 || len(signalItems(l, "owner-reply")) != 0 {
+		t.Errorf("tally = %+v, items %+v", l.Tally, l.Items)
+	}
+}
+
+// TestLongLine: a transcript line over maxLine is skipped and counted; the lines after it count.
+func TestLongLine(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	f.transcript(
+		"s",
+		user("task", hourAgo, true),
+		assistant(hourAgo, "/w"),
+		user(
+			strings.Repeat("x", 16<<20),
+			hourAgo,
+			true,
+		),
+		user("after", hourAgo, true),
+	) // 16 MiB text
+	resp, l := f.run()
+	if l.Tally.Owner != 2 ||
+		!slices.Equal(excerpts(signalItems(l, "owner-reply")), []string{"after"}) {
+		t.Errorf("tally = %+v, owner-reply %q", l.Tally, excerpts(signalItems(l, "owner-reply")))
+	}
+	if st := l.Sources["transcripts"]; st.Status != srcOK || st.Records != 2 ||
+		!strings.Contains(resp.Context, "long lines skipped 1") {
+		t.Errorf("transcripts = %+v, context %q", st, resp.Context)
+	}
+}
