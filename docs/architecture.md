@@ -3,7 +3,7 @@
 ## 1. Core Thesis
 
 Single-user personal orchestration foundation built following `extensible-by-design`:
-- **The core is the lifecycle and the extension contract.** It defines every stage (§4) and the protocol extensions use (§3), and holds only built-in behaviour that is required for every session with no extension installed, wrong or unsafe if left to extensions, and stable: session identity, kits and their restore at compaction, the extension protocol, and the guarantee that each stage fires (the checked `stack pr merge` and the raw `gh pr merge` deny, without which `merged` could be bypassed). Everything else is an extension or external, listed in §4 "Intentionally not in core". Design: `docs/design/core-stages.md`.
+- **The core is the lifecycle and the extension contract.** It defines every stage (§4) and the protocol extensions use (§3), and holds only built-in behaviour that is required for every session with no extension installed, wrong or unsafe if left to extensions, and stable: session identity, kits and their restore at compaction, the extension protocol, and the guarantee that each stage fires (the checked `stack pr merge` and the raw `gh pr merge` deny, without which `merged` could be bypassed). Restore means the contract (which parts compaction restores, in which order, within one budget, with a marker for each omitted part); what a kit, worker or handover contains is config and kit files. Everything else is an extension or external, listed in §4 "Intentionally not in core". Design: `docs/design/core-stages.md`.
 - **Safety extensions guard hard boundaries only (near-zero false positives, irreversible hazards):** secrets reads, local paths and private terms in public text, a direct recursive `rm` whose literal operand is `/`, the home directory, a drive root or a `.git` directory itself, and the owner's Pencil Generate deny. Nothing broader. This is the policy of `stack-guard` and `stack-public`, not a core pillar.
 - **Drop over-defensive machinery & wolf-crying alerts:** No owner-only merge list (`.claude/kaizen-managed`), no `readonly_` (0444) live locks, no self-defending budget ratchets, no custom live swapper (`apply.py`), no `--restricted` sandbox / `commit-tree -S` / recovery state machine in `improve`, no `deny-rm.sh` or broad `git` / `deploy` denies.
 - **Cross-platform (macOS, Linux, Windows):** `cmd/stack` and `internal/` are pure portable Go verified on `ubuntu-latest`, `macos-latest`, and `windows-latest` in CI. The public-text check (`stack-public`) handles both POSIX (`/Users/...`, `/home/...`) and Windows (`C:\Users\...`) local paths. Scheduled `cycle` runs via `launchd` on macOS only, while `stack run cycle` itself works cross-platform.
@@ -30,13 +30,26 @@ stack kit open <slug>                              # Record <slug> in <session_i
 stack kit close <slug>                             # Remove <slug> from <session_id>.kits so completed kits do not resurrect after compaction
 stack hook claude session-start                    # All events: export STACK_SESSION_ID via CLAUDE_ENV_FILE when provided; compact only: restore .kits + WORKER_LINE, then entry extensions
 stack hook claude pre-tool-use                     # Deny raw `gh pr merge` and its `gh api` merge forms only
-stack pr merge <pr> <head-sha> [--merge|--squash|--rebase] ...   # outbound on --subject/--body; verify checked head SHA, all checks passing, optional .claude/merge-check; merged after MERGED
+stack pr merge <pr> <head-sha> [--merge|--squash|--rebase] ...   # outbound (fail-closed) on --subject/--body; verify checked head SHA, all checks passing, optional .claude/merge-check; merged after MERGED
 stack run <entry|outbound|merged|cycle> [--dry-run] [--replay FILE] [--ext NAME]... [--range R] [--prompt-file F] [--title-file F] [--body-file F] [--branch B]
-stack --version [--json]                           # Plain version; --json prints {"version","gh_model"}, gh_model = the gh release the raw-merge deny models
+                                                   # --title-file/--body-file/--branch: outbound only, not with --replay (exit 2)
+stack --version [--json]                           # Plain version; --json prints {"version","gh_model"}, gh_model = the gh release the raw-merge deny models (kept for stack-observe)
 ```
 
+`stack-guard hook claude pre-tool-use` is a bundled Claude Code hook built from `extensions/guard`, wired as its own
+`PreToolUse` entry; it is not a stage extension and the core never runs it. It and the core share `internal/shell`,
+`internal/ghargs`, `internal/paths` and `internal/hookio`, a narrow in-repo dependency allowed by `depguard` for
+`extensions/guard` only; every other extension uses only the protocol and the documented CLI. Its deny reasons start
+with `stack-guard (<rule>): `. With both hooks, an input matching the raw-merge rule and a moved rule is denied by
+both, and the reason shown may differ from v10's single first-rule reason.
+
+**Compatibility exceptions of v11** (`docs/design/core-stages.md` §4.9): `stack check public` and `stack budget
+status` are removed (`stack-public check` replaces the first); a `block` answer at `entry` or `cycle` becomes `warn`
+with `error` set and exit 0, so replay fixtures of those stages expecting `block` move to `warn`; a `pr merge`
+message refused at `outbound` exits 1 instead of v10's 2.
+
 ### Extension Protocol (Process Boundary)
-Used only for optional extensions (`observe`, `improve`, `audit-due`, `public`, `jev-*`). Core never imports or inspects `extensions/`; it
+Used only for optional extensions (`observe`, `improve`, `audit-due`, `public`, `jev-*`); `stack-guard` is a hook, not a stage extension. Core never imports or inspects `extensions/`; it
 talks to an extension only through this contract. Details (validation commands, usage errors, plan format, replay
 fixtures) are in `docs/design/phase2-core.md` §4.7.
 - **Evolution:** existing fields, types, defaults, statuses, stages and meanings are kept. New fields are optional,
@@ -51,11 +64,13 @@ fixtures) are in `docs/design/phase2-core.md` §4.7.
   stage; `STACK_SESSION_ID` is passed through when set.
 - `stdin`: one UTF-8 JSON object, read to EOF. A live request has four strings: `{ "stage": "entry|outbound|merged|cycle",
   "repo": "...", "range": "...", "prompt": "..." }`. `repo` is the Git top-level of the cwd or `""`; `range` is
-  `--range R`, else for outbound the literal `@{upstream}..HEAD` when Git resolves `@{upstream}`, else `""`;
-  `prompt` is the `--prompt-file` contents or `""` (`kit open` and compaction send both empty). Every live request
-  also has `kits`: `[{"slug","dir"}]`, the open kits of a valid `STACK_SESSION_ID` (`[]` otherwise). Outbound adds
-  the strings `title`, `body` and `branch` (from `--title-file`, `--body-file`, `--branch`, or `pr merge`'s
-  `--subject`/`--body`); `merged` from `pr merge` adds `merge`: `{"pr","head","oid"}`. `--replay` sends the fixture's
+  `--range R`, else for outbound the literal `@{upstream}..HEAD` when Git resolves `@{upstream}`, else `""`
+  (always `""` for the outbound run of `pr merge`, which checks only the message);
+  `prompt` is the `--prompt-file` contents or `""` (`kit open` and compaction send both empty). Live `entry` and
+  `merged` requests also have `kits`: `[{"slug","dir"}]`, the open kits of a valid `STACK_SESSION_ID` (`[]`
+  otherwise). Outbound adds the strings `title`, `body` and `branch` (from `--title-file`, `--body-file`, `--branch`,
+  or `pr merge`'s `--subject`/`--body`, `""` when absent); `merged` from `pr merge` adds `merge`:
+  `{"pr","head","oid"}`. `--replay` sends the fixture's
   request object as is once its `stage` matches; the fixture supplies the other fields. Extensions ignore unknown
   fields.
 - `stdout`: one UTF-8 JSON object; all stdout bytes count toward a 1 MiB limit: `{ "status": "pass|warn|block", "context": "...", "findings":
@@ -64,15 +79,18 @@ fixtures) are in `docs/design/phase2-core.md` §4.7.
   counts even with a non-zero exit).
   stderr is forwarded to core's stderr with `[<name>] ` before each line.
 - **Limits and failures:** one deadline per stage shared by its extensions (entry 10 s, outbound 120 s, merged 10 s,
-  cycle 30 min). Before parsing stdout, core checks for a lookup or start failure, the deadline, a pipe still open when the
+  cycle 30 min; entry at compaction also ends with the hook's remaining time, and `merged` counts its request
+  preparation and pipe cleanup). Before parsing stdout, core checks for a lookup or start failure, the deadline, a pipe still open when the
   cleanup grace period after exit ends, and oversized stdout; these, an invalid response and an extension left
   unstarted at the deadline become `warn` with a synthetic finding, never `block`.
 - **Result:** statuses aggregate as `block > warn > pass` (no result = `pass`). Only `outbound` can block:
-  at `entry`, `merged` and `cycle` core records a `block` response as `warn` with a synthetic finding. After writing
+  at `entry`, `merged` and `cycle` core records a `block` response as `warn` with a synthetic finding and `error`
+  set, so consumers treat it as an extension failure. After writing
   the aggregate, `stack run` exits 1 on `block` and 0 on `pass` or `warn`; with a replay `expect`, 0 or 1 reports
   match or mismatch (usage errors exit 2; `--dry-run` exits 0). `stack kit open` (and compaction, within its budget)
-  appends each entry `context` and a `warn` marker; `stack pr merge` refuses on an outbound `block` and prints each
-  `merged` context after its `MERGED` line; findings appear only in the `stack run` aggregate.
+  appends each entry `context` and a `warn` marker; `stack pr merge` refuses on an outbound `block` and also when a selected
+  outbound extension is missing or fails (the merge is irreversible), and prints each `merged` context after its
+  `MERGED` line; findings appear only in the `stack run` aggregate.
 
 ## 4. Named Stages & Session Lifecycle
 
@@ -85,12 +103,13 @@ Session identity and kits are core and not stages: `SessionStart` exports `STACK
 
 | Stage | Fires (position) | Semantic | Can block | Failure of an extension | Extensions |
 |---|---|---|---|---|---|
-| **`entry`** | after `stack kit open` printed the kit; on `compact` after the restored kits (when at least one kit was restored); `stack run entry` | inject | no | `warn` marker; the kit is unaffected | optional `jev-router` |
-| **`outbound`** | `stack run outbound` (push hooks, CI, skills); `stack pr merge` before any `gh` call when `--subject`/`--body` is given | gate | yes | `warn`, does not block | `public`, optional `jev-semantic` |
-| **`merged`** | `stack pr merge` after the read-back confirmed `MERGED` on the checked head | observe / inject | no (the merge is irreversible) | `warn` marker after the `MERGED` line; exit code unchanged | `audit-due` |
-| **`cycle`** | `launchd` -> `stack run cycle` | observe | no | `warn` | `observe` (+ optional `jev-classify`) and minimal `improve` (plain worktree + `claude -p`, single period stamp file `~/.local/state/stack/improve/YYYY-Www` to avoid daily re-runs when a proposal is not pushed). Apply via `make apply`. |
+| **`entry`** | after `stack kit open` printed the kit; on `compact` after the restored kits (when at least one kit was restored), reusing the restored session id and kits, within the hook's remaining time; `stack run entry` | inject | no | `warn` marker; the kit and the restore are unaffected | optional `jev-router` |
+| **`outbound`** | `stack run outbound` (push hooks, CI, skills); `stack pr merge` before any `gh` call when `--subject`/`--body` is given | gate | yes | `warn`, does not block; at `pr merge` the merge is refused | `public`, optional `jev-semantic` |
+| **`merged`** | `stack pr merge` at its verified-success point (read-back of `MERGED` on the checked head with a full merge OID, direct or `--auto`, including the final read-back), unless cancelled by SIGINT/SIGTERM; `stack run merged` | observe / inject | no (the merge is irreversible) | `warn` marker after the `MERGED` line; exit code unchanged | `audit-due` |
+| **`cycle`** | `launchd` -> `stack run cycle` (macOS); `stack run cycle` anywhere | observe | no | `warn` | `observe` (+ optional `jev-classify`) and minimal `improve` (plain worktree + `claude -p`, single period stamp file `~/.local/state/stack/improve/YYYY-Www` to avoid daily re-runs when a proposal is not pushed). Apply via `make apply`. |
 
-`merged` fires on every merge `stack pr merge` verifies; the raw-merge deny keeps it the only merge path of an agent
+`merged` fires on every merge `stack pr merge` verifies, except after a cancel (the owner asked to stop; the merge
+result stands); the raw-merge deny keeps it the only merge path of an agent
 session within the guard's static scope. Tool use is not a core stage: Claude Code's own `PreToolUse` hook list
 orders and combines tool-use gates, and `stack-guard` is one entry in it.
 
@@ -107,10 +126,10 @@ installed, unsafe if left to extensions, stable); the reasoning per built-in is 
 |---|---|---|
 | `check public` (local paths, private terms) | optional; secret scanners and hooks are alternatives; the term policy varies | `stack-public`: `outbound` extension, and `stack-public check <range> …` for direct callers |
 | Local-path / private-term check of `pr merge --subject/--body` | same policy as `check public` | `outbound` stage, run by `stack pr merge` |
-| Secrets read deny, local paths in `gh` publish inputs, catastrophic `rm` guard, Pencil Generate deny (on unless disabled) | optional; Claude Code settings, permission modes and scanners cover them; the lists are per user | `stack-guard hook claude pre-tool-use`, its own `PreToolUse` hook |
+| Secrets read deny, local paths in `gh` publish inputs, catastrophic `rm` guard, Pencil Generate deny (on unless disabled) | optional; Claude Code settings, permission modes and scanners cover them; the lists are per user | `stack-guard hook claude pre-tool-use`, a bundled hook with its own `PreToolUse` entry (§3) |
 | `[safety]` settings | read only by the checks above | `~/.config/stack/safety.toml` |
 | `budget status` and a `state.md` byte threshold | display only, no caller; a byte count is not what diverts attention | dropped; the steward judges `state.md` by content; an extension if a caller appears |
-| Audit-due signal | its rule (K merges, `state.md` not updated) is policy | `stack-audit-due`: `merged` extension |
+| Audit-due signal | its rule (K merges, kit state not updated) is policy | `stack-audit-due`: `merged` extension |
 | `observe`, `improve` | optional, paid, owner opt-in | `cycle` extensions |
 | `jev-*` | optional | `entry` / `outbound` / `cycle` extensions |
 
@@ -145,15 +164,17 @@ HERDR_ENV = "~/.config/stack/handover/herdr.md"
 
 [stages]
 entry = ["jev-router"]
-outbound = ["public", "jev-semantic"]
+outbound = ["public"]                 # add "jev-semantic" once installed: pr merge refuses a message when a selected extension is missing
 merged = ["audit-due"]
 cycle = ["observe", "jev-classify", "improve"]
 ```
 
 Extensions keep their own settings beside it: `~/.config/stack/safety.toml` (`stack-guard`, `stack-public`; the v10
 `[safety]` keys `secrets`, `private_terms` and `deny_pencil_generate` with their v10 defaults), `~/.config/stack/improve.toml`
-and `~/.config/stack/audit-due.toml`. A missing or broken `safety.toml` gives its defaults, so a typo never turns a
-deny off.
+and `~/.config/stack/audit-due.toml`. A missing `safety.toml` or key gives its default. A broken `safety.toml` means
+the default rules apply (custom entries are not kept until it is fixed), so a typo never turns a deny off:
+`stack-guard` denies by the defaults, `stack-public check` exits 2 and `stack-public` at a stage answers `block`.
+Arrays in `[stages]` replace the default, so an explicit `outbound` array must name `public` itself.
 
 ## 6. Migration Roadmap
 
@@ -161,4 +182,4 @@ deny off.
 2. **Phase 2 (`shuymn/stack` Go core):** Implement `kit open/close`, `hook claude session-start/pre-tool-use`, `pr merge`, `check public`, `budget status`, `run` with unit/fixture tests passing on macOS, Linux, and Windows CI. Wire into dotfiles and delete the legacy Python hooks they replace; `attention-budget.py status` and `public-check` stay while Phase 3's kaizen scripts still call them.
 3. **Phase 3 (retire legacy `kaizen` & switch `cycle`):** Implement minimal `extensions/observe` and `extensions/improve` (with `writing.md`), switch `launchd` to `stack run cycle`, retire `apply.py`/`ready.py`/old `improve.py`/`.claude/kaizen-managed`, and update `skills/` (`attention.md`, `commit-pr.md`, `retro.md`), `agents/steward.md`, and `statusline.sh.tmpl`. Design: `docs/design/phase3-cycle.md`. Status: the extensions are in this repository (install and opt-in in `README.md`); the `launchd` switch, `skills/` updates and kaizen retirement follow in `shuymn/dotfiles` in the cutover order of the design §6.
 4. **Phase 4 (Jev extensions):** Add `jev-classify` -> `jev-semantic` -> `jev-router` with `fixtures/` and `--replay` verification.
-5. **Core stages (v11):** Give each stage one semantic, add `merged` with `stack-audit-due`, drop the `state.md` byte threshold and `budget status`, and move `check public` and the guards other than the raw-merge deny to `stack-public` and `stack-guard`, adding and wiring each extension before removing the core copy so no guard is ever off. Design and PR order: `docs/design/core-stages.md` §7. Status: designed; v10 behaviour stays in the code until those PRs land.
+5. **Core stages (v11):** Give each stage one semantic, add `merged` with `stack-audit-due`, drop the `state.md` byte threshold and `budget status`, and move `check public` and the guards other than the raw-merge deny to `stack-public` and `stack-guard`, copying the effective `[safety]` to `safety.toml` and installing each binary on every `PATH` before callers switch, then adding, wiring and live-verifying each extension before removing the core copy so no guard is ever off. Design and PR order: `docs/design/core-stages.md` §7. Status: designed; v10 behaviour stays in the code until those PRs land.

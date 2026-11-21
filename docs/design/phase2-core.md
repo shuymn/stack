@@ -8,6 +8,12 @@ is a follow-up in `shuymn/dotfiles` (§7).
 Legacy sources are cited by their deployed path (`~/.claude/...`, deployed from `shuymn/dotfiles:home/dot_claude/`,
 byte-identical today) and `dotfiles:scripts/kaizen/public-check`.
 
+`docs/design/core-stages.md` (architecture v11) supersedes parts of this design: §4.1.1's size note, §4.2 step 2's
+"No extensions run", §4.3's rules other than raw-merge, §4.4 step 1, §4.5, §4.6, §4.7's stages, request fields and
+`block` handling (a `block` at `entry` or `cycle` becomes `warn` with exit 0, and replay fixtures expecting `block`
+there move to `warn`), the `[safety]` table and the matching C10–C12, C14–C15, C19 (its extension assertion only),
+C26 (its message clause) and C27; the list is in that design's §4.10.
+
 ## 0. Principles
 
 1. **Hooks fail open, commands fail closed.** `stack hook ...` never breaks a session: undecodable stdin, an internal
@@ -462,6 +468,9 @@ no non-zero exit for "over" (`docs/architecture.md:36`). Kit root missing: print
 kaizen until Phase 3; `--json` is decided together with the `statusline.sh.tmpl` caller.
 
 ### 4.7 `stack run <entry|outbound|cycle> [--dry-run] [--replay FILE] [--ext NAME]... [--range R] [--prompt-file F]`
+
+v11 adds the `merged` stage, the `kits`, `title`, `body`, `branch` and `merge` request fields, and `block` demotion
+at stages that cannot block, with its compatibility exception (`docs/design/core-stages.md` §2, §4.1, §4.9).
 
 - **Selection:** names from `[stages].<stage>` (defaults §5), or exactly `NAME` with `--ext` (repeatable).
 - **Names:** each name (config or `--ext`) must be a single file-name component matching `^[a-z0-9][a-z0-9-]*$`;

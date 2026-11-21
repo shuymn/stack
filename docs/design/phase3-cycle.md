@@ -10,6 +10,10 @@ Extensions talk to core only through `docs/architecture.md` §3 "Extension Proto
 sources are cited as `dotfiles:<path>:<line>` at `shuymn/dotfiles` main as of this design (paths under
 `scripts/kaizen/` are cited by file name alone); `K` is the legacy state directory `~/.claude/kaizen`.
 
+`docs/design/core-stages.md` (architecture v11) replaces `stack check public` in §3.1, §3.4 step 12.5 and I10 with
+`stack-public check` (same arguments and exit codes; a missing binary is `failed:check`, §6 and C21 there);
+`gh_model` (§3.2) is unchanged.
+
 ## 0. Principles
 
 1. **Stateless observation, one stamp for improvement.** `observe` recomputes a fixed 7-day window on every run and
