@@ -194,11 +194,11 @@ A source not finished by the deadline minus the reserve is `status: "timeout"` a
 
 | Source | Reads | Status |
 |---|---|---|
-| `transcripts` | `~/.claude/projects/*/*.jsonl` and `…/subagents/**/*.jsonl` that are regular files with mtime ≥ `since` (no upper bound: a file appended during the scan keeps its in-window records); complete lines only; each record counts only when its own `timestamp` is in `[since, until)` (legacy `observe.py:84-95,117-201`) | `ok`, `fail` (any unreadable file, listed), `off` when the directory is absent |
-| `t3` | `sqlite3 -readonly -json <T3 state database> <query>` (the file legacy opens, `observe.py:422`) with the legacy queries (`observe.py:229-258`); window literals formatted by observe in the legacy format | `off` when `~/.t3` is absent; `fail` when `sqlite3` is missing or errors |
+| `transcripts` | `~/.claude/projects/*/*.jsonl` and `…/subagents/**/*.jsonl` that are regular files with mtime ≥ `since` (no upper bound: a file appended during the scan keeps its in-window records); complete lines only, each at most 16 MiB (a longer line is skipped and counted); a malformed line is skipped; each record counts only when its own `timestamp` is in `[since, until)` (legacy `observe.py:84-95,117-201`) | `ok`, `fail` (any unreadable file, listed, or a root that is not a directory), `off` when the directory is absent |
+| `t3` | `sqlite3 -readonly -json <T3 state database> <query>` (the file legacy opens, `observe.py:422`) with the legacy queries (`observe.py:229-258`); window literals formatted by observe in the legacy format | `off` when `~/.t3` is absent; `fail` when `sqlite3` is missing or errors (non-zero exit, or a diagnostic on stderr at exit 0) |
 | `codex` | `~/.codex/sessions/**/rollout-*.jsonl` with mtime ≥ `since`, first line only; session start in the window adds its cwd weight (`observe.py:266-297`) | `ok`, `fail`, `off` when absent |
 | `ledgers` | `~/.claude/review-ledgers/*.md` lines starting `- YYYY-MM-DD` that mention a miss (`observe.py:300-321`); the date's local-zone start must be in the window | `ok`, `fail`, `off` when absent |
-| `gh` | for the top 10 repos by transcript and Codex cwd weight: `gh repo view`, merged PRs, failed default-branch runs (`observe.py:342-378`); `gh auth status` | `ok`; `fail` at the first gh error, keeping the items of repos already read (legacy rule, `observe.py:335-339`) and recording `repos_read`; a failing `gh auth status` adds finding `gh-auth` |
+| `gh` | for the top 10 repos by transcript and Codex cwd weight: `gh repo view`, merged PRs, failed default-branch runs (`observe.py:342-378`); `gh auth status` | `ok`; `fail` at the first gh error (non-zero exit, or empty or wrongly shaped JSON), keeping the items of repos already read (legacy rule, `observe.py:335-339`) and recording `repos_read`; a failing `gh auth status` adds finding `gh-auth` |
 | `replay` | §3.3 replay | `ok`, `fail`, `timeout`, `off` when `stack` is not on `PATH` |
 | `gh-version` | §3.3 gh version | finding only |
 
@@ -222,8 +222,9 @@ transcript whose name is one the guard is wired for (`Bash`, `Read`, `NotebookRe
 
 1. *Recorded decision*, from the `tool_result` with the same `tool_use_id`: content starting
    `PreToolUse:<tool> hook error: stack guard (<rule>)` → `deny:<rule>`; any other `PreToolUse:<tool> hook error:`
-   (an older hook, another hook, or several hooks) → `other-deny`; a result that is not a hook error → `no-deny`; no
-   result, or a user permission refusal → `unknown`. Only `deny:<rule>` and `no-deny` are compared. The exact strings
+   (an older hook, another hook, or several hooks) → `other-deny`, and so is a `<rule>` that is not a guard rule id
+   (lowercase letters, digits, `-`); a result that is not a hook error → `no-deny`; no result, a result whose
+   content is missing, null or not text, or a user permission refusal → `unknown`. Only `deny:<rule>` and `no-deny` are compared. The exact strings
    are taken from anonymised real transcripts in `testdata/` (§7), since the hook output specification does not fix
    how a transcript records them.
 2. *Replayed decision*: payload `{"session_id","transcript_path","cwd","hook_event_name":"PreToolUse","tool_name",
@@ -231,16 +232,23 @@ transcript whose name is one the guard is wired for (`Bash`, `Read`, `NotebookRe
    installed hook) with `STACK_DEBUG=1`, 5 s timeout each (the hook's settings timeout), 4 at a time. Exit 0 with a
    deny JSON naming `stack guard (<rule>)` → `deny:<rule>`; exit 0 with empty stdout and no `stack hook:` line on
    stderr → `no-deny` (the hook denied nothing; it does not say the input was understood). A start failure, timeout,
-   non-zero exit, unparsable stdout, or a `stack hook:` stderr line (the hook failed open,
-   `internal/hookio/hookio.go:104-115`) → `not-comparable`. A record whose `cwd` no longer exists, or whose
-   `tool_input` lacks the input the guard needs for that tool (a `Bash` call without a non-empty string `command`,
-   which the guard returns without a decision or diagnostic, `internal/guard/guard.go:48-60`), is `unrecoverable`:
-   not run and excluded from comparison. Identical `(cwd, tool_name, tool_input)` payloads run once, and that one
-   replayed decision is compared with each recorded decision separately. Payloads run newest first until 5,000 have
-   run (`truncated_cap` counts the rest) or the deadline minus the reserve passes (`truncated_time` counts the rest).
-3. *Reported change* (finding `replay-change`, at most 20 listed, all counted in `replay.changed`): `no-deny →
-   deny:<rule>` (new deny: a false positive or a newly guarded call), `deny:<rule> → no-deny` (lost deny),
-   `deny:<a> → deny:<b>` (rule changed).
+   non-zero exit, unparsable stdout, a rule that is not a guard rule id, stderr not read in full (past its cap),
+   or a `stack hook:` stderr line (the hook failed open, `internal/hookio/hookio.go:104-115`) → `not-comparable`.
+   A record whose `cwd` no longer exists, or whose `tool_input` lacks the input the guard needs for that tool, is
+   `unrecoverable`: not run and excluded from comparison. The guard returns without a decision or diagnostic when it
+   cannot decode the fields it reads or the field it judges is empty (`internal/guard/guard.go:48-60`,
+   `secrets.go`, `pencil.go`), so a `Bash` call needs a non-empty string `command`, `Read` a `file_path`,
+   `NotebookRead` a `notebook_path` or `file_path`, `Glob` a `pattern`, `mcp__pencil__execute` an `input` or
+   `edits`, and every file tool string path fields. Identical `(cwd, tool_name, tool_input)` payloads run once, and
+   that one replayed decision is compared with each recorded decision separately. A payload's input is re-read
+   from its transcript line when it runs; an input that no longer matches the scanned digest is `not-comparable`.
+   Payloads run newest first (full timestamp precision) until 100,000 have run (`truncated_cap` counts the records
+   of the rest, not unique payloads) or the deadline minus the reserve passes (`truncated_time` counts the records
+   of the rest); 5,000 covered ~7% of a real 7-day window in 8.7 s, and the time bound
+   is the real limit.
+3. *Reported change* (finding `replay-change`, at most 20 listed, all counted in `replay.changed` and per kind in
+   `replay.changed_by_kind`): `no-deny → deny:<rule>` (`new_deny`: a false positive or a newly guarded call),
+   `deny:<rule> → no-deny` (`lost_deny`), `deny:<a> → deny:<b>` (`rule_changed`).
    `where` is `transcript:line`; `detail` holds only the tool name and the two decisions (rule ids). Deny reasons
    are never copied: they quote input paths and globs (`internal/guard/ghpublish.go:20-30`).
 
@@ -256,8 +264,11 @@ object, is finding `gh-version` with `unknown`.
 
 **Response.** `status`: `warn` when any source is `fail`/`timeout` or any `gh-auth`, `replay-change` or
 `gh-version` finding exists; else `pass`. `context`: ≤ 4,000 chars, English: window, per-source status and counts,
-owner tally, per-signal counts with up to 3 excerpts each, replay totals (`compared`, `changed`, `not_comparable`,
-`unrecoverable`, `truncated_cap`, `truncated_time`), installed vs modelled gh. `findings`: as above.
+owner tally, per-signal counts, replay totals (`compared`, `changed` with its three kinds, `not_comparable`,
+`unrecoverable`, `truncated_cap`, `truncated_time`) and installed vs modelled gh come first; up to 3 excerpts per
+signal fill the rest. `findings`: as above. An error in `findings`, `context` or `latest.json` is a fixed summary of
+its cause (`gh auth failed: exit 1`, `gh repo view failed: exit 1`, `sqlite3 failed: error on stderr`), never a
+child's stderr, which can quote local paths and inputs.
 
 **File** `~/.local/state/stack/observe/latest.json` (0600, temp file in the same directory + rename, so readers
 never see a partial file):
@@ -270,11 +281,13 @@ never see a partial file):
  "items": [{"id": "…", "signal": "revert", "kind": "miss", "where": "https://github.com/o/r/pull/1",
             "excerpt": "…", "provenance": "public", "repo": "o/r", "ts": "…Z"}],
  "replay": {"compared": 0, "changed": 0, "not_comparable": 0, "unrecoverable": 0, "truncated_cap": 0,
-            "truncated_time": 0},
+            "truncated_time": 0, "changed_by_kind": {"new_deny": 0, "lost_deny": 0, "rule_changed": 0}},
  "gh": {"installed": "v…", "model": "v…"}}
 ```
 
-`version` is this file's schema; timestamps are RFC 3339 UTC in whole seconds (`until` is the start time cut to the
+The deadline is checked again right before the write starts; past it, observe answers `latest-not-written`
+without writing. A local write already started (temp file, sync, rename) runs to completion: it is not
+interruptible, and the 20-s reserve covers it. `version` is this file's schema; timestamps are RFC 3339 UTC in whole seconds (`until` is the start time cut to the
 second), so `jq`'s `fromdateiso8601` reads them (§3.6). Last writer wins: two overlapping observe runs (a manual one
 and the job) can leave the older window as the file; improve's freshness bound (§3.4 step 6) still holds, so this is
 accepted. When writing `latest.json` fails, observe answers `warn` with the finding `latest-not-written`, and the
@@ -582,7 +595,8 @@ records the real Claude and Codex durations, both timeouts, the cost or `unknown
 the evidence for changing these numbers.
 
 The other limits: 4 parallel replays and 5 s each (the hook's own settings timeout; 4 is a starting value, P3
-records the replay wall time on the real machine); 5,000 payloads (newest first, bounded again by time); 20 listed
+records the replay wall time on the real machine); 100,000 payloads (newest first, bounded again by time; 5,000
+covered ~7% of a real 7-day window in 8.7 s, and the time bound is the real limit); 20 listed
 findings with all counted in `replay.changed` (keeps `context` under 4,000 chars); 24 h freshness (one missed daily
 run makes the evidence stale; the next run refreshes it, free); 256 KiB patch (instruction edits are far smaller;
 the cut is marked).
