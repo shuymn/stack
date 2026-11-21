@@ -4,6 +4,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/shuymn/stack/internal/ext"
+	"github.com/shuymn/stack/internal/ghargs"
 )
 
 // Exit codes shared by every command. Hook commands always exit exitOK.
@@ -153,8 +155,7 @@ func Run(ctx context.Context, args []string, env Env) int {
 	}
 	switch args[0] {
 	case "--version", "-v":
-		_, _ = fmt.Fprintln(env.Stdout, env.Version)
-		return exitOK
+		return writeVersion(env, len(args) > 1 && args[1] == "--json")
 	case "help", "--help", "-h":
 		writeUsage(env.Stdout, nil)
 		return exitOK
@@ -189,6 +190,30 @@ func Run(ctx context.Context, args []string, env Env) int {
 		return exitCode(err)
 	}
 	return exitOK
+}
+
+// writeVersion prints the plain version, or with asJSON the version and the gh release the guard's
+// argument model was written against. Any other trailing argument is ignored, as it always was.
+func writeVersion(env Env, asJSON bool) int {
+	if !asJSON {
+		_, _ = fmt.Fprintln(env.Stdout, env.Version)
+		return exitOK
+	}
+	out, err := json.Marshal(versionJSON{Version: env.Version, GhModel: ghargs.GhVersion})
+	if err != nil {
+		_, _ = fmt.Fprintf(env.Stderr, "stack --version: %v\n", err)
+		return exitUsage
+	}
+	_, _ = fmt.Fprintf(env.Stdout, "%s\n", out)
+	return exitOK
+}
+
+// versionJSON is the `stack --version --json` object that stack-observe reads.
+//
+//nolint:tagliatelle // the key is part of the documented CLI contract.
+type versionJSON struct {
+	Version string `json:"version"`
+	GhModel string `json:"gh_model"`
 }
 
 // route finds the command named by the leading words of args. When none matches, prefix is the
@@ -269,7 +294,8 @@ func writeUsage(w io.Writer, prefix []string) {
 		}
 	}
 	if prefix == nil {
-		_, _ = fmt.Fprintln(w, "  stack --version\n      print the version")
+		_, _ = fmt.Fprintln(w, "  stack --version [--json]\n"+
+			"      print the version; --json also prints the gh release the guard models")
 		_, _ = fmt.Fprintln(w)
 		_, _ = fmt.Fprintln(w, "exit codes: 0 ok; 1 refused, finding or block; "+
 			"2 usage, input, config or environment error. Hooks always exit 0.")

@@ -35,6 +35,7 @@ stack pr merge <pr> <head-sha> [--merge|--squash|--rebase] ...   # Verify checke
 stack check public <range> [--title-file F --body-file F --branch B]
 stack budget status                                # Display-only byte & attention item counts
 stack run <entry|outbound|cycle> [--dry-run] [--replay FILE] [--ext NAME]... [--range R] [--prompt-file F]
+stack --version [--json]                           # Plain version; --json prints {"version","gh_model"}, gh_model = the gh release the guard models
 ```
 
 ### Extension Protocol (Process Boundary)
