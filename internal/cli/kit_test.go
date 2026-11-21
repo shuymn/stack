@@ -35,6 +35,36 @@ func holdLock(path string) int {
 	return 0
 }
 
+// holdKitsLock holds id's `.kits` lock from another process until the test ends.
+func holdKitsLock(t *testing.T, home, id string) {
+	t.Helper()
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	holder := exec.Command(exe, "-test.run=^$")
+	holder.Env = append(os.Environ(), lockHolderEnv+"="+paths.SessionLockFile(home, id))
+	stdin, err := holder.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := holder.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := holder.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = stdin.Close()
+		_ = holder.Process.Kill()
+		_ = holder.Wait()
+	})
+	if line, err := bufio.NewReader(stdout).ReadString('\n'); err != nil || line != "locked\n" {
+		t.Fatalf("lock holder: %q, %v", line, err)
+	}
+}
+
 // tree lists every path under root, slash-separated and relative, directories with a trailing /.
 func tree(t *testing.T, root string) []string {
 	t.Helper()
@@ -234,32 +264,7 @@ func TestKitLocked(t *testing.T) {
 		t.Fatalf("open a = %+v", r)
 	}
 	before, _ := readKits(t, home)
-
-	exe, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	holder := exec.Command(exe, "-test.run=^$")
-	holder.Env = append(os.Environ(), lockHolderEnv+"="+paths.SessionLockFile(home, "demo-1"))
-	stdin, err := holder.StdinPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	stdout, err := holder.StdoutPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := holder.Start(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		_ = holder.Process.Kill()
-		_ = holder.Wait()
-	})
-	defer func() { _ = stdin.Close() }()
-	if line, err := bufio.NewReader(stdout).ReadString('\n'); err != nil || line != "locked\n" {
-		t.Fatalf("lock holder: %q, %v", line, err)
-	}
+	holdKitsLock(t, home, "demo-1")
 
 	subs := []string{"open", "close"}
 	results := make([]result, len(subs))

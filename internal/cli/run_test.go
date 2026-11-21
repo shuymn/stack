@@ -176,6 +176,67 @@ func TestRunBlockExit(t *testing.T) {
 	}
 }
 
+// TestRequestKits covers C3: a live entry request lists the session's open kits in `.kits` order,
+// [] without a valid id or under a held lock; outbound and cycle requests carry no kits.
+func TestRequestKits(t *testing.T) {
+	bin, _ := extBin(t)
+	logger := fakeExt(t, bin, "logger", `{"status":"pass"}`)
+	home := t.TempDir()
+	root := filepath.Join(home, ".local", "state", "stack", "kits")
+	withID := map[string]string{"STACK_SESSION_ID": "s1"}
+	for _, slug := range []string{"b", "a", "gone"} {
+		if res := runIn(t, home, withID, "kit", "open", slug); res.code != exitOK {
+			t.Fatalf("kit open %s = %+v", slug, res)
+		}
+	}
+	if err := os.RemoveAll(filepath.Join(root, "gone")); err != nil {
+		t.Fatal(err)
+	}
+	// lastKits runs stage and returns the kits key of the request logger received.
+	lastKits := func(env map[string]string, stage string) (json.RawMessage, bool, result) {
+		t.Helper()
+		res := runIn(t, home, env, "run", stage, "--ext", "logger")
+		calls := proctest.Calls(t, logger)
+		var req map[string]json.RawMessage
+		if res.code != exitOK || json.Unmarshal([]byte(calls[len(calls)-1].Stdin), &req) != nil {
+			t.Fatalf("run %s = %+v, calls %+v", stage, res, calls)
+		}
+		kits, ok := req["kits"]
+		return kits, ok, res
+	}
+
+	want, err := json.Marshal([]ext.Kit{
+		{Slug: "b", Dir: filepath.Join(root, "b")},
+		{Slug: "a", Dir: filepath.Join(root, "a")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kits, _, res := lastKits(withID, "entry"); string(kits) != string(want) ||
+		res.stderr != "[logger] note\n" {
+		t.Fatalf("kits = %s (%+v), want %s", kits, res, want)
+	}
+	for _, env := range []map[string]string{nil, {"STACK_SESSION_ID": "../x"}} {
+		if kits, _, _ := lastKits(env, "entry"); string(kits) != "[]" {
+			t.Errorf("kits with id %q = %s, want []", env["STACK_SESSION_ID"], kits)
+		}
+	}
+	for _, stage := range []string{"outbound", "cycle"} {
+		if kits, ok, _ := lastKits(withID, stage); ok {
+			t.Errorf("%s request has kits %s", stage, kits)
+		}
+	}
+
+	holdKitsLock(t, home, "s1")
+	start := time.Now()
+	kits, _, res := lastKits(withID, "entry")
+	if elapsed := time.Since(start); string(kits) != "[]" || elapsed < time.Second ||
+		!strings.Contains(res.stderr, "stack: s1.kits locked; kits not sent\n") {
+		t.Fatalf("kits under a held lock = %s after %s, %+v; want [] and the note", kits,
+			elapsed, res)
+	}
+}
+
 // TestRunConfigNames covers names from `[stages]`; one that is not a single component is a config
 // error.
 func TestRunConfigNames(t *testing.T) {
@@ -237,6 +298,7 @@ func TestRunDryRun(t *testing.T) {
 		"--ext", "absent")
 	req, err := json.Marshal(ext.Request{
 		Stage: "entry", Repo: strings.TrimSpace(r.Git("rev-parse", "--show-toplevel")),
+		Kits: &[]ext.Kit{},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -312,8 +374,8 @@ func TestRunReplay(t *testing.T) {
 	}
 }
 
-// TestKitOpenEntryStage covers `kit open` running the entry stage and appending each context in
-// the renderer's block format; a block is shown as a demoted warn.
+// TestKitOpenEntryStage covers `kit open` running the entry stage with the session's kits and
+// appending each context in the renderer's block format; a block is shown as a demoted warn.
 func TestKitOpenEntryStage(t *testing.T) {
 	bin, r := extBin(t)
 	// The entry deadline is for an interactive start, not for five fake processes under -race
@@ -343,10 +405,15 @@ func TestKitOpenEntryStage(t *testing.T) {
 		t.Fatalf("kit open = %+v\nwant prefix %s", res, want)
 	}
 	calls := proctest.Calls(t, router)
-	var req map[string]string
+	var req struct {
+		ext.Request
+
+		Kits []ext.Kit `json:"kits"`
+	}
 	if len(calls) != 1 || json.Unmarshal([]byte(calls[0].Stdin), &req) != nil ||
-		req["stage"] != "entry" || req["range"] != "" || req["prompt"] != "" ||
-		!sameFile(t, req["repo"], r.Dir) {
+		req.Stage != "entry" || req.Range != "" || req.Prompt != "" ||
+		!sameFile(t, req.Repo, r.Dir) ||
+		!slices.Equal(req.Kits, []ext.Kit{{Slug: "demo", Dir: kitDir}}) {
 		t.Fatalf("entry request = %+v", calls)
 	}
 
