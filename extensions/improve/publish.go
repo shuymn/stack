@@ -42,7 +42,7 @@ func (a *attempt) writeTemp(name, content string) (string, *stop) {
 	if err != nil {
 		return "", halt("failed:check", "cannot create %s", name)
 	}
-	_, err = f.Write([]byte(content))
+	_, err = f.WriteString(content)
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
