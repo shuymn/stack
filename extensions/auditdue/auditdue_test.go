@@ -261,7 +261,8 @@ func TestK(t *testing.T) {
 	t.Run("beyond 32 bits", func(t *testing.T) {
 		home := newHome(t, "merges = 2147483648\n")
 		k := newKit(t, "demo", nil)
-		for _, r := range run(t, home, 3, k) {
+		// Five merges: a silent fallback to the default would be due on the fifth.
+		for _, r := range run(t, home, 5, k) {
 			wantResp(t, r, StatusPass, "")
 		}
 	})
