@@ -28,7 +28,7 @@ const (
 var errStart = errors.New("did not start")
 
 // repoVars are the repository-location variables a git hook exports; a child must find its
-// repository from its own working directory, as internal/checkpub does for core.
+// repository from its own working directory, as internal/proc.DropRepoVars does for core.
 var repoVars = []string{
 	"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY",
 	"GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE",

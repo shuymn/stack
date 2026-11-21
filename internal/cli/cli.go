@@ -91,7 +91,7 @@ var commands = []*command{
 	},
 	{
 		path:    []string{"hook", "claude", "pre-tool-use"},
-		summary: "PreToolUse hook: deny the hard-boundary hazards",
+		summary: "PreToolUse hook: deny a raw merge outside stack pr merge",
 		hook:    true,
 		run:     runPreToolUse,
 	},
@@ -112,18 +112,6 @@ var commands = []*command{
 			fs.Bool("auto", false, "")
 		},
 		run: runPrMerge,
-	},
-	{
-		path:    []string{"check", "public"},
-		args:    "<base>..<head>",
-		flagDoc: "[--title-file F] [--body-file F] [--branch B]",
-		summary: "scan a commit range and PR metadata for local paths and private terms",
-		define: func(fs *flag.FlagSet) {
-			fs.String("title-file", "", "")
-			fs.String("body-file", "", "")
-			fs.String("branch", "", "")
-		},
-		run: runCheckPublic,
 	},
 	{
 		path: []string{"run"},

@@ -17,8 +17,8 @@ import (
 	"github.com/shuymn/stack/internal/proc/proctest"
 )
 
-// built holds the binaries TestMain builds: the real stack and stack-public, for the comparison
-// with `stack check public` and the `stack run outbound` round trip.
+// built holds the binaries TestMain builds: the real stack and stack-public, for the
+// `stack run outbound` round trip.
 var built struct {
 	dir, stack, public string
 	err                error

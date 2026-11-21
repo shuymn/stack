@@ -72,7 +72,7 @@ func TestSignalEndsOtherCommands(t *testing.T) {
 	skipWithoutSIGTERM(t)
 	home := t.TempDir()
 	cmd, _ := stack(t, t.TempDir(), []string{"HOME=" + home, "PATH=" + os.Getenv("PATH")},
-		"check", "public", "a..b", "--title-file", "/dev/stdin")
+		"run", "outbound", "--ext", "demo", "--title-file", "/dev/stdin")
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		t.Fatal(err)

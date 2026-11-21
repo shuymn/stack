@@ -27,7 +27,6 @@ type Config struct {
 	Worker  Worker
 	// Handover lists the `[handover]` entries in file order; the first active one wins.
 	Handover []HandoverEntry
-	Safety   Safety
 	Stages   Stages
 	Merge    Merge
 }
@@ -48,13 +47,6 @@ type Worker struct {
 type HandoverEntry struct {
 	Env  string
 	Path string
-}
-
-// Safety is the `[safety]` table.
-type Safety struct {
-	Secrets            []string
-	PrivateTerms       string
-	DenyPencilGenerate bool
 }
 
 // Stages is the `[stages]` table: extension names per stage.
@@ -84,11 +76,6 @@ func Defaults() Config {
 		Handover: []HandoverEntry{
 			{Env: "T3CODE_THREAD_ID", Path: "~/.config/stack/handover/t3.md"},
 			{Env: "HERDR_ENV", Path: "~/.config/stack/handover/herdr.md"},
-		},
-		Safety: Safety{
-			Secrets:            []string{"~/.t3/userdata/secrets", ".dev.vars"},
-			PrivateTerms:       "~/.config/stack/private-terms",
-			DenyPencilGenerate: true,
 		},
 		Stages: Stages{
 			Entry:    []string{"jev-router"},
@@ -167,11 +154,6 @@ func Load(path string) (Config, []string, error) {
 		}
 	}
 
-	safety := d.section(top, "safety")
-	d.field(safety, "secrets", &cfg.Safety.Secrets)
-	d.field(safety, "private_terms", &cfg.Safety.PrivateTerms)
-	d.field(safety, "deny_pencil_generate", &cfg.Safety.DenyPencilGenerate)
-
 	stages := d.section(top, "stages")
 	d.field(stages, "entry", &cfg.Stages.Entry)
 	d.field(stages, "outbound", &cfg.Stages.Outbound)
@@ -218,14 +200,4 @@ func (d *decoder) section(s section, key string) section {
 	sub := section{path: append(slices.Clip(s.path), key)}
 	d.field(s, key, &sub.m)
 	return sub
-}
-
-// LoadForHook is Load for hook commands, which never fail: any error yields the defaults, so a
-// typo cannot turn a safety rule off. Warnings are dropped.
-func LoadForHook(path string) Config {
-	cfg, _, err := Load(path)
-	if err != nil {
-		return Defaults()
-	}
-	return cfg
 }

@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/shuymn/stack/internal/gittest"
 )
 
 // TestCheck covers C13: the CLI mode keeps the `stack check public` table, its stderr and its exit
@@ -150,7 +148,7 @@ func TestCheckInheritsNoGitVars(t *testing.T) {
 }
 
 // TestUsage checks the top-level usage, which names the stack-public invocation; `check`'s own
-// usage is the core command's (TestCheckMatchesCore).
+// usage is the v10 core command's.
 func TestUsage(t *testing.T) {
 	for _, args := range [][]string{{"--help"}, {"-h"}, {"help"}} {
 		if r := runMain(t, "", "", args...); r.code != exitOK ||
@@ -167,53 +165,4 @@ func TestUsage(t *testing.T) {
 		) {
 		t.Errorf("unknown command = %+v", r)
 	}
-}
-
-// TestCheckMatchesCore covers P9 in the test suite: on a seeded repository with a local path and a
-// private term in a commit, the title and the body, the real `stack check public` and
-// `stack-public check` write byte-identical stderr and exit with the same code.
-func TestCheckMatchesCore(t *testing.T) {
-	needBuilt(t)
-	r := checkRepoNoChdir(t, "feat: notes for Project Zebra\n\nSee "+local("Users", "erin")+"x")
-	r.Write("notes.md", "zebra notes under "+local("home", "bob")+"\n")
-	r.Commit("docs: notes")
-	home := t.TempDir()
-	writeFile(t, filepath.Join(home, ".config", "stack", "private-terms"), []byte("Zebra\n"))
-	writeFile(t, filepath.Join(home, ".config", "stack", "safety.toml"),
-		[]byte("private_terms = \"~/.config/stack/private-terms\"\n"))
-	title := filepath.Join(home, "title.txt")
-	body := filepath.Join(home, "body.md")
-	writeFile(t, title, []byte("docs: zebra\n"))
-	writeFile(t, body, []byte("Ran in "+local("Users", "erin")+"x\n"))
-	for _, args := range [][]string{
-		{"base..HEAD", "--title-file", title, "--body-file", body, "--branch", "kaizen/zebra"},
-		{"base..HEAD"},
-		{"base..nope"},
-		{"base...HEAD"},
-		{"base..HEAD", "--body-file", filepath.Join(home, "none.md")},
-		{"base..HEAD", "--nope"},
-		{"base..HEAD", "--branch"},
-		{"--branch", "x"},
-		{"base..HEAD", "a..b"},
-		{"--help"},
-		{"base..HEAD", "-h"},
-	} {
-		core := runBinary(t, r, home, r.Dir, "", built.stack, append([]string{"check", "public"},
-			args...)...)
-		ext := runBinary(t, r, home, r.Dir, "", built.public, append([]string{"check"},
-			args...)...)
-		if core.code != ext.code || core.stderr != ext.stderr || core.stdout != ext.stdout {
-			t.Errorf("%q:\nstack check public = %+v\nstack-public check = %+v", args, core, ext)
-		}
-	}
-}
-
-// checkRepoNoChdir is checkRepo for tests that run binaries with the fixture's environment.
-func checkRepoNoChdir(t *testing.T, msg string) *gittest.Repo {
-	t.Helper()
-	r := gittest.New(t)
-	r.Commit("chore: base")
-	r.Tag("base")
-	r.Commit(msg)
-	return r
 }

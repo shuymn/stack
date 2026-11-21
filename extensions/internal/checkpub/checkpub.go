@@ -1,5 +1,5 @@
-// Package checkpub implements the scan of stack-public (and of the core's `stack check public`, which
-// it copies): it scans what a push or a PR would publish for local paths and private terms.
+// Package checkpub implements the scan of stack-public, moved from the v10 core's
+// `stack check public`: it scans what a push or a PR would publish for local paths and private terms.
 //
 // For each commit of a `<base>..<head>` range it scans the message, the destination paths and the
 // added lines of the patch, then the PR title, body and branch. Git output is streamed line by line

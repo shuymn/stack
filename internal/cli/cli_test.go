@@ -8,11 +8,15 @@ import (
 	"flag"
 	"fmt"
 	"maps"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/shuymn/stack/internal/ghargs"
+	"github.com/shuymn/stack/internal/gittest"
 )
 
 type result struct {
@@ -38,6 +42,16 @@ func runIn(t *testing.T, home string, env map[string]string, args ...string) res
 		Version: "v1.2.3",
 	})
 	return result{code, stdout.String(), stderr.String()}
+}
+
+func writeFile(t *testing.T, path string, data []byte) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestVersion(t *testing.T) {
@@ -109,6 +123,58 @@ func TestUnknownCommand(t *testing.T) {
 	}
 }
 
+// TestCommands is C20: the core names no content check and does not link one in, and the
+// extensions other than stack-guard reach core only through the protocol and the CLI.
+func TestCommands(t *testing.T) {
+	r := run(t, nil, "help")
+	if r.code != exitOK || strings.Contains(r.stdout, "check public") {
+		t.Errorf("usage names check public: %q", r.stdout)
+	}
+	r = run(t, nil, "check", "public", "a..b")
+	if r.code != exitUsage || !strings.Contains(r.stderr, `unknown command "check"`) {
+		t.Errorf("check public = %+v, want unknown command, exit 2", r)
+	}
+
+	// goList prints, per package of pattern, its import path and its non-test dependencies.
+	goList := func(pattern string) [][]string {
+		t.Helper()
+		cmd := exec.CommandContext(t.Context(), "go", "list",
+			"-f", "{{.ImportPath}}{{range .Deps}} {{.}}{{end}}", pattern)
+		cmd.Dir = filepath.Join("..", "..")
+		cmd.Env = gittest.CleanEnv(os.Environ())
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("go list %s: %v", pattern, err)
+		}
+		var pkgs [][]string
+		for line := range strings.Lines(string(out)) {
+			pkgs = append(pkgs, strings.Fields(line))
+		}
+		return pkgs
+	}
+	const mod = "github.com/shuymn/stack/"
+	stack := goList("./cmd/stack")
+	if len(stack) != 1 {
+		t.Fatalf("go list ./cmd/stack = %q", stack)
+	}
+	for _, d := range stack[0][1:] {
+		if strings.Contains(d, "tdewolff") || strings.HasPrefix(d, mod+"extensions/") ||
+			d == mod+"internal/publictext" || d == mod+"internal/checkpub" {
+			t.Errorf("stack depends on %s", d)
+		}
+	}
+	for _, pkg := range goList("./extensions/...") {
+		if strings.HasPrefix(pkg[0], mod+"extensions/guard") {
+			continue
+		}
+		for _, d := range pkg[1:] {
+			if strings.HasPrefix(d, mod+"internal/") {
+				t.Errorf("%s depends on core package %s", pkg[0], d)
+			}
+		}
+	}
+}
+
 // TestRouting checks that `run` reaches its command with interspersed flags. Not parallel: it
 // changes the working directory, so the dry run's git reads see no repository.
 func TestRouting(t *testing.T) {
@@ -128,7 +194,6 @@ func TestArgumentErrors(t *testing.T) {
 		{"pr", "merge", "12", "abc", "--admin"},
 		{"pr", "merge", "12", "abc", "--subject"},
 		{"pr", "merge", "12", "abc", "--squash=maybe"},
-		{"check", "public"},
 		{"run", "nope"},
 		{"run"},
 	}
