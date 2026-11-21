@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -22,10 +23,12 @@ import (
 
 var (
 	errReplayStage    = errors.New("replay request stage differs from the command's stage")
-	errReplayConflict = errors.New("--replay cannot be combined with --range or --prompt-file")
-	errEmptyFlag      = errors.New("empty value")
-	errExpect         = errors.New("aggregate status differs from the replay's expect")
-	errBlocked        = errors.New("block")
+	errReplayConflict = errors.New("--replay cannot be combined with --range, --prompt-file, " +
+		"--title-file, --body-file or --branch")
+	errOutboundOnly = errors.New("only for the outbound stage")
+	errEmptyFlag    = errors.New("empty value")
+	errExpect       = errors.New("aggregate status differs from the replay's expect")
+	errBlocked      = errors.New("block")
 )
 
 // runRun implements `stack run <stage>`: it runs the stage's extensions and prints the aggregate as
@@ -36,11 +39,17 @@ func runRun(ctx context.Context, env Env, inv invocation) error {
 	set := map[string]bool{}
 	inv.flags.Visit(func(f *flag.Flag) { set[f.Name] = true })
 	// Arguments first, so a usage error does not depend on the config.
-	if set["replay"] && (set["range"] || set["prompt-file"]) {
+	if set["replay"] && slices.ContainsFunc(requestFlags, func(n string) bool { return set[n] }) {
 		return errReplayConflict
 	}
-	// An explicitly empty value is not an omitted flag: `--range=` must not fall back.
-	for _, name := range []string{"range", "prompt-file"} {
+	for _, name := range textFlags {
+		if set[name] && stage != ext.StageOutbound {
+			return fmt.Errorf("--%s: %w", name, errOutboundOnly)
+		}
+	}
+	// An explicitly empty value is not an omitted flag: `--range=` must not fall back, and an
+	// empty file name names no file. `--branch=` is an empty branch.
+	for _, name := range []string{"range", "prompt-file", "title-file", "body-file"} {
 		if set[name] && inv.flags.Lookup(name).Value.String() == "" {
 			return fmt.Errorf("--%s: %w", name, errEmptyFlag)
 		}
@@ -82,6 +91,12 @@ func runRun(ctx context.Context, env Env, inv invocation) error {
 	}
 	return nil
 }
+
+// requestFlags build a live request, so --replay, which sends the fixture's request, excludes them.
+var requestFlags = []string{"range", "prompt-file", "title-file", "body-file", "branch"}
+
+// textFlags give the texts of an outbound request.
+var textFlags = []string{"title-file", "body-file", "branch"}
 
 // lazyConfig loads the config, printing its warnings, at most once.
 type lazyConfig struct {
@@ -160,14 +175,39 @@ func buildRequest(
 	if err != nil {
 		return nil, err
 	}
-	if stage == ext.StageEntry || stage == ext.StageMerged {
+	switch stage {
+	case ext.StageEntry, ext.StageMerged:
 		req.Kits = runKits(ctx, env, lc)
+	case ext.StageOutbound:
+		if err := setOutboundTexts(env, inv, &req); err != nil {
+			return nil, err
+		}
 	}
 	request, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("encode request: %w", err)
 	}
 	return request, nil
+}
+
+// setOutboundTexts sets the title from --title-file, the body from --body-file and the branch from
+// --branch; each is "" when absent.
+func setOutboundTexts(env Env, inv invocation, req *ext.Request) error {
+	texts := map[string]string{"branch": inv.flags.Lookup("branch").Value.String()}
+	for _, name := range []string{"title-file", "body-file"} {
+		arg := inv.flags.Lookup(name).Value.String()
+		if arg == "" {
+			continue
+		}
+		text, err := input.ReadFile(env.Home, arg)
+		if err != nil {
+			return fmt.Errorf("--%s: %w", name, err)
+		}
+		texts[name] = text
+	}
+	title, body, branch := texts["title-file"], texts["body-file"], texts["branch"]
+	req.Title, req.Body, req.Branch = &title, &body, &branch
+	return nil
 }
 
 func writeDryRun(w io.Writer, stage string, plans []ext.Plan, request []byte) error {
