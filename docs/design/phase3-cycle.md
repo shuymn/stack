@@ -10,9 +10,9 @@ Extensions talk to core only through `docs/architecture.md` §3 "Extension Proto
 sources are cited as `dotfiles:<path>:<line>` at `shuymn/dotfiles` main as of this design (paths under
 `scripts/kaizen/` are cited by file name alone); `K` is the legacy state directory `~/.claude/kaizen`.
 
-`docs/design/core-stages.md` (architecture v11) replaces `stack check public` in §3.1, §3.4 step 12.5 and I10 with
-`stack-public check` (same arguments and exit codes; a missing binary is `failed:check`, §6 and C21 there);
-`gh_model` (§3.2) is unchanged.
+`docs/design/core-stages.md` (architecture v11) moved improve's public check (§3.1, §3.4 step 12.5, I10) from
+`stack check public` to `stack-public check` (same arguments and exit codes; a missing binary is `failed:check`, §6
+and C21 there); `gh_model` (§3.2) is unchanged.
 
 ## 0. Principles
 
@@ -154,8 +154,8 @@ extensions/
 **Go, in this module.** Both binaries build with `go install ./extensions/observe/cmd/stack-observe
 ./extensions/improve/cmd/stack-improve` (with `GOBIN` set to the directory that holds `stack`), so the installed
 names match core's `stack-<name>` discovery. They are `package main` + library like `cmd/stack` + `internal/`, run
-under `scripts/test` and the Windows CI job, and need no runtime besides the tools they call (`stack`, `git`, `gh`,
-`claude`, `codex`, `sqlite3`). Boundary: `.golangci.yaml` enables `depguard` with two rules: non-test files under
+under `scripts/test` and the Windows CI job, and need no runtime besides the tools they call (`stack`,
+`stack-public`, `git`, `gh`, `claude`, `codex`, `sqlite3`). Boundary: `.golangci.yaml` enables `depguard` with two rules: non-test files under
 `extensions/` may not import `github.com/shuymn/stack/internal/...`, and nothing under `cmd/` or `internal/` may
 import `github.com/shuymn/stack/extensions/...`. Extension tests may import `internal/proc/proctest` and
 `internal/gittest` (test infrastructure only). The run lock uses `github.com/gofrs/flock`, already a module
@@ -434,7 +434,7 @@ step's timeout is cut to what the deadline leaves after the reserve and the late
     outcome after the model that does not publish stores the redacted `git diff` (≤ 256 KiB, then cut with a
     marker) in the stamp's `patch` field; `proposal:*` and `failed:*` answer `warn`, and each outcome of this run
     that answers `warn` also adds an `improve-outcome` finding with its reason.
-12. **Commit, pin, verify, check, publish.** Every `git` improve starts, and `stack check public`, runs with
+12. **Commit, pin, verify, check, publish.** Every `git` improve starts, and `stack-public check`, runs with
     `GIT_NO_REPLACE_OBJECTS=1`, so a replace ref cannot show the checks other objects than the push sends.
     1. *Commit.* Body = model body + `Evidence:` list of the cited URLs (`improve.py:617-621`); title and body are
        written to files once, after the commit and its hooks (step 12.2), and never rebuilt. The model and every
@@ -458,9 +458,10 @@ step's timeout is cut to what the deadline leaves after the reserve and the late
        wrote is stopped before any commit (step 9); a value a commit hook adds is already in the local commit and is
        stopped before Codex and the push. Removing the worktree drops the commit from every ref, but its objects can stay
        in the shared object store until Git prunes them; erasing them is not part of this guarantee (they never
-       leave the machine). `stack check public` alone does not cover it: a credential is not a private term.
-    5. *Public check.* `stack check public <base_oid>..<oid> --title-file <t> --body-file <b> --branch improve/<W>`.
-       Exit 1 → `proposal:public-check` (hits, redacted, in the stamp), exit 2 → `failed:check`.
+       leave the machine). `stack-public check` alone does not cover it: a credential is not a private term.
+    5. *Public check.* `stack-public check <base_oid>..<oid> --title-file <t> --body-file <b> --branch improve/<W>`.
+       Exit 1 → `proposal:public-check` (hits, redacted, in the stamp), exit 2, or a `stack-public` that is missing or
+       does not start → `failed:check`.
     6. *Codex check* (§9 D1). If less time is left than the Codex timeout plus push and PR (§3.9) →
        `failed:deadline`. `codex exec --ephemeral --skip-git-repo-check -s read-only -c approval_policy=never -C
        <empty dir> --output-schema <verdict schema> -o <verdict> -` with the legacy review prompt
@@ -479,7 +480,7 @@ step's timeout is cut to what the deadline leaves after the reserve and the late
        `failed:push` with the porcelain line. `origin` is the target's own remote; a `pushurl` differing from the
        fetch URL is the owner's own configuration and is not checked.
     9. *PR.* `gh pr create --repo github.com/<slug> --base <default> --head improve/<W> --title <title>
-       --body-file -` with the checked bytes on stdin: right after `stack check public`, the title and body files
+       --body-file -` with the checked bytes on stdin: right after `stack-public check`, the title and body files
        are read once, and if they no longer hold what was written → `proposal:public-check`; Codex and gh get those
        bytes and no file is read again. Then one read; create gets at most half
        of the PR step it shares with the read, so the read always has time. The read is made once per run whatever create returned and reused by step 10: `gh api 'repos/<slug>/pulls?state=all&head=<owner>:improve/<W>&per_page=100'`.
@@ -871,7 +872,7 @@ I7); no remote write without enough time (I14); one run at a time (I5); a Codex 
 | I7 | Improve shall run `claude -p` with the stated flags, settings and environment, cwd = worktree, the brief, `writing.md` and the task on stdin, and kill it at its timeout. | `improve.TestModelInvocation` | argv exact (`--setting-sources user`; no `--restricted`, `--safe-mode`, `--add-dir`; `--settings` sets `autoMemoryEnabled: false` and blocks reads and writes); env has `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`; stdin contains brief ids and `writing.md`; timeout → `failed:timeout`, cost `unknown`, child gone |
 | I8 | If the worktree has anything but modifications of existing `100644` files within `paths`, or evidence ids are not ⊆ brief ids, then improve shall record a proposal with the patch and not commit. | `improve.TestProposal` | add, delete, rename, mode change, type change (file → symlink), out-of-scope path, `**` boundary (`skills` vs `skills2`), empty diff with `change: true`, foreign id; `git rev-parse HEAD` still `base_oid` and no new ref |
 | I9 | Improve shall commit with the repository's hooks and the owner's config, without `--no-verify`. | `improve.TestCommit` (real git) | a failing `commit-msg` hook → `failed:commit` with patch; argv has no `--no-verify` |
-| I10 | Improve shall verify the pinned OID as one commit on `base_oid` changing only allowed existing files, run the credential check, `stack check public` and the Codex check on that OID and the fixed title and body, and push exactly that OID. | `improve.TestCommitScope` (real git), `improve.TestPublicCheck` (real `stack` built in `TestMain`) | a `pre-commit` hook that succeeds after staging an extra file → `proposal:commit-scope`, no push; HEAD moved after the check → pushed OID is still the pinned one; a `post-commit` hook that replaces the commit (with the extra file) by an allowed one through `git replace` → still `proposal:commit-scope`; a `pre-push` hook that rewrites the body file → `gh pr create` gets the checked body; real `stack check public` with a dummy private term in the diff, message, title or body → `proposal:public-check`; exit 2 → `failed:check` |
+| I10 | Improve shall verify the pinned OID as one commit on `base_oid` changing only allowed existing files, run the credential check, `stack-public check` and the Codex check on that OID and the fixed title and body, and push exactly that OID. | `improve.TestCommitScope` (real git), `improve.TestPublicCheck` (real `stack-public` built in `TestMain`) | a `pre-commit` hook that succeeds after staging an extra file → `proposal:commit-scope`, no push; HEAD moved after the check → pushed OID is still the pinned one; a `post-commit` hook that replaces the commit (with the extra file) by an allowed one through `git replace` → still `proposal:commit-scope`; a `pre-push` hook that rewrites the body file → `gh pr create` gets the checked body; real `stack-public check` with a dummy private term in the diff, message, title or body → `proposal:public-check`; exit 2, or `stack-public` absent from `PATH` → `failed:check` with no Codex call, push or `gh pr create` |
 | I11 | Improve shall push only the pinned OID to a new `improve/<YYYY-Www>`, create one PR with the checked title and body, record a PR only when one read matches head repo, ref, OID and base, and on an ambiguous result report only what read-only queries show. | `improve.TestPublish` (bare remote + fake gh) | branch exists at an ancestor of `oid` (fast-forward possible) → `failed:push`; branch already at `oid` (Git's up-to-date, exit 0) → `failed:push`, no `gh pr create`; argv has `--porcelain --no-follow-tags --recurse-submodules=no`, and an annotated tag reachable from `oid`, with `push.followTags=true`, is not in the bare remote; `gh pr create` argv and body bytes equal the checked bytes; create succeeds but the read shows a fork's PR or another base at `oid` → `publish-unknown` with the read in the stamp; create fails but the read shows the matching PR → `pr <url>`; two matching PRs → `publish-unknown`; branch only → `pushed-no-pr`; query fails → `publish-unknown`; a matching PR without a usable `html_url` → `publish-unknown`; no second create; the fake gh log shows zero PR reads when the push is clearly rejected or up to date, and exactly one when create ran or the push result was ambiguous |
 | I12 | Improve shall remove its worktree on every path after creating it, and shall report, not remove, a leftover worktree of an earlier run. | `improve.TestCleanup` | after success, proposal, failure; a leftover directory under `work/` → `leftover-worktree` finding naming it, directory and its files untouched; a leftover at this run's own `<work>/<W>` (same week, stamp released by the owner) → `git worktree add` fails, `failed:worktree`, the directory and its files untouched and no `worktree remove` in the git log; removal happens before the unbilled stamp removal; an add that registers the worktree and then fails (`post-checkout` hook) → worktree and metadata removed; with one minute left the removal still runs |
 | I13 | Improve shall refuse to publish when an endpoint credential appears in the tree, the model output, or the pinned commit, title and body, and shall never write a credential value to a commit it makes from model output, a PR, a remote, the stamp, stderr or context. | `improve.TestCredential` | dummy `ANTHROPIC_AUTH_TOKEN` in env and in a settings fixture; model writes it into a file or the title → `proposal:credential`, no commit; a `commit-msg` hook appends it to the message, or a `pre-commit` hook writes it into an allowed file → local commit exists, `proposal:credential`, no `stack check public`, no codex, no push, no ref points at the commit after cleanup; the same with a `diff.external` that prints nothing configured → still `proposal:credential`; fake `claude` prints it only on stderr, or fake `gh repo view` prints the settings value → outcome unchanged, value redacted; a new file holding it past 8 MiB across a 64 KiB read → `proposal:credential`; an unreadable new file → `proposal:credential`; grep of the stamp, captured stderr, the response and the bare remote finds no dummy value |

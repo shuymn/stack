@@ -12,7 +12,7 @@ A minimal, extensible Go CLI (`stack`) for personal AI coding agent orchestratio
   - `stack check public`: Detects local paths (macOS/Linux/Windows) and private terms in commit ranges or PR/issue bodies.
   - `stack budget status`: Reports instruction prose sizes and attention item counts (display-only).
   - `stack run <entry|outbound|merged|cycle>`: Runs optional extensions over a uniform `stdin/stdout JSON` contract, with `--dry-run` and `--replay`.
-- **Optional extensions (`extensions/`):** `observe`, stateless `improve`, and opt-out System One (`jev`) extensions.
+- **Optional extensions (`extensions/`):** `observe`, stateless `improve`, `public` (`stack-public`: the local-path and private-term check as an `outbound` extension, and `stack-public check <base>..<head>` for direct callers such as improve; reads `~/.config/stack/safety.toml`), and opt-out System One (`jev`) extensions.
 - **Fixtures (`fixtures/`):** Positive/negative cases for `--replay` verification.
 
 ## Install
@@ -22,8 +22,11 @@ runs, also on the job's `PATH`), so core finds each extension as `stack-<name>`:
 
 ```sh
 GOBIN="$HOME/.local/bin" go install ./cmd/stack ./extensions/observe/cmd/stack-observe ./extensions/improve/cmd/stack-improve \
-  ./extensions/auditdue/cmd/stack-audit-due
+  ./extensions/auditdue/cmd/stack-audit-due ./extensions/public/cmd/stack-public
 ```
+
+Improve's public check runs `stack-public check`, so install `stack-public` before (re)installing `stack-improve`;
+without it improve stops at `failed:check`.
 
 `stack-improve` embeds `extensions/improve/writing.md`; reinstall after changing it.
 
