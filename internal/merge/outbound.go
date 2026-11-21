@@ -67,18 +67,23 @@ func checkMessage(ctx context.Context, o Options) error {
 	}
 	eo := s.Ext
 	eo.Timeout = s.timeout
-	results := map[string]ext.Result{}
+	// Stream answers once per plan that is not skipped, in plan order, so each result is judged
+	// at its own position, also when a name is listed twice.
+	var results []ext.Result
 	ext.Stream(ctx, eo, ext.StageOutbound, request, plans, func(r ext.Result) {
-		results[r.Name] = r
+		results = append(results, r)
 	})
 
 	var lines []string
 	for _, p := range plans {
-		r, ran := results[p.Name]
-		switch {
-		case !ran:
+		if p.Skipped() {
 			lines = append(lines, fmt.Sprintf("outbound could not check the message: %s: "+
 				"not installed (%s%s not found on PATH)", p.Name, ext.Prefix, p.Name))
+			continue
+		}
+		r := results[0]
+		results = results[1:]
+		switch {
 		case r.Error != "":
 			lines = append(lines, fmt.Sprintf("outbound could not check the message: %s: %s",
 				p.Name, r.Error))

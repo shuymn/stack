@@ -242,6 +242,33 @@ func TestOutboundMessageRequest(t *testing.T) {
 	}
 }
 
+// TestOutboundMessageRepeatedName: a name listed twice is judged at each position, so a later pass
+// of the same name does not hide an earlier block. The first `gate` resolves to a fake that blocks,
+// the second to one that passes.
+func TestOutboundMessageRepeatedName(t *testing.T) {
+	t.Parallel()
+	f := newChecks(t, map[string]proctest.Response{
+		"gate":  {Stdout: `{"status":"block","context":"STOP"}`},
+		"clean": {Stdout: `{"status":"pass"}`},
+	})
+	checks := f.checks([]string{"gate", "gate"}, time.Minute)
+	checks.resolve = func(names []string) []ext.Plan {
+		return []ext.Plan{
+			{Name: names[0], Path: f.fakes["gate"]},
+			{Name: names[1], Path: f.fakes["clean"]},
+		}
+	}
+	out := run(t, okResponses(), setup{fakeGit: true, opts: func(o *Options) {
+		o.Merge.Body = new("ok")
+		o.MessageChecks = checks
+	}})
+	assertMessageOutcome(t, out, []string{"outbound blocked: gate: STOP"}, "")
+	if len(f.calls(t, "gate")) != 1 || len(f.calls(t, "clean")) != 1 {
+		t.Errorf("calls: gate %d, clean %d; want one each", len(f.calls(t, "gate")),
+			len(f.calls(t, "clean")))
+	}
+}
+
 // TestOutboundMessageDeadline: a check that hangs past the stage deadline refuses the merge before
 // gh, and the next check is left unstarted.
 func TestOutboundMessageDeadline(t *testing.T) {
