@@ -21,12 +21,30 @@ From this checkout, install `stack` and the extensions into one absolute directo
 runs, also on the job's `PATH`), so core finds each extension as `stack-<name>`:
 
 ```sh
-GOBIN="$HOME/.local/bin" go install ./cmd/stack ./extensions/observe/cmd/stack-observe ./extensions/improve/cmd/stack-improve \
-  ./extensions/auditdue/cmd/stack-audit-due ./extensions/public/cmd/stack-public
+GOBIN="$HOME/.local/bin" go install ./cmd/stack ./extensions/observe/cmd/stack-observe \
+  ./extensions/auditdue/cmd/stack-audit-due
 ```
 
-Improve's public check runs `stack-public check`, so install `stack-public` before (re)installing `stack-improve`;
-without it improve stops at `failed:check`.
+Install `stack-public` and `stack-improve` last, in this order. Improve's public check runs `stack-public check`,
+which reads `~/.config/stack/safety.toml` instead of the `[safety]` table of `config.toml`; a private-terms file
+named only in `config.toml` would otherwise drop out of the check.
+
+1. Write `~/.config/stack/safety.toml` from the effective `[safety]` table of `~/.config/stack/config.toml`, with
+   the same keys (`secrets`, `private_terms`, `deny_pencil_generate`). Compare custom `secrets` paths, a custom
+   `private_terms` file and an explicit `deny_pencil_generate = false`; a key left out takes the same default in
+   both files. Keep the table in `config.toml` too: `stack` still reads it.
+2. Install `stack-public` and check that `command -v stack-public` finds it both in an interactive shell and on the
+   scheduled job's `PATH`:
+
+   ```sh
+   GOBIN="$HOME/.local/bin" go install ./extensions/public/cmd/stack-public
+   ```
+
+3. Only then install or reinstall `stack-improve`; without `stack-public` it stops at `failed:check`:
+
+   ```sh
+   GOBIN="$HOME/.local/bin" go install ./extensions/improve/cmd/stack-improve
+   ```
 
 `stack-improve` embeds `extensions/improve/writing.md`; reinstall after changing it.
 
