@@ -118,11 +118,8 @@ func TestBinary(t *testing.T) {
 		assertAllow(t, "string", guardBin(t, home, pencil(`Print("Generate()")`)))
 	})
 
-	// Both hooks run on a matching call (§4.5): an input matching raw-merge and secrets is denied
-	// by each. The core hook keeps the secrets rule first until §7 PR 10 removes it, so its reason
-	// names secrets until then; a raw merge alone is denied by core only.
 	// With no home, `~` entries match by their home-relative components and `~` operands are not
-	// resolved; both hooks decide alike.
+	// resolved; the core hook, which keeps only the raw-merge rule, denies none of them.
 	t.Run("HOME unset", func(t *testing.T) {
 		cwd := t.TempDir()
 		for _, c := range []struct {
@@ -143,22 +140,25 @@ func TestBinary(t *testing.T) {
 			if got := deniedBy(g, "stack-guard"); got != c.rule {
 				t.Errorf("%s: stack-guard rule %q (%+v), want %q", c.name, got, g, c.rule)
 			}
-			if got := deniedBy(k, "stack guard"); got != c.rule {
-				t.Errorf("%s: core rule %q (%+v), want %q", c.name, got, k, c.rule)
+			if k.stdout != "" {
+				t.Errorf("%s: core output %q, want none", c.name, k.stdout)
 			}
-			if c.rule == "" && (g.stdout != "" || k.stdout != "") {
-				t.Errorf("%s: want no output, stack-guard %q, core %q", c.name, g.stdout, k.stdout)
+			if c.rule == "" && g.stdout != "" {
+				t.Errorf("%s: want no output, stack-guard %q", c.name, g.stdout)
 			}
 		}
 	})
 
+	// Both hooks run on a matching call (§4.5): an input matching raw-merge and secrets is denied
+	// by each, stack-guard for secrets and core for raw-merge (§4.9); a raw merge alone is denied by
+	// core only.
 	t.Run("two hooks", func(t *testing.T) {
 		home, cwd := t.TempDir(), t.TempDir()
 		both := bashPayload(t, cwd, "gh pr merge 1 && cat .dev.vars")
 		assertDeny(t, "stack-guard on raw-merge and secrets", guardBin(t, home, both), RuleSecrets)
-		if rule := deniedBy(coreBin(t, home, both), "stack guard"); rule != RuleSecrets {
+		if rule := deniedBy(coreBin(t, home, both), "stack guard"); rule != "raw-merge" {
 			t.Errorf(
-				"core on raw-merge and secrets: rule %q, want a stack guard (secrets) deny",
+				"core on raw-merge and secrets: rule %q, want a stack guard (raw-merge) deny",
 				rule,
 			)
 		}

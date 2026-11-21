@@ -26,8 +26,8 @@ const (
 // TestGolden runs each testdata/<name>.json PreToolUse payload through the built stack-guard and
 // compares its stdout with testdata/<name>.golden (empty for allow) and its exit code with 0. Files
 // under testdata/<name>.files/ are copied into the payload's cwd first. Each deny's reason names its
-// rule. The core binary, which keeps these rules until their removal (docs/design/core-stages.md §7
-// PR 10), must answer the same with its own prefix, so the two copies cannot drift apart.
+// rule. The core binary, which keeps only the raw-merge rule (docs/design/core-stages.md §4.5),
+// answers none of them.
 func TestGolden(t *testing.T) {
 	payloads, err := filepath.Glob(filepath.Join("testdata", "*.json"))
 	if err != nil || len(payloads) == 0 {
@@ -76,14 +76,8 @@ func TestGolden(t *testing.T) {
 				t.Errorf("golden %q: allow- names must have empty output, others a deny", name)
 			}
 
-			rc := coreBin(t, home, stdin)
-			if rc.code != 0 {
-				t.Errorf("core hook exit %d, want 0 (stderr %q)", rc.code, rc.stderr)
-			}
-			core := back.Replace(rc.stdout)
-			wantCore := strings.Replace(string(want), `"stack-guard (`, `"stack guard (`, 1)
-			if core != wantCore {
-				t.Errorf("core hook drifted from stack-guard:\n%s\nwant:\n%s", core, wantCore)
+			if rc := coreBin(t, home, stdin); rc.code != 0 || rc.stdout != "" {
+				t.Errorf("core hook = %+v, want exit 0 and no output", rc)
 			}
 		})
 	}

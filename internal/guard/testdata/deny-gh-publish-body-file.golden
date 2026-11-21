@@ -1,1 +1,0 @@
-{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"stack guard (gh-publish): gh pr create publishes the local path \"@@LOCAL@@/\" through --body-file file pr.md. Use repository-relative paths or leave the path out."}}

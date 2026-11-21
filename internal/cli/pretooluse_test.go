@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
-
-	"github.com/shuymn/stack/internal/paths"
 )
 
 func runHookStdin(t *testing.T, home, stdin string) result {
@@ -47,57 +47,60 @@ type denyOutput struct {
 	} `json:"hookSpecificOutput"`
 }
 
-func assertDeny(t *testing.T, name string, r result, rule string) {
+// assertRawMergeDeny checks for the core hook's raw-merge deny.
+func assertRawMergeDeny(t *testing.T, name string, r result) {
 	t.Helper()
 	var out denyOutput
 	if r.code != exitOK || json.Unmarshal([]byte(r.stdout), &out) != nil ||
 		out.HookSpecificOutput.HookEventName != "PreToolUse" ||
 		out.HookSpecificOutput.PermissionDecision != "deny" ||
-		!strings.Contains(out.HookSpecificOutput.PermissionDecisionReason, "("+rule+")") {
-		t.Errorf("%s = %+v, want a %s deny", name, r, rule)
+		!strings.HasPrefix(out.HookSpecificOutput.PermissionDecisionReason,
+			"stack guard (raw-merge): ") {
+		t.Errorf("%s = %+v, want a stack guard (raw-merge) deny", name, r)
 	}
 }
 
-func writeConfig(t *testing.T, home, text string) {
+func assertNoOutput(t *testing.T, name string, r result) {
 	t.Helper()
-	p := paths.ConfigFile(home)
-	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(p, []byte(text), 0o600); err != nil {
-		t.Fatal(err)
+	if r.code != exitOK || r.stdout != "" || r.stderr != "" {
+		t.Errorf("%s = %+v, want exit 0 and no output", name, r)
 	}
 }
 
-// TestHookConfigFallback is the CLI half of C2: under a broken config the hook applies the §5
-// defaults, so the secrets and Pencil rules still deny.
-func TestHookConfigFallback(t *testing.T) {
-	read := func(cwd string) string {
-		return payload(t, cwd, "Read", map[string]any{"file_path": ".dev.vars"})
-	}
-	pencil := func(cwd string) string {
-		return payload(t, cwd, "mcp__pencil__execute",
-			map[string]any{"input": `await Generate({prompt: "icon"})`})
-	}
-	for name, cfg := range map[string]string{
-		"no config":    "",
-		"syntax error": "version = 1\n[safety\nsecrets = []\n",
-		"version 2":    "version = 2\n[safety]\nsecrets = []\ndeny_pencil_generate = false\n",
-		"type error":   "version = 1\n[safety]\nsecrets = \"x\"\ndeny_pencil_generate = false\n",
-	} {
-		home := t.TempDir()
-		if cfg != "" {
-			writeConfig(t, home, cfg)
-		}
-		cwd := t.TempDir()
-		assertDeny(t, name+": Read secret", runHookStdin(t, home, read(cwd)), "secrets")
-		assertDeny(t, name+": Pencil Generate", runHookStdin(t, home, pencil(cwd)), "pencil")
-	}
-
+// TestPreToolUseCoreOnly is C18: the core hook denies raw merges and allows everything else, also
+// the inputs the stack-guard rules deny, under the old [safety] defaults and a config that still
+// has them.
+func TestPreToolUseCoreOnly(t *testing.T) {
 	home := t.TempDir()
-	writeConfig(t, home, "version = 1\n[safety]\ndeny_pencil_generate = false\n")
-	if r := runHookStdin(t, home, pencil(t.TempDir())); r.code != exitOK || r.stdout != "" {
-		t.Errorf("valid config disabling the Pencil rule = %+v, want allow", r)
+	writeFile(t, filepath.Join(home, ".config", "stack", "config.toml"), []byte(
+		"[safety]\nsecrets = [\".dev.vars\"]\ndeny_pencil_generate = true\n"))
+	local := strings.Join([]string{"", "home", "dev"}, "/") // a local path, built at run time
+	root := "/"
+	if runtime.GOOS == "windows" {
+		root = "C:/"
+	}
+	for _, h := range []string{home, t.TempDir(), ""} {
+		cwd := t.TempDir()
+		writeFile(t, filepath.Join(cwd, ".dev.vars"), []byte("KEY=x\n"))
+		for name, stdin := range map[string]string{
+			"Read .dev.vars": payload(t, cwd, "Read", map[string]any{"file_path": ".dev.vars"}),
+			"Grep .dev.vars": payload(t, cwd, "Grep",
+				map[string]any{"pattern": "KEY", "path": ".dev.vars"}),
+			"cat .dev.vars": payload(t, cwd, "Bash", map[string]any{"command": "cat .dev.vars"}),
+			"rm -rf root":   payload(t, cwd, "Bash", map[string]any{"command": "rm -rf " + root}),
+			"rm -rf ~":      payload(t, cwd, "Bash", map[string]any{"command": "rm -rf ~"}),
+			"gh publish": payload(t, cwd, "Bash",
+				map[string]any{"command": "gh pr create -t t --body 'see " + local + "/x'"}),
+			"Pencil Generate": payload(t, cwd, "mcp__pencil__execute",
+				map[string]any{"input": `await Generate({prompt: "icon"})`}),
+		} {
+			assertNoOutput(t, name+" (home "+strconv.Quote(h)+")", runHookStdin(t, h, stdin))
+		}
+		merge := payload(t, cwd, "Bash", map[string]any{"command": "gh pr merge 1"})
+		assertRawMergeDeny(t, "gh pr merge 1", runHookStdin(t, h, merge))
+		// An input matching raw-merge and a moved rule is denied by core for raw-merge (§4.9).
+		both := payload(t, cwd, "Bash", map[string]any{"command": "cat .dev.vars && gh pr merge 1"})
+		assertRawMergeDeny(t, "secret read and raw merge", runHookStdin(t, h, both))
 	}
 }
 
@@ -107,142 +110,49 @@ func TestPreToolUseMalformedStdin(t *testing.T) {
 		"x",
 		"[]",
 		`{"tool_name":`,
-		`{"tool_name":"Bash","tool_input":"rm -rf /"}`,
-		`{"tool_name":"Read","tool_input":{"file_path":7}}`,
+		`{"tool_name":"Bash","tool_input":"gh pr merge 1"}`,
+		`{"tool_name":"Bash","tool_input":{"command":7}}`,
 		"\x00\xff",
 	} {
-		r := runHookStdin(t, t.TempDir(), stdin)
-		if r.code != exitOK || r.stdout != "" || r.stderr != "" {
-			t.Errorf("stdin %q = %+v, want exit 0 and no output", stdin, r)
-		}
+		assertNoOutput(t, strconv.Quote(stdin), runHookStdin(t, t.TempDir(), stdin))
 	}
 }
 
-// TestPreToolUseRegressions runs review findings through the CLI entry point. rule "" means allow.
+// TestPreToolUseRegressions runs review findings through the CLI entry point.
 func TestPreToolUseRegressions(t *testing.T) {
-	home := strings.Join([]string{"", "home", "dev"}, "/") // a local path, built at run time
 	tests := []struct {
-		name, tool string
-		input      map[string]any
-		rule       string
+		name, command string
+		deny          bool
 	}{
 		{
-			"guarded call in an if body after cd", "Bash",
-			map[string]any{"command": "if cd docs; then gh pr merge -R o/r 1 --squash; fi"},
-			"raw-merge",
+			"guarded call in an if body after cd",
+			"if cd docs; then gh pr merge -R o/r 1 --squash; fi",
+			true,
 		},
-		{
-			"empty here-string before a secret read", "Bash",
-			map[string]any{"command": `: <<< ""; cat .dev.vars`},
-			"secrets",
-		},
-		{
-			"heredoc on a compound command reaches its gh call",
-			"Bash",
-			map[string]any{
-				"command": "{ gh issue comment 1 --body-file -; } <<'EOF'\nsee " + home + "/x\nEOF",
-			},
-			"gh-publish",
-		},
-		{
-			"heredoc on an if clause reaches its gh call",
-			"Bash",
-			map[string]any{
-				"command": "if true; then gh issue comment 1 -F -; fi <<'EOF'\nsee " + home + "/x\nEOF",
-			},
-			"gh-publish",
-		},
-		{
-			"ANSI-C quoted body", "Bash",
-			map[string]any{"command": "gh pr create -t t -b $'see\\n" + home + "/x'"},
-			"gh-publish",
-		},
-		{
-			"command -v only looks the name up", "Bash",
-			map[string]any{"command": "command -v gh pr merge 1 && command -V rm -rf ~"},
-			"",
-		},
-		{
-			"command without -v still runs it", "Bash",
-			map[string]any{"command": "command -p gh pr merge 1"},
-			"raw-merge",
-		},
-		{
-			"negated Grep glob excludes the secret", "Grep",
-			map[string]any{"pattern": "KEY", "glob": "!**/.dev.vars"},
-			"",
-		},
-		{
-			"negated Grep glob does not hide a secret path", "Grep",
-			map[string]any{"pattern": "KEY", "path": ".dev.vars", "glob": "!*.md"},
-			"secrets",
-		},
-		{
-			"positive pattern after a negated one in a comma list", "Grep",
-			map[string]any{"pattern": "KEY", "glob": "!*.md,.dev.vars"},
-			"secrets",
-		},
-		{
-			"positive pattern after a negated one in a space list", "Grep",
-			map[string]any{"pattern": "KEY", "glob": "!*.md **/.dev.vars*"},
-			"secrets",
-		},
-		{
-			"negated patterns only", "Grep",
-			map[string]any{"pattern": "KEY", "glob": "!**/.dev.vars, !*.md"},
-			"",
-		},
-		{
-			"negated brace group stays whole", "Grep",
-			map[string]any{"pattern": "KEY", "glob": "!{*.md,.dev.vars}"},
-			"",
-		},
-		{
-			"gh api help merges nothing", "Bash",
-			map[string]any{"command": "gh api --help -X PUT repos/o/r/pulls/1/merge"},
-			"",
-		},
-		{
-			"gh pr create help publishes nothing", "Bash",
-			map[string]any{"command": "gh pr create -h --body '" + home + "/x'"},
-			"",
-		},
-		{
-			"gh pr create dry run publishes nothing", "Bash",
-			map[string]any{"command": "gh pr create --dry-run -t t --body '" + home + "/x'"},
-			"",
-		},
-		{
-			"gh pr create dry run turned off publishes", "Bash",
-			map[string]any{"command": "gh pr create --dry-run=false -t t --body '" + home + "/x'"},
-			"gh-publish",
-		},
-		{
-			"Pencil call through a constant index", "mcp__pencil__execute",
-			map[string]any{"input": `await api["Generate"]({prompt: "logo"})`},
-			"pencil",
-		},
+		{"command -v only looks the name up", "command -v gh pr merge 1", false},
+		{"command without -v still runs it", "command -p gh pr merge 1", true},
+		{"gh api help merges nothing", "gh api --help -X PUT repos/o/r/pulls/1/merge", false},
 	}
 	for _, tt := range tests {
-		r := runHookStdin(t, t.TempDir(), payload(t, t.TempDir(), tt.tool, tt.input))
-		if tt.rule == "" {
-			if r.code != exitOK || r.stdout != "" {
-				t.Errorf("%s = %+v, want allow", tt.name, r)
-			}
-			continue
+		r := runHookStdin(t, t.TempDir(),
+			payload(t, t.TempDir(), "Bash", map[string]any{"command": tt.command}))
+		if tt.deny {
+			assertRawMergeDeny(t, tt.name, r)
+		} else {
+			assertNoOutput(t, tt.name, r)
 		}
-		assertDeny(t, tt.name, r, tt.rule)
 	}
 }
 
 // TestPreToolUseInheritedStdinCwd checks that `( cd sub && … ) < F` reads F where the shell opens
 // it, the outer cwd, not the cwd of the command inside.
 func TestPreToolUseInheritedStdinCwd(t *testing.T) {
-	home := strings.Join([]string{"", "home", "dev"}, "/") // a local path, built at run time
-	const cmd = "(cd docs && gh issue comment 1 -F -) < body.md"
+	mutation := `{"query":"mutation { mergePullRequest(input: {}) { clientMutationId } }"}`
+	read := `{"query":"query { viewer { login } }"}`
+	const cmd = "(cd docs && gh api graphql --input -) < in.json"
 	for name, files := range map[string]map[string]string{
-		"gh-publish": {"body.md": "see " + home + "/x\n", "docs/body.md": "clean\n"},
-		"":           {"body.md": "clean\n", "docs/body.md": "see " + home + "/x\n"},
+		"merge": {"in.json": mutation, "docs/in.json": read},
+		"read":  {"in.json": read, "docs/in.json": mutation},
 	} {
 		cwd := t.TempDir()
 		for rel, content := range files {
@@ -255,42 +165,16 @@ func TestPreToolUseInheritedStdinCwd(t *testing.T) {
 			}
 		}
 		r := runHookStdin(t, t.TempDir(), payload(t, cwd, "Bash", map[string]any{"command": cmd}))
-		if name == "" {
-			if r.code != exitOK || r.stdout != "" {
-				t.Errorf("clean outer body.md = %+v, want allow", r)
-			}
-			continue
-		}
-		assertDeny(t, "local path in the outer body.md", r, name)
-	}
-}
-
-// TestPreToolUseStdinDupOrClose checks that `<&N`, `0<&N` and `<&-` replace an inherited stdin
-// with an unknown one instead of keeping the stale `< F`.
-func TestPreToolUseStdinDupOrClose(t *testing.T) {
-	home := strings.Join([]string{"", "home", "dev"}, "/") // a local path, built at run time
-	cwd := t.TempDir()
-	for rel, content := range map[string]string{"body.md": "see " + home + "/x\n", "clean.md": "ok\n"} {
-		if err := os.WriteFile(filepath.Join(cwd, rel), []byte(content), 0o600); err != nil {
-			t.Fatal(err)
+		if name == "merge" {
+			assertRawMergeDeny(t, "merge mutation in the outer in.json", r)
+		} else {
+			assertNoOutput(t, "query in the outer in.json", r)
 		}
 	}
-	for _, redir := range []string{"<&3", "0<&3", "<&-"} {
-		cmd := "{ gh issue comment 1 -F - " + redir + "; } 3<clean.md <body.md"
-		r := runHookStdin(t, t.TempDir(), payload(t, cwd, "Bash", map[string]any{"command": cmd}))
-		if r.code != exitOK || r.stdout != "" {
-			t.Errorf("%q = %+v, want allow", cmd, r)
-		}
-	}
-	r := runHookStdin(t, t.TempDir(), payload(t, cwd, "Bash",
-		map[string]any{"command": "{ gh issue comment 1 -F - 2<&3; } 3<clean.md <body.md"}))
-	assertDeny(t, "a dup of another fd keeps stdin", r, "gh-publish")
 }
 
 func TestPreToolUseAllowsOrdinaryCommand(t *testing.T) {
 	r := runHookStdin(t, t.TempDir(),
 		payload(t, t.TempDir(), "Bash", map[string]any{"command": "git status"}))
-	if r.code != exitOK || r.stdout != "" || r.stderr != "" {
-		t.Errorf("git status = %+v, want exit 0 and no output", r)
-	}
+	assertNoOutput(t, "git status", r)
 }

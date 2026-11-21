@@ -1,6 +1,6 @@
-// Package guard decides a Claude Code PreToolUse payload: it denies the hard-boundary hazards of
-// docs/design/phase2-core.md §4.3 and allows everything else. Rules run in table order (secrets, gh
-// publish, raw merge, rmroot, pencil); the first deny wins.
+// Package guard decides a Claude Code PreToolUse payload: it denies a raw merge, which would skip
+// `stack pr merge` and its merged stage, and allows everything else (docs/design/core-stages.md
+// §4.5). The other hard-boundary rules live in the stack-guard hook (extensions/guard).
 package guard
 
 import (
@@ -8,25 +8,17 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/shuymn/stack/internal/config"
 	"github.com/shuymn/stack/internal/ghargs"
 	"github.com/shuymn/stack/internal/hookio"
 	"github.com/shuymn/stack/internal/paths"
 	"github.com/shuymn/stack/internal/shell"
 )
 
-// Rule names, as they appear in deny reasons.
-const (
-	RuleSecrets   = "secrets"
-	RuleGhPublish = "gh-publish"
-	RuleRawMerge  = "raw-merge"
-	RuleRmRoot    = "rmroot"
-	RulePencil    = "pencil"
-)
+// RuleRawMerge is the rule name, as it appears in deny reasons.
+const RuleRawMerge = "raw-merge"
 
 // Options carries what a decision needs besides the payload.
 type Options struct {
-	Config config.Config
 	// Home is the user's home directory, or "" when unknown (then `~` entries and operands are not
 	// resolved).
 	Home string
@@ -45,39 +37,19 @@ func deny(rule, format string, args ...any) (Decision, bool) {
 	}, true
 }
 
-// Decide returns the deny for the payload, or false to allow it.
+// Decide returns the deny for the payload, or false to allow it. Only a Bash command can merge.
 func Decide(in hookio.Input, opts Options) (Decision, bool) {
-	switch in.ToolName {
-	case "Read", "NotebookRead", "Grep", "Glob":
-		return secretsFileTool(in, opts)
-	case "Bash":
-		var tin struct {
-			Command string `json:"command"`
-		}
-		if json.Unmarshal(in.ToolInput, &tin) != nil || tin.Command == "" {
-			return Decision{}, false
-		}
-		return decideBash(tin.Command, in.CWD, opts)
-	case "mcp__pencil__execute":
-		return pencil(in.ToolInput, opts.Config)
-	default:
+	if in.ToolName != "Bash" {
 		return Decision{}, false
 	}
-}
-
-func decideBash(command, cwd string, opts Options) (Decision, bool) {
-	parsed := shell.Parse(command, cwd, opts.Home)
-	if d, ok := secretsBash(command, parsed.Handoffs, opts); ok {
-		return d, true
+	var tin struct {
+		Command string `json:"command"`
 	}
-	gh := ghCalls(parsed.Calls)
-	if d, ok := ghPublish(gh, opts); ok {
-		return d, true
+	if json.Unmarshal(in.ToolInput, &tin) != nil || tin.Command == "" {
+		return Decision{}, false
 	}
-	if d, ok := rawMerge(gh, opts); ok {
-		return d, true
-	}
-	return rmRoot(parsed.Calls, opts)
+	parsed := shell.Parse(tin.Command, in.CWD, opts.Home)
+	return rawMerge(ghCalls(parsed.Calls), opts)
 }
 
 // ghCall is a gh call with its parsed argv.

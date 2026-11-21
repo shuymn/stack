@@ -11,18 +11,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/shuymn/stack/internal/config"
 	"github.com/shuymn/stack/internal/hookio"
 )
 
 var update = flag.Bool("update", false, "rewrite the .golden files of TestGolden")
 
-// Placeholders in testdata: the payload's cwd, the home directory, and a local path publictext
-// reports. They keep machine paths out of the repository.
+// Placeholders in testdata: the payload's cwd and the home directory. They keep machine paths out
+// of the repository.
 const (
-	phCwd   = "@@CWD@@"
-	phHome  = "@@HOME@@"
-	phLocal = "@@LOCAL@@"
+	phCwd  = "@@CWD@@"
+	phHome = "@@HOME@@"
 )
 
 // TestGolden runs each testdata/<name>.json PreToolUse payload through the decision and the hook
@@ -37,8 +35,7 @@ func TestGolden(t *testing.T) {
 		name := strings.TrimSuffix(filepath.Base(p), ".json")
 		t.Run(name, func(t *testing.T) {
 			home, cwd := t.TempDir(), t.TempDir()
-			repl := strings.NewReplacer(phCwd, jsonPath(cwd), phHome, jsonPath(home),
-				phLocal, strings.TrimSuffix(localPath(), "/notes.md"))
+			repl := strings.NewReplacer(phCwd, jsonPath(cwd), phHome, jsonPath(home))
 			copyFiles(t, filepath.Join("testdata", name+".files"), cwd, repl)
 
 			raw, err := os.ReadFile(p)
@@ -50,7 +47,7 @@ func TestGolden(t *testing.T) {
 				t.Fatalf("payload: %v", err)
 			}
 			var out []byte
-			if d, ok := Decide(in, Options{Config: config.Defaults(), Home: home}); ok {
+			if d, ok := Decide(in, Options{Home: home}); ok {
 				if !strings.Contains(name, d.Rule) {
 					t.Errorf("deny by %s, but the golden name %q names another rule", d.Rule, name)
 				}
@@ -58,8 +55,8 @@ func TestGolden(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			got := strings.NewReplacer(jsonPath(cwd), phCwd, jsonPath(home), phHome,
-				strings.TrimSuffix(localPath(), "/notes.md"), phLocal).Replace(string(out))
+			got := strings.NewReplacer(jsonPath(cwd), phCwd, jsonPath(home), phHome).
+				Replace(string(out))
 
 			golden := filepath.Join("testdata", name+".golden")
 			if *update {
