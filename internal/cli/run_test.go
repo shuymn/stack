@@ -77,7 +77,7 @@ func TestRunNoExtensions(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	for stage, skipped := range map[string]string{
 		"entry":    `["jev-router"]`,
-		"outbound": `["jev-semantic"]`,
+		"outbound": `["public","jev-semantic"]`,
 		"cycle":    `["observe","jev-classify","improve"]`,
 	} {
 		r := run(t, nil, "run", stage)
