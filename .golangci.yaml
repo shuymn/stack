@@ -35,10 +35,10 @@ linters:
         extension-tests:
           list-mode: lax
           files:
-            - "**/extensions/**/*_test.go"
+            - "**/extensions/**_test.go"
           allow:
-            - github.com/shuymn/stack/internal/proc/proctest
-            - github.com/shuymn/stack/internal/gittest
+            - github.com/shuymn/stack/internal/proc/proctest$
+            - github.com/shuymn/stack/internal/gittest$
           deny:
             - pkg: github.com/shuymn/stack/internal
               desc: extension tests may import only proctest and gittest from core
@@ -46,6 +46,7 @@ linters:
           files:
             - "**/cmd/**"
             - "**/internal/**"
+            - "!**/extensions/**"
           deny:
             - pkg: github.com/shuymn/stack/extensions
               desc: core must not depend on extensions
