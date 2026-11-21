@@ -2,7 +2,6 @@ version: "2"
 linters:
   default: all
   disable:
-    - depguard
     - cyclop
     - exhaustruct
     - exhaustruct_v5
@@ -24,6 +23,32 @@ linters:
     - gomodguard
     - testpackage
   settings:
+    depguard:
+      rules:
+        extensions:
+          files:
+            - "**/extensions/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/shuymn/stack/internal
+              desc: extensions use only the extension protocol and the documented CLI
+        extension-tests:
+          list-mode: lax
+          files:
+            - "**/extensions/**/*_test.go"
+          allow:
+            - github.com/shuymn/stack/internal/proc/proctest
+            - github.com/shuymn/stack/internal/gittest
+          deny:
+            - pkg: github.com/shuymn/stack/internal
+              desc: extension tests may import only proctest and gittest from core
+        core:
+          files:
+            - "**/cmd/**"
+            - "**/internal/**"
+          deny:
+            - pkg: github.com/shuymn/stack/extensions
+              desc: core must not depend on extensions
     nolintlint:
       require-explanation: true
       require-specific: true
