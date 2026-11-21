@@ -112,21 +112,31 @@ func TestPrMerge(t *testing.T) {
 
 // TestPrMergeMergedStage covers the wiring of C5 and C7 through the CLI: [stages].merged from
 // config.toml, extensions found on PATH, the session's kits, and today's output when nothing is
-// runnable, with the `.kits` lock held so that a read would show. Not parallel: it changes PATH.
+// runnable, with the `.kits` lock held so that a read would show. PATH holds only the test's fakes,
+// so no host `stack-*` binary can start. Not parallel: it changes PATH.
 func TestPrMergeMergedStage(t *testing.T) {
 	longStageDeadlines(t)
 	gh := fakeGh(t, prHead)
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
 	bin := t.TempDir()
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	// pr merge's one git call finds the top level of the fixture repository it runs in.
+	proctest.InstallAt(t, bin, "git", proctest.Scenario{Responses: []proctest.Response{{
+		Args: []string{"rev-parse", "--show-toplevel"}, Stdout: filepath.ToSlash(cwd) + "\n",
+	}}})
+	t.Setenv("PATH", filepath.Dir(gh)+string(os.PathListSeparator)+bin)
 	demo := fakeExt(t, bin, "demo", `{"status":"warn","context":"  DUE\n"}`)
 	home := t.TempDir()
 	withID := map[string]string{"STACK_SESSION_ID": "s1"}
-	if res := runIn(t, home, withID, "kit", "open", "a"); res.code != exitOK {
-		t.Fatalf("kit open = %+v", res)
-	}
 	config := func(merged string) {
 		writeFile(t, filepath.Join(home, ".config", "stack", "config.toml"),
 			[]byte("[stages]\nentry = []\nmerged = ["+merged+"]\n"))
+	}
+	config(`"demo"`)
+	if res := runIn(t, home, withID, "kit", "open", "a"); res.code != exitOK {
+		t.Fatalf("kit open = %+v", res)
 	}
 	merge := func() result {
 		t.Helper()
@@ -134,7 +144,6 @@ func TestPrMergeMergedStage(t *testing.T) {
 	}
 	line := "MERGED " + prHead + " " + prMergeOID + "\n"
 
-	config(`"demo"`)
 	res := merge()
 	if res.code != exitOK || res.stdout != line+"[extension demo: warn: warn]\nDUE\n" ||
 		res.stderr != "[demo] note\n" {
