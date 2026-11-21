@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shuymn/stack/internal/gittest"
 	"github.com/shuymn/stack/internal/proc/proctest"
 )
 
@@ -198,36 +200,78 @@ func TestProtocol(t *testing.T) {
 				proctest.Response{Stdout: claudeOut(change("e1"), 1.0, zeroUsage(1))},
 				false,
 			)
-			ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
-			defer cancel()
-			c := exec.CommandContext(ctx, built.stack, "run", "cycle", "--ext", "improve")
-			c.Dir = f.repo.Dir
-			c.Env = f.processEnv(now, built.dir, tools)
-			var stdout bytes.Buffer
-			c.Stdout, c.Stderr = &stdout, f.stderr
-			if err := c.Run(); err != nil {
-				t.Fatalf("stack run: %v\n%s\n%s", err, stdout.String(), f.stderr)
-			}
-			var agg struct {
-				Stage   string `json:"stage"`
-				Status  string `json:"status"`
-				Results []struct {
-					Name     string            `json:"name"`
-					Status   string            `json:"status"`
-					Error    string            `json:"error"`
-					Context  string            `json:"context"`
-					Findings []json.RawMessage `json:"findings"`
-				} `json:"results"`
-			}
-			if err := json.Unmarshal(stdout.Bytes(), &agg); err != nil {
-				t.Fatalf("aggregate %q: %v", stdout.String(), err)
-			}
-			if agg.Stage != "cycle" || agg.Status != StatusPass || len(agg.Results) != 1 ||
-				agg.Results[0].Name != "improve" || agg.Results[0].Error != "" ||
-				agg.Results[0].Status != StatusPass || agg.Results[0].Findings == nil ||
-				!strings.Contains(agg.Results[0].Context, tc.context) {
-				t.Fatalf("aggregate = %s\nstderr %s", stdout.String(), f.stderr)
-			}
+			runCycle(t, f.repo.Dir, f.processEnv(now, built.dir, tools), f.stderr, tc.context)
 		})
+	}
+}
+
+// runCycle runs `stack run cycle --ext improve` in dir and requires one adopted improve result
+// that passes with want in its context.
+func runCycle(t *testing.T, dir string, env []string, stderr io.Writer, want string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	defer cancel()
+	c := exec.CommandContext(ctx, built.stack, "run", "cycle", "--ext", "improve")
+	c.Dir = dir
+	c.Env = env
+	var stdout bytes.Buffer
+	c.Stdout, c.Stderr = &stdout, stderr
+	if err := c.Run(); err != nil {
+		t.Fatalf("stack run: %v\n%s", err, stdout.String())
+	}
+	var agg struct {
+		Stage   string `json:"stage"`
+		Status  string `json:"status"`
+		Results []struct {
+			Name     string            `json:"name"`
+			Status   string            `json:"status"`
+			Error    string            `json:"error"`
+			Context  string            `json:"context"`
+			Findings []json.RawMessage `json:"findings"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &agg); err != nil {
+		t.Fatalf("aggregate %q: %v", stdout.String(), err)
+	}
+	if agg.Stage != "cycle" || agg.Status != StatusPass || len(agg.Results) != 1 ||
+		agg.Results[0].Name != "improve" || agg.Results[0].Error != "" ||
+		agg.Results[0].Status != StatusPass || agg.Results[0].Findings == nil ||
+		!strings.Contains(agg.Results[0].Context, want) {
+		t.Fatalf("aggregate = %s", stdout.String())
+	}
+}
+
+// P9: on every runner, including Windows, a disabled improve answers pass through core and
+// starts none of the tools it would call.
+func TestProtocolDisabled(t *testing.T) {
+	t.Parallel()
+	needBuilt(t)
+	r := gittest.New(t)
+	home, tools := t.TempDir(), t.TempDir()
+	fakes := make([]string, 0, 3)
+	for _, name := range []string{"gh", "claude", "codex"} {
+		fakes = append(fakes, proctest.InstallAt(t, tools, name,
+			proctest.Scenario{Responses: []proctest.Response{{}}}))
+	}
+	env := slices.DeleteFunc(slices.Clone(r.Env), func(kv string) bool {
+		name, _, _ := strings.Cut(kv, "=")
+		return strings.EqualFold(name, "HOME") || strings.EqualFold(name, "USERPROFILE")
+	})
+	for i, kv := range env {
+		if name, path, ok := strings.Cut(kv, "="); ok && strings.EqualFold(name, "PATH") {
+			env[i] = name + "=" + strings.Join([]string{built.dir, tools, path},
+				string(os.PathListSeparator))
+		}
+	}
+	env = append(env, "HOME="+home, "USERPROFILE="+home)
+	var stderr bytes.Buffer
+	runCycle(t, r.Dir, env, &stderr, "improve disabled")
+	for _, fake := range fakes {
+		if calls := proctest.Calls(t, fake); len(calls) != 0 {
+			t.Fatalf("%s ran: %+v", filepath.Base(fake), calls)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(home, ".local")); !os.IsNotExist(err) {
+		t.Fatalf("state written: %v", err)
 	}
 }

@@ -37,6 +37,7 @@ func TestBilling(t *testing.T) {
 		}
 		return string(mustJSON(t, r))
 	}
+	zeroFailure := failure(0, usage("", 0))
 	for _, tc := range []struct {
 		name        string
 		setup       func(f *fx)
@@ -45,6 +46,27 @@ func TestBilling(t *testing.T) {
 		removed     bool
 		costUnknown bool
 	}{
+		{
+			name: "zero result then garbage", stdout: zeroFailure + "\n{broken",
+			outcome: "failed:model-result", costUnknown: true,
+		},
+		{name: "zero no-change then garbage", stdout: claudeOut(map[string]any{
+			"change": false, "evidence_ids": []string{}, "summary": "s", "watch": "w",
+			"commit_message": "", "pr_title": "", "pr_body": "",
+		}, 0, usage("", 0)) + "\n{broken", outcome: "failed:model-result", costUnknown: true},
+		{
+			name: "zero result then killed", outcome: "failed:model-result", costUnknown: true,
+			setup: func(f *fx) {
+				f.fake("claude", &fakeSpec{
+					Print: []fakePrint{{Contains: "-p", Stdout: zeroFailure}}, Kill: true,
+				}, proctest.Response{})
+			},
+		},
+		{
+			name: "zero result without type", stdout: strings.Replace(zeroFailure,
+				`"type":"result",`, "", 1),
+			outcome: "failed:model-result", costUnknown: true,
+		},
 		{
 			name: "start failure", setup: func(f *fx) { delete(f.tools, "claude") },
 			outcome: "failed:model-start", removed: true,
@@ -214,6 +236,16 @@ func TestModelInvocation(t *testing.T) {
 		}
 		if strings.Contains(in, "caps") || strings.Contains(in, "budget.json") {
 			t.Fatalf("writing.md still has the caps rules:\n%s", in)
+		}
+		// P5, P11: the launcher logs what the first real run must show.
+		for _, want := range []string{
+			`claude argv: ["-p" "--setting-sources" "user"`,
+			"claude env: CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 set, CLAUDE_CONFIG_DIR removed; timeout ",
+			"claude wall time ", "codex timeout ", "codex wall time ",
+		} {
+			if !strings.Contains(f.stderr.String(), want) {
+				t.Fatalf("stderr lacks %q:\n%s", want, f.stderr)
+			}
 		}
 	})
 	t.Run("timeout", func(t *testing.T) {
@@ -387,8 +419,14 @@ func TestCleanup(t *testing.T) {
 			f.repo.Config("core.hooksPath", hooks)
 		}, "failed:commit"},
 		{"success", func(*fx) {}, "pr https://github.com/o/r/pull/1"},
+		// git registers the worktree, then reports the failing hook.
+		{"add fails after registering", func(f *fx) {
+			hooks := filepath.Join(f.repo.Root, "hooks")
+			writeHook(t, hooks, "post-checkout", "exit 1")
+			f.repo.Config("core.hooksPath", hooks)
+		}, "failed:worktree"},
 		{"unbilled", func(f *fx) {
-			f.fake("claude", nil, proctest.Response{Exit: 1, Stdout: `{"subtype":"error",` +
+			f.fake("claude", nil, proctest.Response{Exit: 1, Stdout: `{"type":"result","subtype":"error",` +
 				`"total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0,` +
 				`"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}`})
 		}, "failed:model-result"},

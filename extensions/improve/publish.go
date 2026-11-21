@@ -8,7 +8,11 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
+
+// createShare: gh pr create gets at most 1/createShare of the step it shares with the PR read.
+const createShare = 2
 
 // verdictSchema is the Codex verdict schema (legacy improve.py VERDICT).
 const verdictSchema = `{"type":"object","additionalProperties":false,"required":["high"],` +
@@ -96,21 +100,24 @@ func (a *attempt) publish() *stop {
 		return halt("failed:deadline", "not enough time left to push and open the PR")
 	}
 	pushed, line := a.push(ref)
+	a.hook("pushed")
 	if pushed == pushRejected {
 		return halt("failed:push", "%s", line)
 	}
 	if pushed == pushAmbiguous {
 		return a.ambiguous(branch, nil, "push result unclear: "+line)
 	}
-	// 12.9 PR.
+	// 12.9 PR: create and the read share one step, and create gets at most half of it, so the
+	// read always has time. The body goes on stdin from the checked bytes; no file is read again.
+	slotEnd := s.o.clock().Add(min(s.o.limits.step, s.left()-s.o.limits.reserve))
 	create := s.child("gh", command{
 		args: []string{
 			"pr", "create", "--repo", s.slug, "--base", s.branchBase, "--head", branch,
-			"--title", a.title, "--body-file", a.bodyFile,
+			"--title", a.title, "--body-file", "-",
 		},
-		env: s.ghEnv(), timeout: s.o.limits.step,
+		env: s.ghEnv(), stdin: []byte(a.body), timeout: slotEnd.Sub(s.o.clock()) / createShare,
 	})
-	read := a.readPRs(branch)
+	read := a.readPRs(branch, slotEnd.Sub(s.o.clock()))
 	if read.err == nil {
 		if m := a.matching(read.prs, branch); len(m) == 1 {
 			a.setPR(m[0])
@@ -182,6 +189,7 @@ func (a *attempt) publicCheck(branch string) *stop {
 			"--body-file", a.bodyFile, "--branch", branch,
 		},
 		dir: a.worktree, timeout: s.o.limits.step,
+		env: append(slices.Clone(s.o.Env), noReplace),
 	})
 	switch {
 	case out.ok():
@@ -200,8 +208,8 @@ func (a *attempt) publicCheck(branch string) *stop {
 // codex is step 12.6: a read-only review of the pinned candidate; it can only stop.
 func (a *attempt) codex() *stop {
 	s := a.s
-	avail := s.left() - s.o.limits.reserve - s.o.limits.pushPR
-	if avail < s.o.limits.codexMin {
+	avail := func() time.Duration { return s.left() - s.o.limits.reserve - s.o.limits.pushPR }
+	if avail() < s.o.limits.codexMin {
 		return halt("failed:deadline", "not enough time left for the Codex check")
 	}
 	diff := s.git(a.worktree, "diff", "--text", "--no-ext-diff", "--no-textconv", "--no-color",
@@ -219,14 +227,23 @@ func (a *attempt) codex() *stop {
 	}
 	verdict := filepath.Join(a.tmp, "verdict.json")
 	prompt := fmt.Sprintf(review, a.briefTxt, a.message, a.title, a.body, string(diff.stdout))
+	a.hook("codex-input")
+	// The timeout is what is left after preparing the input.
+	timeout := avail()
+	if timeout <= 0 {
+		return halt("failed:deadline", "not enough time left for the Codex check")
+	}
+	s.logf("codex timeout %s", timeout.Round(time.Second))
 	a.st.CodexRuns++
+	start := time.Now()
 	out := s.child("codex", command{
 		args: []string{
 			"exec", "--ephemeral", "--skip-git-repo-check", "-s", "read-only", "-c",
 			"approval_policy=never", "-C", empty, "--output-schema", schema, "-o", verdict, "-",
 		},
-		dir: empty, stdin: []byte(prompt), timeout: avail,
+		dir: empty, stdin: []byte(prompt), timeout: timeout,
 	})
+	s.logf("codex wall time %s (%s)", time.Since(start).Round(time.Second), out.describe())
 	if !out.ok() {
 		return halt("proposal:codex", "codex %s", out.describe())
 	}
@@ -270,11 +287,15 @@ const (
 	pushAmbiguous
 )
 
-// push is step 12.8: only the pinned OID, to a new branch, confirmed by the porcelain line.
+// push is step 12.8: only the pinned OID, to a new branch, confirmed by the porcelain line. It
+// runs in the worktree, so a pre-push hook never runs in the owner's checkout, and leaves a full
+// step for the PR.
 func (a *attempt) push(ref string) (pushResult, string) {
 	s := a.s
-	out := s.git(s.repo, "push", "--porcelain", "--no-follow-tags", "--recurse-submodules=no",
-		"origin", "--force-with-lease="+ref+":", a.oid+":"+ref)
+	c := s.gitCmd(a.worktree, "push", "--porcelain", "--no-follow-tags",
+		"--recurse-submodules=no", "origin", "--force-with-lease="+ref+":", a.oid+":"+ref)
+	c.timeout = min(c.timeout, s.left()-s.o.limits.reserve-s.o.limits.step)
+	out := s.child("git", c)
 	line := ""
 	for l := range strings.SplitSeq(string(out.stdout), "\n") {
 		f := strings.Split(l, "\t")
@@ -302,11 +323,11 @@ type prRead struct {
 }
 
 // readPRs is the one PR read of step 12.9.
-func (a *attempt) readPRs(branch string) prRead {
+func (a *attempt) readPRs(branch string, timeout time.Duration) prRead {
 	s := a.s
 	owner, _, _ := strings.Cut(s.slug, "/")
 	var prs []pr
-	if err := s.ghJSON(&prs, "api",
+	if err := s.ghJSONWithin(timeout, &prs, "api",
 		"repos/"+s.slug+"/pulls?state=all&head="+owner+":"+branch+"&per_page=100"); err != nil {
 		return prRead{err: err}
 	}
@@ -316,12 +337,22 @@ func (a *attempt) readPRs(branch string) prRead {
 	return prRead{prs: prs}
 }
 
-// matching returns the PRs that match head repo, ref, OID and base.
+// matching returns the PRs that match head repo, ref, OID and base and have a usable URL.
 func (a *attempt) matching(prs []pr, branch string) []pr {
 	return slices.DeleteFunc(slices.Clone(prs), func(p pr) bool {
 		return !strings.EqualFold(p.headRepo(), a.s.slug) || p.Head.Ref != branch ||
-			p.Head.SHA != a.oid || p.Base.Ref != a.s.branchBase
+			p.Head.SHA != a.oid || p.Base.Ref != a.s.branchBase || !a.prURL(p.HTMLURL)
 	})
+}
+
+// prURL reports whether u is the URL of a pull request of the target.
+func (a *attempt) prURL(u string) bool {
+	prefix := "https://github.com/" + a.s.slug + "/pull/"
+	if len(u) <= len(prefix) || !strings.EqualFold(u[:len(prefix)], prefix) {
+		return false
+	}
+	_, err := strconv.ParseUint(u[len(prefix):], 10, 64)
+	return err == nil
 }
 
 func (a *attempt) setPR(p pr) {
@@ -334,7 +365,7 @@ func (a *attempt) setPR(p pr) {
 func (a *attempt) ambiguous(branch string, read *prRead, note string) *stop {
 	s := a.s
 	if read == nil {
-		r := a.readPRs(branch)
+		r := a.readPRs(branch, s.o.limits.step)
 		read = &r
 	}
 	prs, ok := read.prs, read.err == nil

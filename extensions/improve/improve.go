@@ -19,6 +19,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gofrs/flock"
 )
@@ -41,12 +42,17 @@ const (
 	unknownCost = "unknown"
 	detailLen   = 300
 	redactMark  = "[redacted]"
+	// maxContext and maxFindings keep the encoded response far below core's 1 MiB limit; the
+	// stamp keeps the full detail.
+	maxContext  = 16 << 10
+	maxFindings = 50
 )
 
 // Time budget (design §3.9).
 const (
 	defaultBudget     = 29 * time.Minute
 	defaultReserve    = 60 * time.Second
+	defaultFinal      = 10 * time.Second
 	defaultModelMin   = 5 * time.Minute
 	defaultAfterModel = 9 * time.Minute
 	defaultCodexMin   = 5 * time.Minute
@@ -56,7 +62,10 @@ const (
 
 // limits are the time budget; zero values take the §3.9 defaults. Tests shorten them.
 type limits struct {
-	budget, reserve      time.Duration
+	budget, reserve time.Duration
+	// final is what cleanup leaves for the stamp and the response: the worktree removal runs inside
+	// the reserve, not before it.
+	final                time.Duration
 	modelMin, afterModel time.Duration
 	codexMin, pushPR     time.Duration
 	// step bounds each pre-model gh and git call and each after-model step (commit, checks, push,
@@ -90,8 +99,8 @@ type Options struct {
 	goos   string
 	clock  func() time.Time
 	limits limits
-	// hook, when set, runs at named points of the attempt (worktree, model, check, codex,
-	// cleanup).
+	// hook, when set, runs at named points of the attempt (worktree, model, check, codex-input,
+	// codex, pushed, cleanup).
 	hook func(point string)
 }
 
@@ -139,6 +148,7 @@ func (o Options) withDefaults() Options {
 	}{
 		{&l.budget, defaultBudget},
 		{&l.reserve, defaultReserve},
+		{&l.final, defaultFinal},
 		{&l.modelMin, defaultModelMin},
 		{&l.afterModel, defaultAfterModel},
 		{&l.codexMin, defaultCodexMin},
@@ -167,6 +177,8 @@ type state struct {
 	week, stampPath        string
 	stateDir               string
 	tools                  map[string]string
+	settings               userSettings
+	settingsErr            error
 }
 
 // Run answers one cycle request. It never answers block.
@@ -199,16 +211,23 @@ func (s *state) guardedRun() (string, string) {
 
 // respond builds the redacted response; any finding makes it warn.
 func (s *state) respond(status, text string) Response {
-	findings := make([]Finding, 0, len(s.findings))
+	findings := make([]Finding, 0, min(len(s.findings), maxFindings))
 	for _, f := range s.findings {
+		if len(findings) == maxFindings {
+			s.logf("%d more findings not listed", len(s.findings)-maxFindings)
+			break
+		}
 		findings = append(findings, Finding{
-			Kind: f.Kind, Where: s.redact(f.Where), Detail: cut(s.redact(f.Detail), detailLen),
+			Kind: f.Kind, Where: cut(s.redact(f.Where)),
+			Detail: cut(s.redact(f.Detail)),
 		})
 	}
 	if len(findings) > 0 {
 		status = StatusWarn
 	}
-	return Response{Status: status, Context: s.redact(text), Findings: findings}
+	return Response{
+		Status: status, Context: cutBytes(s.redact(text), maxContext), Findings: findings,
+	}
 }
 
 func (s *state) finding(kind, where, detail string) {
@@ -253,6 +272,9 @@ func (s *state) run() (string, string) {
 	if s.repo == "" {
 		return StatusPass, "not in a repository"
 	}
+	// The credential set is complete before the first child, so every stderr line is masked.
+	s.settings, s.settingsErr = readSettings(s.o.Home)
+	s.creds = append(s.creds, s.settings.creds...)
 	if status, text, ok := s.target(); !ok {
 		return status, text
 	}
@@ -274,10 +296,15 @@ func (s *state) run() (string, string) {
 
 // target is step 1: origin, repository visibility and the settings boundary.
 func (s *state) target() (string, string, bool) {
-	out := s.git(s.repo, "config", "--get", "remote.origin.url")
-	s.slug = slugOf(string(out.stdout))
-	if !out.ok() || s.slug == "" {
-		return StatusPass, "target is not a public GitHub repository (origin is not on GitHub)", false
+	// Exactly one URL: with several, fetch would use the first and push every one of them.
+	out := s.git(s.repo, "config", "--get-all", "remote.origin.url")
+	urls := strings.Split(strings.TrimSuffix(string(out.stdout), "\n"), "\n")
+	if out.ok() && len(urls) == 1 {
+		s.slug = slugOf(urls[0])
+	}
+	if s.slug == "" {
+		return StatusPass, "target is not a public GitHub repository (origin is not exactly one GitHub URL)",
+			false
 	}
 	var view struct {
 		NameWithOwner    string `json:"nameWithOwner"`
@@ -297,15 +324,13 @@ func (s *state) target() (string, string, bool) {
 		return StatusWarn, "gh repo view returned no usable default branch", false
 	}
 	s.branchBase = view.DefaultBranchRef.Name
-	settings, err := readSettings(s.o.Home)
-	if err != nil {
-		return StatusWarn, err.Error(), false
+	if s.settingsErr != nil {
+		return StatusWarn, s.settingsErr.Error(), false
 	}
-	if settings.additional {
+	if s.settings.additional {
 		return StatusWarn, "~/.claude/settings.json lists permissions.additionalDirectories, " +
 			"which would widen the model's file-tool boundary; improve stopped", false
 	}
-	s.creds = append(s.creds, settings.creds...)
 	return "", "", true
 }
 
@@ -318,8 +343,11 @@ func validBranch(b string) bool {
 func (s *state) locked() (string, string) {
 	// 3. Base and config.
 	ref := "refs/remotes/origin/" + s.branchBase
+	// --refmap= stops the configured remote.origin.fetch from updating other refs; --no-prune and
+	// --no-prune-tags override fetch.prune and fetch.pruneTags.
 	if out := s.git(s.repo, "fetch", "--no-tags", "--no-write-fetch-head",
-		"--no-recurse-submodules", "origin", "+refs/heads/"+s.branchBase+":"+ref); !out.ok() {
+		"--no-recurse-submodules", "--refmap=", "--no-prune", "--no-prune-tags", "origin",
+		"+refs/heads/"+s.branchBase+":"+ref); !out.ok() {
 		return StatusWarn, "git fetch of origin " + s.branchBase + " failed: " + out.describe()
 	}
 	out := s.git(s.repo, "rev-parse", "--verify", "--end-of-options", ref+"^{commit}")
@@ -471,8 +499,8 @@ func (s *state) tool(name string) (string, error) {
 	return p, nil
 }
 
-// child runs a tool with a timeout cut to the deadline minus the reserve, and passes its stderr,
-// redacted, to improve's stderr.
+// child runs a tool with a timeout cut to the deadline minus the reserve (c.reserve when set), and
+// passes its stderr, redacted, to improve's stderr.
 func (s *state) child(name string, c command) outcome {
 	p, err := s.tool(name)
 	if err != nil {
@@ -483,7 +511,11 @@ func (s *state) child(name string, c command) outcome {
 	if c.env == nil {
 		c.env = s.o.Env
 	}
-	c.timeout = min(c.timeout, s.left()-s.o.limits.reserve)
+	reserve := s.o.limits.reserve
+	if c.reserve > 0 {
+		reserve = c.reserve
+	}
+	c.timeout = min(c.timeout, s.left()-reserve)
 	if c.timeout <= 0 {
 		return outcome{
 			exit:     -1,
@@ -502,11 +534,20 @@ func (s *state) child(name string, c command) outcome {
 
 // git runs git in dir.
 func (s *state) git(dir string, args ...string) outcome {
-	return s.child("git", command{
-		args: append([]string{"-C", dir}, args...), timeout: s.o.limits.step,
-		env: append(slices.Clone(s.o.Env), "GIT_TERMINAL_PROMPT=0"),
-	})
+	return s.child("git", s.gitCmd(dir, args...))
 }
+
+// gitCmd is a git call in dir. Replace refs are off: the checks must read the objects the push
+// sends.
+func (s *state) gitCmd(dir string, args ...string) command {
+	return command{
+		args: append([]string{"-C", dir}, args...), timeout: s.o.limits.step,
+		env: append(slices.Clone(s.o.Env), "GIT_TERMINAL_PROMPT=0", noReplace),
+	}
+}
+
+// noReplace turns replace refs off for git and for the git `stack check public` runs.
+const noReplace = "GIT_NO_REPLACE_OBJECTS=1"
 
 var ghEnvVars = []string{"GH_PROMPT_DISABLED=1", "GH_NO_UPDATE_NOTIFIER=1", "NO_COLOR=1"}
 
@@ -516,7 +557,12 @@ var errGh = errors.New("gh failed")
 
 // ghJSON runs gh and decodes its stdout into v; errors are fixed summaries.
 func (s *state) ghJSON(v any, args ...string) error {
-	out := s.child("gh", command{args: args, env: s.ghEnv(), timeout: s.o.limits.step})
+	return s.ghJSONWithin(s.o.limits.step, v, args...)
+}
+
+// ghJSONWithin is ghJSON with a timeout.
+func (s *state) ghJSONWithin(timeout time.Duration, v any, args ...string) error {
+	out := s.child("gh", command{args: args, env: s.ghEnv(), timeout: timeout})
 	if !out.ok() {
 		return fmt.Errorf("%w: %s", errGh, out.describe())
 	}
@@ -526,8 +572,21 @@ func (s *state) ghJSON(v any, args ...string) error {
 	return nil
 }
 
-// cut collapses whitespace and keeps at most n characters.
-func cut(text string, n int) string {
+// cutBytes keeps at most n bytes of text, on a rune boundary, marking a cut.
+func cutBytes(text string, n int) string {
+	if len(text) <= n {
+		return text
+	}
+	i := n
+	for i > 0 && !utf8.RuneStart(text[i]) {
+		i--
+	}
+	return text[:i] + "\n[cut]"
+}
+
+// cut collapses whitespace and keeps at most detailLen characters.
+func cut(text string) string {
+	const n = detailLen
 	r := []rune(strings.Join(strings.Fields(text), " "))
 	if len(r) <= n {
 		return string(r)

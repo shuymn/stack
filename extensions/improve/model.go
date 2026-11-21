@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
 
 //go:embed writing.md
@@ -35,8 +36,9 @@ const (
 		`"evidence_ids":{"type":"array","items":{"type":"string"}},` +
 		`"summary":{"type":"string"},"watch":{"type":"string"},` +
 		`"commit_message":{"type":"string"},"pr_title":{"type":"string"},"pr_body":{"type":"string"}}}`
-	maxPatch    = 256 << 10
-	maxScanFile = 8 << 20
+	maxPatch = 256 << 10
+	// scanChunk is the read size of the untracked-file credential scan.
+	scanChunk = 64 << 10
 )
 
 // task is the legacy task (improve.py:73-87) with the allowed paths from the target's config.
@@ -91,11 +93,16 @@ type result struct {
 	output *modelOutput
 }
 
+// parseResult reads stdout to EOF: exactly one complete `type: result` object, else nothing is
+// known (trailing bytes mean the output is not the one result improve can trust).
 func parseResult(data []byte) result {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
 	var m map[string]any
-	if err := dec.Decode(&m); err != nil || m == nil {
+	if err := dec.Decode(&m); err != nil || m == nil || m["type"] != "result" {
+		return result{}
+	}
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
 		return result{}
 	}
 	var r result
@@ -180,13 +187,16 @@ func claudeArgs() []string {
 	}
 }
 
+// claudeEnvSet is what claudeEnv sets; it also drops CLAUDE_CONFIG_DIR.
+const claudeEnvSet = "CLAUDE_CODE_DISABLE_AUTO_MEMORY=1"
+
 // claudeEnv is env without CLAUDE_CONFIG_DIR, with auto memory off.
 func claudeEnv(env []string) []string {
 	out := slices.DeleteFunc(slices.Clone(env), func(kv string) bool {
 		name, _, _ := strings.Cut(kv, "=")
 		return name == "CLAUDE_CONFIG_DIR" || name == "CLAUDE_CODE_DISABLE_AUTO_MEMORY"
 	})
-	return append(out, "CLAUDE_CODE_DISABLE_AUTO_MEMORY=1")
+	return append(out, claudeEnvSet)
 }
 
 func (a *attempt) prompt() string {
@@ -201,17 +211,26 @@ func (a *attempt) prompt() string {
 // model is steps 9-11: the model call, billing, the credential guard and the result checks.
 func (a *attempt) model() *stop {
 	s := a.s
+	timeout := s.modelTime()
+	s.logf("claude argv: %q", claudeArgs())
+	s.logf("claude env: %s set, CLAUDE_CONFIG_DIR removed; timeout %s", claudeEnvSet,
+		timeout.Round(time.Second))
+	start := time.Now()
 	out := s.child("claude", command{
 		args: claudeArgs(), dir: a.worktree, env: claudeEnv(s.o.Env), stdin: []byte(a.prompt()),
-		timeout: s.modelTime(),
+		timeout: timeout,
 	})
+	s.logf("claude wall time %s (%s)", time.Since(start).Round(time.Second), out.describe())
 	if errors.Is(out.err, errStart) {
 		return halt("failed:model-start", "claude did not start")
 	}
 	a.modelStarted = true
 	a.hook("model")
 	res := parseResult(out.stdout)
-	if !out.timedOut && res.known {
+	// Billing trusts only output read to EOF from a child that exited on its own: not timed out,
+	// not killed by a signal (exit -1), not cut, with no wait or pipe failure.
+	complete := out.err == nil && !out.timedOut && !out.truncated && !out.pipesCut && out.exit >= 0
+	if complete && res.known {
 		a.st.CostUSD, a.costKnown = res.cost, true
 		a.zeroCost = res.zero
 	} else {
@@ -221,7 +240,7 @@ func (a *attempt) model() *stop {
 	if err != nil {
 		return halt("failed:check", "cannot read the worktree status: %v", err)
 	}
-	diff, scan, err := a.worktreeDiff(entries)
+	diff, err := a.worktreeDiff(entries)
 	if err != nil {
 		return halt("failed:check", "cannot read the worktree diff: %v", err)
 	}
@@ -229,8 +248,11 @@ func (a *attempt) model() *stop {
 	if out.timedOut {
 		return halt("failed:timeout", "claude did not finish within its timeout")
 	}
-	if s.leaks(scan) || (res.output != nil && slices.ContainsFunc(res.output.strings(), s.leaks)) {
+	if s.leaks(diff) || (res.output != nil && slices.ContainsFunc(res.output.strings(), s.leaks)) {
 		return halt("proposal:credential", "the model output contains an endpoint credential")
+	}
+	if stop := a.scanUntracked(entries); stop != nil {
+		return stop
 	}
 	if !out.ok() || res.output == nil {
 		return halt("failed:model-result", "claude %s; result not a success matching the schema",
@@ -330,47 +352,80 @@ func parseStatus(data []byte) ([]statusEntry, error) {
 	return out, nil
 }
 
-// worktreeDiff returns the patch for the owner (tracked changes against base, plus the names of
-// untracked files) and the text the credential guard scans (the patch plus untracked contents).
-func (a *attempt) worktreeDiff(entries []statusEntry) (string, string, error) {
+// worktreeDiff returns the patch: tracked changes against base, plus the names of untracked files.
+func (a *attempt) worktreeDiff(entries []statusEntry) (string, error) {
 	out := a.s.git(a.worktree, "diff", "--text", "--no-ext-diff", "--no-textconv",
 		"--no-color", a.s.baseOID)
 	if !out.ok() {
-		return "", "", fmt.Errorf("%w: git diff %s", errGit, out.describe())
+		return "", fmt.Errorf("%w: git diff %s", errGit, out.describe())
 	}
-	var patch, scan strings.Builder
+	var patch strings.Builder
 	patch.Write(out.stdout)
-	scan.Write(out.stdout)
+	for _, e := range entries {
+		if e.kind == '?' || e.kind == '!' {
+			fmt.Fprintf(&patch, "# untracked: %s\n", e.path)
+		}
+	}
+	return patch.String(), nil
+}
+
+// scanUntracked runs the credential guard over every untracked regular file, whole, one at a
+// time. A file it cannot read leaves the check incomplete, which refuses like a hit.
+func (a *attempt) scanUntracked(entries []statusEntry) *stop {
 	for _, e := range entries {
 		if e.kind != '?' && e.kind != '!' {
 			continue
 		}
-		fmt.Fprintf(&patch, "# untracked: %s\n", e.path)
 		p := filepath.Join(a.worktree, filepath.FromSlash(e.path))
 		info, err := os.Lstat(p)
 		if err != nil || !info.Mode().IsRegular() {
 			continue
 		}
-		data, err := readCapped(p)
+		hit, err := a.s.fileLeaks(p)
 		if err != nil {
-			return "", "", err
+			a.s.logf("credential scan: %v", err)
+			return halt("proposal:credential", "cannot scan the untracked file %s for an "+
+				"endpoint credential", e.path)
 		}
-		scan.WriteString("\n" + data)
+		if hit {
+			return halt("proposal:credential", "the model output contains an endpoint credential")
+		}
 	}
-	return patch.String(), scan.String(), nil
+	return nil
 }
 
-func readCapped(p string) (string, error) {
+// fileLeaks streams the file in chunks, each read with the previous chunk's tail, so a
+// credential across a chunk boundary is found without holding the file.
+func (s *state) fileLeaks(p string) (bool, error) {
+	longest := 0
+	for _, c := range s.creds {
+		longest = max(longest, len(c))
+	}
+	if longest == 0 {
+		return false, nil
+	}
 	f, err := os.Open(p)
 	if err != nil {
-		return "", fmt.Errorf("read untracked file: %w", err)
+		return false, fmt.Errorf("read untracked file: %w", err)
 	}
 	defer func() { _ = f.Close() }()
-	data, err := io.ReadAll(io.LimitReader(f, maxScanFile))
-	if err != nil {
-		return "", fmt.Errorf("read untracked file: %w", err)
+	buf := make([]byte, 0, longest-1+scanChunk)
+	for {
+		n, err := f.Read(buf[len(buf) : len(buf)+scanChunk])
+		buf = buf[:len(buf)+n]
+		if s.leaks(string(buf)) {
+			return true, nil
+		}
+		if errors.Is(err, io.EOF) {
+			return false, nil
+		}
+		if err != nil {
+			return false, fmt.Errorf("read untracked file: %w", err)
+		}
+		if keep := longest - 1; len(buf) > keep {
+			buf = buf[:copy(buf, buf[len(buf)-keep:])]
+		}
 	}
-	return string(data), nil
 }
 
 // cutPatch keeps at most maxPatch bytes, marking a cut.

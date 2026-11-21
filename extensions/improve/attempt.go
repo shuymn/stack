@@ -1,7 +1,9 @@
 package improve
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -144,10 +146,17 @@ func (a *attempt) steps() *stop {
 		return halt("failed:worktree", "git worktree prune: %s", out.describe())
 	}
 	wt := filepath.Join(work, s.week)
-	if out := s.git(s.repo, "worktree", "add", "--detach", wt, s.baseOID); !out.ok() {
+	// A path that did not exist before the add is this run's, even when the add then failed (a
+	// post-checkout hook, say) after registering it; a leftover that existed is never touched.
+	_, err = os.Lstat(wt)
+	existed := !errors.Is(err, fs.ErrNotExist)
+	out := s.git(s.repo, "worktree", "add", "--detach", wt, s.baseOID)
+	if _, err := os.Lstat(wt); !existed && err == nil {
+		a.worktree, a.added = wt, true
+	}
+	if !out.ok() {
 		return halt("failed:worktree", "git worktree add: %s", out.describe())
 	}
-	a.worktree, a.added = wt, true
 	a.hook("worktree")
 	if s.modelTime() < s.o.limits.modelMin {
 		return halt("failed:deadline", "not enough time left for the model")
@@ -160,11 +169,14 @@ func (a *attempt) steps() *stop {
 	return a.publish()
 }
 
-// cleanup is step 13: the worktree is removed only when this run added it.
+// cleanup is step 13: the worktree is removed only when this run's add created it.
 func (a *attempt) cleanup() {
 	s := a.s
 	if a.added {
-		if out := s.git(s.repo, "worktree", "remove", "--force", a.worktree); !out.ok() {
+		// Cleanup runs inside the reserve: only the final stamp and the response come after it.
+		c := s.gitCmd(s.repo, "worktree", "remove", "--force", a.worktree)
+		c.reserve = s.o.limits.final
+		if out := s.child("git", c); !out.ok() {
 			s.logf("git worktree remove: %s", out.describe())
 			s.finding(kindLeftover, a.worktree, "this run could not remove its worktree: "+
 				out.describe())
@@ -192,13 +204,14 @@ func (a *attempt) respond(removed bool) (string, string) {
 	var b strings.Builder
 	fmt.Fprintf(&b, "improve %s: %s (cost %s)", a.st.Week, a.st.Outcome, cost)
 	if a.st.Reason != "" {
-		fmt.Fprintf(&b, "\nreason: %s", cut(a.st.Reason, detailLen))
+		fmt.Fprintf(&b, "\nreason: %s", cut(a.st.Reason))
 	}
+	// summary and watch are cut here; the stamp keeps them whole.
 	if a.st.Summary != "" {
-		fmt.Fprintf(&b, "\nsummary: %s", a.st.Summary)
+		fmt.Fprintf(&b, "\nsummary: %s", cut(a.st.Summary))
 	}
 	if a.st.Watch != "" {
-		fmt.Fprintf(&b, "\nwatch: %s", a.st.Watch)
+		fmt.Fprintf(&b, "\nwatch: %s", cut(a.st.Watch))
 	}
 	switch {
 	case a.st.PR != "":

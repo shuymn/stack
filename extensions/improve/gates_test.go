@@ -144,6 +144,7 @@ func TestTarget(t *testing.T) {
 		view     proctest.Response
 		settings string
 		origin   string
+		setup    func(f *fx)
 		status   string
 		context  string
 	}{
@@ -169,7 +170,30 @@ func TestTarget(t *testing.T) {
 		},
 		{
 			name: "not github", origin: "https://example.com/o/r.git",
-			status: StatusPass, context: "origin is not on GitHub",
+			status: StatusPass, context: "origin is not exactly one GitHub URL",
+		},
+		{
+			// The look-alike host reaches the bare remote, so only the parse stops the publish.
+			name: "look-alike host", origin: "https://notgithub.com/o/r.git",
+			setup: func(f *fx) {
+				f.repo.Config("url."+filepath.ToSlash(f.bare)+".insteadOf",
+					"https://notgithub.com/o/r.git")
+			},
+			status: StatusPass, context: "origin is not exactly one GitHub URL",
+		},
+		{
+			name: "two origin URLs",
+			setup: func(f *fx) {
+				f.repo.Git("config", "--add", "remote.origin.url", "https://github.com/x/y.git")
+			},
+			status: StatusPass, context: "origin is not exactly one GitHub URL",
+		},
+		{
+			name: "ssh origin", origin: "git@github.com:o/r.git",
+			setup: func(f *fx) {
+				f.repo.Config("url."+filepath.ToSlash(f.bare)+".insteadOf", "git@github.com:o/r.git")
+			},
+			status: StatusPass, context: "pr https://github.com/o/r/pull/1",
 		},
 		{
 			name: "additional directories", status: StatusWarn, context: "additionalDirectories",
@@ -194,6 +218,9 @@ func TestTarget(t *testing.T) {
 			if tc.origin != "" {
 				f.repo.Git("remote", "set-url", "origin", tc.origin)
 			}
+			if tc.setup != nil {
+				tc.setup(f)
+			}
 			resp := f.run()
 			if resp.Status != tc.status || !strings.Contains(resp.Context, tc.context) {
 				t.Fatalf("resp %+v, want %s %q", resp, tc.status, tc.context)
@@ -203,6 +230,7 @@ func TestTarget(t *testing.T) {
 					t.Fatal("claude ran")
 				}
 				f.noStamp()
+				f.noPublish()
 			}
 		})
 	}

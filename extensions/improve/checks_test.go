@@ -1,8 +1,10 @@
 package improve
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -25,6 +27,28 @@ func TestCommitScope(t *testing.T) {
 		}
 		if len(f.calls("stack")) != 0 || len(f.calls("codex")) != 0 {
 			t.Fatal("checks ran")
+		}
+		f.noPublish()
+	})
+	t.Run("replace ref hides the extra file", func(t *testing.T) {
+		t.Parallel()
+		f := newFx(t)
+		hooks := filepath.Join(f.repo.Root, "hooks")
+		writeHook(t, hooks, "pre-commit", "echo more >> other/c.md && git add other/c.md")
+		// A look-alike commit with only the allowed change replaces the real one.
+		writeHook(t, hooks, "post-commit", `idx="$(git rev-parse --git-dir)/safe-index"
+GIT_INDEX_FILE="$idx" git read-tree HEAD^ &&
+GIT_INDEX_FILE="$idx" git update-index --cacheinfo "100644,$(git rev-parse HEAD:skills/a.md),skills/a.md" &&
+tree=$(GIT_INDEX_FILE="$idx" git write-tree) &&
+safe=$(git commit-tree "$tree" -p HEAD^ -m safe) &&
+git replace HEAD "$safe"`)
+		f.repo.Config("core.hooksPath", hooks)
+		st := f.wantOutcome(f.run(), StatusWarn, "proposal:commit-scope")
+		if !strings.Contains(st.Reason, "other/c.md") {
+			t.Fatalf("reason %q", st.Reason)
+		}
+		if f.repo.Git("for-each-ref", "refs/replace/") == "" {
+			t.Fatal("the hook made no replace ref")
 		}
 		f.noPublish()
 	})
@@ -125,6 +149,7 @@ func TestCredential(t *testing.T) {
 		name    string
 		setup   func(f *fx)
 		outcome string
+		reason  string
 		// committed: the hook added the value after the commit was made.
 		committed bool
 	}{
@@ -168,6 +193,38 @@ func TestCredential(t *testing.T) {
 			},
 		},
 		{
+			// The value straddles a 64 KiB read and lies past the old 8 MiB cap.
+			name: "large new file", outcome: "proposal:credential", setup: func(f *fx) {
+				big := strings.Repeat("x", 8<<20-3) + settingsToken
+				f.fake("claude", &fakeSpec{Edits: []fakeEdit{{Path: "notes.txt", Content: big}}},
+					proctest.Response{Stdout: claudeOut(change("e1"), 1.0, zeroUsage(1))})
+			},
+		},
+		{
+			name: "unreadable new file", outcome: "proposal:credential", reason: "cannot scan",
+			setup: func(f *fx) {
+				if os.Geteuid() == 0 {
+					f.t.Skip("root reads a write-only file")
+				}
+				f.fake("claude", &fakeSpec{Edits: []fakeEdit{
+					{Path: "skills/a.md", Content: "a2\n"},
+					{Path: "notes.txt", Content: "n", NoRead: true},
+				}}, proctest.Response{Stdout: claudeOut(change("e1"), 1.0, zeroUsage(1))})
+			},
+		},
+		{
+			name: "settings value on gh's stderr", outcome: "pr https://github.com/o/r/pull/1",
+			setup: func(f *fx) {
+				f.fake("gh", f.ghSpec(),
+					proctest.Response{
+						Args: argsRepoView, Stdout: repoView, Stderr: "using " + settingsToken + "\n",
+					},
+					proctest.Response{Args: argsOpenPRs, Stdout: "[[]]"},
+					proctest.Response{Args: argsReadPRs},
+					proctest.Response{Stdout: "https://github.com/o/r/pull/1\n"})
+			},
+		},
+		{
 			name: "only on claude's stderr", outcome: "pr https://github.com/o/r/pull/1",
 			setup: func(f *fx) {
 				f.fake("claude", &fakeSpec{Edits: []fakeEdit{{Path: "skills/a.md", Content: "a2\n"}}},
@@ -190,6 +247,9 @@ func TestCredential(t *testing.T) {
 				status = StatusPass
 			}
 			st := f.wantOutcome(resp, status, tc.outcome)
+			if !strings.Contains(st.Reason, tc.reason) {
+				t.Fatalf("reason %q, want %q", st.Reason, tc.reason)
+			}
 			if strings.HasPrefix(tc.outcome, "pr ") {
 				if !strings.Contains(f.stderr.String(), redactMark) {
 					t.Fatalf("stderr not passed through redacted:\n%s", f.stderr)
@@ -261,6 +321,8 @@ func TestDeadline(t *testing.T) {
 		{"slow worktree", "worktree", 20 * time.Minute, "failed:deadline", true, 0, 0},
 		{"before codex", "check", 25 * time.Minute, "failed:deadline", false, 1, 0},
 		{"before push", "codex", 26*time.Minute + 30*time.Second, "failed:deadline", false, 1, 1},
+		// One minute left: the worktree removal still runs inside the reserve.
+		{"at the reserve", "codex", 28 * time.Minute, "failed:deadline", false, 1, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -292,8 +354,86 @@ func TestDeadline(t *testing.T) {
 				t.Fatalf("codex calls %d", n)
 			}
 			f.noPublish()
+			if _, err := os.Stat(f.worktreeDir()); !os.IsNotExist(err) {
+				t.Fatalf("worktree left: %v\n%s", err, f.stderr)
+			}
 		})
 	}
+	t.Run("slow Codex input", func(t *testing.T) {
+		t.Parallel()
+		f := newFx(t)
+		c := &fakeClock{}
+		f.opts.clock = c.now
+		f.fake("codex", nil, proctest.Response{Sleep: 2 * time.Minute, NoStdin: true})
+		f.opts.hook = func(point string) {
+			switch point {
+			case "check":
+				// 5 min 30 s for Codex when the check ends ...
+				c.advance(29*time.Minute - 3*time.Minute - 5*time.Minute - 30*time.Second)
+			case "codex-input":
+				// ... and 1 s once its input is ready.
+				c.advance(5*time.Minute + 29*time.Second)
+			}
+		}
+		start := time.Now()
+		f.wantOutcome(f.run(), StatusWarn, "proposal:codex")
+		if took := time.Since(start); took > 30*time.Second {
+			t.Fatalf("took %s: the Codex timeout was not cut after its input", took)
+		}
+		f.noPublish()
+	})
+	t.Run("create and read share a step", func(t *testing.T) {
+		t.Parallel()
+		f := newFx(t)
+		const step = 4 * time.Second
+		f.opts.limits.step, f.opts.limits.pushPR = step, 2*step
+		c := &realClock{}
+		f.opts.clock = c.now
+		f.fake("gh", f.ghSpec(),
+			proctest.Response{Args: argsRepoView, Stdout: repoView},
+			proctest.Response{Args: argsOpenPRs, Stdout: "[[]]"},
+			proctest.Response{Args: argsReadPRs},
+			proctest.Response{Sleep: time.Minute})
+		f.opts.hook = func(point string) {
+			switch point {
+			case "codex":
+				c.leave(defaultBudget, defaultReserve+2*step+time.Second)
+			case "pushed":
+				// A push that used its whole step leaves exactly one step: gh pr create hangs.
+				c.leave(defaultBudget, defaultReserve+step)
+			}
+		}
+		f.wantOutcome(f.run(), StatusPass, "pr https://github.com/o/r/pull/1")
+		if n := f.ghCalls(argsReadPRs...); n != 1 {
+			t.Fatalf("PR reads = %d, want 1", n)
+		}
+	})
+}
+
+// realClock runs at real speed from the first reading, shifted by what the test moves it.
+type realClock struct {
+	mu    sync.Mutex
+	first time.Time
+	start time.Time
+	ahead time.Duration
+}
+
+func (c *realClock) now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.start.IsZero() {
+		c.start, c.first = time.Now(), clockBase
+	}
+	return c.first.Add(time.Since(c.start) + c.ahead)
+}
+
+// leave moves the clock so that left remains before the deadline the first reading set with
+// budget.
+func (c *realClock) leave(budget, left time.Duration) {
+	now := c.now()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.ahead += c.first.Add(budget).Sub(now) - left
 }
 
 // I16.

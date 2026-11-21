@@ -16,7 +16,10 @@ import (
 
 var (
 	errConfig = errors.New("invalid config")
-	reGitHub  = regexp.MustCompile(`github\.com[:/]([\w.-]+)/([\w.-]+?)(?:\.git)?/?$`)
+	// reGitHub is an origin URL on the host github.com itself, in its HTTPS or SSH form.
+	reGitHub = regexp.MustCompile(
+		`^(?:https://github\.com/|ssh://git@github\.com/|git@github\.com:)` +
+			`([\w.-]+)/([\w.-]+?)(?:\.git)?/?$`)
 	// rePublic is a public evidence URL (legacy improve.py:64).
 	rePublic = regexp.MustCompile(`^https://github\.com/[\w.-]+/[\w.-]+/(pull|actions/runs)/\d+$`)
 )
@@ -182,7 +185,8 @@ func envCreds(env []string) []string {
 	return out
 }
 
-// slugOf parses owner/name from a GitHub remote URL (legacy observe.py:41), or "".
+// slugOf parses owner/name from a github.com remote URL, or "". Stricter than legacy
+// observe.py:41, which took any host ending in github.com.
 func slugOf(url string) string {
 	m := reGitHub.FindStringSubmatch(strings.TrimSpace(url))
 	if m == nil {

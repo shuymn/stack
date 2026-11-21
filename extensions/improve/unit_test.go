@@ -65,14 +65,18 @@ func TestParseResult(t *testing.T) {
 		in          string
 		known, zero bool
 	}{
-		{`{"total_cost_usd":0,` + zero + `}`, true, true},
-		{`{"total_cost_usd":0.0,` + zero + `}`, true, true},
-		{`{"total_cost_usd":1e999,` + zero + `}`, false, false},
-		{`{"total_cost_usd":-1,` + zero + `}`, false, false},
-		{`{"total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0,` +
+		{`{"type":"result","total_cost_usd":0,` + zero + `}`, true, true},
+		{`{"type":"result","total_cost_usd":0.0,` + zero + `}`, true, true},
+		{`{"type":"result","total_cost_usd":1e999,` + zero + `}`, false, false},
+		{`{"type":"result","total_cost_usd":-1,` + zero + `}`, false, false},
+		{`{"type":"result","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0,` +
 			`"cache_creation_input_tokens":0,"cache_read_input_tokens":1e0}}`, false, false},
-		{`{"total_cost_usd":0,"usage":null}`, false, false},
+		{`{"type":"result","total_cost_usd":0,"usage":null}`, false, false},
 		{`[]`, false, false},
+		{`{"total_cost_usd":0,` + zero + `}`, false, false},
+		{`{"type":"result","total_cost_usd":0,` + zero + "}\n", true, true},
+		{`{"type":"result","total_cost_usd":0,` + zero + "}\n{broken", false, false},
+		{`{"type":"result","total_cost_usd":0,` + zero + `}{}`, false, false},
 	} {
 		r := parseResult([]byte(tc.in))
 		if r.known != tc.known || r.zero != tc.zero {

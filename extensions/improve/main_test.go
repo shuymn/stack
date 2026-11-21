@@ -83,8 +83,8 @@ func needUnix(t *testing.T) {
 
 // fakeSpec is what a fake does besides answering from its proctest scenario: edit files in its
 // working directory (fake claude), write the file named after a flag (fake codex's -o), copy the
-// file named after a flag (fake gh's --body-file), or print an answer that names the OID a
-// branch has in the bare remote (fake gh's PR read).
+// file named after a flag (fake gh's --body-file), print an answer that names the OID a branch
+// has in the bare remote (fake gh's PR read), or kill itself after printing (fake claude).
 type fakeSpec struct {
 	Edits        []fakeEdit  `json:"edits,omitempty"`
 	WriteAfter   string      `json:"writeAfter,omitempty"`
@@ -94,6 +94,8 @@ type fakeSpec struct {
 	Print        []fakePrint `json:"print,omitempty"`
 	// EnvTo receives the fake's environment, one variable per line.
 	EnvTo string `json:"envTo,omitempty"`
+	// Kill makes the fake kill itself after its edits and prints, before proctest answers.
+	Kill bool `json:"kill,omitempty"`
 }
 
 type fakeEdit struct {
@@ -103,6 +105,8 @@ type fakeEdit struct {
 	Symlink string `json:"symlink,omitempty"`
 	Remove  bool   `json:"remove,omitempty"`
 	Rename  string `json:"rename,omitempty"`
+	// NoRead leaves the file write-only.
+	NoRead bool `json:"noRead,omitempty"`
 }
 
 type fakePrint struct {
@@ -167,7 +171,8 @@ func (s fakeSpec) apply(args []string) error {
 			return fmt.Errorf("write: %w", err)
 		}
 	}
-	if p := after(args, s.CopyAfter); s.CopyAfter != "" && p != "" {
+	// "-" is stdin, which proctest records in the call.
+	if p := after(args, s.CopyAfter); s.CopyAfter != "" && p != "" && p != "-" {
 		data, err := os.ReadFile(p) //nolint:gosec // G703: the fake's own argument in a test.
 		if err != nil {
 			return fmt.Errorf("copy: %w", err)
@@ -192,6 +197,13 @@ func (s fakeSpec) apply(args []string) error {
 		fmt.Print(out)
 		break
 	}
+	if s.Kill {
+		p, err := os.FindProcess(os.Getpid())
+		if err == nil {
+			err = p.Kill()
+		}
+		return fmt.Errorf("kill: %w", err)
+	}
 	return nil
 }
 
@@ -215,6 +227,9 @@ func (e fakeEdit) apply() error {
 		}
 		if err = os.MkdirAll(filepath.Dir(p), 0o700); err == nil {
 			err = os.WriteFile(p, []byte(e.Content), mode)
+		}
+		if e.NoRead {
+			mode = 0o200
 		}
 		if err == nil {
 			err = os.Chmod(p, mode)
@@ -245,7 +260,7 @@ type fx struct {
 	opts   Options
 	req    Request
 	stderr *bytes.Buffer
-	// capture receives the body file gh pr create got.
+	// capture receives the body file gh pr create got, when it got a file.
 	capture string
 	// secrets must never appear in anything improve writes.
 	secrets []string
@@ -491,6 +506,26 @@ func checkResponse(t *testing.T, r Response) {
 	if r.Findings == nil {
 		t.Fatal("findings is nil")
 	}
+}
+
+// createBody returns the body gh pr create got: its stdin for `--body-file -`, else the file.
+func (f *fx) createBody() string {
+	f.t.Helper()
+	for _, c := range f.calls("gh") {
+		if len(c.Args) < 2 || c.Args[0] != "pr" || c.Args[1] != "create" {
+			continue
+		}
+		if c.Args[len(c.Args)-1] == "-" {
+			return c.Stdin
+		}
+		data, err := os.ReadFile(f.capture)
+		if err != nil {
+			f.t.Fatalf("gh pr create body: %v", err)
+		}
+		return string(data)
+	}
+	f.t.Fatal("no gh pr create")
+	return ""
 }
 
 func (f *fx) stampPath() string {

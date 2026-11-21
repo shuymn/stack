@@ -54,6 +54,8 @@ type command struct {
 	stdin []byte
 	// timeout is cut to the context's deadline.
 	timeout time.Duration
+	// reserve, when positive, replaces the run's reserve when the timeout is cut to the deadline.
+	reserve time.Duration
 }
 
 // outcome is what a child left behind.
@@ -61,9 +63,9 @@ type outcome struct {
 	stdout, stderr []byte
 	exit           int
 	timedOut       bool
-	// truncated: stdout passed maxStdout; stderrCut: stderr passed maxStderr; pipesCut: the pipes
-	// were closed at pipeGrace before they reached EOF.
-	truncated, stderrCut, pipesCut bool
+	// truncated: stdout passed maxStdout; pipesCut: the pipes were closed at pipeGrace before they
+	// reached EOF.
+	truncated, pipesCut bool
 	// err is non-nil when the child did not start (wrapping errStart) or its pipes failed.
 	err error
 }
