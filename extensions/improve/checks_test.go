@@ -359,6 +359,30 @@ func TestDeadline(t *testing.T) {
 			}
 		})
 	}
+	t.Run("slow untracked scan", func(t *testing.T) {
+		t.Parallel()
+		f := newFx(t)
+		c := &realClock{}
+		f.opts.clock = c.now
+		f.fake("claude", &fakeSpec{Edits: []fakeEdit{
+			{Path: "skills/a.md", Content: "a2\n"},
+			{Path: "notes.txt", Content: "n", Size: 1 << 40},
+		}}, proctest.Response{Stdout: claudeOut(change("e1"), 1.0, zeroUsage(1))})
+		f.opts.hook = func(point string) {
+			if point == "model" {
+				c.leave(defaultBudget, defaultReserve+3*time.Second)
+			}
+		}
+		start := time.Now()
+		st := f.wantOutcome(f.run(), StatusWarn, "proposal:credential")
+		took := time.Since(start)
+		if took > time.Minute || !strings.Contains(st.Reason, "cannot scan") {
+			t.Fatalf("took %s, reason %q", took, st.Reason)
+		}
+		if _, err := os.Stat(f.worktreeDir()); !os.IsNotExist(err) {
+			t.Fatalf("worktree left: %v\n%s", err, f.stderr)
+		}
+	})
 	t.Run("slow Codex input", func(t *testing.T) {
 		t.Parallel()
 		f := newFx(t)

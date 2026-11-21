@@ -51,15 +51,9 @@ func (a *attempt) publish() *stop {
 	s := a.s
 	branch := "improve/" + s.week
 	ref := "refs/heads/" + branch
-	// 12.1 Commit: the title and body are written once and never rebuilt.
+	// 12.1 Commit.
 	msgFile, err := a.writeTemp("message", a.message+"\n")
 	if err != nil {
-		return err
-	}
-	if a.titleFile, err = a.writeTemp("title", a.title); err != nil {
-		return err
-	}
-	if a.bodyFile, err = a.writeTemp("body", a.body); err != nil {
 		return err
 	}
 	if out := s.git(a.worktree, "commit", "-a", "-F", msgFile); !out.ok() {
@@ -72,6 +66,14 @@ func (a *attempt) publish() *stop {
 	}
 	a.oid = strings.TrimSpace(string(out.stdout))
 	a.st.OID = a.oid
+	// The title and body files are written once, after every commit hook has run, and never
+	// rebuilt.
+	if a.titleFile, err = a.writeTemp("title", a.title); err != nil {
+		return err
+	}
+	if a.bodyFile, err = a.writeTemp("body", a.body); err != nil {
+		return err
+	}
 	// 12.3 Verify.
 	if err := a.verify(); err != nil {
 		return err
@@ -82,6 +84,9 @@ func (a *attempt) publish() *stop {
 	}
 	// 12.5 Public check.
 	if err := a.publicCheck(branch); err != nil {
+		return err
+	}
+	if err := a.readChecked(); err != nil {
 		return err
 	}
 	a.hook("check")
@@ -112,15 +117,16 @@ func (a *attempt) publish() *stop {
 	slotEnd := s.o.clock().Add(min(s.o.limits.step, s.left()-s.o.limits.reserve))
 	create := s.child("gh", command{
 		args: []string{
-			"pr", "create", "--repo", s.slug, "--base", s.branchBase, "--head", branch,
+			"pr", "create", "--repo", ghHost + "/" + s.slug, "--base", s.branchBase,
+			"--head", branch,
 			"--title", a.title, "--body-file", "-",
 		},
 		env: s.ghEnv(), stdin: []byte(a.body), timeout: slotEnd.Sub(s.o.clock()) / createShare,
 	})
 	read := a.readPRs(branch, slotEnd.Sub(s.o.clock()))
 	if read.err == nil {
-		if m := a.matching(read.prs, branch); len(m) == 1 {
-			a.setPR(m[0])
+		if p, ok := a.unique(read.prs, branch); ok {
+			a.setPR(p)
 			return nil
 		}
 	}
@@ -203,6 +209,21 @@ func (a *attempt) publicCheck(branch string) *stop {
 	default:
 		return halt("failed:check", "stack check public: %s", out.describe())
 	}
+}
+
+// readChecked reads the title and body files once, after the public check read them; Codex and
+// gh get these bytes. Files that no longer hold what was written are refused.
+func (a *attempt) readChecked() *stop {
+	title, terr := os.ReadFile(a.titleFile)
+	body, berr := os.ReadFile(a.bodyFile)
+	if terr != nil || berr != nil {
+		return halt("failed:check", "cannot read the checked title or body")
+	}
+	if string(title) != a.title || string(body) != a.body {
+		return halt("proposal:public-check", "the title or body changed around the public check")
+	}
+	a.title, a.body = string(title), string(body)
+	return nil
 }
 
 // codex is step 12.6: a read-only review of the pinned candidate; it can only stop.
@@ -327,7 +348,7 @@ func (a *attempt) readPRs(branch string, timeout time.Duration) prRead {
 	s := a.s
 	owner, _, _ := strings.Cut(s.slug, "/")
 	var prs []pr
-	if err := s.ghJSONWithin(timeout, &prs, "api",
+	if err := s.ghJSONWithin(timeout, &prs, "api", "--hostname", ghHost,
 		"repos/"+s.slug+"/pulls?state=all&head="+owner+":"+branch+"&per_page=100"); err != nil {
 		return prRead{err: err}
 	}
@@ -337,12 +358,21 @@ func (a *attempt) readPRs(branch string, timeout time.Duration) prRead {
 	return prRead{prs: prs}
 }
 
-// matching returns the PRs that match head repo, ref, OID and base and have a usable URL.
+// matching returns the PRs that match head repo, ref, OID and base.
 func (a *attempt) matching(prs []pr, branch string) []pr {
 	return slices.DeleteFunc(slices.Clone(prs), func(p pr) bool {
 		return !strings.EqualFold(p.headRepo(), a.s.slug) || p.Head.Ref != branch ||
-			p.Head.SHA != a.oid || p.Base.Ref != a.s.branchBase || !a.prURL(p.HTMLURL)
+			p.Head.SHA != a.oid || p.Base.Ref != a.s.branchBase
 	})
+}
+
+// unique is the one matching PR, when there is exactly one and its URL is usable.
+func (a *attempt) unique(prs []pr, branch string) (pr, bool) {
+	m := a.matching(prs, branch)
+	if len(m) != 1 || !a.prURL(m[0].HTMLURL) {
+		return pr{}, false
+	}
+	return m[0], true
 }
 
 // prURL reports whether u is the URL of a pull request of the target.
@@ -393,14 +423,14 @@ func (a *attempt) ambiguous(branch string, read *prRead, note string) *stop {
 	}
 	facts := note + "; " + remote + "; " + reads
 	if ok {
-		if m := a.matching(prs, branch); len(m) == 1 {
-			a.setPR(m[0])
+		if p, ok := a.unique(prs, branch); ok {
+			a.setPR(p)
 			return nil
 		}
 		if len(prs) == 0 && ls.ok() && atOID {
 			return halt(
 				outPushedNoPR,
-				"%s; create it with: gh pr create --repo %s --base %s --head %s "+
+				"%s; create it with: gh pr create --repo github.com/%s --base %s --head %s "+
 					"--title %q --body-file <the stamp's body>",
 				facts,
 				s.slug,

@@ -275,3 +275,38 @@ func TestProtocolDisabled(t *testing.T) {
 		t.Fatalf("state written: %v", err)
 	}
 }
+
+// I12, P8: an existing <work>/<W>, even an empty directory Git would accept, is refused before
+// the add; nothing runs in the owner's checkout, which is improve's cwd here.
+func TestExistingWorktreeDir(t *testing.T) {
+	t.Parallel()
+	needBuilt(t)
+	f := newFx(t)
+	if err := os.MkdirAll(f.worktreeDir(), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	tools := f.toolDir(proctest.Response{Stdout: claudeOut(change("e1"), 1.0, zeroUsage(1))}, true)
+	before := f.ownerState()
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	defer cancel()
+	cmd, out := f.startImprove(ctx, f.processEnv(now, tools))
+	if err := cmd.Wait(); err != nil {
+		t.Fatalf("improve: %v\n%s", err, f.stderr)
+	}
+	resp := decodeResponse(t, out.Bytes())
+	if !strings.Contains(resp.Context, "failed:worktree") {
+		t.Fatalf("resp %+v\n%s", resp, f.stderr)
+	}
+	if n := len(proctest.Calls(t, filepath.Join(tools, "claude"))); n != 0 {
+		t.Fatalf("claude ran %d times", n)
+	}
+	if after := f.ownerState(); after != before {
+		t.Fatalf("owner checkout changed:\nbefore %s\nafter  %s", before, after)
+	}
+	if strings.Contains(f.repo.Git("worktree", "list", "--porcelain"), "improve/work") {
+		t.Fatal("a worktree was registered")
+	}
+	if entries, err := os.ReadDir(f.worktreeDir()); err != nil || len(entries) != 0 {
+		t.Fatalf("leftover touched: %v %v", entries, err)
+	}
+}

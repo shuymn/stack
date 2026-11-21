@@ -146,12 +146,15 @@ func (a *attempt) steps() *stop {
 		return halt("failed:worktree", "git worktree prune: %s", out.describe())
 	}
 	wt := filepath.Join(work, s.week)
-	// A path that did not exist before the add is this run's, even when the add then failed (a
-	// post-checkout hook, say) after registering it; a leftover that existed is never touched.
-	_, err = os.Lstat(wt)
-	existed := !errors.Is(err, fs.ErrNotExist)
+	// Any existing path, even an empty directory Git would accept, is a leftover: refused before the
+	// add and never touched.
+	if _, err := os.Lstat(wt); !errors.Is(err, fs.ErrNotExist) {
+		return halt("failed:worktree", "%s already exists", wt)
+	}
 	out := s.git(s.repo, "worktree", "add", "--detach", wt, s.baseOID)
-	if _, err := os.Lstat(wt); !existed && err == nil {
+	// The path did not exist before the add, so it is this run's even when the add then failed (a
+	// post-checkout hook, say) after registering it.
+	if _, err := os.Lstat(wt); err == nil {
 		a.worktree, a.added = wt, true
 	}
 	if !out.ok() {

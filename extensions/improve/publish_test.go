@@ -44,7 +44,7 @@ func TestPublishSuccess(t *testing.T) {
 		}
 	}
 	wantPrefix := []string{
-		"pr", "create", "--repo", slug, "--base", "main", "--head", branch,
+		"pr", "create", "--repo", "github.com/" + slug, "--base", "main", "--head", branch,
 		"--title", "docs: tighten a rule", "--body-file", "-",
 	}
 	if !slices.Equal(create, wantPrefix) {
@@ -140,11 +140,17 @@ func TestPublish(t *testing.T) {
 		},
 		{
 			name: "branch only", read: "[]", create: 1, status: StatusWarn, outcome: outPushedNoPR,
-			reads: 1, creates: 1, reason: "gh pr create --repo o/r",
+			reads: 1, creates: 1, reason: "gh pr create --repo github.com/o/r",
 		},
 		{
 			name: "read fails", readErr: true, status: StatusWarn, outcome: outPublishUnknown,
 			reads: 1, creates: 1, reason: "PR read failed",
+		},
+		{
+			name: "two matches, one without a URL",
+			read: "[" + prJSON(1, slug, "main") + "," + strings.Replace(prJSON(3, slug, "main"),
+				"https://github.com/o/r/pull/3", "", 1) + "]",
+			status: StatusWarn, outcome: outPublishUnknown, reads: 1, creates: 1, reason: "2 PR(s)",
 		},
 		{
 			name: "match without a URL", read: strings.Replace("["+prJSON(1, slug, "main")+"]",
@@ -263,4 +269,53 @@ func TestResponseSize(t *testing.T) {
 	if !strings.Contains(resp.Context, "PR: https://github.com/o/r/pull/1") {
 		t.Fatalf("context lost the PR: %.200s", resp.Context)
 	}
+}
+
+// I10: the title and body files are written after the commit hooks, so a post-commit hook that
+// rewrites the body cannot hide a local path from the real stack check public; and files that
+// change around the check are refused.
+func TestCheckedMetadata(t *testing.T) {
+	t.Parallel()
+	needBuilt(t)
+	t.Run("post-commit hook rewrites the body", func(t *testing.T) {
+		t.Parallel()
+		f := newFx(t)
+		f.tools["stack"] = built.stack
+		f.write(".config/stack/private-terms", "Zebrafinch\n")
+		local := "/" + "Users" + "/review/private.md"
+		out := claudeOut(with(change("e1"), "pr_body", "See "+local+"."), 1.0, zeroUsage(1))
+		f.fake(
+			"claude",
+			&fakeSpec{Edits: []fakeEdit{{Path: "skills/a.md", Content: "alpha two\n"}}},
+			proctest.Response{Stdout: out},
+		)
+		hooks := filepath.Join(f.repo.Root, "hooks")
+		writeHook(
+			t,
+			hooks,
+			"post-commit",
+			`for b in "$HOME"/.local/state/stack/improve/.run-*/body; do
+[ -f "$b" ] && printf clean > "$b"
+done
+exit 0`,
+		)
+		f.repo.Config("core.hooksPath", hooks)
+		st := f.wantOutcome(f.run(), StatusWarn, "proposal:public-check")
+		// The real check saw the path: the files were written after the hook.
+		if st.CheckHits == "" {
+			t.Fatalf("stack check public found nothing; reason %q", st.Reason)
+		}
+		f.noPublish()
+	})
+	t.Run("body file changed by the check", func(t *testing.T) {
+		t.Parallel()
+		f := newFx(t)
+		f.fake("stack", &fakeSpec{WriteAfter: "--body-file", WriteContent: "changed"},
+			proctest.Response{})
+		st := f.wantOutcome(f.run(), StatusWarn, "proposal:public-check")
+		if !strings.Contains(st.Reason, "changed") || len(f.calls("codex")) != 0 {
+			t.Fatalf("reason %q, codex calls %d", st.Reason, len(f.calls("codex")))
+		}
+		f.noPublish()
+	})
 }

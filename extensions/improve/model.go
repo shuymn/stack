@@ -394,8 +394,11 @@ func (a *attempt) scanUntracked(entries []statusEntry) *stop {
 	return nil
 }
 
+var errScanTime = errors.New("scan not finished before the reserve")
+
 // fileLeaks streams the file in chunks, each read with the previous chunk's tail, so a
-// credential across a chunk boundary is found without holding the file.
+// credential across a chunk boundary is found without holding the file. It stops at the reserve,
+// so cleanup keeps its time.
 func (s *state) fileLeaks(p string) (bool, error) {
 	longest := 0
 	for _, c := range s.creds {
@@ -411,6 +414,9 @@ func (s *state) fileLeaks(p string) (bool, error) {
 	defer func() { _ = f.Close() }()
 	buf := make([]byte, 0, longest-1+scanChunk)
 	for {
+		if s.left() <= s.o.limits.reserve {
+			return false, fmt.Errorf("%s: %w", filepath.Base(p), errScanTime)
+		}
 		n, err := f.Read(buf[len(buf) : len(buf)+scanChunk])
 		buf = buf[:len(buf)+n]
 		if s.leaks(string(buf)) {

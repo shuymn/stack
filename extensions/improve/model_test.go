@@ -1,6 +1,7 @@
 package improve
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -61,6 +62,10 @@ func TestBilling(t *testing.T) {
 					Print: []fakePrint{{Contains: "-p", Stdout: zeroFailure}}, Kill: true,
 				}, proctest.Response{})
 			},
+		},
+		{
+			name: "zero result past the capture cap", stdout: zeroFailure + strings.Repeat(" ", 33<<20),
+			outcome: "failed:model-result", costUnknown: true,
 		},
 		{
 			name: "zero result without type", stdout: strings.Replace(zeroFailure,
@@ -508,4 +513,28 @@ func TestCleanup(t *testing.T) {
 			t.Fatal("claude ran")
 		}
 	})
+}
+
+// I12, P8: claude or git -C without a directory never starts, so neither can run in improve's own
+// cwd.
+func TestChildNeedsDir(t *testing.T) {
+	t.Parallel()
+	f := newFx(t)
+	// A fake that edits nothing: a regression would run it in the package directory.
+	f.fake("claude", nil, proctest.Response{})
+	s := &state{
+		o: f.opts.withDefaults(), ctx: t.Context(), tools: map[string]string{},
+		deadline: f.opts.withDefaults().clock().Add(time.Hour),
+	}
+	for name, out := range map[string]outcome{
+		"claude": s.child("claude", command{args: claudeArgs(), timeout: time.Minute}),
+		"git":    s.git("", "status"),
+	} {
+		if !errors.Is(out.err, errStart) {
+			t.Fatalf("%s started: %+v", name, out)
+		}
+	}
+	if n := len(f.calls("claude")); n != 0 {
+		t.Fatalf("claude ran %d times", n)
+	}
 }

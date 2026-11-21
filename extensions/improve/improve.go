@@ -313,7 +313,7 @@ func (s *state) target() (string, string, bool) {
 			Name string `json:"name"`
 		} `json:"defaultBranchRef"`
 	}
-	if err := s.ghJSON(&view, "repo", "view", s.slug, "--json",
+	if err := s.ghJSON(&view, "repo", "view", ghHost+"/"+s.slug, "--json",
 		"nameWithOwner,visibility,defaultBranchRef"); err != nil {
 		return StatusWarn, "gh repo view failed: " + err.Error(), false
 	}
@@ -435,7 +435,7 @@ const (
 // openPRs is step 4: any open improve/ or kaizen/ PR of the target itself, on every page.
 func (s *state) openPRs() (string, string, bool) {
 	var pages [][]pr
-	if err := s.ghJSON(&pages, "api", "--paginate", "--slurp",
+	if err := s.ghJSON(&pages, "api", "--hostname", ghHost, "--paginate", "--slurp",
 		"repos/"+s.slug+"/pulls?state=open&per_page=100"); err != nil {
 		return StatusWarn, "open PR check failed: " + err.Error(), false
 	}
@@ -507,6 +507,12 @@ func (s *state) child(name string, c command) outcome {
 		s.logf("%v", err)
 		return outcome{exit: -1, err: fmt.Errorf("%s: %w: %w", name, errStart, err)}
 	}
+	// A git -C or claude without a directory would run in improve's own cwd, possibly the owner's
+	// checkout.
+	noGitDir := len(c.args) > 1 && c.args[0] == "-C" && c.args[1] == ""
+	if (name == "claude" && c.dir == "") || noGitDir {
+		return outcome{exit: -1, err: fmt.Errorf("%s: %w: no directory", name, errStart)}
+	}
 	c.name = p
 	if c.env == nil {
 		c.env = s.o.Env
@@ -548,6 +554,9 @@ func (s *state) gitCmd(dir string, args ...string) command {
 
 // noReplace turns replace refs off for git and for the git `stack check public` runs.
 const noReplace = "GIT_NO_REPLACE_OBJECTS=1"
+
+// ghHost pins every gh call to github.com, whatever GH_HOST or gh's default host says.
+const ghHost = "github.com"
 
 var ghEnvVars = []string{"GH_PROMPT_DISABLED=1", "GH_NO_UPDATE_NOTIFIER=1", "NO_COLOR=1"}
 

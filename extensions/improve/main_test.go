@@ -107,6 +107,8 @@ type fakeEdit struct {
 	Rename  string `json:"rename,omitempty"`
 	// NoRead leaves the file write-only.
 	NoRead bool `json:"noRead,omitempty"`
+	// Size extends the file, sparse, to this many bytes.
+	Size int64 `json:"size,omitempty"`
 }
 
 type fakePrint struct {
@@ -230,6 +232,9 @@ func (e fakeEdit) apply() error {
 		}
 		if e.NoRead {
 			mode = 0o200
+		}
+		if err == nil && e.Size > 0 {
+			err = os.Truncate(p, e.Size)
 		}
 		if err == nil {
 			err = os.Chmod(p, mode)
@@ -400,17 +405,24 @@ var (
 	argsRepoView = []string{
 		"repo",
 		"view",
-		slug,
+		"github.com/" + slug,
 		"--json",
 		"nameWithOwner,visibility,defaultBranchRef",
 	}
 	argsOpenPRs = []string{
 		"api",
+		"--hostname",
+		"github.com",
 		"--paginate",
 		"--slurp",
 		"repos/o/r/pulls?state=open&per_page=100",
 	}
-	argsReadPRs = []string{"api", "repos/o/r/pulls?state=all&head=o:" + branch + "&per_page=100"}
+	argsReadPRs = []string{
+		"api",
+		"--hostname",
+		"github.com",
+		"repos/o/r/pulls?state=all&head=o:" + branch + "&per_page=100",
+	}
 )
 
 const repoView = `{"nameWithOwner":"o/r","visibility":"PUBLIC","defaultBranchRef":{"name":"main"}}`

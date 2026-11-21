@@ -189,6 +189,18 @@ func TestTarget(t *testing.T) {
 			status: StatusPass, context: "origin is not exactly one GitHub URL",
 		},
 		{
+			// gh's default host says PUBLIC; github.com says PRIVATE.
+			name: "GH_HOST elsewhere",
+			view: proctest.Response{Stdout: view("o/r", "PRIVATE")},
+			setup: func(f *fx) {
+				f.opts.Env = append(f.opts.Env, "GH_HOST=enterprise.example")
+				f.fake("gh", f.ghSpec(),
+					proctest.Response{Args: argsRepoView, Stdout: view("o/r", "PRIVATE")},
+					proctest.Response{Stdout: repoView})
+			},
+			status: StatusPass, context: "not a public GitHub repository",
+		},
+		{
 			name: "ssh origin", origin: "git@github.com:o/r.git",
 			setup: func(f *fx) {
 				f.repo.Config("url."+filepath.ToSlash(f.bare)+".insteadOf", "git@github.com:o/r.git")
