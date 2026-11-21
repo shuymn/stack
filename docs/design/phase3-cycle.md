@@ -118,8 +118,8 @@ Every behaviour of the legacy cycle, with the v10 decision. "Owner command" rows
 |---|---|
 | R3, `ready.py:113-118` (from `cycle.py:337`) | deleted with `ready.py` |
 | `improve.py:807-826` executes the hook source for prose caps | deleted with `improve.py` |
-| `dotfiles:AGENTS.md:51` validation row ("shows no `OVER`") | the budget clause is removed; `stack budget status` may be run to see sizes, with no pass/fail |
-| `hiden/references/attention.md:5` (usage command) and `:6-7` (caps that only go down) | rewritten around `stack budget status`, display-only, no caps (§5) |
+| `dotfiles:AGENTS.md:51` validation row ("shows no `OVER`") | the budget clause is removed; `stack budget status` may be run to see sizes, with no pass/fail (v11 removes the command, `core-stages.md` §5.3) |
+| `hiden/references/attention.md:5` (usage command) and `:6-7` (caps that only go down) | rewritten around `stack budget status`, display-only, no caps (§5); v11 removes that sentence with the command (`core-stages.md` §5.3) |
 | `hiden/SKILL.md:58` (new rules pass the attention budget first) | clause removed (§5) |
 | the hook's own deny text, `attention-budget.py:202` | the file is deleted (it is unwired since Phase 2) |
 | `writing.md:3,7` (caps only go down, lower the caps) | rewritten in `extensions/improve/writing.md` |
