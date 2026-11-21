@@ -193,19 +193,22 @@ func buildRequest(
 // setOutboundTexts sets the title from --title-file, the body from --body-file and the branch from
 // --branch; each is "" when absent.
 func setOutboundTexts(env Env, inv invocation, req *ext.Request) error {
-	texts := map[string]string{"branch": inv.flags.Lookup("branch").Value.String()}
-	for _, name := range []string{"title-file", "body-file"} {
-		arg := inv.flags.Lookup(name).Value.String()
+	var title, body string
+	for _, f := range []struct {
+		name string
+		dst  *string
+	}{{"title-file", &title}, {"body-file", &body}} {
+		arg := inv.flags.Lookup(f.name).Value.String()
 		if arg == "" {
 			continue
 		}
 		text, err := input.ReadFile(env.Home, arg)
 		if err != nil {
-			return fmt.Errorf("--%s: %w", name, err)
+			return fmt.Errorf("--%s: %w", f.name, err)
 		}
-		texts[name] = text
+		*f.dst = text
 	}
-	title, body, branch := texts["title-file"], texts["body-file"], texts["branch"]
+	branch := inv.flags.Lookup("branch").Value.String()
 	req.Title, req.Body, req.Branch = &title, &body, &branch
 	return nil
 }
