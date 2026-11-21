@@ -5,9 +5,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 
 	"github.com/shuymn/stack/internal/checkpub"
+	"github.com/shuymn/stack/internal/input"
 	"github.com/shuymn/stack/internal/paths"
 	"github.com/shuymn/stack/internal/proc"
 )
@@ -33,7 +33,7 @@ func runCheckPublic(ctx context.Context, env Env, inv invocation) error {
 		if !set[name] {
 			continue
 		}
-		text, err := readInputFile(env.Home, inv.flags.Lookup(name).Value.String())
+		text, err := input.ReadFile(env.Home, inv.flags.Lookup(name).Value.String())
 		if err != nil {
 			return fmt.Errorf("--%s: %w", name, err)
 		}
@@ -66,18 +66,4 @@ func privateTerms(env Env) ([]string, error) {
 		return nil, err
 	}
 	return checkpub.ReadTerms(paths.Expand(env.Home, cfg.Safety.PrivateTerms))
-}
-
-// readInputFile reads a --title-file or --body-file argument, resolving `~` and, on Windows, the Git
-// Bash `/c/…` forms against the current directory.
-func readInputFile(home, arg string) (string, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("current directory: %w", err)
-	}
-	p, ok := paths.Resolve(home, cwd, arg, true)
-	if !ok {
-		return "", fmt.Errorf("%w %s: cannot resolve the path", checkpub.ErrInput, arg)
-	}
-	return checkpub.ReadUTF8(p)
 }

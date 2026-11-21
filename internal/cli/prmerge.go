@@ -41,7 +41,7 @@ func runPrMerge(ctx context.Context, env Env, inv invocation) error {
 			Runner: proc.Exec{},
 			// gh and git find the repository from the working directory, never from variables a git
 			// hook exported.
-			Env: checkpub.DropRepoVars(os.Environ()),
+			Env: proc.DropRepoVars(os.Environ()),
 		},
 	}
 	if env.Getenv != nil {

@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shuymn/stack/internal/checkpub"
 	"github.com/shuymn/stack/internal/config"
 	"github.com/shuymn/stack/internal/ext"
+	"github.com/shuymn/stack/internal/input"
 	"github.com/shuymn/stack/internal/kit"
 	"github.com/shuymn/stack/internal/paths"
 	"github.com/shuymn/stack/internal/proc"
@@ -127,7 +127,7 @@ func checkStageNames(env Env, stage string, names []string) error {
 
 // replayRequest reads a --replay fixture whose request stage must be stage.
 func replayRequest(env Env, file, stage string) ([]byte, string, error) {
-	text, err := readInputFile(env.Home, file)
+	text, err := input.ReadFile(env.Home, file)
 	if err != nil {
 		return nil, "", fmt.Errorf("--replay: %w", err)
 	}
@@ -149,7 +149,7 @@ func buildRequest(
 ) ([]byte, error) {
 	prompt := ""
 	if f := inv.flags.Lookup("prompt-file").Value.String(); f != "" {
-		text, err := readInputFile(env.Home, f)
+		text, err := input.ReadFile(env.Home, f)
 		if err != nil {
 			return nil, fmt.Errorf("--prompt-file: %w", err)
 		}
@@ -204,7 +204,7 @@ func loadConfig(env Env) (config.Config, error) {
 // hostGit runs git on the repository around the current directory, never one named by variables a
 // git hook exported.
 func hostGit() ext.Git {
-	return ext.Git{Runner: proc.Exec{}, Env: checkpub.DropRepoVars(os.Environ())}
+	return ext.Git{Runner: proc.Exec{}, Env: proc.DropRepoVars(os.Environ())}
 }
 
 // kitsLockTimeout bounds the wait for the `.kits` lock when a request lists the session's kits.
