@@ -245,9 +245,6 @@ func Run(ctx context.Context, o Options) Response {
 	s.source("t3", s.t3)
 	s.source("codex", s.codex)
 	s.source("ledgers", s.ledgers)
-	if st := s.latest.Sources["transcripts"]; st.Status == srcOK {
-		s.referenceUnread()
-	}
 	if st := s.latest.Sources["t3"]; st.Status != srcOK {
 		// Owner turns of T3 sessions are read only from the database: unread, they are unknown.
 		s.latest.Tally.Unknown += len(s.t3Sessions)
@@ -260,20 +257,32 @@ func Run(ctx context.Context, o Options) Response {
 	return s.response(path, s.publish(ctx, path))
 }
 
-// publish writes latest.json unless the deadline has passed before the write starts; a write
-// already started runs to its end (a local file's sync and rename are not interruptible).
+// publish writes latest.json unless the deadline has passed before the write starts, checked
+// before encoding and again right before writing; a write already started runs to its end (a
+// local file's sync and rename are not interruptible). The finding names the failed step only:
+// the error itself quotes local paths.
 func (s *state) publish(ctx context.Context, path string) bool {
+	const late = "deadline passed before writing latest.json"
 	if ctx.Err() != nil {
-		s.finding(kindLatestMissing, path, "deadline passed before writing latest.json")
+		s.finding(kindLatestMissing, path, late)
 		return false
 	}
 	data, err := marshalLatest(s.latest)
 	if err != nil {
-		s.finding(kindLatestMissing, path, "cannot encode latest.json: "+err.Error())
+		s.finding(kindLatestMissing, path, "cannot encode latest.json")
+		return false
+	}
+	if ctx.Err() != nil {
+		s.finding(kindLatestMissing, path, late)
 		return false
 	}
 	if err := writeLatest(path, data); err != nil {
-		s.finding(kindLatestMissing, path, err.Error())
+		detail := "home directory unknown"
+		if we, ok := errors.AsType[*writeError](err); ok {
+			detail = "cannot " + we.step
+		}
+		_, _ = fmt.Fprintf(s.o.Stderr, "latest.json: %v\n", err)
+		s.finding(kindLatestMissing, path, detail)
 		return false
 	}
 	return true

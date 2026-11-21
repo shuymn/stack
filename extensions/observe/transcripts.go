@@ -132,7 +132,7 @@ func (s *state) transcripts(st *Source) error {
 			if path == root {
 				return errors.New("transcripts root unreadable") //nolint:err113 // fixed summary
 			}
-			st.unreadable = append(st.unreadable, unreadable(path, err))
+			st.unreadable = append(st.unreadable, unreadable(root, path, err))
 			if d != nil && d.IsDir() {
 				return fs.SkipDir
 			}
@@ -149,11 +149,11 @@ func (s *state) transcripts(st *Source) error {
 		}
 		info, err := os.Lstat(path)
 		if err != nil {
-			st.unreadable = append(st.unreadable, unreadable(path, err))
+			st.unreadable = append(st.unreadable, unreadable(root, path, err))
 			return nil
 		}
 		if !info.Mode().IsRegular() {
-			st.unreadable = append(st.unreadable, path+": not a regular file")
+			st.unreadable = append(st.unreadable, unreadable(root, path, errNotRegular))
 			return nil
 		}
 		if info.ModTime().Before(s.since) {
@@ -164,12 +164,19 @@ func (s *state) transcripts(st *Source) error {
 			if isDeadline(err) {
 				return err
 			}
-			st.unreadable = append(st.unreadable, unreadable(path, err))
+			st.unreadable = append(st.unreadable, unreadable(root, path, err))
 		}
 		return nil
 	})
 	if err != nil {
 		return fmt.Errorf("walk transcripts: %w", err)
+	}
+	if len(st.unreadable) == 0 {
+		// Part of the step: a deadline here makes transcripts timeout, never ok with the signal
+		// missing (reference-unread needs every transcript read, design §3.3).
+		if err := s.referenceUnread(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -178,11 +185,19 @@ func isDeadline(err error) bool {
 	return errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)
 }
 
-func unreadable(path string, err error) string {
-	if pe, ok := errors.AsType[*fs.PathError](err); ok {
-		return path + ": " + pe.Err.Error()
+var errNotRegular = errors.New("not a regular file")
+
+// unreadable names a file that could not be read by its location under the source root, so no
+// local path reaches latest.json or the context, and by the cause without the path in it.
+func unreadable(root, path string, err error) string {
+	rel, rerr := filepath.Rel(root, path)
+	if rerr != nil {
+		rel = filepath.Base(path)
 	}
-	return path + ": " + err.Error()
+	if pe, ok := errors.AsType[*fs.PathError](err); ok {
+		err = pe.Err
+	}
+	return filepath.ToSlash(rel) + ": " + err.Error()
 }
 
 // completeLines calls fn with each newline-terminated line of r, its 1-based number and its byte
@@ -630,14 +645,14 @@ func recordedDecision(tool, text string, r record) string {
 var reRuleID = regexp.MustCompile(`^[a-z0-9-]+$`)
 
 // referenceUnread reports each live hiden reference no in-window Read named (observe.py:204-207).
-func (s *state) referenceUnread() {
-	if s.work.Err() != nil {
-		return
+func (s *state) referenceUnread() error {
+	if err := s.work.Err(); err != nil {
+		return fmt.Errorf("reference-unread: %w", err)
 	}
 	dir := filepath.Join(s.o.Home, ".claude", "skills", "hiden", "references")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return
+		return nil //nolint:nilerr // no live references: nothing can be unread (legacy behaviour)
 	}
 	for _, e := range entries {
 		name := e.Name()
@@ -653,4 +668,5 @@ func (s *state) referenceUnread() {
 			"",
 		)
 	}
+	return nil
 }

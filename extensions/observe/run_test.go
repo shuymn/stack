@@ -34,6 +34,14 @@ func TestGhVersion(t *testing.T) {
 		},
 		{"gh missing", nil, stackModel, unknown, "v2.105.0", true},
 		{
+			"model not a version", &ghVersion,
+			proctest.Response{
+				Args:   []string{"--version", "--json"},
+				Stdout: `{"version":"dev","gh_model":"` + probePath + `"}` + "\n",
+			},
+			"v2.105.0", unknown, true,
+		},
+		{
 			"old stack", &ghVersion,
 			proctest.Response{Args: []string{"--version", "--json"}, Stdout: "stack dev\n"},
 			"v2.105.0", unknown, true,
@@ -47,6 +55,7 @@ func TestGhVersion(t *testing.T) {
 			}
 			f.fake("stack", tc.stack)
 			resp, l := f.run()
+			noProbe(t, f, resp)
 			if l.Gh.Installed != tc.installed || l.Gh.Model != tc.model {
 				t.Errorf("gh = %+v", l.Gh)
 			}
@@ -130,7 +139,7 @@ func TestLatestFileRun(t *testing.T) {
 		checkResponse(t, resp)
 		got := findings(resp, kindLatestMissing)
 		if resp.Status != StatusWarn || len(got) != 1 ||
-			!strings.Contains(got[0].Detail, "rename refused") {
+			got[0].Detail != "cannot replace latest.json" {
 			t.Fatalf("status %q, findings %+v", resp.Status, resp.Findings)
 		}
 		if data, err := os.ReadFile(prev); err != nil || !bytes.Equal(data, old) {
@@ -142,6 +151,16 @@ func TestLatestFileRun(t *testing.T) {
 		}
 		if !strings.Contains(resp.Context, "not written") {
 			t.Errorf("context = %q", resp.Context)
+		}
+	})
+	t.Run("a local write error names the step, not the path", func(t *testing.T) {
+		f := newFixture(t)
+		f.write(".local/state/stack/observe", "occupied")
+		resp := Run(context.Background(), f.opts)
+		checkResponse(t, resp)
+		got := findings(resp, kindLatestMissing)
+		if len(got) != 1 || got[0].Detail != "cannot create the state directory" {
+			t.Fatalf("findings %+v", resp.Findings)
 		}
 	})
 	t.Run("no home", func(t *testing.T) {
@@ -395,6 +414,30 @@ func TestDeadlineInSteps(t *testing.T) {
 		})
 		if st := s.latest.Sources["ledgers"]; st.Status != srcTimeout {
 			t.Errorf("ledgers = %+v, want timeout", st)
+		}
+	})
+	t.Run("deadline passed while encoding", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t)
+		s := f.state(t.Context())
+		path := latestPath(f.home)
+		if s.publish(expireAfter(1), path) {
+			t.Fatal("published after the deadline")
+		}
+		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("latest.json written: %v", err)
+		}
+	})
+	t.Run("reference-unread is part of the transcript step", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t)
+		f.transcript("ok", user("task", hourAgo, true))
+		f.write(".claude/skills/hiden/references/unread.md", "x")
+		s := f.state(t.Context())
+		s.source("transcripts", s.transcripts)
+		if st := s.latest.Sources["transcripts"]; st.Status != srcOK ||
+			len(signalItems(s.latest, "reference-unread")) != 1 {
+			t.Errorf("transcripts %+v, items %+v", st, s.latest.Items)
 		}
 	})
 	t.Run("no write after the deadline", func(t *testing.T) {

@@ -20,9 +20,12 @@ var (
 	// reFixClause and reFixRef are the legacy fix-PR rules (observe.py:42-45).
 	reFixClause = regexp.MustCompile(`(?i)\bfix(?:es|ed)?\b[^#\n]{0,60}?(` + oneRef +
 		`(?:[ \t]*(?:,|\band\b|\bor\b|&)?[ \t]*(?:fix(?:es|ed)?[ \t]+)?` + oneRef + `)*)`)
-	reFixRef  = regexp.MustCompile(`(?:\b([\w.-]+/[\w.-]+))?#(\d+)`)
-	reRevert  = regexp.MustCompile(`(?i)\brevert`)
-	reGhVer   = regexp.MustCompile(`^gh version (\d+\.\d+\.\d+)\b`)
+	reFixRef = regexp.MustCompile(`(?:\b([\w.-]+/[\w.-]+))?#(\d+)`)
+	reRevert = regexp.MustCompile(`(?i)\brevert`)
+	reGhVer  = regexp.MustCompile(`^gh version (\d+\.\d+\.\d+)\b`)
+	// reModel is the shape of stack's gh_model (internal/ghargs GhVersion); anything else is
+	// unknown, never copied into the response.
+	reModel   = regexp.MustCompile(`^v\d+(?:\.\d+)*(?:[-+][0-9A-Za-z.-]+)?$`)
 	ghEnvVars = []string{"GH_PROMPT_DISABLED=1", "GH_NO_UPDATE_NOTIFIER=1", "NO_COLOR=1"}
 )
 
@@ -171,6 +174,12 @@ func (s *state) ghRepo(gh, repo, day string, st *Source) ([]Item, error) {
 	}, '[', &prs); err != nil {
 		return nil, err
 	}
+	for _, pr := range prs {
+		// A list item without what the signals read is wrongly shaped: the repo is not read.
+		if _, ok := parseTime(pr.MergedAt); !ok || pr.Number <= 0 {
+			return nil, fmt.Errorf("gh pr list: %w", errOutput)
+		}
+	}
 	st.Records += len(prs)
 	var items []Item
 	item := func(signal, where, excerpt string, t time.Time) {
@@ -236,6 +245,11 @@ func (s *state) ghRepo(gh, repo, day string, st *Source) ([]Item, error) {
 		return nil, err
 	}
 	for _, r := range runs {
+		if _, ok := parseTime(r.CreatedAt); !ok {
+			return nil, fmt.Errorf("gh run list: %w", errOutput)
+		}
+	}
+	for _, r := range runs {
 		st.Records++
 		if t, ok := parseTime(r.CreatedAt); ok && s.inWindow(t) {
 			where := r.URL
@@ -293,7 +307,7 @@ func (s *state) ghVersion() {
 		}
 		if out.ok() && json.Unmarshal(out.stdout, &v) == nil && v.Version != nil &&
 			v.GhModel != nil &&
-			*v.GhModel != "" {
+			reModel.MatchString(*v.GhModel) {
 			model = *v.GhModel
 		}
 	}

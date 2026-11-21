@@ -1,6 +1,7 @@
 package observe
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/shuymn/stack/internal/gittest"
@@ -106,7 +108,8 @@ func TestSourceIsolation(t *testing.T) {
 		t.Errorf("status = %q, want warn", resp.Status)
 	}
 	tr := l.Sources["transcripts"]
-	if tr.Status != srcFail || !strings.Contains(tr.Error, "link.jsonl") ||
+	if tr.Status != srcFail || !strings.Contains(tr.Error, "-p/link.jsonl") ||
+		strings.Contains(tr.Error, f.home) ||
 		!strings.Contains(tr.Error, "not a regular file") {
 		t.Errorf("transcripts = %+v, want fail listing the link", tr)
 	}
@@ -155,6 +158,16 @@ func TestGhFailureKeepsReposRead(t *testing.T) {
 			ghFailureKeepsReposRead(t, tc.view, tc.error)
 		})
 	}
+	t.Run("pr without a number", func(t *testing.T) {
+		t.Parallel()
+		ghFailureKeepsReposRead(t, ghView("o/b", "PUBLIC"), "gh pr list: unexpected output",
+			ghPRs("o/b", "[{}]"))
+	})
+	t.Run("run without a time", func(t *testing.T) {
+		t.Parallel()
+		ghFailureKeepsReposRead(t, ghView("o/b", "PUBLIC"), "gh run list: unexpected output",
+			ghPRs("o/b", "[]"), ghRuns("o/b", `[{"workflowName":"CI"}]`))
+	})
 	t.Run("pr list not a list", func(t *testing.T) {
 		t.Parallel()
 		ghFailureKeepsReposRead(t, ghView("o/b", "PUBLIC"), "gh pr list: unexpected output",
@@ -578,5 +591,19 @@ func TestLongLine(t *testing.T) {
 	if st := l.Sources["transcripts"]; st.Status != srcOK || st.Records != 2 ||
 		!strings.Contains(resp.Context, "long lines skipped 1") {
 		t.Errorf("transcripts = %+v, context %q", st, resp.Context)
+	}
+}
+
+// TestCodexReadError: a read error after the open fails the file instead of reading as empty.
+func TestCodexReadError(t *testing.T) {
+	t.Parallel()
+	if _, err := readFirstLine(iotest.ErrReader(errNotOnPath)); !errors.Is(err, errNotOnPath) {
+		t.Fatalf("readFirstLine = %v, want the read error", err)
+	}
+	if line, err := readFirstLine(
+		strings.NewReader(`{"a":1}`),
+	); err != nil ||
+		string(line) != `{"a":1}` {
+		t.Fatalf("readFirstLine at EOF = %q, %v", line, err)
 	}
 }

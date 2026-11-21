@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -194,12 +195,12 @@ func (s *state) codex(st *Source) error {
 			if path == root {
 				return errors.New("codex sessions root unreadable") //nolint:err113 // summary
 			}
-			st.unreadable = append(st.unreadable, unreadable(path, err))
+			st.unreadable = append(st.unreadable, unreadable(root, path, err))
 			return nil
 		}
 		name := d.Name()
 		if !d.IsDir() && strings.HasPrefix(name, "rollout-") && strings.HasSuffix(name, ".jsonl") {
-			s.codexSession(path, st)
+			s.codexSession(root, path, st)
 		}
 		return nil
 	})
@@ -210,14 +211,14 @@ func (s *state) codex(st *Source) error {
 }
 
 // codexSession reads the first line of one rollout file.
-func (s *state) codexSession(path string, st *Source) {
+func (s *state) codexSession(root, path string, st *Source) {
 	info, err := os.Lstat(path)
 	if err != nil {
-		st.unreadable = append(st.unreadable, unreadable(path, err))
+		st.unreadable = append(st.unreadable, unreadable(root, path, err))
 		return
 	}
 	if !info.Mode().IsRegular() {
-		st.unreadable = append(st.unreadable, path+": not a regular file")
+		st.unreadable = append(st.unreadable, unreadable(root, path, errNotRegular))
 		return
 	}
 	if info.ModTime().Before(s.since) {
@@ -225,7 +226,7 @@ func (s *state) codexSession(path string, st *Source) {
 	}
 	first, err := firstLine(path)
 	if err != nil {
-		st.unreadable = append(st.unreadable, unreadable(path, err))
+		st.unreadable = append(st.unreadable, unreadable(root, path, err))
 		return
 	}
 	st.Files++
@@ -259,13 +260,22 @@ func firstLine(path string) ([]byte, error) {
 		return nil, fmt.Errorf("open: %w", err)
 	}
 	defer func() { _ = f.Close() }()
+	return readFirstLine(f)
+}
+
+// readFirstLine reads up to the first newline, at most about maxFirstLine bytes; a read error
+// other than EOF fails the file.
+func readFirstLine(f io.Reader) ([]byte, error) {
 	r := bufio.NewReader(f)
 	var line []byte
 	for len(line) < maxFirstLine {
 		chunk, err := r.ReadSlice('\n')
 		line = append(line, chunk...)
-		if err == nil || !errors.Is(err, bufio.ErrBufferFull) {
-			break
+		switch {
+		case err == nil, errors.Is(err, io.EOF):
+			return line, nil
+		case !errors.Is(err, bufio.ErrBufferFull):
+			return nil, fmt.Errorf("read: %w", err)
 		}
 	}
 	return line, nil
@@ -303,7 +313,7 @@ func (s *state) ledgers(st *Source) error {
 		st.Files++
 		info, err := os.Lstat(path)
 		if err == nil && !info.Mode().IsRegular() {
-			st.unreadable = append(st.unreadable, path+": not a regular file")
+			st.unreadable = append(st.unreadable, unreadable(root, path, errNotRegular))
 			continue
 		}
 		var data []byte
@@ -311,7 +321,7 @@ func (s *state) ledgers(st *Source) error {
 			data, err = os.ReadFile(path)
 		}
 		if err != nil {
-			st.unreadable = append(st.unreadable, unreadable(path, err))
+			st.unreadable = append(st.unreadable, unreadable(root, path, err))
 			continue
 		}
 		for i, line := range strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n") {
