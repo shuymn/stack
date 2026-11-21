@@ -69,7 +69,7 @@ built-in behaviour; it still runs its extensions.
 |---|---|---|---|---|---|
 | `entry` | after `stack kit open` printed the kit; on SessionStart `compact` after the restored kits, when the session has at least one kit and the hook has time left for it (§4.3); `stack run entry` | inject | no | 10 s; at compaction also bounded by the hook's cut-off less the pipe-reaping allowance (§4.3) | `warn` marker after the kit; kit output unaffected |
 | `outbound` | `stack run outbound` (push hooks, CI, skills) with `[stages].outbound`; `stack pr merge` before any `gh` call when `--subject` or `--body` is given, with `[merge].message_checks` | gate | yes: `stack run` exits 1, `pr merge` refuses | 120 s | `warn`, does not block; at `pr merge` the merge is refused instead (§4.2) |
-| `merged` | `stack pr merge` at its one verified-success point (read-back of `MERGED` on the checked head with a full merge OID, on the direct path and on every `--auto` success, including the final read-back after auto-merge was disabled), unless the run was cancelled; `stack run merged` | observe / inject | no: the merge is irreversible | 10 s from the stage's start, including request preparation and pipe reaping (§4.2) | `warn` marker after the `MERGED` line; exit code unchanged |
+| `merged` | `stack pr merge` at its one verified-success point (read-back of `MERGED` on the checked head with a full merge OID, on the direct path and on every `--auto` success, including the final read-back after auto-merge was disabled), unless the run was cancelled; `stack run merged` | observe / inject | no: the merge is irreversible | 10 s from the stage's start; run by `pr merge`, including request preparation and pipe reaping (§4.2); `stack run merged` prepares its request outside it | `warn` marker after the `MERGED` line; exit code unchanged |
 | `cycle` | `launchd` → `stack run cycle` (macOS); `stack run cycle` anywhere | observe | no | 30 min | `warn` |
 
 **Block at a stage that cannot block.** At `entry`, `merged` and `cycle` the core records a `block` response as a
@@ -207,13 +207,15 @@ Step 2 of `docs/design/phase2-core.md` §4.2 gains a last step: when at least on
   so far: it bounds the entry stage, not the restore's own file reads and board commands, which keep their v10
   bounds (`docs/design/phase2-core.md` §4.2). Once the restore is built, the stage's deadline is the earlier of 10 s
   from its start and the cut-off, less the runner's pipe-reaping allowance (2 s, `internal/proc/proc.go:28`), so an
-  extension that runs to that deadline and leaves a pipe open to a grandchild is reaped by the cut-off. The stage
+  extension that runs to that deadline and leaves a pipe open to a grandchild is reaped by the cut-off (the 1 s
+  minimum below is measured on that deadline, after the allowance is subtracted). The stage
   runs only when that deadline is at least 1 s away; the deadline covers request encoding and every extension, and
   an extension not started by it is left unstarted with a `warn`. When the stage does not run, its place shows
   `[entry skipped: deadline]` if that fits.
 - **Restore first:** the rules, brief, kits, boards and handover are placed before the stage starts and are never
   changed by it. Whatever the extensions do (hang, crash, flood stdout, leave a pipe open), the hook writes the
-  already-built restore, plus what entry added, by the cut-off.
+  already-built restore, plus what entry added: no work starts after the cut-off, and the output is written before
+  the host's 60 s.
 - **Placement:** each result that `kit open` would show becomes one piece after the boards, in stage order, capped
   at 4,500 chars like a kit block and cut with `[...cut N chars]` on a code-point boundary, or replaced by
   `[entry context omitted: context limit: <name>]` when the cut piece does not fit. Entry contexts reserve
