@@ -242,7 +242,8 @@ func TestGhPublish(t *testing.T) {
 		"gh api repos/o/r/pulls --jq '.[] | \"" + lp + "\"'",
 		"gh api repos/o/r/contents/x -H 'X-Note: " + lp + "'",
 		"gh pr create --body-file b.md",
-		"gh pr create --body-file " + lp,
+		// An absolute body file path is not published; only the clean content is.
+		"gh pr create --body-file '" + filepath.ToSlash(filepath.Join(f.cwd, "clean.md")) + "'",
 		"gh pr create --attach '" + lp + "/s.png#alt'",
 		"cd sub; gh pr create --body-file b.md",
 		"cat sub/b.md | gh pr create --body-file -",
