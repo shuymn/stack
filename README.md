@@ -17,8 +17,8 @@ A minimal, extensible Go CLI (`stack`) for personal AI coding agent orchestratio
 
 ## Install
 
-Install `stack` and the cycle extensions into one directory on `PATH`, so core finds each extension as
-`stack-<name>`:
+From this checkout, install `stack` and the cycle extensions into one absolute directory on `PATH` (for scheduled
+runs, also on the job's `PATH`), so core finds each extension as `stack-<name>`:
 
 ```sh
 GOBIN="$HOME/.local/bin" go install ./cmd/stack ./extensions/observe/cmd/stack-observe ./extensions/improve/cmd/stack-improve
@@ -28,28 +28,36 @@ GOBIN="$HOME/.local/bin" go install ./cmd/stack ./extensions/observe/cmd/stack-o
 
 ## Cycle
 
-Run each cycle extension as its own stage, from the checkout of the repository improve may change:
+Run each cycle extension as its own stage, observe first, from the checkout of the repository improve may change:
 
 ```sh
 stack run cycle --ext observe   # 7-day window; writes ~/.local/state/stack/observe/latest.json
-stack run cycle --ext improve   # off unless enabled below
+stack run cycle --ext improve   # reads that file; off unless enabled below
 ```
 
-`stack-improve` makes paid model calls and opens a PR, so it calls nothing until the owner opts in on this machine:
+Check that observe answered without a `latest-not-written` finding before running improve, which otherwise works
+from an older `latest.json` (up to 24 hours old).
+
+Improve is off by default. Once enabled it can make paid model calls and open a PR, so the owner opts in on this
+machine:
 
 ```toml
 # ~/.config/stack/improve.toml
 enabled = true   # absent file or any other value = off
 ```
 
-Enabled, it makes at most one attempt per ISO week, on macOS and Linux only, and only in a public GitHub
-repository whose default branch has `.stack/improve.toml` listing the paths it may change:
+Enabled, it runs on macOS and Linux only, keeps one weekly stamp per machine (one paid attempt per local ISO week
+across repositories), and acts only when the single `origin` URL is a public `github.com` repository whose default
+branch has `.stack/improve.toml` with a non-empty `paths` list; it changes only existing regular, non-executable
+files matching those patterns:
 
 ```toml
 paths = ["home/dot_claude/skills/**"]
 ```
 
-The scheduled daily run (`launchd`, macOS) lives in `shuymn/dotfiles`. Contracts:
-[docs/design/phase3-cycle.md](docs/design/phase3-cycle.md).
+Moving from the legacy kaizen cycle, keep improve disabled until the cutover order of
+[docs/design/phase3-cycle.md](docs/design/phase3-cycle.md) §6 reaches its opt-in step: the old job stopped, the
+private terms copied and verified, and a fresh observe run checked. The scheduled daily run (`launchd`, macOS) is
+part of that cutover in `shuymn/dotfiles`.
 
 See [docs/architecture.md](docs/architecture.md) for the full design and migration roadmap.
