@@ -29,10 +29,17 @@ Install `stack-public` and `stack-improve` last, in this order. Improve's public
 which reads `~/.config/stack/safety.toml` instead of the `[safety]` table of `config.toml`; a private-terms file
 named only in `config.toml` would otherwise drop out of the check.
 
-1. Write `~/.config/stack/safety.toml` from the effective `[safety]` table of `~/.config/stack/config.toml`, with
-   the same keys (`secrets`, `private_terms`, `deny_pencil_generate`). Compare custom `secrets` paths, a custom
-   `private_terms` file and an explicit `deny_pencil_generate = false`; a key left out takes the same default in
-   both files. Keep the table in `config.toml` too: `stack` still reads it.
+1. Write `~/.config/stack/safety.toml` from the effective `[safety]` table of `~/.config/stack/config.toml`: the
+   same keys (`secrets`, `private_terms`, `deny_pencil_generate`) at the top level, without the `[safety]` header
+   (a `[safety]` table in `safety.toml` is an unknown key, and the defaults apply). For example:
+
+   ```toml
+   private_terms = "~/.config/stack/private-terms"
+   deny_pencil_generate = true
+   ```
+
+   Compare custom `secrets` paths, a custom `private_terms` file and an explicit `deny_pencil_generate = false`; a
+   key left out takes the same default in both files. Keep the table in `config.toml` too: `stack` still reads it.
 2. Install `stack-public` and check that `command -v stack-public` finds it both in an interactive shell and on the
    scheduled job's `PATH`:
 
@@ -47,6 +54,9 @@ named only in `config.toml` would otherwise drop out of the check.
    ```
 
 `stack-improve` embeds `extensions/improve/writing.md`; reinstall after changing it.
+
+Keep `public` first in `[stages].outbound` (the default order): its own 100 s limit, which answers `block` before
+the stage's 120 s deadline turns a slow check into a `warn`, holds only when no extension runs before it.
 
 ## Cycle
 
