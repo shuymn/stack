@@ -58,6 +58,11 @@ var Timeouts = map[string]time.Duration{
 // severity orders statuses for aggregation: block > warn > pass.
 var severity = []string{StatusPass, StatusWarn, StatusBlock}
 
+// cannotBlock reports a stage whose semantic is inject or observe: a block there is demoted.
+func cannotBlock(stage string) bool {
+	return stage == StageEntry || stage == StageCycle
+}
+
 var (
 	// ErrInvalidName reports an extension name that is not a single lower-case file-name component.
 	ErrInvalidName = errors.New("invalid extension name")
@@ -210,7 +215,8 @@ func Run(ctx context.Context, o Options, stage string, stdin []byte, plans []Pla
 // Stream runs the runnable plans of stage in order under one stage deadline and passes each
 // result to each as soon as it is known; skipped plans yield nothing. Once the deadline has
 // passed no extension starts: each remaining one warns, so a stage takes at most its timeout
-// plus one cleanup grace period of the runner.
+// plus one cleanup grace period of the runner. A block at a stage that cannot block is passed on
+// demoted to warn.
 func Stream(ctx context.Context, o Options, stage string, stdin []byte, plans []Plan,
 	each func(Result),
 ) {
@@ -231,7 +237,7 @@ func Stream(ctx context.Context, o Options, stage string, stdin []byte, plans []
 		case ctx.Err() != nil:
 			each(warn(p.Name, "not started: "+ctx.Err().Error()))
 		default:
-			each(o.runOne(ctx, stage, stdin, p, timeout))
+			each(demote(stage, o.runOne(ctx, stage, stdin, p, timeout)))
 		}
 	}
 }
@@ -347,6 +353,28 @@ func parse(stdout []byte) (Result, error) {
 		r.Findings = json.RawMessage(resp.Findings)
 	}
 	return r, nil
+}
+
+// demote records a block at a stage that cannot block as a warn: context and findings are kept,
+// the finding `{"extension":<name>,"error":"block is not allowed at stage <stage>"}` is appended
+// and error is set to that reason.
+func demote(stage string, r Result) Result {
+	if r.Status != StatusBlock || !cannotBlock(stage) {
+		return r
+	}
+	reason := "block is not allowed at stage " + stage
+	synthetic := warn(r.Name, reason).Findings
+	// Both are arrays (parse accepted r's); splice the synthetic element in after the
+	// extension's own, keeping their bytes.
+	own := bytes.TrimSpace(bytes.TrimSuffix(bytes.TrimSpace(r.Findings), []byte("]")))
+	elem := synthetic[1 : len(synthetic)-1]
+	if len(own) <= 1 { // "[" or nothing: no findings of its own
+		r.Findings = synthetic
+	} else {
+		r.Findings = slices.Concat(own, []byte(","), elem, []byte("]"))
+	}
+	r.Status, r.Error = StatusWarn, reason
+	return r
 }
 
 func warn(name, reason string) Result {

@@ -51,8 +51,8 @@ const (
 )
 
 // Response is one scripted answer. The fake performs, in order: read stdin
-// (unless NoStdin), spawn the grandchild, log the call, write stdout and
-// stderr, sleep, exit.
+// (unless NoStdin), spawn the grandchild, write WriteFiles, log the call,
+// write stdout and stderr, sleep, exit.
 type Response struct {
 	// Args matches the arguments after argv[0] exactly; nil matches any call
 	// and an empty non-nil slice matches only a call without arguments.
@@ -69,6 +69,10 @@ type Response struct {
 	// stdin, stdout and stderr open, without reading stdin, for at most this
 	// long, or until cleanup.
 	Grandchild time.Duration `json:"grandchild,omitempty"`
+	// LogEnv names environment variables whose values the call log records.
+	LogEnv []string `json:"logEnv,omitempty"`
+	// WriteFiles maps a path to the content the fake writes there before it logs the call.
+	WriteFiles map[string]string `json:"writeFiles,omitempty"`
 }
 
 // Scenario lists responses; the first whose Args match is used.
@@ -82,6 +86,8 @@ type Call struct {
 	Stdin string   `json:"stdin"`
 	// GrandchildPID is the PID of the spawned grandchild, or zero.
 	GrandchildPID int `json:"grandchildPid,omitempty"`
+	// Env holds the variables of the response's LogEnv that were set.
+	Env map[string]string `json:"env,omitempty"`
 }
 
 var mainCalled bool
@@ -217,6 +223,14 @@ func runFake(exe, base string, data []byte) int {
 	args := os.Args[1:]
 	resp, ok := match(s, args)
 	call := Call{Args: args}
+	for _, name := range resp.LogEnv {
+		if v, set := os.LookupEnv(name); set {
+			if call.Env == nil {
+				call.Env = map[string]string{}
+			}
+			call.Env[name] = v
+		}
+	}
 	if !ok || !resp.NoStdin {
 		stdin, _ := io.ReadAll(os.Stdin)
 		call.Stdin = string(stdin)
@@ -228,6 +242,12 @@ func runFake(exe, base string, data []byte) int {
 			return noMatchExit
 		}
 		call.GrandchildPID = pid
+	}
+	for path, content := range resp.WriteFiles {
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "proctest: write file: %v\n", err)
+			return noMatchExit
+		}
 	}
 	if err := appendCall(base, call); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "proctest: log: %v\n", err)

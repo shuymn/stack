@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/shuymn/stack/internal/checkpub"
 	"github.com/shuymn/stack/internal/config"
@@ -27,7 +29,8 @@ var (
 )
 
 // runRun implements `stack run <stage>`: it runs the stage's extensions and prints the aggregate as
-// JSON. block exits 1; with a replay's expect, exit 1 means the aggregate differs from it instead.
+// JSON. block, which only outbound keeps, exits 1; with a replay's expect, exit 1 means the
+// aggregate differs from it instead.
 func runRun(ctx context.Context, env Env, inv invocation) error {
 	stage := inv.args[0]
 	set := map[string]bool{}
@@ -42,7 +45,8 @@ func runRun(ctx context.Context, env Env, inv invocation) error {
 			return fmt.Errorf("--%s: %w", name, errEmptyFlag)
 		}
 	}
-	names, err := stageNames(env, inv, stage)
+	cfg := &lazyConfig{env: env}
+	names, err := stageNames(env, inv, cfg, stage)
 	if err != nil {
 		return err
 	}
@@ -51,7 +55,7 @@ func runRun(ctx context.Context, env Env, inv invocation) error {
 	if set["replay"] {
 		request, expect, err = replayRequest(env, inv.flags.Lookup("replay").Value.String(), stage)
 	} else {
-		request, err = buildRequest(ctx, env, inv, stage)
+		request, err = buildRequest(ctx, env, inv, cfg, stage)
 	}
 	if err != nil {
 		return err
@@ -69,6 +73,7 @@ func runRun(ctx context.Context, env Env, inv invocation) error {
 	if _, err := fmt.Fprintf(env.Stdout, "%s\n", out); err != nil {
 		return fmt.Errorf("write result: %w", err)
 	}
+	// The aggregate is compared after demotion, so only a stage that can block exits 1 on it.
 	switch {
 	case expect != "" && agg.Status != expect:
 		return refusal{fmt.Errorf("%w: got %s, want %s", errExpect, agg.Status, expect)}
@@ -78,13 +83,29 @@ func runRun(ctx context.Context, env Env, inv invocation) error {
 	return nil
 }
 
+// lazyConfig loads the config, printing its warnings, at most once.
+type lazyConfig struct {
+	env    Env
+	loaded bool
+	cfg    config.Config
+	err    error
+}
+
+func (l *lazyConfig) get() (config.Config, error) {
+	if !l.loaded {
+		l.cfg, l.err = loadConfig(l.env)
+		l.loaded = true
+	}
+	return l.cfg, l.err
+}
+
 // stageNames returns the --ext names, or else the stage's configured ones; an invalid name is a
 // usage error from --ext and a config error from the config.
-func stageNames(env Env, inv invocation, stage string) ([]string, error) {
+func stageNames(env Env, inv invocation, lc *lazyConfig, stage string) ([]string, error) {
 	if l, ok := inv.flags.Lookup("ext").Value.(*stringList); ok && len(*l) > 0 {
 		return *l, ext.CheckNames(*l)
 	}
-	cfg, err := loadConfig(env)
+	cfg, err := lc.get()
 	if err != nil {
 		return nil, err
 	}
@@ -121,8 +142,10 @@ func replayRequest(env Env, file, stage string) ([]byte, string, error) {
 }
 
 // buildRequest builds the request from the repository around the working directory, --range and
-// --prompt-file.
-func buildRequest(ctx context.Context, env Env, inv invocation, stage string) ([]byte, error) {
+// --prompt-file; an entry request also lists the session's kits.
+func buildRequest(
+	ctx context.Context, env Env, inv invocation, lc *lazyConfig, stage string,
+) ([]byte, error) {
 	prompt := ""
 	if f := inv.flags.Lookup("prompt-file").Value.String(); f != "" {
 		text, err := readInputFile(env.Home, f)
@@ -135,6 +158,9 @@ func buildRequest(ctx context.Context, env Env, inv invocation, stage string) ([
 	req, err := ext.BuildRequest(ctx, hostGit(), stage, rng, prompt)
 	if err != nil {
 		return nil, err
+	}
+	if stage == ext.StageEntry {
+		req.Kits = runKits(ctx, env, lc)
 	}
 	request, err := json.Marshal(req)
 	if err != nil {
@@ -180,6 +206,61 @@ func hostGit() ext.Git {
 	return ext.Git{Runner: proc.Exec{}, Env: checkpub.DropRepoVars(os.Environ())}
 }
 
+// kitsLockTimeout bounds the wait for the `.kits` lock when a request lists the session's kits.
+const kitsLockTimeout = time.Second
+
+// requestKits returns the kits field of a live request: the kits recorded for id whose dir under
+// kitRoot exists, in `.kits` order, or an empty list without a valid id. When the `.kits` lock is
+// not taken within a second, or the list cannot be read, it is empty and stderr says why.
+func requestKits(ctx context.Context, env Env, id, kitRoot string) *[]ext.Kit {
+	kits := []ext.Kit{}
+	if env.Home == "" || !paths.ValidSessionID(id) {
+		return &kits
+	}
+	refs, err := (kit.Store{Home: env.Home, Timeout: kitsLockTimeout}).Refs(ctx, id, kitRoot)
+	switch {
+	case errors.Is(err, kit.ErrLocked):
+		_, _ = fmt.Fprintf(env.Stderr, "stack: %s.kits locked; kits not sent\n", id)
+	case err != nil:
+		_, _ = fmt.Fprintf(env.Stderr, "stack: %v; kits not sent\n", err)
+	}
+	for _, r := range refs {
+		kits = append(kits, ext.Kit{Slug: r.Slug, Dir: r.Dir})
+	}
+	return &kits
+}
+
+// runKits returns the kits of a live `stack run entry` request; only a valid session id loads the
+// config for the kit root. A config that cannot be loaded costs only the kits: they are [] and
+// stderr says why, so an --ext run still runs as it did before requests carried kits.
+func runKits(ctx context.Context, env Env, lc *lazyConfig) *[]ext.Kit {
+	id := ""
+	if env.Getenv != nil {
+		id = env.Getenv(sessionIDEnv)
+	}
+	root := ""
+	if paths.ValidSessionID(id) && env.Home != "" {
+		cfg, err := lc.get()
+		if err == nil {
+			root, err = kitRoot(env, cfg)
+		}
+		if err != nil {
+			_, _ = fmt.Fprintf(env.Stderr, "stack: %v; kits not sent\n", err)
+			return &[]ext.Kit{}
+		}
+	}
+	return requestKits(ctx, env, id, root)
+}
+
+// kitRoot is the absolute kit root of cfg.
+func kitRoot(env Env, cfg config.Config) (string, error) {
+	root, err := filepath.Abs(paths.FromConfig(env.Home, cfg.Kit.Root))
+	if err != nil {
+		return "", fmt.Errorf("kit root: %w", err)
+	}
+	return root, nil
+}
+
 func extOptions(env Env) ext.Options {
 	o := ext.Options{Runner: proc.Exec{}, Stderr: env.Stderr}
 	if env.Getenv != nil {
@@ -209,16 +290,19 @@ func (b *blockWriter) write(blocks ...kit.Block) error {
 	return nil
 }
 
-// writeEntryStage runs the entry stage after `kit open` with an empty range and prompt and writes
-// each result that has something to show, as soon as it completes, as a block in the kit
-// renderer's format. block is shown, not enforced. names must be valid. After a write error no
+// writeEntryStage runs the entry stage after `kit open` with an empty range and prompt and the
+// session's kits under kitRoot, and writes each result that has something to show, as soon as it
+// completes, as a block in the kit renderer's format. names must be valid. After a write error no
 // further extension starts.
-func writeEntryStage(ctx context.Context, env Env, names []string, bw *blockWriter) error {
+func writeEntryStage(
+	ctx context.Context, env Env, id, kitRoot string, names []string, bw *blockWriter,
+) error {
 	plans := ext.Resolve(names)
 	var request []byte
 	if ext.AnyToRun(plans) {
 		req, err := ext.BuildRequest(ctx, hostGit(), ext.StageEntry, "", "")
 		if err == nil {
+			req.Kits = requestKits(ctx, env, id, kitRoot)
 			request, err = json.Marshal(req)
 		}
 		if err != nil {
@@ -229,36 +313,11 @@ func writeEntryStage(ctx context.Context, env Env, names []string, bw *blockWrit
 	defer cancel()
 	var werr error
 	ext.Stream(ctx, extOptions(env), ext.StageEntry, request, plans, func(r ext.Result) {
-		if werr == nil && (r.Status != ext.StatusPass || r.Context != "") {
-			if werr = bw.write(resultBlock(r)); werr != nil {
+		if b, shown := kit.EntryBlock(r); werr == nil && shown {
+			if werr = bw.write(b); werr != nil {
 				cancel()
 			}
 		}
 	})
 	return werr
-}
-
-// resultBlock renders one extension result: its context in an `extension-context` block naming
-// the executable, preceded by a status line unless it passed; a result without context is a bare
-// marker.
-func resultBlock(r ext.Result) kit.Block {
-	note := ""
-	switch r.Status {
-	case ext.StatusBlock:
-		note = fmt.Sprintf("[extension %s: block (shown, not enforced)]", r.Name)
-	case ext.StatusWarn:
-		reason := r.Error
-		if reason == "" {
-			reason = "warn"
-		}
-		note = fmt.Sprintf("[extension %s: warn: %s]", r.Name, reason)
-	}
-	body := strings.TrimSpace(r.Context)
-	if body == "" || r.Path == "" {
-		return kit.Block{Body: strings.TrimSpace(note + "\n" + body)}
-	}
-	if note != "" {
-		body = note + "\n" + body
-	}
-	return kit.Block{Tag: "extension-context", Path: r.Path, Body: body}
 }

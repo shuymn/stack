@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 
 	"github.com/shuymn/stack/internal/ext"
 	"github.com/shuymn/stack/internal/kit"
@@ -72,9 +71,9 @@ func runKitOpen(ctx context.Context, env Env, inv invocation) error {
 	if err := checkStageNames(env, ext.StageEntry, cfg.Stages.Entry); err != nil {
 		return err
 	}
-	root, err := filepath.Abs(paths.FromConfig(env.Home, cfg.Kit.Root))
+	root, err := kitRoot(env, cfg)
 	if err != nil {
-		return fmt.Errorf("kit root: %w", err)
+		return err
 	}
 
 	// With the lock held, create the kit dir and record the slug only once that succeeded; render
@@ -103,7 +102,7 @@ func runKitOpen(ctx context.Context, env Env, inv invocation) error {
 	bw := &blockWriter{w: env.Stdout}
 	err = bw.write(r.Render(boardCtx, dir)...)
 	if err == nil {
-		err = writeEntryStage(ctx, env, cfg.Stages.Entry, bw)
+		err = writeEntryStage(ctx, env, id, root, cfg.Stages.Entry, bw)
 	}
 	if err != nil {
 		if id != "" {

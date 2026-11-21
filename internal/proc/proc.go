@@ -24,9 +24,9 @@ import (
 )
 
 const (
-	// defaultWaitDelay bounds how long Run and Stream wait for the pipes after
+	// DefaultWaitDelay bounds how long Run and Stream wait for the pipes after
 	// the child exits.
-	defaultWaitDelay = 2 * time.Second
+	DefaultWaitDelay = 2 * time.Second
 	// defaultMaxStdout caps captured stdout when Cmd.MaxStdout is zero.
 	defaultMaxStdout = 1 << 20
 	// maxStderr caps stderr captured into Result.Stderr.
@@ -224,7 +224,7 @@ func (e Exec) waitDelay() time.Duration {
 	if e.WaitDelay > 0 {
 		return e.WaitDelay
 	}
-	return defaultWaitDelay
+	return DefaultWaitDelay
 }
 
 // child is a started subprocess whose stdio pipes stack owns.

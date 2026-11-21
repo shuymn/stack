@@ -276,7 +276,8 @@ func TestRunStartFailure(t *testing.T) {
 	}
 }
 
-// TestRunAggregate covers C21's aggregation: block > warn > pass, skipped listed, zero run = pass.
+// TestRunAggregate covers C21's aggregation at outbound, the stage that can block: block > warn >
+// pass, skipped listed, zero run = pass.
 func TestRunAggregate(t *testing.T) {
 	t.Parallel()
 	pass := install(t, "a", proctest.Response{Stdout: `{"status":"pass","context":"A"}`})
@@ -307,13 +308,13 @@ func TestRunAggregate(t *testing.T) {
 		{"not runnable", []Plan{pass, unrunnable}, StatusWarn, []string{"a", "odd"}, []string{}},
 	}
 	for _, tt := range tests {
-		agg := Run(context.Background(), Options{Runner: proc.Exec{}}, StageCycle,
+		agg := Run(context.Background(), Options{Runner: proc.Exec{}}, StageOutbound,
 			[]byte(request), tt.plans)
 		var names []string
 		for _, r := range agg.Results {
 			names = append(names, r.Name)
 		}
-		if agg.Stage != StageCycle || agg.Status != tt.want ||
+		if agg.Stage != StageOutbound || agg.Status != tt.want ||
 			!slices.Equal(append([]string{}, names...), tt.results) ||
 			!slices.Equal(agg.Skipped, tt.skipped) {
 			t.Errorf("%s: aggregate = %+v, want %s %v skipped %v", tt.name, agg, tt.want,
@@ -333,6 +334,51 @@ func TestRunAggregate(t *testing.T) {
 	f := findings(t, agg.Results[0])
 	if len(f) != 1 || f[0]["extension"] != "odd" {
 		t.Fatalf("not runnable finding = %s", agg.Results[0].Findings)
+	}
+}
+
+// TestBlockDemotion covers C1: a block at entry or cycle is recorded as warn with its context and
+// findings kept, the stage finding appended and error set; outbound keeps block.
+func TestBlockDemotion(t *testing.T) {
+	t.Parallel()
+	withFindings := install(t, "gate", proctest.Response{
+		Stdout: `{"status":"block","context":"STOP","findings":[{"rule":"x"}, {"n":1} ]}`,
+	})
+	bare := install(t, "bare", proctest.Response{Stdout: `{"status":"block"}`})
+	for _, stage := range []string{StageEntry, StageOutbound, StageCycle} {
+		t.Run(stage, func(t *testing.T) {
+			t.Parallel()
+			// Not the stages' own deadlines: two fakes may start slowly on a loaded machine.
+			o := Options{Runner: proc.Exec{}, Timeout: time.Minute}
+			agg := Run(context.Background(), o, stage, []byte(request), []Plan{withFindings, bare})
+			if stage == StageOutbound {
+				if agg.Status != StatusBlock || agg.Results[0].Status != StatusBlock ||
+					agg.Results[0].Error != "" ||
+					string(agg.Results[0].Findings) != `[{"rule":"x"}, {"n":1} ]` {
+					t.Fatalf("outbound aggregate = %+v, want block kept", agg)
+				}
+				return
+			}
+			reason := "block is not allowed at stage " + stage
+			want := []struct{ name, context, findings string }{
+				{"gate", "STOP", `[{"rule":"x"}, {"n":1},` +
+					`{"error":"` + reason + `","extension":"gate"}]`},
+				{"bare", "", `[{"error":"` + reason + `","extension":"bare"}]`},
+			}
+			if agg.Status != StatusWarn || len(agg.Results) != len(want) {
+				t.Fatalf("aggregate = %+v, want warn", agg)
+			}
+			for i, w := range want {
+				r := agg.Results[i]
+				if r.Name != w.name || r.Status != StatusWarn || r.Context != w.context ||
+					r.Error != reason || string(r.Findings) != w.findings {
+					t.Errorf("result %d = %+v (findings %s), want %+v", i, r, r.Findings, w)
+				}
+				if !json.Valid(r.Findings) {
+					t.Errorf("findings %s are not JSON", r.Findings)
+				}
+			}
+		})
 	}
 }
 

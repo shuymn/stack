@@ -27,6 +27,8 @@ type piece struct {
 	body       string
 	kind       string // names the piece in its omitted marker
 	path       string // names the piece's file in its omitted marker, when set
+	omit       string // replaces the omitted marker built from kind and path, when set
+	cut        bool   // lets a bare piece's body be cut like a tagged one
 	out        string
 }
 
@@ -54,10 +56,12 @@ func cutMarker(n int) string {
 	return fmt.Sprintf("\n[...cut %d chars]", n)
 }
 
-// minimal is the least p emits once it is due: a bare marker whole, a tagged piece its omitted
-// marker, which names its file when it has one.
+// minimal is the least p emits once it is due: its own omitted marker when set, else a bare
+// marker whole, a tagged piece its omitted marker, which names its file when it has one.
 func (p *piece) minimal() string {
 	switch {
+	case p.omit != "":
+		return p.omit
 	case p.head == "":
 		return p.body
 	case p.path != "":
@@ -70,7 +74,7 @@ func (p *piece) minimal() string {
 // fit returns the longest rendering of p whose cost is at most room: whole when its body is within
 // limit (0 = no limit) and it fits; else its body cut at the tail to at most limit characters, at a
 // code-point boundary, and ended with a cut marker; else its minimal form; else "". A bare marker
-// is never cut.
+// is cut only when p.cut is set.
 func (p *piece) fit(room, limit int) string {
 	total := chars(p.body)
 	keep := total
@@ -82,13 +86,20 @@ func (p *piece) fit(room, limit int) string {
 			return whole
 		}
 	}
-	if p.head != "" {
+	if p.head != "" || p.cut {
 		avail := room - len(sep) - chars(p.head) - chars(p.tail)
 		if keep+chars(cutMarker(total-keep)) > avail {
-			// The marker for any cut of this body is at most as long as for total.
+			// Start from the widest marker any cut of this body can need, then keep more while
+			// the cut's own, possibly narrower, marker still fits.
+			limit := keep
 			keep = avail - len(cutMarker(total))
+			for keep+1 <= limit && keep+1+len(cutMarker(total-keep-1)) <= avail {
+				keep++
+			}
 		}
 		if kept := prefix(p.body, keep); kept != "" {
+			// prefix keeps at most one unit less than keep (half a surrogate pair), and the
+			// marker then grows by at most one digit, so the cut still fits avail.
 			return p.head + kept + cutMarker(total-chars(kept)) + p.tail
 		}
 	}

@@ -53,6 +53,29 @@ func (s Store) List(ctx context.Context, id string) ([]string, error) {
 	return out, err
 }
 
+// Ref is one open kit: its slug and absolute dir.
+type Ref struct {
+	Slug string
+	Dir  string
+}
+
+// Refs returns the kits recorded for id, in `.kits` order, whose dir under root (absolute)
+// exists.
+func (s Store) Refs(ctx context.Context, id, root string) ([]Ref, error) {
+	slugs, err := s.List(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	var refs []Ref
+	for _, slug := range slugs {
+		dir := paths.KitDir(root, slug)
+		if fi, err := os.Stat(dir); err == nil && fi.IsDir() {
+			refs = append(refs, Ref{Slug: slug, Dir: dir})
+		}
+	}
+	return refs, nil
+}
+
 // Add appends slug to id's list unless it is already there.
 func (s Store) Add(ctx context.Context, id, slug string) error {
 	return s.Open(ctx, id, slug, nil)

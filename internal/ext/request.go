@@ -29,6 +29,14 @@ type Request struct {
 	Repo   string `json:"repo"`
 	Range  string `json:"range"`
 	Prompt string `json:"prompt"`
+	// Kits is sent only by live entry requests: nil omits the key, an empty list sends [].
+	Kits *[]Kit `json:"kits,omitempty"`
+}
+
+// Kit is one open kit of the session, in a request's kits.
+type Kit struct {
+	Slug string `json:"slug"`
+	Dir  string `json:"dir"`
 }
 
 // Git runs git to build a request.

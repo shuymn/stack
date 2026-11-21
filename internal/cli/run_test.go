@@ -29,6 +29,16 @@ func extBin(t *testing.T) (string, *gittest.Repo) {
 	return bin, r
 }
 
+// longEntryDeadline lifts the entry stage's 10 s deadline, meant for an interactive start, for
+// fakes that start slowly under -race on a loaded machine; the deadline paths have their own
+// tests. Not parallel: it changes a package variable.
+func longEntryDeadline(t *testing.T) {
+	t.Helper()
+	saved := ext.Timeouts[ext.StageEntry]
+	ext.Timeouts[ext.StageEntry] = time.Minute
+	t.Cleanup(func() { ext.Timeouts[ext.StageEntry] = saved })
+}
+
 func fakeExt(t *testing.T, bin, name, stdout string) string {
 	t.Helper()
 	return proctest.InstallAt(t, bin, "stack-"+name,
@@ -121,10 +131,161 @@ func TestRunCommand(t *testing.T) {
 	res = runIn(t, home, env, "run", "entry", "--ext", "blocker", "--range", "base..HEAD",
 		"--prompt-file", prompt)
 	calls = proctest.Calls(t, block)
-	if res.code != exitRefused || len(calls) != 2 ||
-		json.Unmarshal([]byte(calls[1].Stdin), &req) != nil ||
-		req["stage"] != "entry" || req["range"] != "base..HEAD" || req["prompt"] != "do the thing\n" {
-		t.Fatalf("entry run = %+v, request %v", res, req)
+	var entryReq map[string]any
+	if res.code != exitOK || len(calls) != 2 ||
+		json.Unmarshal([]byte(calls[1].Stdin), &entryReq) != nil ||
+		entryReq["stage"] != "entry" || entryReq["range"] != "base..HEAD" ||
+		entryReq["prompt"] != "do the thing\n" {
+		t.Fatalf("entry run = %+v, request %v", res, entryReq)
+	}
+}
+
+// TestRunBlockExit covers C2: `stack run` exits 1 on block only at outbound, and a replay's
+// expect is compared with the aggregate after demotion.
+func TestRunBlockExit(t *testing.T) {
+	longEntryDeadline(t)
+	bin, _ := extBin(t)
+	fakeExt(t, bin, "blocker", `{"status":"block","context":"NO"}`)
+	home := t.TempDir()
+	replay := func(stage, expect string) string {
+		path := filepath.Join(t.TempDir(), stage+"-"+expect+".json")
+		writeFile(t, path, []byte(`{"request":{"stage":"`+stage+`","repo":"","range":"",`+
+			`"prompt":""},"expect":{"status":"`+expect+`"}}`))
+		return path
+	}
+	for _, tt := range []struct {
+		stage, status string
+		code          int
+	}{
+		{"entry", "warn", exitOK},
+		{"outbound", "block", exitRefused},
+		{"cycle", "warn", exitOK},
+	} {
+		res := runIn(t, home, nil, "run", tt.stage, "--ext", "blocker")
+		a := decodeAggregate(t, res)
+		if res.code != tt.code || a.Status != tt.status || a.Results[0].Context != "NO" {
+			t.Errorf("run %s = %+v, want %s and exit %d", tt.stage, res, tt.status, tt.code)
+		}
+		if tt.stage == "outbound" {
+			continue
+		}
+		reason := "block is not allowed at stage " + tt.stage
+		if a.Results[0].Error != reason ||
+			!strings.Contains(string(a.Results[0].Findings), `"error":"`+reason+`"`) {
+			t.Errorf("run %s result = %+v, want the demotion finding", tt.stage, a.Results[0])
+		}
+		res = runIn(t, home, nil, "run", tt.stage, "--ext", "blocker",
+			"--replay", replay(tt.stage, "block"))
+		if res.code != exitRefused || !strings.Contains(res.stderr, "got warn, want block") {
+			t.Errorf("replay %s expecting block = %+v, want a mismatch", tt.stage, res)
+		}
+		res = runIn(t, home, nil, "run", tt.stage, "--ext", "blocker",
+			"--replay", replay(tt.stage, "warn"))
+		if res.code != exitOK || decodeAggregate(t, res).Status != "warn" {
+			t.Errorf("replay %s expecting warn = %+v, want a match", tt.stage, res)
+		}
+	}
+}
+
+// TestRequestKits covers C3: a live entry request lists the session's open kits in `.kits` order,
+// [] without a valid id or under a held lock; outbound and cycle requests carry no kits.
+func TestRequestKits(t *testing.T) {
+	longEntryDeadline(t)
+	bin, _ := extBin(t)
+	logger := fakeExt(t, bin, "logger", `{"status":"pass"}`)
+	home := t.TempDir()
+	root := filepath.Join(home, ".local", "state", "stack", "kits")
+	withID := map[string]string{"STACK_SESSION_ID": "s1"}
+	for _, slug := range []string{"b", "a", "gone"} {
+		if res := runIn(t, home, withID, "kit", "open", slug); res.code != exitOK {
+			t.Fatalf("kit open %s = %+v", slug, res)
+		}
+	}
+	if err := os.RemoveAll(filepath.Join(root, "gone")); err != nil {
+		t.Fatal(err)
+	}
+	// lastKits runs stage and returns the kits key of the request logger received.
+	lastKits := func(env map[string]string, stage string) (json.RawMessage, bool, result) {
+		t.Helper()
+		res := runIn(t, home, env, "run", stage, "--ext", "logger")
+		calls := proctest.Calls(t, logger)
+		var req map[string]json.RawMessage
+		if res.code != exitOK || json.Unmarshal([]byte(calls[len(calls)-1].Stdin), &req) != nil {
+			t.Fatalf("run %s = %+v, calls %+v", stage, res, calls)
+		}
+		kits, ok := req["kits"]
+		return kits, ok, res
+	}
+
+	want := `[{"slug":"b","dir":` + strconv.Quote(filepath.Join(root, "b")) + `},` +
+		`{"slug":"a","dir":` + strconv.Quote(filepath.Join(root, "a")) + `}]`
+	if kits, _, res := lastKits(withID, "entry"); string(kits) != want ||
+		res.stderr != "[logger] note\n" {
+		t.Fatalf("kits = %s (%+v), want %s", kits, res, want)
+	}
+	for _, env := range []map[string]string{nil, {"STACK_SESSION_ID": "../x"}} {
+		if kits, _, _ := lastKits(env, "entry"); string(kits) != "[]" {
+			t.Errorf("kits with id %q = %s, want []", env["STACK_SESSION_ID"], kits)
+		}
+	}
+	for _, stage := range []string{"outbound", "cycle"} {
+		if kits, ok, _ := lastKits(withID, stage); ok {
+			t.Errorf("%s request has kits %s", stage, kits)
+		}
+	}
+	// A replayed entry request is sent byte for byte, its own kits, key order and spacing
+	// included: nothing decodes and re-encodes it.
+	fixture := filepath.Join(t.TempDir(), "entry.json")
+	request := "{ \"kits\": [ {\"dir\": " + strconv.Quote(filepath.Join(root, "other")) +
+		", \"slug\":\"other\"} ],\n  \"prompt\":\"\", \"range\": \"\",\"repo\":\"\", \"stage\": \"entry\" }"
+	writeFile(t, fixture, []byte(`{"request":`+request+`}`))
+	replayed := runIn(t, home, withID, "run", "entry", "--replay", fixture, "--ext", "logger")
+	if calls := proctest.Calls(t, logger); replayed.code != exitOK ||
+		calls[len(calls)-1].Stdin != request {
+		t.Fatalf("replay = %+v, stdin %q, want %s", replayed, calls[len(calls)-1].Stdin, request)
+	}
+
+	holdKitsLock(t, home, "s1")
+	kits, _, res := lastKits(withID, "entry")
+	if string(kits) != "[]" ||
+		!strings.Contains(res.stderr, "stack: s1.kits locked; kits not sent\n") {
+		t.Fatalf("kits under a held lock = %s, %+v; want [] and the note", kits, res)
+	}
+	// The wait itself, without a fake's start: the 1 s lock timeout, not kit open's 5 s.
+	var stderr strings.Builder
+	start := time.Now()
+	got := requestKits(t.Context(), Env{Home: home, Stderr: &stderr}, "s1", root)
+	if elapsed := time.Since(start); got == nil || len(*got) != 0 ||
+		elapsed < 900*time.Millisecond || elapsed >= 2*time.Second ||
+		stderr.String() != "stack: s1.kits locked; kits not sent\n" {
+		t.Fatalf("requestKits under a held lock = %v after %s, stderr %q", got, elapsed,
+			stderr.String())
+	}
+}
+
+// TestRunEntryBrokenConfig: with --ext, a config that cannot be loaded costs only the kits, as
+// stack run did before entry requests carried them.
+func TestRunEntryBrokenConfig(t *testing.T) {
+	longEntryDeadline(t)
+	bin, _ := extBin(t)
+	demo := fakeExt(t, bin, "demo", `{"status":"pass"}`)
+	home := t.TempDir()
+	writeFile(t, filepath.Join(home, ".config", "stack", "config.toml"), []byte("version = 2\n"))
+	withID := map[string]string{"STACK_SESSION_ID": "s1"}
+
+	res := runIn(t, home, withID, "run", "entry", "--ext", "demo")
+	calls := proctest.Calls(t, demo)
+	var req map[string]json.RawMessage
+	if res.code != exitOK || decodeAggregate(t, res).Status != "pass" || len(calls) != 1 ||
+		json.Unmarshal([]byte(calls[0].Stdin), &req) != nil || string(req["kits"]) != "[]" ||
+		!strings.HasPrefix(res.stderr, "stack: ") ||
+		!strings.Contains(res.stderr, "; kits not sent\n") {
+		t.Fatalf("broken config run = %+v, calls %+v", res, calls)
+	}
+	res = runIn(t, home, withID, "run", "entry", "--ext", "demo", "--dry-run")
+	if res.code != exitOK || !strings.Contains(res.stdout, `"kits":[]`) ||
+		!strings.Contains(res.stderr, "; kits not sent\n") {
+		t.Fatalf("broken config dry run = %+v", res)
 	}
 }
 
@@ -187,14 +348,11 @@ func TestRunDryRun(t *testing.T) {
 	block := fakeExt(t, bin, "blocker", `{"status":"block"}`)
 	res := runIn(t, t.TempDir(), nil, "run", "entry", "--dry-run", "--ext", "blocker",
 		"--ext", "absent")
-	req, err := json.Marshal(ext.Request{
-		Stage: "entry", Repo: strings.TrimSpace(r.Git("rev-parse", "--show-toplevel")),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	req := `{"stage":"entry","repo":` +
+		strconv.Quote(strings.TrimSpace(r.Git("rev-parse", "--show-toplevel"))) +
+		`,"range":"","prompt":"","kits":[]}`
 	want := "stage: entry\nplan:\n  blocker -> " + block + "\n  absent -> skipped\nrequest: " +
-		string(req) + "\n"
+		req + "\n"
 	if res.code != exitOK || res.stdout != want {
 		t.Fatalf("dry run = %+v\nwant %s", res, want)
 	}
@@ -264,15 +422,11 @@ func TestRunReplay(t *testing.T) {
 	}
 }
 
-// TestKitOpenEntryStage covers `kit open` running the entry stage and appending each context in
-// the renderer's block format; block is shown, not enforced.
+// TestKitOpenEntryStage covers `kit open` running the entry stage with the session's kits and
+// appending each context in the renderer's block format; a block is shown as a demoted warn.
 func TestKitOpenEntryStage(t *testing.T) {
 	bin, r := extBin(t)
-	// The entry deadline is for an interactive start, not for five fake processes under -race
-	// on a loaded machine; the deadline paths have their own tests.
-	saved := ext.Timeouts[ext.StageEntry]
-	ext.Timeouts[ext.StageEntry] = time.Minute
-	t.Cleanup(func() { ext.Timeouts[ext.StageEntry] = saved })
+	longEntryDeadline(t)
 	router := fakeExt(t, bin, "jev-router", `{"status":"pass","context":"ROUTED"}`)
 	gate := fakeExt(t, bin, "gate", `{"status":"block","context":"STOP"}`)
 	fakeExt(t, bin, "quiet", `{"status":"pass"}`)
@@ -286,7 +440,8 @@ func TestKitOpenEntryStage(t *testing.T) {
 	want := "[new kit: " + kitDir + "; write state.md here]\n\n" +
 		"<extension-context path=" + strconv.Quote(router) + ">\nROUTED\n</extension-context>\n\n" +
 		"<extension-context path=" + strconv.Quote(gate) +
-		">\n[extension gate: block (shown, not enforced)]\nSTOP\n</extension-context>\n\n" +
+		">\n[extension gate: warn: block is not allowed at stage entry]\nSTOP\n" +
+		"</extension-context>\n\n" +
 		"[extension broken: warn: "
 	if res.code != exitOK || !strings.HasPrefix(res.stdout, want) ||
 		!strings.Contains(res.stdout, "not runnable") || strings.Contains(res.stdout, "quiet") ||
@@ -294,10 +449,13 @@ func TestKitOpenEntryStage(t *testing.T) {
 		t.Fatalf("kit open = %+v\nwant prefix %s", res, want)
 	}
 	calls := proctest.Calls(t, router)
-	var req map[string]string
+	var req map[string]json.RawMessage
+	var repo string
 	if len(calls) != 1 || json.Unmarshal([]byte(calls[0].Stdin), &req) != nil ||
-		req["stage"] != "entry" || req["range"] != "" || req["prompt"] != "" ||
-		!sameFile(t, req["repo"], r.Dir) {
+		json.Unmarshal(req["repo"], &repo) != nil || !sameFile(t, repo, r.Dir) ||
+		string(req["stage"]) != `"entry"` || string(req["range"]) != `""` ||
+		string(req["prompt"]) != `""` ||
+		string(req["kits"]) != `[{"slug":"demo","dir":`+strconv.Quote(kitDir)+`}]` {
 		t.Fatalf("entry request = %+v", calls)
 	}
 

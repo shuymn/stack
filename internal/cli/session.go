@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/shuymn/stack/internal/config"
 	"github.com/shuymn/stack/internal/hookio"
@@ -14,6 +15,7 @@ import (
 // runSessionStart is `stack hook claude session-start`. It fails open: an undecodable payload or
 // any error prints nothing, and a broken config falls back to the defaults.
 func runSessionStart(ctx context.Context, env Env, _ invocation) error {
+	start := time.Now()
 	debug := env.Getenv != nil && hookio.Debug(env.Getenv)
 	hookio.Run(env.Stdin, env.Stdout, env.Stderr, debug, func(in hookio.Input) ([]byte, error) {
 		cfg := config.Defaults()
@@ -30,6 +32,8 @@ func runSessionStart(ctx context.Context, env Env, _ invocation) error {
 			Getenv: env.Getenv,
 			Config: cfg,
 			Runner: proc.Exec{},
+			Stderr: env.Stderr,
+			Start:  start,
 		})
 		if debug {
 			for _, err := range errs {
