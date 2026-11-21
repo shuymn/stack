@@ -12,6 +12,7 @@ import (
 
 	"github.com/gofrs/flock"
 	"github.com/shuymn/stack/internal/ext"
+	"github.com/shuymn/stack/internal/kit"
 	"github.com/shuymn/stack/internal/paths"
 	"github.com/shuymn/stack/internal/proc"
 	"github.com/shuymn/stack/internal/proc/proctest"
@@ -304,5 +305,19 @@ func TestEntryOmittedMarker(t *testing.T) {
 	a.place(pc, blockLimit)
 	if pc.out != pc.omit || a.room != 10 {
 		t.Fatalf("out = %q, room %d; want the marker and 10 left", pc.out, a.room)
+	}
+}
+
+// TestCutExactFit: a cut whose actual marker fits the room exactly is used, not the omitted
+// marker.
+func TestCutExactFit(t *testing.T) {
+	t.Parallel()
+	pc := tagged("orchestration-state", filepath.Join(t.TempDir(), "state.md"),
+		strings.Repeat("x", 100), kit.KindState)
+	want := pc.head + "x" + cutMarker(99) + pc.tail
+	a := &allocator{room: cost(want)}
+	a.place(pc, 0)
+	if pc.out != want || a.room != 0 {
+		t.Fatalf("out = %q, room %d; want %q", pc.out, a.room, want)
 	}
 }

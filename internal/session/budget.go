@@ -88,10 +88,17 @@ func (p *piece) fit(room, limit int) string {
 	if p.head != "" {
 		avail := room - len(sep) - chars(p.head) - chars(p.tail)
 		if keep+chars(cutMarker(total-keep)) > avail {
-			// The marker for any cut of this body is at most as long as for total.
+			// Start from the widest marker any cut of this body can need, then keep more while
+			// the cut's own, possibly narrower, marker still fits.
+			limit := keep
 			keep = avail - len(cutMarker(total))
+			for keep+1 <= limit && keep+1+len(cutMarker(total-keep-1)) <= avail {
+				keep++
+			}
 		}
 		if kept := prefix(p.body, keep); kept != "" {
+			// prefix keeps at most one unit less than keep (half a surrogate pair), and the
+			// marker then grows by at most one digit, so the cut still fits avail.
 			return p.head + kept + cutMarker(total-chars(kept)) + p.tail
 		}
 	}
