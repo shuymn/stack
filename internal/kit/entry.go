@@ -1,7 +1,6 @@
 package kit
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/shuymn/stack/internal/ext"
@@ -15,14 +14,7 @@ func EntryBlock(r ext.Result) (Block, bool) {
 	if r.Status == ext.StatusPass && r.Context == "" {
 		return Block{}, false
 	}
-	note := ""
-	if r.Status != ext.StatusPass {
-		reason := r.Error
-		if reason == "" {
-			reason = r.Status
-		}
-		note = fmt.Sprintf("[extension %s: %s: %s]", r.Name, ext.StatusWarn, reason)
-	}
+	note := r.Marker()
 	body := strings.TrimSpace(r.Context)
 	if body == "" || r.Path == "" {
 		return Block{Body: strings.TrimSpace(note + "\n" + body)}, true

@@ -142,7 +142,8 @@ func replayRequest(env Env, file, stage string) ([]byte, string, error) {
 }
 
 // buildRequest builds the request from the repository around the working directory, --range and
-// --prompt-file; an entry request also lists the session's kits.
+// --prompt-file; an entry or merged request also lists the session's kits. A merged request has no
+// merge field: only `stack pr merge` knows a verified merge.
 func buildRequest(
 	ctx context.Context, env Env, inv invocation, lc *lazyConfig, stage string,
 ) ([]byte, error) {
@@ -159,7 +160,7 @@ func buildRequest(
 	if err != nil {
 		return nil, err
 	}
-	if stage == ext.StageEntry {
+	if stage == ext.StageEntry || stage == ext.StageMerged {
 		req.Kits = runKits(ctx, env, lc)
 	}
 	request, err := json.Marshal(req)
@@ -230,7 +231,7 @@ func requestKits(ctx context.Context, env Env, id, kitRoot string) *[]ext.Kit {
 	return &kits
 }
 
-// runKits returns the kits of a live `stack run entry` request; only a valid session id loads the
+// runKits returns the kits of a live entry or merged request; only a valid session id loads the
 // config for the kit root. A config that cannot be loaded costs only the kits: they are [] and
 // stderr says why, so an --ext run still runs as it did before requests carried kits.
 func runKits(ctx context.Context, env Env, lc *lazyConfig) *[]ext.Kit {
