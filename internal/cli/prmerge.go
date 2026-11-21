@@ -9,13 +9,16 @@ import (
 	"syscall"
 
 	"github.com/shuymn/stack/internal/checkpub"
+	"github.com/shuymn/stack/internal/ext"
 	"github.com/shuymn/stack/internal/github"
 	"github.com/shuymn/stack/internal/merge"
+	"github.com/shuymn/stack/internal/paths"
 	"github.com/shuymn/stack/internal/proc"
 )
 
 // runPrMerge implements `stack pr merge <pr> <head-sha>`. Invalid arguments, a local path or private
-// term in --subject/--body and an unusable config exit 2; every later refusal exits 1.
+// term in --subject/--body and an unusable config exit 2; every later refusal exits 1. After a
+// verified merge it runs [stages].merged, whose results never change the exit code.
 //
 // SIGINT and SIGTERM cancel the run instead of ending the process, so the running child is killed
 // and a merge call that already started is still read back; with --auto, auto-merge is disabled
@@ -65,11 +68,24 @@ func runPrMerge(ctx context.Context, env Env, inv invocation) error {
 	if err := merge.Validate(o); err != nil {
 		return err
 	}
-	terms, err := privateTerms(env)
+	// One config load supplies the private terms and [stages].merged.
+	cfg, err := loadConfig(env)
 	if err != nil {
 		return err
 	}
-	o.Terms = terms
+	termsFile := paths.Expand(env.Home, cfg.Safety.PrivateTerms)
+	if o.Terms, err = checkpub.ReadTerms(termsFile); err != nil {
+		return err
+	}
+	if err := checkStageNames(env, ext.StageMerged, cfg.Stages.Merged); err != nil {
+		return err
+	}
+	lc := &lazyConfig{env: env, loaded: true, cfg: cfg}
+	o.Merged = merge.MergedStage{
+		Names: cfg.Stages.Merged,
+		Kits:  func(ctx context.Context) *[]ext.Kit { return runKits(ctx, env, lc) },
+		Ext:   extOptions(env),
+	}
 
 	err = merge.Run(ctx, o)
 	if errors.Is(err, merge.ErrRefused) {

@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/shuymn/stack/internal/checkpub"
+	"github.com/shuymn/stack/internal/ext"
 	"github.com/shuymn/stack/internal/github"
 	"github.com/shuymn/stack/internal/proc"
 	"github.com/shuymn/stack/internal/publictext"
@@ -85,10 +86,16 @@ type Options struct {
 	Now   func() time.Time
 	Sleep func(ctx context.Context, d time.Duration) error
 
+	// Merged is the stage run after a verified merge; its results go to Stdout after the line.
+	Merged MergedStage
+
 	// Stdout receives the `MERGED <head> <merge-oid>` line; Stderr notes and the output of
 	// merge-check and gh pr merge.
 	Stdout io.Writer
 	Stderr io.Writer
+
+	// repo is the repository's top level as git printed it, set by Run once found.
+	repo string
 }
 
 // request is a validated invocation.
@@ -170,6 +177,7 @@ func Run(ctx context.Context, o Options) error {
 		return refuse("not inside a checkout of the PR's repository: run stack pr merge there")
 	}
 	c.Dir = filepath.FromSlash(root)
+	o.repo = root
 
 	head, err := checkPR(ctx, c, r, o.retryDelay())
 	if err != nil {
@@ -227,13 +235,17 @@ func Run(ctx context.Context, o Options) error {
 	case back.State != "MERGED" || back.HeadRefOid != head || !github.IsFullSHA(back.MergeOID):
 		return unknown(r.pr, "read back %s, not MERGED on %s; gh pr merge %s", back, head, res)
 	}
-	return reportMerged(o, r.pr, head, back.MergeOID, res)
+	return reportMerged(ctx, o, r.pr, head, back.MergeOID, res)
 }
 
-// reportMerged writes the result line of a merge the read-back confirmed, plus a note when gh pr
-// merge did not exit cleanly, so the caller does not retry. The merge happened, so it succeeds
-// also when stdout cannot be written; the line then goes to stderr, best effort.
-func reportMerged(o Options, pr int, head, mergeOID string, res github.MergeResult) error {
+// reportMerged is the one success point: it writes the result line of a merge the read-back
+// confirmed, plus a note when gh pr merge did not exit cleanly, so the caller does not retry, and
+// then runs the merged stage unless ctx was cancelled. The merge happened, so it succeeds also
+// when stdout cannot be written, the line then going to stderr, best effort, and whatever the
+// stage's results.
+func reportMerged(
+	ctx context.Context, o Options, pr int, head, mergeOID string, res github.MergeResult,
+) error {
 	line := fmt.Sprintf("MERGED %s %s", head, mergeOID)
 	if _, err := fmt.Fprintln(o.Stdout, line); err != nil {
 		_, _ = fmt.Fprintf(o.Stderr, "stack pr merge: %s (writing stdout failed: %v)\n", line,
@@ -244,6 +256,8 @@ func reportMerged(o Options, pr int, head, mergeOID string, res github.MergeResu
 			"(a cleanup step such as --delete-branch can fail after the merge); do not retry\n",
 			pr, res)
 	}
+	// Only what the run verified: no further git or gh call.
+	runMerged(ctx, o.Merged, o.Stdout, o.repo, ext.Merge{PR: pr, Head: head, OID: mergeOID})
 	return nil
 }
 
@@ -271,7 +285,7 @@ func autoMerge(ctx context.Context, o Options, c github.Client, pr int, method, 
 		}
 		back, err := readAuto(ctx, c, pr, left)
 		if err == nil {
-			if done, err := judgeMerged(o, pr, head, back, res); done {
+			if done, err := judgeMerged(ctx, o, pr, head, back, res); done {
 				return err
 			}
 		}
@@ -311,7 +325,8 @@ func autoMerge(ctx context.Context, o Options, c github.Client, pr int, method, 
 	case !mergedSeen && back.State == "OPEN" && !back.AutoMerge:
 		return refuse("PR %d is not merged; auto-merge disabled: %s", pr, why)
 	}
-	if done, err := judgeMerged(o, pr, head, back, res); done {
+	// A stop by the wait deadline is no cancel: a merge this read finds still runs merged.
+	if done, err := judgeMerged(ctx, o, pr, head, back, res); done {
 		return err
 	}
 	return autoUnknown(pr, "read back %s (auto-merge %s); %s", back, onOff(back.AutoMerge), why)
@@ -387,6 +402,7 @@ func autoStop(
 // judgeMerged decides a MERGED read-back: merged on head with a full merge OID succeeds, merged on
 // another full head fails. Any other read-back is not decided (done false).
 func judgeMerged(
+	ctx context.Context,
 	o Options,
 	pr int,
 	head string,
@@ -397,7 +413,7 @@ func judgeMerged(
 	case back.State != "MERGED":
 		return false, nil
 	case back.HeadRefOid == head && github.IsFullSHA(back.MergeOID):
-		return true, reportMerged(o, pr, head, back.MergeOID, res)
+		return true, reportMerged(ctx, o, pr, head, back.MergeOID, res)
 	case back.HeadRefOid != head && github.IsFullSHA(back.HeadRefOid):
 		return true, refuse("PR %d was merged on %s, not on the checked %s: inspect the PR "+
 			"(a merge cannot be undone)", pr, back.HeadRefOid, head)

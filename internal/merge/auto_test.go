@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -134,8 +135,10 @@ type autoCase struct {
 	polls   []proctest.Response
 	final   proctest.Response
 	// cancelAt cancels the run during the nth sleep of the wait.
-	cancelAt                                       int
-	brokenStdout                                   bool
+	cancelAt     int
+	brokenStdout bool
+	// stdout also receives every write to stdout, after the outcome's buffer.
+	stdout                                         io.Writer
 	stopInMerge, cancelBeforeMerge, missingAtMerge bool
 }
 
@@ -197,6 +200,9 @@ func runAuto(t *testing.T, tc autoCase) autoOutcome {
 	var stdout, stderr bytes.Buffer
 	o.Client = github.Client{Runner: runner, Gh: runner.gh, Dir: r.Dir, Env: r.Env}
 	o.Stdout, o.Stderr = &stdout, &stderr
+	if tc.stdout != nil {
+		o.Stdout = io.MultiWriter(&stdout, tc.stdout)
+	}
 	if tc.brokenStdout {
 		o.Stdout = brokenWriter{}
 	}

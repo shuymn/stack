@@ -1,9 +1,12 @@
 package cli
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -105,4 +108,71 @@ func TestPrMerge(t *testing.T) {
 			t.Errorf("gh calls = %+v, want none", calls)
 		}
 	})
+}
+
+// TestPrMergeMergedStage covers the wiring of C5 and C7 through the CLI: [stages].merged from
+// config.toml, extensions found on PATH, the session's kits, and today's output when nothing is
+// runnable, with the `.kits` lock held so that a read would show. Not parallel: it changes PATH.
+func TestPrMergeMergedStage(t *testing.T) {
+	longStageDeadlines(t)
+	gh := fakeGh(t, prHead)
+	bin := t.TempDir()
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	demo := fakeExt(t, bin, "demo", `{"status":"warn","context":"  DUE\n"}`)
+	home := t.TempDir()
+	withID := map[string]string{"STACK_SESSION_ID": "s1"}
+	if res := runIn(t, home, withID, "kit", "open", "a"); res.code != exitOK {
+		t.Fatalf("kit open = %+v", res)
+	}
+	config := func(merged string) {
+		writeFile(t, filepath.Join(home, ".config", "stack", "config.toml"),
+			[]byte("[stages]\nentry = []\nmerged = ["+merged+"]\n"))
+	}
+	merge := func() result {
+		t.Helper()
+		return runIn(t, home, withID, "pr", "merge", "7", prHead[:9], "--merge")
+	}
+	line := "MERGED " + prHead + " " + prMergeOID + "\n"
+
+	config(`"demo"`)
+	res := merge()
+	if res.code != exitOK || res.stdout != line+"[extension demo: warn: warn]\nDUE\n" ||
+		res.stderr != "[demo] note\n" {
+		t.Fatalf("pr merge = %+v", res)
+	}
+	calls := proctest.Calls(t, demo)
+	var req map[string]json.RawMessage
+	if len(calls) != 1 || json.Unmarshal([]byte(calls[0].Stdin), &req) != nil {
+		t.Fatalf("demo calls = %+v", calls)
+	}
+	dir := filepath.Join(home, ".local", "state", "stack", "kits", "a")
+	if string(req["stage"]) != `"merged"` ||
+		string(req["kits"]) != `[{"slug":"a","dir":`+strconv.Quote(dir)+`}]` ||
+		string(req["merge"]) != `{"pr":7,"head":"`+prHead+`","oid":"`+prMergeOID+`"}` {
+		t.Fatalf("request = %s", calls[0].Stdin)
+	}
+
+	holdKitsLock(t, home, "s1")
+	config(`"absent"`)
+	if res := merge(); res.code != exitOK || res.stdout != line || res.stderr != "" {
+		t.Fatalf("pr merge without an installed extension = %+v, want only %q", res, line)
+	}
+	odd := filepath.Join(bin, "stack-odd")
+	if runtime.GOOS == "windows" {
+		odd += ".cmd"
+	}
+	writeFile(t, odd, []byte("not a program\n"))
+	config(`"odd", "absent"`)
+	res = merge()
+	if res.code != exitOK || !strings.HasPrefix(res.stdout, line+"[extension odd: warn: ") ||
+		strings.Count(res.stdout, "\n") != 2 || res.stderr != "" {
+		t.Fatalf("pr merge with an extension not runnable = %+v", res)
+	}
+
+	n := len(proctest.Calls(t, gh))
+	config(`"../x"`)
+	if res := merge(); res.code != exitUsage || !strings.Contains(res.stderr, "[stages].merged") ||
+		len(proctest.Calls(t, gh)) != n {
+		t.Fatalf("pr merge with an invalid merged name = %+v", res)
+	}
 }
