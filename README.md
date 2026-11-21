@@ -17,11 +17,12 @@ A minimal, extensible Go CLI (`stack`) for personal AI coding agent orchestratio
 
 ## Install
 
-From this checkout, install `stack` and the cycle extensions into one absolute directory on `PATH` (for scheduled
+From this checkout, install `stack` and the extensions into one absolute directory on `PATH` (for scheduled
 runs, also on the job's `PATH`), so core finds each extension as `stack-<name>`:
 
 ```sh
-GOBIN="$HOME/.local/bin" go install ./cmd/stack ./extensions/observe/cmd/stack-observe ./extensions/improve/cmd/stack-improve
+GOBIN="$HOME/.local/bin" go install ./cmd/stack ./extensions/observe/cmd/stack-observe ./extensions/improve/cmd/stack-improve \
+  ./extensions/auditdue/cmd/stack-audit-due
 ```
 
 `stack-improve` embeds `extensions/improve/writing.md`; reinstall after changing it.
