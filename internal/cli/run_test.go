@@ -233,10 +233,11 @@ func TestRequestKits(t *testing.T) {
 			t.Errorf("%s request has kits %s", stage, kits)
 		}
 	}
-	// A replayed entry request is sent as is, its own kits included.
+	// A replayed entry request is sent byte for byte, its own kits, key order and spacing
+	// included: nothing decodes and re-encodes it.
 	fixture := filepath.Join(t.TempDir(), "entry.json")
-	request := `{"stage":"entry","repo":"","range":"","prompt":"",` +
-		`"kits":[{"slug":"other","dir":` + strconv.Quote(filepath.Join(root, "other")) + `}]}`
+	request := "{ \"kits\": [ {\"dir\": " + strconv.Quote(filepath.Join(root, "other")) +
+		", \"slug\":\"other\"} ],\n  \"prompt\":\"\", \"range\": \"\",\"repo\":\"\", \"stage\": \"entry\" }"
 	writeFile(t, fixture, []byte(`{"request":`+request+`}`))
 	replayed := runIn(t, home, withID, "run", "entry", "--replay", fixture, "--ext", "logger")
 	if calls := proctest.Calls(t, logger); replayed.code != exitOK ||
@@ -245,14 +246,20 @@ func TestRequestKits(t *testing.T) {
 	}
 
 	holdKitsLock(t, home, "s1")
-	start := time.Now()
 	kits, _, res := lastKits(withID, "entry")
-	// The command waits the 1 s lock timeout, not kit open's 5 s.
-	if elapsed := time.Since(start); string(kits) != "[]" || elapsed < time.Second ||
-		elapsed >= 3*time.Second ||
+	if string(kits) != "[]" ||
 		!strings.Contains(res.stderr, "stack: s1.kits locked; kits not sent\n") {
-		t.Fatalf("kits under a held lock = %s after %s, %+v; want [] and the note", kits,
-			elapsed, res)
+		t.Fatalf("kits under a held lock = %s, %+v; want [] and the note", kits, res)
+	}
+	// The wait itself, without a fake's start: the 1 s lock timeout, not kit open's 5 s.
+	var stderr strings.Builder
+	start := time.Now()
+	got := requestKits(t.Context(), Env{Home: home, Stderr: &stderr}, "s1", root)
+	if elapsed := time.Since(start); got == nil || len(*got) != 0 ||
+		elapsed < 900*time.Millisecond || elapsed >= 2*time.Second ||
+		stderr.String() != "stack: s1.kits locked; kits not sent\n" {
+		t.Fatalf("requestKits under a held lock = %v after %s, stderr %q", got, elapsed,
+			stderr.String())
 	}
 }
 
