@@ -67,12 +67,9 @@ func checkMessage(ctx context.Context, o Options) error {
 	}
 	eo := s.Ext
 	eo.Timeout = s.timeout
-	// Stream answers once per plan that is not skipped, in plan order, so each result is judged
-	// at its own position, also when a name is listed twice.
-	var results []ext.Result
-	ext.Stream(ctx, eo, ext.StageOutbound, request, plans, func(r ext.Result) {
-		results = append(results, r)
-	})
+	// Run has one result per plan that is not skipped, in plan order, so each result is judged at
+	// its own position, also when a name is listed twice.
+	results := ext.Run(ctx, eo, ext.StageOutbound, request, plans).Results
 
 	var lines []string
 	for _, p := range plans {
