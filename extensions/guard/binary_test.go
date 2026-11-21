@@ -121,6 +121,34 @@ func TestBinary(t *testing.T) {
 	// Both hooks run on a matching call (§4.5): an input matching raw-merge and secrets is denied
 	// by each. The core hook keeps the secrets rule first until §7 PR 10 removes it, so its reason
 	// names secrets until then; a raw merge alone is denied by core only.
+	// With no home, `~` entries match by their home-relative components and `~` operands are not
+	// resolved; both hooks decide alike.
+	t.Run("HOME unset", func(t *testing.T) {
+		cwd := t.TempDir()
+		for _, c := range []struct {
+			name, stdin, rule string
+		}{
+			{"rm -rf /", bashPayload(t, cwd, "rm -rf /"), RuleRmRoot},
+			{"rm -rf ~", bashPayload(t, cwd, "rm -rf ~"), ""},
+			{"Read T3 components", payload(t, cwd, "Read",
+				map[string]any{"file_path": t3Rel + "/token"}), RuleSecrets},
+			{"cat T3 components", bashPayload(t, cwd, "cat "+t3Rel+"/token"), RuleSecrets},
+			{"Read .dev.vars", payload(t, cwd, "Read",
+				map[string]any{"file_path": ".dev.vars"}), RuleSecrets},
+		} {
+			g, k := guardBin(t, "", c.stdin), coreBin(t, "", c.stdin)
+			if g.code != 0 || k.code != 0 {
+				t.Errorf("%s: exit stack-guard %d, core %d, want 0", c.name, g.code, k.code)
+			}
+			if got := deniedBy(g, "stack-guard"); got != c.rule {
+				t.Errorf("%s: stack-guard rule %q (%+v), want %q", c.name, got, g, c.rule)
+			}
+			if got := deniedBy(k, "stack guard"); got != c.rule {
+				t.Errorf("%s: core rule %q (%+v), want %q", c.name, got, k, c.rule)
+			}
+		}
+	})
+
 	t.Run("two hooks", func(t *testing.T) {
 		home, cwd := t.TempDir(), t.TempDir()
 		both := bashPayload(t, cwd, "gh pr merge 1 && cat .dev.vars")
