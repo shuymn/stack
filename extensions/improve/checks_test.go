@@ -284,12 +284,14 @@ func TestCredential(t *testing.T) {
 // each step does not depend on how fast the machine runs the steps.
 type fakeClock struct {
 	ahead atomic.Int64
+	// tick, once set, moves the clock on by itself at every reading.
+	tick atomic.Int64
 }
 
 var clockBase = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
 func (c *fakeClock) now() time.Time {
-	return clockBase.Add(time.Duration(c.ahead.Load()))
+	return clockBase.Add(time.Duration(c.ahead.Add(c.tick.Load())))
 }
 
 func (c *fakeClock) advance(d time.Duration) { c.ahead.Add(int64(d)) }
@@ -362,15 +364,19 @@ func TestDeadline(t *testing.T) {
 	t.Run("slow untracked scan", func(t *testing.T) {
 		t.Parallel()
 		f := newFx(t)
-		c := &realClock{}
+		c := &fakeClock{}
 		f.opts.clock = c.now
+		// 64 MiB, sparse: read whole it holds no credential and the outcome is proposal:tree.
 		f.fake("claude", &fakeSpec{Edits: []fakeEdit{
 			{Path: "skills/a.md", Content: "a2\n"},
-			{Path: "notes.txt", Content: "n", Size: 1 << 40},
+			{Path: "notes.txt", Content: "n", Size: 64 << 20},
 		}}, proctest.Response{Stdout: claudeOut(change("e1"), 1.0, zeroUsage(1))})
 		f.opts.hook = func(point string) {
 			if point == "model" {
-				c.leave(defaultBudget, defaultReserve+3*time.Second)
+				// 10 s past the reserve, then 100 ms per clock reading: the scan reaches the
+				// reserve after about 100 chunks, long before the end of the file.
+				c.advance(defaultBudget - defaultReserve - 10*time.Second)
+				c.tick.Store(int64(100 * time.Millisecond))
 			}
 		}
 		start := time.Now()
@@ -409,8 +415,9 @@ func TestDeadline(t *testing.T) {
 	t.Run("create and read share a step", func(t *testing.T) {
 		t.Parallel()
 		f := newFx(t)
-		const step = 4 * time.Second
-		f.opts.limits.step, f.opts.limits.pushPR = step, 2*step
+		// Default limits, so every other step keeps a full minute under load; only the PR step is
+		// cut short, and gh pr create hangs in it.
+		const prStep = 20 * time.Second
 		c := &realClock{}
 		f.opts.clock = c.now
 		f.fake("gh", f.ghSpec(),
@@ -421,10 +428,11 @@ func TestDeadline(t *testing.T) {
 		f.opts.hook = func(point string) {
 			switch point {
 			case "codex":
-				c.leave(defaultBudget, defaultReserve+2*step+time.Second)
+				c.leave(defaultBudget, defaultReserve+defaultPushPR+time.Second)
 			case "pushed":
-				// A push that used its whole step leaves exactly one step: gh pr create hangs.
-				c.leave(defaultBudget, defaultReserve+step)
+				// A slow push leaves 20 s: create gets half, the read the rest. With separate
+				// timeouts create would use all 20 s and the read none.
+				c.leave(defaultBudget, defaultReserve+prStep)
 			}
 		}
 		f.wantOutcome(f.run(), StatusPass, "pr https://github.com/o/r/pull/1")
