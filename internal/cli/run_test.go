@@ -237,6 +237,31 @@ func TestRequestKits(t *testing.T) {
 	}
 }
 
+// TestRunEntryBrokenConfig: with --ext, a config that cannot be loaded costs only the kits, as
+// stack run did before entry requests carried them.
+func TestRunEntryBrokenConfig(t *testing.T) {
+	bin, _ := extBin(t)
+	demo := fakeExt(t, bin, "demo", `{"status":"pass"}`)
+	home := t.TempDir()
+	writeFile(t, filepath.Join(home, ".config", "stack", "config.toml"), []byte("version = 2\n"))
+	withID := map[string]string{"STACK_SESSION_ID": "s1"}
+
+	res := runIn(t, home, withID, "run", "entry", "--ext", "demo")
+	calls := proctest.Calls(t, demo)
+	var req map[string]json.RawMessage
+	if res.code != exitOK || decodeAggregate(t, res).Status != "pass" || len(calls) != 1 ||
+		json.Unmarshal([]byte(calls[0].Stdin), &req) != nil || string(req["kits"]) != "[]" ||
+		!strings.HasPrefix(res.stderr, "stack: ") ||
+		!strings.Contains(res.stderr, "; kits not sent\n") {
+		t.Fatalf("broken config run = %+v, calls %+v", res, calls)
+	}
+	res = runIn(t, home, withID, "run", "entry", "--ext", "demo", "--dry-run")
+	if res.code != exitOK || !strings.Contains(res.stdout, `"kits":[]`) ||
+		!strings.Contains(res.stderr, "; kits not sent\n") {
+		t.Fatalf("broken config dry run = %+v", res)
+	}
+}
+
 // TestRunConfigNames covers names from `[stages]`; one that is not a single component is a config
 // error.
 func TestRunConfigNames(t *testing.T) {

@@ -142,8 +142,7 @@ func replayRequest(env Env, file, stage string) ([]byte, string, error) {
 }
 
 // buildRequest builds the request from the repository around the working directory, --range and
-// --prompt-file; an entry request also lists the session's kits, for which a valid session id
-// loads the config.
+// --prompt-file; an entry request also lists the session's kits.
 func buildRequest(
 	ctx context.Context, env Env, inv invocation, lc *lazyConfig, stage string,
 ) ([]byte, error) {
@@ -161,9 +160,7 @@ func buildRequest(
 		return nil, err
 	}
 	if stage == ext.StageEntry {
-		if req.Kits, err = runKits(ctx, env, lc); err != nil {
-			return nil, err
-		}
+		req.Kits = runKits(ctx, env, lc)
 	}
 	request, err := json.Marshal(req)
 	if err != nil {
@@ -234,8 +231,9 @@ func requestKits(ctx context.Context, env Env, id, kitRoot string) *[]ext.Kit {
 }
 
 // runKits returns the kits of a live `stack run entry` request; only a valid session id loads the
-// config for the kit root.
-func runKits(ctx context.Context, env Env, lc *lazyConfig) (*[]ext.Kit, error) {
+// config for the kit root. A config that cannot be loaded costs only the kits: they are [] and
+// stderr says why, so an --ext run still runs as it did before requests carried kits.
+func runKits(ctx context.Context, env Env, lc *lazyConfig) *[]ext.Kit {
 	id := ""
 	if env.Getenv != nil {
 		id = env.Getenv(sessionIDEnv)
@@ -243,14 +241,15 @@ func runKits(ctx context.Context, env Env, lc *lazyConfig) (*[]ext.Kit, error) {
 	root := ""
 	if paths.ValidSessionID(id) && env.Home != "" {
 		cfg, err := lc.get()
-		if err != nil {
-			return nil, err
+		if err == nil {
+			root, err = kitRoot(env, cfg)
 		}
-		if root, err = kitRoot(env, cfg); err != nil {
-			return nil, err
+		if err != nil {
+			_, _ = fmt.Fprintf(env.Stderr, "stack: %v; kits not sent\n", err)
+			return &[]ext.Kit{}
 		}
 	}
-	return requestKits(ctx, env, id, root), nil
+	return requestKits(ctx, env, id, root)
 }
 
 // kitRoot is the absolute kit root of cfg.
