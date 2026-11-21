@@ -63,8 +63,8 @@ GOBIN="$HOME/.local/bin" go install ./extensions/guard/cmd/stack-guard
 
 `stack-guard` is a Claude Code hook of its own, not a stage extension: wire it as a separate `PreToolUse` entry
 (matcher `Bash|Read|NotebookRead|Grep|Glob|mcp__pencil__execute`, exec form `stack-guard hook claude pre-tool-use`,
-`timeout: 5`) and never list it in `[stages]`, where it prints usage and exits 2. Until the core hook drops its copy
-of the same rules, both hooks deny them.
+`timeout: 5`, `onFailure: "continue"`) and never list it in `[stages]`, where it prints usage and exits 2. Until
+the core hook drops its copy of the same rules, both hooks deny them.
 
 Keep `public` first in `[stages].outbound` (the default order): its own 100 s limit, which answers `block` before
 the stage's 120 s deadline turns a slow check into a `warn`, holds only when no extension runs before it.
