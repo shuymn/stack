@@ -607,7 +607,7 @@ func (w *walker) nested(sc scope, raw []*syntax.Word, call Call, stdinBase, dept
 			}
 		case i >= len(call.Args) && call.Stdin.Kind == StdinText:
 			// stdinBase is -1 for a body with expansions; handoffs in it are then dropped and the
-			// secrets rule scans it whole.
+			// secrets rule of stack-guard scans it whole.
 			w.script(scope{src: call.Stdin.Text, base: stdinBase}, call.Cwd, depth+1)
 		}
 	}

@@ -19,8 +19,8 @@ const RuleRawMerge = "raw-merge"
 
 // Options carries what a decision needs besides the payload.
 type Options struct {
-	// Home is the user's home directory, or "" when unknown (then `~` entries and operands are not
-	// resolved).
+	// Home is the user's home directory, or "" when unknown (then `~` in a file a gh call reads is
+	// not resolved).
 	Home string
 }
 
@@ -30,10 +30,10 @@ type Decision struct {
 	Reason string
 }
 
-func deny(rule, format string, args ...any) (Decision, bool) {
+func deny(format string, args ...any) (Decision, bool) {
 	return Decision{
-		Rule:   rule,
-		Reason: fmt.Sprintf("stack guard (%s): ", rule) + fmt.Sprintf(format, args...),
+		Rule:   RuleRawMerge,
+		Reason: "stack guard (" + RuleRawMerge + "): " + fmt.Sprintf(format, args...),
 	}, true
 }
 

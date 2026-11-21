@@ -11,23 +11,16 @@ import (
 	"github.com/shuymn/stack/internal/hookio"
 )
 
-// fixture is a home and a cwd under t.TempDir.
+// fixture is a cwd and a home under t.TempDir.
 type fixture struct {
-	t         *testing.T
-	home, cwd string
-	opts      Options
+	t    *testing.T
+	cwd  string
+	opts Options
 }
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
-	home := t.TempDir()
-	cwd := t.TempDir()
-	return &fixture{
-		t:    t,
-		home: home,
-		cwd:  cwd,
-		opts: Options{Home: home},
-	}
+	return &fixture{t: t, cwd: t.TempDir(), opts: Options{Home: t.TempDir()}}
 }
 
 func (f *fixture) write(rel, content string) {
@@ -41,23 +34,18 @@ func (f *fixture) write(rel, content string) {
 	}
 }
 
-func (f *fixture) decide(tool string, input any) (Decision, bool) {
+func (f *fixture) bash(cmd string) (Decision, bool) {
 	f.t.Helper()
-	raw, err := json.Marshal(input)
+	raw, err := json.Marshal(map[string]any{"command": cmd})
 	if err != nil {
 		f.t.Fatal(err)
 	}
 	return Decide(hookio.Input{
 		CWD:           f.cwd,
 		HookEventName: "PreToolUse",
-		ToolName:      tool,
+		ToolName:      "Bash",
 		ToolInput:     raw,
 	}, f.opts)
-}
-
-func (f *fixture) bash(cmd string) (Decision, bool) {
-	f.t.Helper()
-	return f.decide("Bash", map[string]any{"command": cmd})
 }
 
 func wantDeny(t *testing.T, name string, d Decision, ok bool, rule string) {

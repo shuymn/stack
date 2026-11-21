@@ -16,12 +16,8 @@ import (
 
 var update = flag.Bool("update", false, "rewrite the .golden files of TestGolden")
 
-// Placeholders in testdata: the payload's cwd and the home directory. They keep machine paths out
-// of the repository.
-const (
-	phCwd  = "@@CWD@@"
-	phHome = "@@HOME@@"
-)
+// phCwd stands for the payload's cwd in testdata, which keeps machine paths out of the repository.
+const phCwd = "@@CWD@@"
 
 // TestGolden runs each testdata/<name>.json PreToolUse payload through the decision and the hook
 // encoder and compares stdout with testdata/<name>.golden (empty for allow). Files under
@@ -34,8 +30,8 @@ func TestGolden(t *testing.T) {
 	for _, p := range payloads {
 		name := strings.TrimSuffix(filepath.Base(p), ".json")
 		t.Run(name, func(t *testing.T) {
-			home, cwd := t.TempDir(), t.TempDir()
-			repl := strings.NewReplacer(phCwd, jsonPath(cwd), phHome, jsonPath(home))
+			cwd := t.TempDir()
+			repl := strings.NewReplacer(phCwd, jsonPath(cwd))
 			copyFiles(t, filepath.Join("testdata", name+".files"), cwd, repl)
 
 			raw, err := os.ReadFile(p)
@@ -47,7 +43,7 @@ func TestGolden(t *testing.T) {
 				t.Fatalf("payload: %v", err)
 			}
 			var out []byte
-			if d, ok := Decide(in, Options{Home: home}); ok {
+			if d, ok := Decide(in, Options{Home: t.TempDir()}); ok {
 				if !strings.Contains(name, d.Rule) {
 					t.Errorf("deny by %s, but the golden name %q names another rule", d.Rule, name)
 				}
@@ -55,8 +51,7 @@ func TestGolden(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			got := strings.NewReplacer(jsonPath(cwd), phCwd, jsonPath(home), phHome).
-				Replace(string(out))
+			got := strings.ReplaceAll(string(out), jsonPath(cwd), phCwd)
 
 			golden := filepath.Join("testdata", name+".golden")
 			if *update {
