@@ -8,9 +8,11 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/shuymn/stack/internal/gittest"
+	"github.com/shuymn/stack/internal/proc/proctest"
 )
 
 // stageResult decodes a stage answer and checks that it is one valid response.
@@ -109,6 +111,10 @@ func TestStage(t *testing.T) {
 			"RANGE must be",
 		},
 		{"invalid request", func(string) {}, `{"stage":`, "cannot read the request"},
+		{"null request", func(string) {}, "null", "not an object"},
+		{"array request", func(string) {}, `["outbound"]`, "not an object"},
+		{"no stage", func(string) {}, `{"range":""}`, "no stage"},
+		{"null stage", func(string) {}, `{"stage":null}`, "no stage"},
 	}
 	for _, tt := range errorCases {
 		h := t.TempDir()
@@ -205,5 +211,54 @@ func TestHitsCut(t *testing.T) {
 	if len(lines) != 4 || !strings.HasPrefix(lines[2], "stack-public: ") ||
 		lines[3] != hitPrefix+"3 more hits" || len(resp.Findings) != 3 {
 		t.Errorf("block = %+v", resp)
+	}
+}
+
+// TestStageDeadline covers stage mode's own deadline: git that hangs on the patch, after the commit
+// message gave a hit, is stopped at the deadline and the answer is a valid block with that hit and
+// the timeout, never left for the stage deadline to turn into a warn. Not parallel: it changes PATH
+// and a package variable.
+func TestStageDeadline(t *testing.T) {
+	saved := checkTimeout
+	checkTimeout = time.Second
+	t.Cleanup(func() { checkTimeout = saved })
+	const sha = "0123456789abcdef0123456789abcdef01234567"
+	top := "top"
+	git := proctest.Install(t, "git", proctest.Scenario{Responses: []proctest.Response{
+		{Args: []string{"rev-parse", "--show-toplevel"}, Stdout: top + "\n"},
+		{
+			Args:   []string{"-C", top, "rev-list", "--reverse", "--end-of-options", "a..b"},
+			Stdout: sha + "\n",
+		},
+		{
+			Args:   []string{"-C", top, "show", "-s", "--encoding=UTF-8", "--format=%B", sha},
+			Stdout: "see " + local("home", "bob") + "\n",
+		},
+		{Args: nil, Sleep: 30 * time.Second},
+	}})
+	t.Setenv("PATH", filepath.Dir(git))
+	start := time.Now()
+	resp := stageResult(t, runMain(t, t.TempDir(), outboundRequest("", "a..b", "", "", "")))
+	elapsed := time.Since(start)
+	hit := hitPrefix + "commit 012345678 message: local path '" + local("home", "bob") + "'"
+	lines := strings.Split(resp.Context, "\n")
+	if resp.Status != "block" || len(lines) != 2 || lines[0] != hit ||
+		!strings.Contains(lines[1], "deadline") || len(resp.Findings) != 2 ||
+		resp.Findings[1].Error != lines[1] {
+		t.Fatalf("stage = %+v, want block with the hit and the deadline", resp)
+	}
+	if elapsed > 10*time.Second {
+		t.Errorf("answered after %s, want soon after the 1 s deadline", elapsed)
+	}
+}
+
+// TestStageDeadlineFits checks that the production deadline, plus what is reserved for git's exit
+// and the answer, ends before the outbound stage deadline less core's pipe-reaping allowance
+// (docs/architecture.md §3: 120 s and 2 s).
+func TestStageDeadlineFits(t *testing.T) {
+	const stageDeadline, reaping = 120 * time.Second, 2 * time.Second
+	if checkTimeout+answerReserve > stageDeadline-reaping || checkTimeout <= 0 {
+		t.Fatalf("check deadline %s + reserve %s does not fit in %s - %s", checkTimeout,
+			answerReserve, stageDeadline, reaping)
 	}
 }

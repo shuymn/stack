@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/shuymn/stack/extensions/internal/checkpub"
@@ -24,6 +25,25 @@ const (
 	maxLine = 1000
 	// hitPrefix starts every hit line Check writes.
 	hitPrefix = "check public: "
+
+	// outboundDeadline is the protocol's outbound stage deadline, and pipeReaping the time core
+	// allows for an extension's pipes after it exits (docs/architecture.md §3).
+	outboundDeadline = 120 * time.Second
+	pipeReaping      = 2 * time.Second
+	// answerReserve is kept after the check's deadline for the killed git to exit and its pipes to
+	// close (proc's 2 s wait delay, with margin) and for the response to be written.
+	answerReserve = 18 * time.Second
+)
+
+// checkTimeout bounds stage mode from its start to the end of the scan, so it answers block itself
+// before core's stage deadline would record a warn. A variable only for tests.
+var checkTimeout = outboundDeadline - pipeReaping - answerReserve
+
+var (
+	errDeadline   = errors.New("the check did not finish by its deadline")
+	errNotObject  = errors.New("the request is not an object")
+	errNoStage    = errors.New("the request has no stage")
+	objectOpening = []byte("{")
 )
 
 // request is the part of an outbound request stack-public reads.
@@ -61,11 +81,13 @@ func stage(ctx context.Context, env Env) int {
 }
 
 func respond(ctx context.Context, env Env) response {
+	ctx, cancel := context.WithTimeout(ctx, checkTimeout)
+	defer cancel()
 	h := &hits{}
-	var req request
 	data, err := io.ReadAll(env.Stdin)
+	var req request
 	if err == nil {
-		err = json.Unmarshal(data, &req)
+		req, err = decodeRequest(data)
 	}
 	if err != nil {
 		return h.block(fmt.Errorf("cannot read the request: %w", err))
@@ -94,9 +116,32 @@ func respond(ctx context.Context, env Env) response {
 		return response{Status: "pass", Findings: []finding{}}
 	case errors.Is(err, checkpub.ErrFound):
 		return h.block(nil)
+	case errors.Is(ctx.Err(), context.DeadlineExceeded):
+		return h.block(fmt.Errorf("%w (%s): %w", errDeadline, checkTimeout, err))
 	default:
 		return h.block(err)
 	}
+}
+
+// decodeRequest decodes a request, which must be a JSON object with a string stage.
+func decodeRequest(data []byte) (request, error) {
+	var req request
+	if !bytes.HasPrefix(bytes.TrimSpace(data), objectOpening) {
+		return req, errNotObject
+	}
+	var probe struct {
+		Stage *string `json:"stage"`
+	}
+	if err := json.Unmarshal(data, &probe); err != nil {
+		return req, fmt.Errorf("decode: %w", err)
+	}
+	if probe.Stage == nil {
+		return req, errNoStage
+	}
+	if err := json.Unmarshal(data, &req); err != nil {
+		return req, fmt.Errorf("decode: %w", err)
+	}
+	return req, nil
 }
 
 // hits collects the hit lines Check writes, in scan order, while the response stays within its
@@ -124,10 +169,15 @@ func (h *hits) Write(p []byte) (int, error) {
 }
 
 func (h *hits) add(line string) {
+	// Once a hit is left out, every later one is, so the kept hits stay a prefix in scan order.
+	if h.more > 0 {
+		h.more++
+		return
+	}
 	line = cutLine(line)
 	f := finding{Hit: strings.TrimPrefix(line, hitPrefix)}
 	cost := lineCost(line) + encodedLen(f) + 1
-	if h.more > 0 || h.size+cost > maxResponse-lineReserve {
+	if h.size+cost > maxResponse-lineReserve {
 		h.more++
 		return
 	}
