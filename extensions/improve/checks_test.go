@@ -516,8 +516,9 @@ func TestCodexGate(t *testing.T) {
 				f.opts.limits.codexMin = time.Second
 				f.opts.hook = func(point string) {
 					if point == "check" {
-						// Leave the reserve, push and PR, and 5 s for Codex.
-						c.advance(29*time.Minute - 3*time.Minute - 5*time.Second)
+						// Leave the reserve, push and PR, and 20 s for Codex: enough for the fake
+						// to start and log its call on a loaded machine.
+						c.advance(29*time.Minute - 3*time.Minute - 20*time.Second)
 					}
 				}
 			}
