@@ -240,9 +240,11 @@ transcript whose name is one the guard is wired for (`Bash`, `Read`, `NotebookRe
    `secrets.go`, `pencil.go`), so a `Bash` call needs a non-empty string `command`, `Read` a `file_path`,
    `NotebookRead` a `notebook_path` or `file_path`, `Glob` a `pattern`, `mcp__pencil__execute` an `input` or
    `edits`, and every file tool string path fields. Identical `(cwd, tool_name, tool_input)` payloads run once, and
-   that one replayed decision is compared with each recorded decision separately. Payloads run newest first (full
-   timestamp precision) until 100,000 have run (`truncated_cap` counts the rest) or the deadline minus the reserve
-   passes (`truncated_time` counts the rest); 5,000 covered ~7% of a real 7-day window in 8.7 s, and the time bound
+   that one replayed decision is compared with each recorded decision separately. A payload's input is re-read
+   from its transcript line when it runs; an input that no longer matches the scanned digest is `not-comparable`.
+   Payloads run newest first (full timestamp precision) until 100,000 have run (`truncated_cap` counts the records
+   of the rest, not unique payloads) or the deadline minus the reserve passes (`truncated_time` counts the records
+   of the rest); 5,000 covered ~7% of a real 7-day window in 8.7 s, and the time bound
    is the real limit.
 3. *Reported change* (finding `replay-change`, at most 20 listed, all counted in `replay.changed` and per kind in
    `replay.changed_by_kind`): `no-deny → deny:<rule>` (`new_deny`: a false positive or a newly guarded call),
@@ -283,7 +285,9 @@ never see a partial file):
  "gh": {"installed": "v…", "model": "v…"}}
 ```
 
-`version` is this file's schema; timestamps are RFC 3339 UTC in whole seconds (`until` is the start time cut to the
+The deadline is checked again right before the write starts; past it, observe answers `latest-not-written`
+without writing. A local write already started (temp file, sync, rename) runs to completion: it is not
+interruptible, and the 20-s reserve covers it. `version` is this file's schema; timestamps are RFC 3339 UTC in whole seconds (`until` is the start time cut to the
 second), so `jq`'s `fromdateiso8601` reads them (§3.6). Last writer wins: two overlapping observe runs (a manual one
 and the job) can leave the older window as the file; improve's freshness bound (§3.4 step 6) still holds, so this is
 accepted. When writing `latest.json` fails, observe answers `warn` with the finding `latest-not-written`, and the
