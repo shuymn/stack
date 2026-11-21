@@ -30,7 +30,7 @@ stack kit open <slug>                              # Record <slug> in <session_i
 stack kit close <slug>                             # Remove <slug> from <session_id>.kits so completed kits do not resurrect after compaction
 stack hook claude session-start                    # All events: export STACK_SESSION_ID via CLAUDE_ENV_FILE when provided; compact only: restore .kits + WORKER_LINE, then entry extensions
 stack hook claude pre-tool-use                     # Deny raw `gh pr merge` and its `gh api` merge forms only
-stack pr merge <pr> <head-sha> [--merge|--squash|--rebase] ...   # outbound (fail-closed) on --subject/--body; verify checked head SHA, all checks passing, optional .claude/merge-check; merged after MERGED
+stack pr merge <pr> <head-sha> [--merge|--squash|--rebase] ...   # [merge].message_checks (fail-closed) on --subject/--body; verify checked head SHA, all checks passing, optional .claude/merge-check; merged after MERGED
 stack run <entry|outbound|merged|cycle> [--dry-run] [--replay FILE] [--ext NAME]... [--range R] [--prompt-file F] [--title-file F] [--body-file F] [--branch B]
                                                    # --title-file/--body-file/--branch: outbound only, not with --replay (exit 2)
 stack --version [--json]                           # Plain version; --json prints {"version","gh_model"}, gh_model = the gh release the raw-merge deny models (kept for stack-observe)
@@ -45,8 +45,11 @@ both, and the reason shown may differ from v10's single first-rule reason.
 
 **Compatibility exceptions of v11** (`docs/design/core-stages.md` §4.9): `stack check public` and `stack budget
 status` are removed (`stack-public check` replaces the first); a `block` answer at `entry` or `cycle` becomes `warn`
-with `error` set and exit 0, so replay fixtures of those stages expecting `block` move to `warn`; a `pr merge`
-message refused at `outbound` exits 1 instead of v10's 2.
+with `error` set and exit 0, so replay fixtures of those stages expecting `block` move to `warn`; `pr merge`
+checks a merge message only when `[merge].message_checks` lists a check (v10 checked it by default; the default
+`[]` follows from running no content check with zero extensions), and a message refused there exits 1 instead of
+v10's 2; the default `[stages].outbound` gains `public`, so `stack run outbound` with nothing installed lists it
+under `skipped`.
 
 ### Extension Protocol (Process Boundary)
 Used only for optional extensions (`observe`, `improve`, `audit-due`, `public`, `jev-*`); `stack-guard` is a hook, not a stage extension. Core never imports or inspects `extensions/`; it
@@ -55,7 +58,9 @@ fixtures) are in `docs/design/phase2-core.md` §4.7.
 - **Evolution:** existing fields, types, defaults, statuses, stages and meanings are kept. New fields are optional,
   safe to ignore and distinct from existing keys (also case-insensitively); a new stage runs only when selected. An
   incompatible change needs an explicit protocol selection that keeps this contract for current extensions. No
-  version field until a second dialect exists.
+  version field until a second dialect exists. The v11 changes listed above under "Compatibility exceptions of v11"
+  (`block` demotion at `entry` and `cycle`, and the changed `[stages].outbound` default) are the deliberate
+  exceptions to this rule, made once with the stage table rather than by protocol selection.
 - **Discovery:** `<name>` matches `^[a-z0-9][a-z0-9-]*$`; names come from `[stages].<stage>`, or only from the
   repeatable `--ext NAME` for `stack run`, and run in that order. Core picks the first runnable `stack-<name>` in the
   absolute `PATH` entries (on Windows `stack-<name>.exe`; `PATHEXT` is ignored). A missing name is skipped without a
@@ -79,8 +84,10 @@ fixtures) are in `docs/design/phase2-core.md` §4.7.
   counts even with a non-zero exit).
   stderr is forwarded to core's stderr with `[<name>] ` before each line.
 - **Limits and failures:** one deadline per stage shared by its extensions (entry 10 s, outbound 120 s, merged 10 s,
-  cycle 30 min; entry at compaction also ends with the hook's remaining time, and `merged` counts its request
-  preparation and pipe cleanup). Before parsing stdout, core checks for a lookup or start failure, the deadline, a pipe still open when the
+  cycle 30 min). Entry at compaction also ends by the hook's 55 s cut-off, after which no further work starts and
+  the built restore is written, and runs only when at least 1 s is left; there and at `merged`, whose 10 s include
+  request preparation, the runner's deadline is the stage's end less the 2 s pipe-reaping allowance, so reaping
+  fits inside the stage. An extension not started by the deadline is left unstarted. Before parsing stdout, core checks for a lookup or start failure, the deadline, a pipe still open when the
   cleanup grace period after exit ends, and oversized stdout; these, an invalid response and an extension left
   unstarted at the deadline become `warn` with a synthetic finding, never `block`.
 - **Result:** statuses aggregate as `block > warn > pass` (no result = `pass`). Only `outbound` can block:
@@ -88,8 +95,8 @@ fixtures) are in `docs/design/phase2-core.md` §4.7.
   set, so consumers treat it as an extension failure. After writing
   the aggregate, `stack run` exits 1 on `block` and 0 on `pass` or `warn`; with a replay `expect`, 0 or 1 reports
   match or mismatch (usage errors exit 2; `--dry-run` exits 0). `stack kit open` (and compaction, within its budget)
-  appends each entry `context` and a `warn` marker; `stack pr merge` refuses on an outbound `block` and also when a selected
-  outbound extension is missing or fails (the merge is irreversible), and prints each `merged` context after its
+  appends each entry `context` and a `warn` marker; `stack pr merge` refuses on a `block` from a check listed in `[merge].message_checks`
+  and also when a listed check is missing or fails (the merge is irreversible), and prints each `merged` context after its
   `MERGED` line; findings appear only in the `stack run` aggregate.
 
 ## 4. Named Stages & Session Lifecycle
@@ -103,8 +110,8 @@ Session identity and kits are core and not stages: `SessionStart` exports `STACK
 
 | Stage | Fires (position) | Semantic | Can block | Failure of an extension | Extensions |
 |---|---|---|---|---|---|
-| **`entry`** | after `stack kit open` printed the kit; on `compact` after the restored kits (when at least one kit was restored), reusing the restored session id and kits, within the hook's remaining time; `stack run entry` | inject | no | `warn` marker; the kit and the restore are unaffected | optional `jev-router` |
-| **`outbound`** | `stack run outbound` (push hooks, CI, skills); `stack pr merge` before any `gh` call when `--subject`/`--body` is given | gate | yes | `warn`, does not block; at `pr merge` the merge is refused | `public`, optional `jev-semantic` |
+| **`entry`** | after `stack kit open` printed the kit; on `compact` after the restored kits (when at least one kit was restored), reusing the restored session id and kits, when the hook's cut-off leaves time for it (otherwise `[entry skipped: deadline]`); `stack run entry` | inject | no | `warn` marker; the kit and the restore are unaffected | optional `jev-router` |
+| **`outbound`** | `stack run outbound` (push hooks, CI, skills) with `[stages].outbound`; `stack pr merge` before any `gh` call when `--subject`/`--body` is given, with `[merge].message_checks` (default `[]`: nothing runs) | gate | yes | `warn`, does not block; at `pr merge` a listed check that is missing or fails refuses the merge | `public`, optional `jev-semantic` |
 | **`merged`** | `stack pr merge` at its verified-success point (read-back of `MERGED` on the checked head with a full merge OID, direct or `--auto`, including the final read-back), unless cancelled by SIGINT/SIGTERM; `stack run merged` | observe / inject | no (the merge is irreversible) | `warn` marker after the `MERGED` line; exit code unchanged | `audit-due` |
 | **`cycle`** | `launchd` -> `stack run cycle` (macOS); `stack run cycle` anywhere | observe | no | `warn` | `observe` (+ optional `jev-classify`) and minimal `improve` (plain worktree + `claude -p`, single period stamp file `~/.local/state/stack/improve/YYYY-Www` to avoid daily re-runs when a proposal is not pushed). Apply via `make apply`. |
 
@@ -125,7 +132,7 @@ installed, unsafe if left to extensions, stable); the reasoning per built-in is 
 | Capability | Why not core | Extension path |
 |---|---|---|
 | `check public` (local paths, private terms) | optional; secret scanners and hooks are alternatives; the term policy varies | `stack-public`: `outbound` extension, and `stack-public check <range> …` for direct callers |
-| Local-path / private-term check of `pr merge --subject/--body` | same policy as `check public` | `outbound` stage, run by `stack pr merge` |
+| Local-path / private-term check of `pr merge --subject/--body` | same policy as `check public` | outbound extensions listed in `[merge].message_checks` (the owner lists `public`), run by `stack pr merge` |
 | Secrets read deny, local paths in `gh` publish inputs, catastrophic `rm` guard, Pencil Generate deny (on unless disabled) | optional; Claude Code settings, permission modes and scanners cover them; the lists are per user | `stack-guard hook claude pre-tool-use`, a bundled hook with its own `PreToolUse` entry (§3) |
 | `[safety]` settings | read only by the checks above | `~/.config/stack/safety.toml` |
 | `budget status` and a `state.md` byte threshold | display only, no caller; a byte count is not what diverts attention | dropped; the steward judges `state.md` by content; an extension if a caller appears |
@@ -164,9 +171,12 @@ HERDR_ENV = "~/.config/stack/handover/herdr.md"
 
 [stages]
 entry = ["jev-router"]
-outbound = ["public"]                 # add "jev-semantic" once installed: pr merge refuses a message when a selected extension is missing
+outbound = ["public", "jev-semantic"]
 merged = ["audit-due"]
 cycle = ["observe", "jev-classify", "improve"]
+
+[merge]
+message_checks = []                   # outbound extensions pr merge requires for --subject/--body; the owner sets ["public"]
 ```
 
 Extensions keep their own settings beside it: `~/.config/stack/safety.toml` (`stack-guard`, `stack-public`; the v10
@@ -174,7 +184,10 @@ Extensions keep their own settings beside it: `~/.config/stack/safety.toml` (`st
 and `~/.config/stack/audit-due.toml`. A missing `safety.toml` or key gives its default. A broken `safety.toml` means
 the default rules apply (custom entries are not kept until it is fixed), so a typo never turns a deny off:
 `stack-guard` denies by the defaults, `stack-public check` exits 2 and `stack-public` at a stage answers `block`.
-Arrays in `[stages]` replace the default, so an explicit `outbound` array must name `public` itself.
+Arrays in `[stages]` and `[merge]` replace the default. `[stages].outbound` is the selection for `stack run
+outbound`, where a missing extension is skipped; `[merge].message_checks` is separate, and every name in it is
+required: `stack pr merge --subject/--body` refuses before any `gh` call when one is missing, fails or blocks.
+`stack pr merge` loads and validates this file before any `gh` call, so a broken file exits 2.
 
 ## 6. Migration Roadmap
 
