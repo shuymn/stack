@@ -54,6 +54,8 @@ type Params struct {
 	Start time.Time
 	// Now is the clock; nil means time.Now.
 	Now func() time.Time
+	// resolve looks up entry extensions; nil means ext.Resolve. Tests make it slow.
+	resolve func(names []string) []ext.Plan
 }
 
 func (p Params) now() time.Time {
@@ -250,7 +252,8 @@ func runEntry(ctx context.Context, p Params, a *allocator, kits []kitPieces) []*
 	if len(refs) == 0 || len(names) == 0 {
 		return nil
 	}
-	// The clock first: past the cut-off nothing is checked, looked up or started.
+	// The clock first: past the cut-off nothing is checked, looked up or started. The deadline
+	// set here bounds discovery, request encoding and every extension alike.
 	now := p.now()
 	timeout := min(ext.EntryTimeout, p.Start.Add(cutoff).Sub(now)) - proc.DefaultWaitDelay
 	if timeout < entryMinimum {
@@ -258,21 +261,26 @@ func runEntry(ctx context.Context, p Params, a *allocator, kits []kitPieces) []*
 		a.place(pc, 0)
 		return []*piece{pc}
 	}
+	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(timeout))
+	defer cancel()
 	if err := ext.CheckNames(names); err != nil {
 		pc := &piece{body: fmt.Sprintf("[entry extensions skipped: %v]", err)}
 		a.place(pc, 0)
 		return []*piece{pc}
 	}
-	plans := ext.Resolve(names)
+	resolve := p.resolve
+	if resolve == nil {
+		resolve = ext.Resolve
+	}
+	plans := resolve(names)
 	if !slices.ContainsFunc(plans, func(pl ext.Plan) bool { return !pl.Skipped() }) {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
 	request, err := json.Marshal(ext.Request{Stage: ext.StageEntry, Kits: &refs})
 	if err != nil { // strings only; it always encodes
 		return nil
 	}
+	// Timeout names the stage's window in warn reasons; ctx already ends at its deadline.
 	o := ext.Options{Runner: p.Runner, SessionID: p.Input.SessionID, Timeout: timeout}
 	var results []ext.Result
 	ext.Stream(ctx, o, ext.StageEntry, request, plans, func(r ext.Result) {

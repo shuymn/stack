@@ -131,6 +131,54 @@ func TestCompactEntry(t *testing.T) {
 // C4: the entry stage at compaction runs only with time left and ends by the hook's cut-off,
 // leaving the restore whole. Not parallel: it changes PATH.
 func TestCompactEntryDeadline(t *testing.T) {
+	t.Run("the deadline set at the check also bounds discovery", func(t *testing.T) {
+		for _, tt := range []struct {
+			name   string
+			lookup time.Duration // how long discovery takes
+			start  bool          // whether the extension is started at all
+		}{
+			{"window shrinks", 1500 * time.Millisecond, true},
+			{"deadline passed", 2500 * time.Millisecond, false},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				bin := pathDir(t)
+				demo := fakeEntry(t, bin, "demo",
+					proctest.Response{Stdout: `{"status":"pass"}`, Sleep: time.Minute})
+				f := newFixture(t)
+				f.cfg.Stages.Entry = []string{"demo"}
+				f.open("demo", map[string]string{"state.md": "DEMO STATE"})
+				// A fixed clock that leaves the stage 2 s at its check.
+				start := time.Now()
+				now := start.Add(cutoff - proc.DefaultWaitDelay - 2*time.Second)
+				f.params = func(p *Params) {
+					p.Start = start
+					p.Now = func() time.Time { return now }
+					p.resolve = func(names []string) []ext.Plan {
+						time.Sleep(tt.lookup)
+						return ext.Resolve(names)
+					}
+				}
+				begin := time.Now()
+				ctx, _ := f.start(compactIn(testID))
+				// The stage ends 2 s after its check, or when a longer discovery returns; a fresh
+				// timer after discovery would add 2 s to the lookup. The slack covers the kill.
+				if took, limit := time.Since(begin),
+					max(tt.lookup, 2*time.Second)+750*time.Millisecond; took >= limit {
+					t.Fatalf("stage took %s, want under %s: its deadline is 2 s after the check",
+						took, limit)
+				}
+				if tt.start {
+					mustContain(t, ctx, "[extension demo: warn: timed out")
+					return
+				}
+				mustContain(t, ctx, "[extension demo: warn: not started: stage deadline")
+				if calls := proctest.Calls(t, demo); len(calls) != 0 {
+					t.Fatalf("extension started after the deadline: %+v", calls)
+				}
+			})
+		}
+	})
+
 	t.Run("runs only with at least 1 s to its deadline", func(t *testing.T) {
 		for _, tt := range []struct {
 			left time.Duration
