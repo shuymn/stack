@@ -51,8 +51,8 @@ const (
 )
 
 // Response is one scripted answer. The fake performs, in order: read stdin
-// (unless NoStdin), spawn the grandchild, log the call, write stdout and
-// stderr, sleep, exit.
+// (unless NoStdin), spawn the grandchild, write WriteFiles, log the call,
+// write stdout and stderr, sleep, exit.
 type Response struct {
 	// Args matches the arguments after argv[0] exactly; nil matches any call
 	// and an empty non-nil slice matches only a call without arguments.
@@ -71,6 +71,8 @@ type Response struct {
 	Grandchild time.Duration `json:"grandchild,omitempty"`
 	// LogEnv names environment variables whose values the call log records.
 	LogEnv []string `json:"logEnv,omitempty"`
+	// WriteFiles maps a path to the content the fake writes there before it logs the call.
+	WriteFiles map[string]string `json:"writeFiles,omitempty"`
 }
 
 // Scenario lists responses; the first whose Args match is used.
@@ -240,6 +242,12 @@ func runFake(exe, base string, data []byte) int {
 			return noMatchExit
 		}
 		call.GrandchildPID = pid
+	}
+	for path, content := range resp.WriteFiles {
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "proctest: write file: %v\n", err)
+			return noMatchExit
+		}
 	}
 	if err := appendCall(base, call); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "proctest: log: %v\n", err)

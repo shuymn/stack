@@ -348,8 +348,9 @@ func TestBlockDemotion(t *testing.T) {
 	for _, stage := range []string{StageEntry, StageOutbound, StageCycle} {
 		t.Run(stage, func(t *testing.T) {
 			t.Parallel()
-			agg := Run(context.Background(), Options{Runner: proc.Exec{}}, stage,
-				[]byte(request), []Plan{withFindings, bare})
+			// Not the stages' own deadlines: two fakes may start slowly on a loaded machine.
+			o := Options{Runner: proc.Exec{}, Timeout: time.Minute}
+			agg := Run(context.Background(), o, stage, []byte(request), []Plan{withFindings, bare})
 			if stage == StageOutbound {
 				if agg.Status != StatusBlock || agg.Results[0].Status != StatusBlock ||
 					agg.Results[0].Error != "" ||

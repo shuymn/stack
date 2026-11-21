@@ -73,7 +73,14 @@ func TestCompactEntry(t *testing.T) {
 		if err := os.RemoveAll(f.kitDir("gone")); err != nil {
 			t.Fatal(err)
 		}
-		board(t, f.kitDir("a"), proctest.Response{Stdout: "A BOARD\n"})
+		// The board rewrites .kits after the restore read it; entry must not read it again.
+		if err := os.MkdirAll(f.kitDir("late"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		board(t, f.kitDir("a"), proctest.Response{
+			Stdout:     "A BOARD\n",
+			WriteFiles: map[string]string{paths.SessionKitsFile(f.home, testID): "late\n"},
+		})
 		write(t, filepath.Join(f.home, ".config", "stack", "handover", "t3.md"), "HANDOVER")
 		f.env["T3CODE_THREAD_ID"] = "thread"
 
@@ -216,14 +223,15 @@ func TestCompactEntryDeadline(t *testing.T) {
 
 	t.Run("a pipe left open is reaped by the cut-off", func(t *testing.T) {
 		bin := pathDir(t)
-		fakeEntry(t, bin, "first", proctest.Response{
+		first := fakeEntry(t, bin, "first", proctest.Response{
 			Stdout: `{"status":"pass"}`, Sleep: time.Minute, Grandchild: 30 * time.Second,
 		})
 		second := fakeEntry(t, bin, "second", passWith("SECOND"))
 		f := newFixture(t)
 		f.cfg.Stages.Entry = []string{"first", "second"}
 		f.open("demo", map[string]string{"state.md": "DEMO STATE"})
-		cut := cutoffIn(f, 4*time.Second)
+		// 5 s for the extension: a fake's start under load must not use it all before it spawns.
+		cut := cutoffIn(f, 7*time.Second)
 
 		ctx, _ := f.start(compactIn(testID))
 		// Killed at the deadline, the extension's pipes are reaped within the allowance, so the
@@ -235,6 +243,9 @@ func TestCompactEntryDeadline(t *testing.T) {
 			"[extension second: warn: not started")
 		if calls := proctest.Calls(t, second); len(calls) != 0 {
 			t.Fatalf("second extension started after the deadline: %+v", calls)
+		}
+		if calls := proctest.Calls(t, first); len(calls) != 1 || calls[0].GrandchildPID == 0 {
+			t.Fatalf("first calls = %+v, want one that spawned a grandchild", calls)
 		}
 	})
 
