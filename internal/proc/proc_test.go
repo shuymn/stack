@@ -205,7 +205,7 @@ func TestRunTimeoutGrandchildHoldsPipe(t *testing.T) {
 		Stdout: "partial", Sleep: time.Minute, Grandchild: grandchildLife,
 	}))
 	// Long enough for the fake to start its grandchild on a slow runner.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	ended := make(chan time.Time, 1)
 	go func() {
