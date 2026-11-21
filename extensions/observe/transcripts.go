@@ -502,11 +502,6 @@ func (sc *scanner) finish() {
 	}
 }
 
-func mustTime(v string) time.Time {
-	t, _ := parseTime(v)
-	return t
-}
-
 func containsAny(s string, subs []string) bool {
 	for _, sub := range subs {
 		if strings.Contains(s, sub) {

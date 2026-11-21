@@ -20,7 +20,6 @@ import (
 	"runtime/debug"
 	"strings"
 	"time"
-	"unicode"
 	"unicode/utf8"
 )
 
@@ -588,12 +587,7 @@ func (s *state) inWindow(t time.Time) bool {
 // cut collapses whitespace and keeps at most n characters, marking a cut with an ellipsis
 // (legacy observe.py:68-70).
 func cut(text string, n int) string {
-	text = strings.Join(strings.FieldsFunc(text, unicode.IsSpace), " ")
-	r := []rune(text)
-	if len(r) <= n {
-		return text
-	}
-	return string(r[:n-1]) + "…"
+	return truncate(strings.Join(strings.Fields(text), " "), n)
 }
 
 // latestPath is ~/.local/state/stack/observe/latest.json, or "" without a home.

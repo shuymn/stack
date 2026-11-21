@@ -81,8 +81,7 @@ func (s *state) t3(st *Source) error {
 			continue
 		}
 		text, _ := d["text"].(string)
-		idle, hasIdle := d["idleCompaction"]
-		if d["createdBy"] != "user" || (hasIdle && idle != nil) ||
+		if d["createdBy"] != "user" || d["idleCompaction"] != nil ||
 			strings.HasPrefix(strings.TrimLeft(text, " \t\r\n"), "/compact") {
 			s.latest.Tally.Synthetic++
 			continue
@@ -141,8 +140,8 @@ func rootThread(payload any) bool {
 	if !ok {
 		return true
 	}
-	lineage, ok := p["lineage"]
-	if !ok || lineage == nil {
+	lineage := p["lineage"]
+	if lineage == nil {
 		return true
 	}
 	l, ok := lineage.(map[string]any)

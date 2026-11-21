@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"regexp"
 	"slices"
@@ -105,12 +106,7 @@ func (s *state) gh(st *Source) error {
 	}
 	weights := map[string]int{}
 	if git, err := s.o.LookPath("git"); err == nil {
-		cwds := make([]string, 0, len(s.cwds))
-		for cwd := range s.cwds {
-			cwds = append(cwds, cwd)
-		}
-		slices.Sort(cwds)
-		for _, cwd := range cwds {
+		for _, cwd := range slices.Sorted(maps.Keys(s.cwds)) {
 			if s.work.Err() != nil {
 				return fmt.Errorf("gh: %w", s.work.Err())
 			}
@@ -119,11 +115,7 @@ func (s *state) gh(st *Source) error {
 			}
 		}
 	}
-	repos := make([]string, 0, len(weights))
-	for r := range weights {
-		repos = append(repos, r)
-	}
-	slices.SortFunc(repos, func(a, b string) int {
+	repos := slices.SortedFunc(maps.Keys(weights), func(a, b string) int {
 		return cmp.Or(cmp.Compare(weights[b], weights[a]), cmp.Compare(a, b))
 	})
 	day := s.since.Format(time.DateOnly)
@@ -134,14 +126,20 @@ func (s *state) gh(st *Source) error {
 			return err
 		}
 		for _, it := range items {
-			s.add(it.Signal, it.Where, it.Excerpt, mustTime(it.TS), it.Provenance, it.Repo)
+			s.add(it.signal, it.where, it.excerpt, it.ts, it.provenance, repo)
 		}
 		*st.ReposRead++
 	}
 	return nil
 }
 
-func (s *state) ghRepo(gh, repo, day string, st *Source) ([]Item, error) {
+// ghItem is a signal occurrence of one repository, added only once the whole repository is read.
+type ghItem struct {
+	signal, where, excerpt, provenance string
+	ts                                 time.Time
+}
+
+func (s *state) ghRepo(gh, repo, day string, st *Source) ([]ghItem, error) {
 	var view struct {
 		Visibility       string `json:"visibility"`
 		DefaultBranchRef *struct {
@@ -181,18 +179,11 @@ func (s *state) ghRepo(gh, repo, day string, st *Source) ([]Item, error) {
 		}
 	}
 	st.Records += len(prs)
-	var items []Item
+	var items []ghItem
 	item := func(signal, where, excerpt string, t time.Time) {
 		items = append(
 			items,
-			Item{
-				Signal:     signal,
-				Where:      where,
-				Excerpt:    excerpt,
-				TS:         iso(t),
-				Provenance: prov,
-				Repo:       repo,
-			},
+			ghItem{signal: signal, where: where, excerpt: excerpt, provenance: prov, ts: t},
 		)
 	}
 	numbers := map[int]bool{}
@@ -275,12 +266,7 @@ func fixedPRs(pr ghPR, repo string, numbers map[int]bool) []int {
 			}
 		}
 	}
-	out := make([]int, 0, len(set))
-	for n := range set {
-		out = append(out, n)
-	}
-	slices.Sort(out)
-	return out
+	return slices.Sorted(maps.Keys(set))
 }
 
 // ghVersion compares the installed gh release with the one the guard models (design §3.3).

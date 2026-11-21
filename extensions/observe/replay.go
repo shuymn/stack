@@ -118,15 +118,15 @@ func (s *state) replay(st *Source) error {
 	wg.Wait()
 
 	for _, p := range run {
-		if p.late {
+		switch {
+		case p.late:
 			totals.TruncatedTime += len(p.records)
+			continue
+		case p.result == decNotComparable:
+			totals.NotComparable += len(p.records)
 			continue
 		}
 		for _, c := range p.records {
-			if p.result == decNotComparable {
-				totals.NotComparable++
-				continue
-			}
 			totals.Compared++
 			if p.result == c.recorded {
 				continue
