@@ -188,7 +188,9 @@ All additions follow the evolution rule: new optional request fields, safe to ig
    unstarted with a `warn`. For each result that is not `pass` or has a non-empty `context`, print to stdout, after
    the `MERGED` line, the `warn` marker `[extension <name>: warn: <reason>]` when it warned, then its trimmed
    `context`. Exit 0 whatever the results, also when stdout is closed and those writes fail. The 10 s bounds the stage
-   run (from the `.kits` read to the last reaped pipe); printing its results follows it and is not counted. A manual
+   run (from the `.kits` read to the last reaped pipe); printing its results follows it and is not counted. The bound
+   assumes that the caller reads `pr merge`'s stdout and stderr and that the session's `.kits` file is a regular
+   file; the operating system's kill and wait latency (milliseconds) is outside it. A manual
    `stack run merged` keeps `stack run`'s request preparation (git discovery, up to 30 s,
    `internal/ext/request.go:69`) outside the 10 s, as every `stack run` stage does.
 4. Refusals and "result unknown" outcomes never run `merged`.
