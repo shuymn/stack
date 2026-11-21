@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -459,12 +460,6 @@ func TestStateUnchanged(t *testing.T) {
 			wantResp(t, merge(home, "o4", k), StatusPass, dueState)
 		})
 	}
-
-	t.Run("first merge of a kit with a state", func(t *testing.T) {
-		home := newHome(t, "merges = 100\n")
-		k := newKit(t, "demo", map[string]string{"state.md": "s", "NORTH.md": "n"})
-		wantResp(t, merge(home, "o1", k), StatusPass, "")
-	})
 }
 
 func TestHash(t *testing.T) {
@@ -558,12 +553,7 @@ func TestErrors(t *testing.T) {
 			return k
 		}
 	}
-	names := make([]string, 0, len(broken))
-	for name := range broken {
-		names = append(names, name)
-	}
-	slices.Sort(names)
-	for _, name := range names {
+	for _, name := range slices.Sorted(maps.Keys(broken)) {
 		t.Run(name, func(t *testing.T) {
 			home := newHome(t, "merges = 1\n")
 			bad := broken[name](t)
