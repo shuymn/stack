@@ -34,10 +34,19 @@ as a general rule, or a relative link that no longer resolves. Return {"high": [
 ## Diff
 %s`
 
-// writeTemp writes a file of the run's temp directory.
+// writeTemp creates a new file of the run's temp directory. An existing path, a symlink a hook
+// planted included, is refused rather than written through.
 func (a *attempt) writeTemp(name, content string) (string, *stop) {
 	p := filepath.Join(a.tmp, name)
-	if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
+	f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return "", halt("failed:check", "cannot create %s", name)
+	}
+	_, err = f.Write([]byte(content))
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
 		return "", halt("failed:check", "cannot write %s", name)
 	}
 	return p, nil

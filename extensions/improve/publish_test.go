@@ -307,6 +307,25 @@ exit 0`,
 		}
 		f.noPublish()
 	})
+	t.Run("post-commit hook plants a symlink at the body path", func(t *testing.T) {
+		t.Parallel()
+		f := newFx(t)
+		owner := filepath.Join(f.repo.Dir, "skills", "a.md")
+		hooks := filepath.Join(f.repo.Root, "hooks")
+		writeHook(t, hooks, "post-commit", `for d in "$HOME"/.local/state/stack/improve/.run-*; do
+ln -sf '`+owner+`' "$d/body"
+done
+exit 0`)
+		f.repo.Config("core.hooksPath", hooks)
+		st := f.wantOutcome(f.run(), StatusWarn, "failed:check")
+		if !strings.Contains(st.Reason, "body") {
+			t.Fatalf("reason %q", st.Reason)
+		}
+		if data, err := os.ReadFile(owner); err != nil || string(data) != "alpha\n" {
+			t.Fatalf("owner file = %q (%v)", data, err)
+		}
+		f.noPublish()
+	})
 	t.Run("body file changed by the check", func(t *testing.T) {
 		t.Parallel()
 		f := newFx(t)
