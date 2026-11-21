@@ -27,7 +27,8 @@ var (
 )
 
 // runRun implements `stack run <stage>`: it runs the stage's extensions and prints the aggregate as
-// JSON. block exits 1; with a replay's expect, exit 1 means the aggregate differs from it instead.
+// JSON. block, which only outbound keeps, exits 1; with a replay's expect, exit 1 means the
+// aggregate differs from it instead.
 func runRun(ctx context.Context, env Env, inv invocation) error {
 	stage := inv.args[0]
 	set := map[string]bool{}
@@ -69,6 +70,7 @@ func runRun(ctx context.Context, env Env, inv invocation) error {
 	if _, err := fmt.Fprintf(env.Stdout, "%s\n", out); err != nil {
 		return fmt.Errorf("write result: %w", err)
 	}
+	// The aggregate is compared after demotion, so only a stage that can block exits 1 on it.
 	switch {
 	case expect != "" && agg.Status != expect:
 		return refusal{fmt.Errorf("%w: got %s, want %s", errExpect, agg.Status, expect)}
@@ -211,7 +213,7 @@ func (b *blockWriter) write(blocks ...kit.Block) error {
 
 // writeEntryStage runs the entry stage after `kit open` with an empty range and prompt and writes
 // each result that has something to show, as soon as it completes, as a block in the kit
-// renderer's format. block is shown, not enforced. names must be valid. After a write error no
+// renderer's format. names must be valid. After a write error no
 // further extension starts.
 func writeEntryStage(ctx context.Context, env Env, names []string, bw *blockWriter) error {
 	plans := ext.Resolve(names)
@@ -243,10 +245,7 @@ func writeEntryStage(ctx context.Context, env Env, names []string, bw *blockWrit
 // marker.
 func resultBlock(r ext.Result) kit.Block {
 	note := ""
-	switch r.Status {
-	case ext.StatusBlock:
-		note = fmt.Sprintf("[extension %s: block (shown, not enforced)]", r.Name)
-	case ext.StatusWarn:
+	if r.Status == ext.StatusWarn {
 		reason := r.Error
 		if reason == "" {
 			reason = "warn"

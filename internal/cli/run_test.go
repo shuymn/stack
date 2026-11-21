@@ -121,10 +121,58 @@ func TestRunCommand(t *testing.T) {
 	res = runIn(t, home, env, "run", "entry", "--ext", "blocker", "--range", "base..HEAD",
 		"--prompt-file", prompt)
 	calls = proctest.Calls(t, block)
-	if res.code != exitRefused || len(calls) != 2 ||
-		json.Unmarshal([]byte(calls[1].Stdin), &req) != nil ||
-		req["stage"] != "entry" || req["range"] != "base..HEAD" || req["prompt"] != "do the thing\n" {
-		t.Fatalf("entry run = %+v, request %v", res, req)
+	var entryReq map[string]any
+	if res.code != exitOK || len(calls) != 2 ||
+		json.Unmarshal([]byte(calls[1].Stdin), &entryReq) != nil ||
+		entryReq["stage"] != "entry" || entryReq["range"] != "base..HEAD" ||
+		entryReq["prompt"] != "do the thing\n" {
+		t.Fatalf("entry run = %+v, request %v", res, entryReq)
+	}
+}
+
+// TestRunBlockExit covers C2: `stack run` exits 1 on block only at outbound, and a replay's
+// expect is compared with the aggregate after demotion.
+func TestRunBlockExit(t *testing.T) {
+	bin, _ := extBin(t)
+	fakeExt(t, bin, "blocker", `{"status":"block","context":"NO"}`)
+	home := t.TempDir()
+	replay := func(stage, expect string) string {
+		path := filepath.Join(t.TempDir(), stage+"-"+expect+".json")
+		writeFile(t, path, []byte(`{"request":{"stage":"`+stage+`","repo":"","range":"",`+
+			`"prompt":""},"expect":{"status":"`+expect+`"}}`))
+		return path
+	}
+	for _, tt := range []struct {
+		stage, status string
+		code          int
+	}{
+		{"entry", "warn", exitOK},
+		{"outbound", "block", exitRefused},
+		{"cycle", "warn", exitOK},
+	} {
+		res := runIn(t, home, nil, "run", tt.stage, "--ext", "blocker")
+		a := decodeAggregate(t, res)
+		if res.code != tt.code || a.Status != tt.status || a.Results[0].Context != "NO" {
+			t.Errorf("run %s = %+v, want %s and exit %d", tt.stage, res, tt.status, tt.code)
+		}
+		if tt.stage == "outbound" {
+			continue
+		}
+		reason := "block is not allowed at stage " + tt.stage
+		if a.Results[0].Error != reason ||
+			!strings.Contains(string(a.Results[0].Findings), `"error":"`+reason+`"`) {
+			t.Errorf("run %s result = %+v, want the demotion finding", tt.stage, a.Results[0])
+		}
+		res = runIn(t, home, nil, "run", tt.stage, "--ext", "blocker",
+			"--replay", replay(tt.stage, "block"))
+		if res.code != exitRefused || !strings.Contains(res.stderr, "got warn, want block") {
+			t.Errorf("replay %s expecting block = %+v, want a mismatch", tt.stage, res)
+		}
+		res = runIn(t, home, nil, "run", tt.stage, "--ext", "blocker",
+			"--replay", replay(tt.stage, "warn"))
+		if res.code != exitOK || decodeAggregate(t, res).Status != "warn" {
+			t.Errorf("replay %s expecting warn = %+v, want a match", tt.stage, res)
+		}
 	}
 }
 
@@ -265,7 +313,7 @@ func TestRunReplay(t *testing.T) {
 }
 
 // TestKitOpenEntryStage covers `kit open` running the entry stage and appending each context in
-// the renderer's block format; block is shown, not enforced.
+// the renderer's block format; a block is shown as a demoted warn.
 func TestKitOpenEntryStage(t *testing.T) {
 	bin, r := extBin(t)
 	// The entry deadline is for an interactive start, not for five fake processes under -race
@@ -286,7 +334,8 @@ func TestKitOpenEntryStage(t *testing.T) {
 	want := "[new kit: " + kitDir + "; write state.md here]\n\n" +
 		"<extension-context path=" + strconv.Quote(router) + ">\nROUTED\n</extension-context>\n\n" +
 		"<extension-context path=" + strconv.Quote(gate) +
-		">\n[extension gate: block (shown, not enforced)]\nSTOP\n</extension-context>\n\n" +
+		">\n[extension gate: warn: block is not allowed at stage entry]\nSTOP\n" +
+		"</extension-context>\n\n" +
 		"[extension broken: warn: "
 	if res.code != exitOK || !strings.HasPrefix(res.stdout, want) ||
 		!strings.Contains(res.stdout, "not runnable") || strings.Contains(res.stdout, "quiet") ||
