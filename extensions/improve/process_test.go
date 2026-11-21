@@ -30,7 +30,7 @@ func (f *fx) processEnv(at time.Time, dirs ...string) []string {
 }
 
 // toolDir installs the default fakes, with claude answering claudeResp, into a new directory.
-func (f *fx) toolDir(claudeResp proctest.Response, withStack bool) string {
+func (f *fx) toolDir(claudeResp proctest.Response, withPublic bool) string {
 	f.t.Helper()
 	dir := f.t.TempDir()
 	install := func(name string, spec *fakeSpec, resp ...proctest.Response) {
@@ -46,8 +46,8 @@ func (f *fx) toolDir(claudeResp proctest.Response, withStack bool) string {
 	install("claude", &fakeSpec{Edits: []fakeEdit{{Path: "skills/a.md", Content: "alpha two\n"}}},
 		claudeResp)
 	install("codex", &fakeSpec{WriteAfter: "-o", WriteContent: `{"high":[]}`}, proctest.Response{})
-	if withStack {
-		install("stack", nil, proctest.Response{})
+	if withPublic {
+		install("stack-public", nil, proctest.Response{})
 	}
 	return dir
 }
@@ -200,7 +200,8 @@ func TestProtocol(t *testing.T) {
 				proctest.Response{Stdout: claudeOut(change("e1"), 1.0, zeroUsage(1))},
 				false,
 			)
-			runCycle(t, f.repo.Dir, f.processEnv(now, built.dir, tools), f.stderr, tc.context)
+			runCycle(t, f.repo.Dir, f.processEnv(now, built.dir, filepath.Dir(built.public), tools),
+				f.stderr, tc.context)
 		})
 	}
 }

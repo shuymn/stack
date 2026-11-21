@@ -25,7 +25,7 @@ func TestCommitScope(t *testing.T) {
 		if !strings.Contains(st.Reason, "other/c.md") {
 			t.Fatalf("reason %q", st.Reason)
 		}
-		if len(f.calls("stack")) != 0 || len(f.calls("codex")) != 0 {
+		if len(f.calls("stack-public")) != 0 || len(f.calls("codex")) != 0 {
 			t.Fatal("checks ran")
 		}
 		f.noPublish()
@@ -70,14 +70,15 @@ git replace HEAD "$safe"`)
 		if !strings.Contains(f.remote(), st.OID+"\trefs/heads/"+branch) {
 			t.Fatalf("remote %s, want the pinned %s", f.remote(), st.OID)
 		}
-		calls := f.calls("stack")
-		if len(calls) != 1 || calls[0].Args[2] != f.stamp().BaseOID+".."+st.OID {
+		calls := f.calls("stack-public")
+		if len(calls) != 1 || calls[0].Args[1] != f.stamp().BaseOID+".."+st.OID {
 			t.Fatalf("stack calls %+v", calls)
 		}
 	})
 }
 
-// I10 with the real stack check public.
+// I10 with the real stack-public check (C21 of docs/design/core-stages.md): hits stop the PR, and
+// a stack-public that exits 2 or is not on PATH is a failed check with no Codex, push or PR.
 func TestPublicCheck(t *testing.T) {
 	t.Parallel()
 	needBuilt(t)
@@ -104,15 +105,24 @@ func TestPublicCheck(t *testing.T) {
 			out: with(change("e1"), "pr_body", "About "+term+"."), outcome: "proposal:public-check",
 		},
 		{name: "exit 2", edit: "alpha two\n", terms: "dir", outcome: "failed:check"},
+		{name: "broken safety.toml", edit: "alpha two\n", terms: "safety", outcome: "failed:check"},
+		{name: "not on PATH", edit: "alpha two\n", terms: "missing", outcome: "failed:check"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			f := newFx(t)
-			f.tools["stack"] = built.stack
-			if tc.terms == "dir" {
+			f.tools["stack-public"] = built.public
+			switch tc.terms {
+			case "dir":
 				f.write(".config/stack/private-terms/x", "")
-			} else {
+			default:
 				f.write(".config/stack/private-terms", term+"\n")
+			}
+			switch tc.terms {
+			case "safety":
+				f.write(".config/stack/safety.toml", "private_terms = [\n")
+			case "missing":
+				delete(f.tools, "stack-public")
 			}
 			out := tc.out
 			if out == nil {
@@ -135,6 +145,9 @@ func TestPublicCheck(t *testing.T) {
 				}
 			}
 			if !strings.HasPrefix(tc.outcome, "pr ") {
+				if len(f.calls("codex")) != 0 {
+					t.Fatal("codex ran")
+				}
 				f.noPublish()
 			}
 		})
@@ -255,7 +268,7 @@ func TestCredential(t *testing.T) {
 					t.Fatalf("stderr not passed through redacted:\n%s", f.stderr)
 				}
 			} else {
-				if len(f.calls("stack")) != 0 || len(f.calls("codex")) != 0 {
+				if len(f.calls("stack-public")) != 0 || len(f.calls("codex")) != 0 {
 					t.Fatal("checks ran after a credential hit")
 				}
 				f.noPublish()

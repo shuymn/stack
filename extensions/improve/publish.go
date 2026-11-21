@@ -195,12 +195,13 @@ func (a *attempt) credentialCheck() *stop {
 	return nil
 }
 
-// publicCheck is step 12.5.
+// publicCheck is step 12.5. A stack-public that is missing or does not start is a failed check,
+// so nothing is published unchecked.
 func (a *attempt) publicCheck(branch string) *stop {
 	s := a.s
-	out := s.child("stack", command{
+	out := s.child("stack-public", command{
 		args: []string{
-			"check", "public", s.baseOID + ".." + a.oid, "--title-file", a.titleFile,
+			"check", s.baseOID + ".." + a.oid, "--title-file", a.titleFile,
 			"--body-file", a.bodyFile, "--branch", branch,
 		},
 		dir: a.worktree, timeout: s.o.limits.step,
@@ -213,10 +214,10 @@ func (a *attempt) publicCheck(branch string) *stop {
 		a.st.CheckHits = string(out.stderr)
 		return halt(
 			"proposal:public-check",
-			"stack check public found text that must not be published",
+			"stack-public check found text that must not be published",
 		)
 	default:
-		return halt("failed:check", "stack check public: %s", out.describe())
+		return halt("failed:check", "stack-public check: %s", out.describe())
 	}
 }
 

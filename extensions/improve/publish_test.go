@@ -272,7 +272,7 @@ func TestResponseSize(t *testing.T) {
 }
 
 // I10: the title and body files are written after the commit hooks, so a post-commit hook that
-// rewrites the body cannot hide a local path from the real stack check public; and files that
+// rewrites the body cannot hide a local path from the real stack-public check; and files that
 // change around the check are refused.
 func TestCheckedMetadata(t *testing.T) {
 	t.Parallel()
@@ -280,7 +280,7 @@ func TestCheckedMetadata(t *testing.T) {
 	t.Run("post-commit hook rewrites the body", func(t *testing.T) {
 		t.Parallel()
 		f := newFx(t)
-		f.tools["stack"] = built.stack
+		f.tools["stack-public"] = built.public
 		f.write(".config/stack/private-terms", "Zebrafinch\n")
 		local := "/" + "Users" + "/review/private.md"
 		out := claudeOut(with(change("e1"), "pr_body", "See "+local+"."), 1.0, zeroUsage(1))
@@ -303,7 +303,7 @@ exit 0`,
 		st := f.wantOutcome(f.run(), StatusWarn, "proposal:public-check")
 		// The real check saw the path: the files were written after the hook.
 		if st.CheckHits == "" {
-			t.Fatalf("stack check public found nothing; reason %q", st.Reason)
+			t.Fatalf("stack-public check found nothing; reason %q", st.Reason)
 		}
 		f.noPublish()
 	})
@@ -329,7 +329,7 @@ exit 0`)
 	t.Run("body file changed by the check", func(t *testing.T) {
 		t.Parallel()
 		f := newFx(t)
-		f.fake("stack", &fakeSpec{WriteAfter: "--body-file", WriteContent: "changed"},
+		f.fake("stack-public", &fakeSpec{WriteAfter: "--body-file", WriteContent: "changed"},
 			proctest.Response{})
 		st := f.wantOutcome(f.run(), StatusWarn, "proposal:public-check")
 		if !strings.Contains(st.Reason, "changed") || len(f.calls("codex")) != 0 {

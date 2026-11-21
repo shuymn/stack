@@ -19,11 +19,12 @@ import (
 	"github.com/shuymn/stack/internal/proc/proctest"
 )
 
-// built holds the binaries TestMain builds: the real stack (I10, protocol) and stack-improve with
-// the improvetest tag (I5, protocol).
+// built holds the binaries TestMain builds: the real stack (protocol), stack-improve with the
+// improvetest tag (I5, protocol) and, in a directory of its own that no test puts on PATH, the real
+// stack-public (I10).
 var built struct {
-	dir, stack, improve string
-	err                 error
+	dir, stack, improve, public string
+	err                         error
 }
 
 func TestMain(m *testing.M) {
@@ -48,10 +49,16 @@ func buildBinaries() func() {
 	}
 	built.stack = filepath.Join(dir, "stack"+exe)
 	built.improve = filepath.Join(dir, "stack-improve"+exe)
+	built.public = filepath.Join(dir, "public", "stack-public"+exe)
+	if err := os.Mkdir(filepath.Dir(built.public), 0o700); err != nil {
+		built.err = err
+		return func() { _ = os.RemoveAll(dir) }
+	}
 	env := gittest.CleanEnv(os.Environ())
 	for _, c := range [][]string{
 		{"build", "-o", built.stack, "../../cmd/stack"},
 		{"build", "-tags", "improvetest", "-o", built.improve, "./cmd/stack-improve"},
+		{"build", "-o", built.public, "../public/cmd/stack-public"},
 	} {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		cmd := exec.CommandContext(ctx, "go", c...)
@@ -309,7 +316,7 @@ func newFx(t *testing.T) *fx {
 	f.fake("claude", &fakeSpec{Edits: []fakeEdit{{Path: "skills/a.md", Content: "alpha two\n"}}},
 		proctest.Response{Stdout: claudeOut(change("e1"), 1.5, zeroUsage(7))})
 	f.fake("codex", &fakeSpec{WriteAfter: "-o", WriteContent: `{"high":[]}`}, proctest.Response{})
-	f.fake("stack", nil, proctest.Response{})
+	f.fake("stack-public", nil, proctest.Response{})
 	return f
 }
 
