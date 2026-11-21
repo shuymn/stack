@@ -91,8 +91,9 @@ func validPattern(p string) bool {
 
 // matchAny reports whether the slash-separated repository path p matches one of patterns.
 func matchAny(patterns []string, p string) bool {
+	segs := strings.Split(p, "/")
 	for _, pat := range patterns {
-		if match(strings.Split(pat, "/"), strings.Split(p, "/")) {
+		if match(strings.Split(pat, "/"), segs) {
 			return true
 		}
 	}

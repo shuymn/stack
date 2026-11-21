@@ -186,7 +186,6 @@ func run(ctx context.Context, c command) outcome {
 		exit:      cmd.ProcessState.ExitCode(),
 		timedOut:  timedOut,
 		truncated: stdout.over,
-		stderrCut: stderr.over,
 		pipesCut:  pipesCut,
 	}
 	if timedOut {

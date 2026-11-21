@@ -32,7 +32,6 @@ type attempt struct {
 	modelStarted, zeroCost bool
 	costKnown              bool
 
-	public   []item
 	briefTxt string
 	briefIDs map[string]item
 
@@ -46,7 +45,7 @@ func iso(t time.Time) string { return t.UTC().Truncate(time.Second).Format(time.
 // attempt claims the week, runs the attempt, finalises the stamp and cleans up.
 func (s *state) attempt(public []item) (string, string) {
 	a := &attempt{
-		s: s, public: public, briefIDs: map[string]item{},
+		s: s, briefIDs: map[string]item{},
 		st: stamp{
 			Week: s.week, Started: iso(s.o.Now()), Repo: s.slug, BaseOID: s.baseOID,
 			Outcome: outStarted,
