@@ -149,15 +149,22 @@ func TestCheckInheritsNoGitVars(t *testing.T) {
 	}
 }
 
+// TestUsage checks the top-level usage, which names the stack-public invocation; `check`'s own
+// usage is the core command's (TestCheckMatchesCore).
 func TestUsage(t *testing.T) {
-	for _, args := range [][]string{{"--help"}, {"check", "-h"}} {
+	for _, args := range [][]string{{"--help"}, {"-h"}, {"help"}} {
 		if r := runMain(t, "", "", args...); r.code != exitOK ||
-			!strings.HasPrefix(r.stdout, "usage: stack-public check ") {
+			r.stdout != "usage: stack-public check <base>..<head> [--title-file F] [--body-file F] "+
+				"[--branch B]\n       stack-public   (no arguments: one outbound request on stdin)\n" ||
+			r.stderr != "" {
 			t.Errorf("%q = %+v", args, r)
 		}
 	}
 	if r := runMain(t, "", "", "scan"); r.code != exitUsage ||
-		!strings.Contains(r.stderr, `unknown command "scan"`) {
+		!strings.HasPrefix(
+			r.stderr,
+			`stack-public: unknown command "scan"`+"\nusage: stack-public check ",
+		) {
 		t.Errorf("unknown command = %+v", r)
 	}
 }
@@ -184,12 +191,18 @@ func TestCheckMatchesCore(t *testing.T) {
 		{"base..nope"},
 		{"base...HEAD"},
 		{"base..HEAD", "--body-file", filepath.Join(home, "none.md")},
+		{"base..HEAD", "--nope"},
+		{"base..HEAD", "--branch"},
+		{"--branch", "x"},
+		{"base..HEAD", "a..b"},
+		{"--help"},
+		{"base..HEAD", "-h"},
 	} {
 		core := runBinary(t, r, home, r.Dir, "", built.stack, append([]string{"check", "public"},
 			args...)...)
 		ext := runBinary(t, r, home, r.Dir, "", built.public, append([]string{"check"},
 			args...)...)
-		if core.code != ext.code || core.stderr != ext.stderr || ext.stdout != "" {
+		if core.code != ext.code || core.stderr != ext.stderr || core.stdout != ext.stdout {
 			t.Errorf("%q:\nstack check public = %+v\nstack-public check = %+v", args, core, ext)
 		}
 	}

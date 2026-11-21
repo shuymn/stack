@@ -25,10 +25,14 @@ const (
 )
 
 const (
-	// diag prefixes the CLI mode's diagnostics. It is the core command's name, so a caller that
-	// switches from `stack check public` reads the same stderr (P9).
-	diag     = "stack check public"
-	synopsis = "stack-public check <base>..<head> [--title-file F] [--body-file F] [--branch B]"
+	// diag prefixes the CLI mode's diagnostics and checkSynopsis is its usage line: both are the
+	// core command's, so a caller that switches from `stack check public` reads the same output
+	// (P9).
+	diag          = "stack check public"
+	checkSynopsis = diag + " <base>..<head> [--title-file F] [--body-file F] [--branch B]"
+	// usage is the top-level usage, which names the stack-public invocations.
+	usage = "usage: stack-public check <base>..<head> [--title-file F] [--body-file F] [--branch B]\n" +
+		"       stack-public   (no arguments: one outbound request on stdin)\n"
 )
 
 var (
@@ -55,11 +59,10 @@ func Main(ctx context.Context, args []string, env Env) int {
 	case "check":
 		return runCheck(ctx, args[1:], env)
 	case "help", "-h", "--help":
-		_, _ = fmt.Fprintf(env.Stdout, "usage: %s\n", synopsis)
+		_, _ = io.WriteString(env.Stdout, usage)
 		return exitOK
 	default:
-		_, _ = fmt.Fprintf(env.Stderr, "stack-public: unknown command %q\nusage: %s\n", args[0],
-			synopsis)
+		_, _ = fmt.Fprintf(env.Stderr, "stack-public: unknown command %q\n%s", args[0], usage)
 		return exitUsage
 	}
 }
@@ -73,14 +76,14 @@ func runCheck(ctx context.Context, args []string, env Env) int {
 	}
 	positional, err := parseInterspersed(fs, args)
 	if errors.Is(err, flag.ErrHelp) {
-		_, _ = fmt.Fprintf(env.Stdout, "usage: %s\n", synopsis)
+		_, _ = fmt.Fprintf(env.Stdout, "usage: %s\n", checkSynopsis)
 		return exitOK
 	}
 	if err == nil && len(positional) != 1 {
 		err = fmt.Errorf("%w: want 1 positional, got %d", errArgs, len(positional))
 	}
 	if err != nil {
-		_, _ = fmt.Fprintf(env.Stderr, "%s: %v\nusage: %s\n", diag, err, synopsis)
+		_, _ = fmt.Fprintf(env.Stderr, "%s: %v\nusage: %s\n", diag, err, checkSynopsis)
 		return exitUsage
 	}
 	err = check(ctx, env, positional[0], fs)
