@@ -214,6 +214,9 @@ func TestLatestFileRun(t *testing.T) {
 func TestDeadline(t *testing.T) {
 	t.Parallel()
 	const budget, reserve = 3 * time.Second, time.Second
+	// gh version runs before replay: where replay runs to the deadline, the budget leaves the fake
+	// gh and stack time to start on a loaded machine.
+	const replayBudget = 10 * time.Second
 	slack := 3 * time.Second
 	t.Run("gh and later sources", func(t *testing.T) {
 		t.Parallel()
@@ -245,10 +248,34 @@ func TestDeadline(t *testing.T) {
 			t.Errorf("status = %q", resp.Status)
 		}
 	})
+	// Replay runs to the deadline, so gh version is read before it.
+	t.Run("gh version before replay", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t)
+		f.opts.Budget, f.opts.Reserve = replayBudget, reserve
+		f.calls("r", bashCall(hourAgo, f.cwd, cmd("b"), "ok"))
+		f.fake("gh", ghAuthOK, ghVersion)
+		f.fake(
+			"stack",
+			stackModel,
+			proctest.Response{Args: []string{"hook", "claude", "pre-tool-use"}, Sleep: time.Minute},
+		)
+		f.opts.replayTimeout = time.Minute
+		resp, l := f.run()
+		if l.Sources["replay"].Status != srcTimeout {
+			t.Errorf("replay %+v, want timeout", l.Sources["replay"])
+		}
+		if l.Gh.Installed != "v2.105.0" || l.Gh.Model != "v2.105.0" {
+			t.Errorf("gh = %+v", l.Gh)
+		}
+		if got := findings(resp, kindGhVersion); len(got) != 0 {
+			t.Errorf("gh-version findings = %+v", got)
+		}
+	})
 	t.Run("replay cut by time and by cap", func(t *testing.T) {
 		t.Parallel()
 		f := newFixture(t)
-		f.opts.Budget, f.opts.Reserve = budget, reserve
+		f.opts.Budget, f.opts.Reserve = replayBudget, reserve
 		f.opts.replayCap = 1
 		f.calls(
 			"r",
@@ -264,7 +291,7 @@ func TestDeadline(t *testing.T) {
 		f.opts.replayTimeout = time.Minute
 		start := time.Now()
 		resp, l := f.run()
-		if took := time.Since(start); took > budget+slack {
+		if took := time.Since(start); took > replayBudget+slack {
 			t.Fatalf("took %s", took)
 		}
 		if l.Replay != (ReplayTotals{TruncatedCap: 2, TruncatedTime: 1}) {

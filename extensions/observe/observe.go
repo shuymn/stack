@@ -249,8 +249,9 @@ func Run(ctx context.Context, o Options) Response {
 		s.latest.Tally.Unknown += len(s.t3Sessions)
 	}
 	s.source("gh", s.gh)
-	s.source("replay", s.replay)
+	// Before replay: replay uses whatever time is left, and its workers run until the deadline.
 	s.guarded("gh-version", func() { s.ghVersion() })
+	s.source("replay", s.replay)
 
 	path := latestPath(o.Home)
 	return s.response(path, s.publish(ctx, path))
