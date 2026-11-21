@@ -23,8 +23,8 @@ const isWindows = runtime.GOOS == "windows"
 // built holds the binaries TestMain builds: stack-guard, and the core stack for the drift and
 // two-hook checks.
 var built struct {
-	dir, stack, guard string
-	err               error
+	stack, guard string
+	err          error
 }
 
 func TestMain(m *testing.M) {
@@ -40,7 +40,6 @@ func buildBinaries() func() {
 		built.err = err
 		return func() {}
 	}
-	built.dir = dir
 	exe := ""
 	if isWindows {
 		exe = ".exe"
@@ -78,14 +77,18 @@ type result struct {
 }
 
 // runBinary runs bin with args and stdin under an environment holding only the home variables (and
-// what Windows needs to start a process), so the user's real home is never read.
+// what Windows needs to start a process), so the user's real home is never read. With home "" the
+// home variables are unset.
 func runBinary(t *testing.T, bin, home, stdin string, args ...string) result {
 	t.Helper()
 	needBuilt(t)
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Env = []string{"HOME=" + home, "USERPROFILE=" + home}
+	cmd.Env = []string{}
+	if home != "" {
+		cmd.Env = append(cmd.Env, "HOME="+home, "USERPROFILE="+home)
+	}
 	if root := os.Getenv("SYSTEMROOT"); root != "" {
 		cmd.Env = append(cmd.Env, "SYSTEMROOT="+root)
 	}
