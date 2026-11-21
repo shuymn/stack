@@ -36,7 +36,7 @@ func TestKillGroup(t *testing.T) {
 		{
 			"timeout kills the group",
 			proctest.Response{Sleep: 2 * time.Minute, Grandchild: 2 * time.Minute},
-			5 * time.Second, true,
+			20 * time.Second, true,
 		},
 		{"parent exits first", proctest.Response{Grandchild: 2 * time.Minute}, time.Minute, false},
 	} {
