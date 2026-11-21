@@ -35,7 +35,8 @@ until the rest is in place. Follow these steps in order, and replace `stack` las
    ```
 
    Compare custom `secrets` paths, a custom `private_terms` file and an explicit `deny_pencil_generate = false`; a
-   key left out takes the v10 default.
+   key left out takes the v10 default. Copy the values and keep the `[safety]` table in `config.toml`: v10 still
+   reads it until step 6, and again after a rollback to v10.
 2. Install `stack-public` and check that `command -v stack-public` finds it both in an interactive shell and on the
    scheduled job's `PATH`:
 
@@ -52,9 +53,13 @@ until the rest is in place. Follow these steps in order, and replace `stack` las
 
 4. To keep v10's check of `stack pr merge --subject/--body` for local paths and private terms, add
    `message_checks = ["public"]` under `[merge]` in `config.toml`.
-5. Only once `stack-guard` denies on its own and `stack-public` resolves, replace `stack` and the other
-   extensions (the command below), then install or reinstall `stack-improve`; without `stack-public` it stops at
-   `failed:check`.
+5. Before replacing `stack`, check v11 with the applied settings: put a v11 `stack` built from this checkout first
+   on a session's `PATH` (not installed) and confirm that the moved rules are denied only with `stack-guard (`
+   reasons, a raw `gh pr merge` with `stack guard (raw-merge): `, and that `stack pr merge --body` with a local path
+   is refused with `outbound blocked: public` before any `gh` call.
+6. Only then replace `stack` and the other extensions (the command below), and install or reinstall
+   `stack-improve`; without `stack-public` it stops at `failed:check`. After installing, merge one PR with
+   `--body` to confirm the check runs on the installed `PATH`. To roll back, reinstall the v10 `stack` first.
 
 ### Install
 
