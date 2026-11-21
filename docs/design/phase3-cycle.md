@@ -310,7 +310,9 @@ step's timeout is cut to what the deadline leaves after the reserve and the late
 1. **Target.** `repo == ""` → `pass` "not in a repository". `remote.origin.url` must be set exactly once (with
    several, fetch uses the first and push every one) and be `https://github.com/<owner>/<name>`,
    `ssh://git@github.com/<owner>/<name>` or `git@github.com:<owner>/<name>`, `.git` optional; any other host,
-   including one that only ends in `github.com` (which `observe.py:41` accepted), is not GitHub. `gh repo view <slug> --json nameWithOwner,visibility,defaultBranchRef`: `visibility` must be
+   including one that only ends in `github.com` (which `observe.py:41` accepted), is not GitHub. Every `gh` call names github.com, whatever `GH_HOST` or gh's default host says (`gh repo
+   view github.com/<slug>`, `gh pr create --repo github.com/<slug>`, `gh api --hostname github.com`). `gh repo view
+   github.com/<slug> --json nameWithOwner,visibility,defaultBranchRef`: `visibility` must be
    `PUBLIC` and `nameWithOwner` equal to `<slug>` (case-insensitive), else `pass` "target is not a public GitHub
    repository" (gh error → `warn`); with `origin` not one GitHub URL the text names that. `<default>` =
    `defaultBranchRef.name`; there is no `base` setting. `~/.claude/settings.json` is read before improve's first
@@ -360,8 +362,9 @@ step's timeout is cut to what the deadline leaves after the reserve and the late
    (§3.1), possibly still in use by a surviving child: they are not removed; each adds a `leftover-worktree` finding
    (`warn`) naming its path, for the owner to remove once nothing uses it. Then `git worktree prune` (drops only the
    metadata of worktrees whose directory is gone) and `git worktree add --detach <work>/<W> <base_oid>`; a failure,
-   including an existing `<work>/<W>`, is `failed:worktree` before the model. A `<work>/<W>` that did not exist
-   before the add is this run's even when the add then fails (Git registers the worktree before a failing
+   including an existing `<work>/<W>`, is `failed:worktree` before the model; any existing path there, even an
+   empty directory Git would accept, is refused before the add and left untouched. A `<work>/<W>` created by the
+   add is this run's even when the add then fails (Git registers the worktree before a failing
    `post-checkout` hook), so step 13 removes it. The owner's working tree, index and
    branches are never touched; the fetch updates only `refs/remotes/origin/<default>`. Right before starting
    `claude`, the model minimum (§3.9) is checked again; too little time left → `failed:deadline`, the model never
@@ -401,7 +404,7 @@ step's timeout is cut to what the deadline leaves after the reserve and the late
    `env` of `~/.claude/settings.json`. If any appears in the worktree diff, any string of the structured output or
    an untracked file (read whole, one file at a time, in chunks that overlap by a credential's length), the outcome
    is `proposal:credential` before any commit; an untracked file it cannot read leaves the check incomplete and
-   refuses the same way. Step 12.4 checks the published bytes again. Every value
+   refuses the same way, as does a scan not finished before the reserve (checked between chunks). Step 12.4 checks the published bytes again. Every value
    is replaced by `[redacted]` in everything improve writes: stamp (patch, reason, hits), stderr (including the
    passed-through stderr of `claude`, `git`, `codex`, `gh`), `context` and findings. A value that appears only in a
    child's stderr is redacted and changes no outcome: stderr is never published.
@@ -430,7 +433,8 @@ step's timeout is cut to what the deadline leaves after the reserve and the late
 12. **Commit, pin, verify, check, publish.** Every `git` improve starts, and `stack check public`, runs with
     `GIT_NO_REPLACE_OBJECTS=1`, so a replace ref cannot show the checks other objects than the push sends.
     1. *Commit.* Body = model body + `Evidence:` list of the cited URLs (`improve.py:617-621`); title and body are
-       written to files once and never rebuilt. `git -C <worktree> commit -a -F <msg>` with the owner's git
+       written to files once, after the commit and its hooks (step 12.2), and never rebuilt. The model and every
+       `git -C` run only in this run's worktree: a call without a directory never starts. `git -C <worktree> commit -a -F <msg>` with the owner's git
        configuration (signing included) and the repository's hooks; never `--no-verify`. Failure →
        `failed:commit`.
     2. *Pin.* `oid = git rev-parse --verify HEAD^{commit}` once; every later step names `oid`, never `HEAD`.
@@ -465,12 +469,14 @@ step's timeout is cut to what the deadline leaves after the reserve and the late
        before it checks the lease, so the exit code alone is not proof. A rejection or any other flag →
        `failed:push` with the porcelain line. `origin` is the target's own remote; a `pushurl` differing from the
        fetch URL is the owner's own configuration and is not checked.
-    9. *PR.* `gh pr create --repo <slug> --base <default> --head improve/<W> --title <title> --body-file -` with
-       the checked body bytes on stdin (no file is read after the checks), then one read; create gets at most half
+    9. *PR.* `gh pr create --repo github.com/<slug> --base <default> --head improve/<W> --title <title>
+       --body-file -` with the checked bytes on stdin: right after `stack check public`, the title and body files
+       are read once, and if they no longer hold what was written → `proposal:public-check`; Codex and gh get those
+       bytes and no file is read again. Then one read; create gets at most half
        of the PR step it shares with the read, so the read always has time. The read is made once per run whatever create returned and reused by step 10: `gh api 'repos/<slug>/pulls?state=all&head=<owner>:improve/<W>&per_page=100'`.
        The outcome is `pr <url>` (`pass`, URL in `context`) only when exactly one PR in that answer has
-       `head.repo.full_name == <slug>` (case-insensitive), `head.ref == improve/<W>`, `head.sha == oid`,
-       `base.ref == <default>` and an `html_url` of the form `https://github.com/<slug>/pull/<n>`. `gh pr create` takes a branch name, not an OID, so its exit code alone does not
+       `head.repo.full_name == <slug>` (case-insensitive), `head.ref == improve/<W>`, `head.sha == oid` and
+       `base.ref == <default>`, and that PR's `html_url` is `https://github.com/<slug>/pull/<n>`. `gh pr create` takes a branch name, not an OID, so its exit code alone does not
        prove which commit the PR holds.
     10. *Ambiguous result* (push or PR create fails without a clear rejection or times out, or the read of step 9
        has no unique match). Read-only: `git ls-remote origin refs/heads/improve/<W>` plus the step 9 read (made now
