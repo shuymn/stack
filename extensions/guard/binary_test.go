@@ -146,6 +146,9 @@ func TestBinary(t *testing.T) {
 			if got := deniedBy(k, "stack guard"); got != c.rule {
 				t.Errorf("%s: core rule %q (%+v), want %q", c.name, got, k, c.rule)
 			}
+			if c.rule == "" && (g.stdout != "" || k.stdout != "") {
+				t.Errorf("%s: want no output, stack-guard %q, core %q", c.name, g.stdout, k.stdout)
+			}
 		}
 	})
 
