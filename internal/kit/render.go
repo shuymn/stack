@@ -21,8 +21,6 @@ const (
 	// BoardDeadline is the one deadline covering every board of a render
 	// (`orchestration-context.py:47`).
 	BoardDeadline = 40 * time.Second
-	// StateLimit is the size in bytes past which a state file gets a rewrite note.
-	StateLimit = 3000
 )
 
 // Block kinds, so compact restore can budget each kind separately.
@@ -46,8 +44,6 @@ type Block struct {
 	Tag  string
 	Path string
 	Body string
-	// state is a state file's text without notes; a board's leading repeat of it is dropped.
-	state string
 }
 
 func (b Block) String() string {
@@ -118,18 +114,11 @@ func StateBlocks(dir string) []Block {
 			blocks = append(blocks, unreadable(KindState, path))
 			continue
 		}
-		state := strings.ReplaceAll(text(data), "\r\n", "\n")
-		body := state
-		if n := len(state); n > StateLimit {
-			body = fmt.Sprintf("[%s is %d bytes, over %d: rewrite it shorter now; "+
-				"it holds the current state, not history.]\n%s", name, n, StateLimit, state)
-		}
 		blocks = append(blocks, Block{
-			Kind:  KindState,
-			Tag:   "orchestration-state",
-			Path:  path,
-			Body:  body,
-			state: state,
+			Kind: KindState,
+			Tag:  "orchestration-state",
+			Path: path,
+			Body: strings.ReplaceAll(text(data), "\r\n", "\n"),
 		})
 	}
 	if b, ok := itemsBlock(root, dir); ok {
@@ -268,8 +257,10 @@ func (r Renderer) BoardBlocks(ctx context.Context, dir string, prior []Block) []
 
 	out := strings.ReplaceAll(text(res.Stdout), "\r\n", "\n")
 	for _, b := range prior {
-		if b.state != "" && (out == b.state || strings.HasPrefix(out, b.state+"\n")) {
-			out = strings.TrimLeft(out[len(b.state):], " \t\n")
+		// A board's leading repeat of a state file is dropped.
+		if b.Kind == KindState && b.Tag != "" && b.Body != "" &&
+			(out == b.Body || strings.HasPrefix(out, b.Body+"\n")) {
+			out = strings.TrimLeft(out[len(b.Body):], " \t\n")
 		}
 	}
 	notes := []string{out}

@@ -82,26 +82,17 @@ func TestRenderStateAndItems(t *testing.T) {
 	}
 }
 
-func TestRenderNewKitAndNotes(t *testing.T) {
+func TestRenderNewKit(t *testing.T) {
 	t.Parallel()
 	dir := newKit(t, map[string]string{"attention/items.json": "{malformed"})
 	got := render(t, Renderer{}, dir)
 	if got != "[new kit: "+dir+"; write state.md here]\n" {
 		t.Fatalf("new kit = %q; malformed items must be omitted", got)
 	}
-
-	dir = newKit(t, map[string]string{"state.md": strings.Repeat("x", 3001)})
-	if got := render(t, Renderer{}, dir); !strings.Contains(got,
-		"[state.md is 3001 bytes, over 3000: rewrite it shorter now;") {
-		t.Fatalf("no size note over 3,000 bytes:\n%.200s", got)
-	}
-	dir = newKit(t, map[string]string{"state.md": strings.Repeat("x", 3000)})
-	if got := render(t, Renderer{}, dir); strings.Contains(got, "bytes, over") {
-		t.Fatal("size note at exactly 3,000 bytes")
-	}
 }
 
-// TestRender covers C17: handover selection by `[handover]` order and unreadable parts as markers.
+// TestRender covers C17: handover selection by `[handover]` order and unreadable parts as markers;
+// and C12 of docs/design/core-stages.md: state files of any size render verbatim, with no size note.
 func TestRender(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
@@ -164,6 +155,17 @@ func TestRender(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("large state files render verbatim", func(t *testing.T) {
+		t.Parallel()
+		north, state := strings.Repeat("n", 3001), strings.Repeat("s\n", 5000)+"end"
+		dir := newKit(t, map[string]string{"NORTH.md": north, "state.md": state})
+		want := block("orchestration-state", filepath.Join(dir, "NORTH.md"), north) + "\n\n" +
+			block("orchestration-state", filepath.Join(dir, "state.md"), state) + "\n"
+		if got := render(t, Renderer{}, dir); got != want {
+			t.Fatalf("render =\n%.300s\nwant the state files verbatim", got)
+		}
+	})
 
 	t.Run("dangling symlinks are markers", func(t *testing.T) {
 		t.Parallel()

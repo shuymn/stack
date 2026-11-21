@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -119,15 +120,15 @@ func TestKitOpenClose(t *testing.T) {
 		t.Fatalf("kit dir mode = %v, want 0700", info.Mode().Perm())
 	}
 
-	if err := os.WriteFile(
-		filepath.Join(kitDir, "state.md"),
-		[]byte("the state\n"),
-		0o600,
-	); err != nil {
+	// C12: a state file over 3,000 bytes renders verbatim, with no size note.
+	state := strings.Repeat("the state\n", 400) + "end"
+	if err := os.WriteFile(filepath.Join(kitDir, "state.md"), []byte(state), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	r = runIn(t, home, withID, "kit", "open", "demo")
-	if r.code != exitOK || !strings.Contains(r.stdout, "the state") {
+	verbatim := "<orchestration-state path=" + strconv.Quote(filepath.Join(kitDir, "state.md")) +
+		">\n" + state + "\n</orchestration-state>\n"
+	if r.code != exitOK || r.stdout != verbatim || r.stderr != "" {
 		t.Fatalf("second open = %+v", r)
 	}
 	if got, _ := readKits(t, home); got != "demo\n" {
