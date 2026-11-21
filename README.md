@@ -55,11 +55,13 @@ until the rest is in place. Follow these steps in order, and replace `stack` las
    `message_checks = ["public"]` under `[merge]` in `config.toml`.
 5. Before replacing `stack`, check v11 with the applied settings: put a v11 `stack` built from this checkout first
    on a session's `PATH` (not installed) and confirm that the moved rules are denied only with `stack-guard (`
-   reasons, a raw `gh pr merge` with `stack guard (raw-merge): `, and that `stack pr merge --body` with a local path
-   is refused with `outbound blocked: public` before any `gh` call.
+   reasons (including each custom `secrets` path; Pencil Generate is allowed when `deny_pencil_generate = false`),
+   a raw `gh pr merge` with `stack guard (raw-merge): `, and that `stack pr merge --body` with a local path is
+   refused before any `gh` call with `outbound blocked: public` naming that path (a refusal for an unreadable
+   `safety.toml` or terms file means the copied values are not in effect).
 6. Only then replace `stack` and the other extensions (the command below), and install or reinstall
-   `stack-improve`; without `stack-public` it stops at `failed:check`. After installing, merge one PR with
-   `--body` to confirm the check runs on the installed `PATH`. To roll back, reinstall the v10 `stack` first.
+   `stack-improve`; without `stack-public` it stops at `failed:check`. After installing, repeat the `--body` check
+   with a local path on the installed `PATH`. To roll back, reinstall the v10 `stack` first.
 
 ### Install
 
