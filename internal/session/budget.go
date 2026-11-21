@@ -28,6 +28,7 @@ type piece struct {
 	kind       string // names the piece in its omitted marker
 	path       string // names the piece's file in its omitted marker, when set
 	omit       string // replaces the omitted marker built from kind and path, when set
+	cut        bool   // lets a bare piece's body be cut like a tagged one
 	out        string
 }
 
@@ -73,7 +74,7 @@ func (p *piece) minimal() string {
 // fit returns the longest rendering of p whose cost is at most room: whole when its body is within
 // limit (0 = no limit) and it fits; else its body cut at the tail to at most limit characters, at a
 // code-point boundary, and ended with a cut marker; else its minimal form; else "". A bare marker
-// is never cut.
+// is cut only when p.cut is set.
 func (p *piece) fit(room, limit int) string {
 	total := chars(p.body)
 	keep := total
@@ -85,7 +86,7 @@ func (p *piece) fit(room, limit int) string {
 			return whole
 		}
 	}
-	if p.head != "" {
+	if p.head != "" || p.cut {
 		avail := room - len(sep) - chars(p.head) - chars(p.tail)
 		if keep+chars(cutMarker(total-keep)) > avail {
 			// Start from the widest marker any cut of this body can need, then keep more while

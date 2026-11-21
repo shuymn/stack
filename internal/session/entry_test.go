@@ -308,6 +308,23 @@ func TestEntryOmittedMarker(t *testing.T) {
 	}
 }
 
+// TestEntryBareCap: a bare entry result (a warn line without context) is capped and cut like a
+// tagged one, so a very long extension name cannot take the room of later results.
+func TestEntryBareCap(t *testing.T) {
+	t.Parallel()
+	name := strings.Repeat("x", 6000)
+	r := ext.Result{Name: name, Status: ext.StatusWarn, Error: "not started: stage deadline"}
+	var stderr strings.Builder
+	a := newAllocator()
+	out := placeEntry(a, &stderr, []ext.Result{r})
+	body := "[extension " + name + ": warn: not started: stage deadline]"
+	want := body[:blockLimit] + cutMarker(chars(body)-blockLimit)
+	if len(out) != 1 || out[0].out != want || stderr.Len() != 0 {
+		t.Fatalf("out = %q, stderr %q; want the body cut at %d", squash(out[0].out),
+			stderr.String(), blockLimit)
+	}
+}
+
 // TestCutExactFit: a cut whose actual marker fits the room exactly is used, not the omitted
 // marker.
 func TestCutExactFit(t *testing.T) {

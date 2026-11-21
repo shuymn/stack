@@ -278,6 +278,13 @@ func runEntry(ctx context.Context, p Params, a *allocator, kits []kitPieces) []*
 	ext.Stream(ctx, o, ext.StageEntry, request, plans, func(r ext.Result) {
 		results = append(results, r)
 	})
+	return placeEntry(a, p.Stderr, results)
+}
+
+// placeEntry places each result `kit open` would show, in order, with its body capped at
+// blockLimit and cut with a marker, else its omitted marker; a result with no room even for that
+// is reported on stderr (nil discards it).
+func placeEntry(a *allocator, stderr io.Writer, results []ext.Result) []*piece {
 	var out []*piece
 	for _, r := range results {
 		b, shown := kit.EntryBlock(r)
@@ -286,9 +293,10 @@ func runEntry(ctx context.Context, p Params, a *allocator, kits []kitPieces) []*
 		}
 		pc := pieces([]kit.Block{b})[0]
 		pc.omit = "[entry context omitted: context limit: " + r.Name + "]"
+		pc.cut = true
 		a.place(pc, blockLimit)
-		if pc.out == "" && p.Stderr != nil {
-			_, _ = fmt.Fprintf(p.Stderr, "stack: entry context of %s dropped: context limit\n",
+		if pc.out == "" && stderr != nil {
+			_, _ = fmt.Fprintf(stderr, "stack: entry context of %s dropped: context limit\n",
 				r.Name)
 		}
 		out = append(out, pc)
