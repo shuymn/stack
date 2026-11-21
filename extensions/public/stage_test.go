@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -220,7 +221,8 @@ func TestHitsCut(t *testing.T) {
 // and a package variable.
 func TestStageDeadline(t *testing.T) {
 	saved := checkTimeout
-	checkTimeout = time.Second
+	// Long enough for three fake git starts under -race on a loaded machine.
+	checkTimeout = 5 * time.Second
 	t.Cleanup(func() { checkTimeout = saved })
 	const sha = "0123456789abcdef0123456789abcdef01234567"
 	top := "top"
@@ -234,8 +236,13 @@ func TestStageDeadline(t *testing.T) {
 			Args:   []string{"-C", top, "show", "-s", "--encoding=UTF-8", "--format=%B", sha},
 			Stdout: "see " + local("home", "bob") + "\n",
 		},
-		{Args: nil, Sleep: 30 * time.Second},
+		{Args: []string{"warm-up"}},
+		{Args: nil, Sleep: time.Minute},
 	}})
+	// The first start of a new executable can be slow (a virus scan of the copy); take it here.
+	if err := exec.CommandContext(t.Context(), git, "warm-up").Run(); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("PATH", filepath.Dir(git))
 	start := time.Now()
 	resp := stageResult(t, runMain(t, t.TempDir(), outboundRequest("", "a..b", "", "", "")))
@@ -247,8 +254,8 @@ func TestStageDeadline(t *testing.T) {
 		resp.Findings[1].Error != lines[1] {
 		t.Fatalf("stage = %+v, want block with the hit and the deadline", resp)
 	}
-	if elapsed > 10*time.Second {
-		t.Errorf("answered after %s, want soon after the 1 s deadline", elapsed)
+	if elapsed > checkTimeout+10*time.Second {
+		t.Errorf("answered after %s, want soon after the %s deadline", elapsed, checkTimeout)
 	}
 }
 
