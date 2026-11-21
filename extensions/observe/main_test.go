@@ -129,6 +129,8 @@ func newFixture(t *testing.T) *fixture {
 		Location: time.UTC,
 		Budget:   time.Minute,
 		Reserve:  5 * time.Second,
+		// Generous for proctest fakes under load; a test that wants the timeout path sets its own.
+		replayTimeout: 30 * time.Second,
 	}
 	return f
 }
