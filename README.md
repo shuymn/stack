@@ -35,8 +35,8 @@ stack run cycle --ext observe   # 7-day window; writes ~/.local/state/stack/obse
 stack run cycle --ext improve   # reads that file; off unless enabled below
 ```
 
-Check that observe answered without a `latest-not-written` finding before running improve, which otherwise works
-from an older `latest.json` (up to 24 hours old).
+Check that observe answered without a `latest-not-written` finding before running improve, which can otherwise
+use an older `latest.json` (up to 24 hours old).
 
 Improve is off by default. Once enabled it can make paid model calls and open a PR, so the owner opts in on this
 machine:
@@ -46,10 +46,11 @@ machine:
 enabled = true   # absent file or any other value = off
 ```
 
-Enabled, it runs on macOS and Linux only, keeps one weekly stamp per machine (one paid attempt per local ISO week
-across repositories), and acts only when the single `origin` URL is a public `github.com` repository whose default
-branch has `.stack/improve.toml` with a non-empty `paths` list; it changes only existing regular, non-executable
-files matching those patterns:
+Enabled, it runs on macOS and Linux only. It shares one stamp per local ISO week across repositories under the same
+home directory; a Claude attempt with nonzero or unknown cost keeps it. It starts Claude only after verifying that the
+single `origin` URL is a public `github.com` repository whose default branch has `.stack/improve.toml` with a
+non-empty `paths` list, and published changes modify only existing regular, non-executable files matching those
+patterns:
 
 ```toml
 paths = ["home/dot_claude/skills/**"]
