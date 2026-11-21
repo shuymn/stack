@@ -61,8 +61,9 @@ fixtures) are in `docs/design/phase2-core.md` §4.7.
   version field until a second dialect exists. The v11 changes listed above under "Compatibility exceptions of v11"
   (`block` demotion at `entry` and `cycle`, and the changed `[stages].outbound` default) are the deliberate
   exceptions to this rule, made once with the stage table rather than by protocol selection.
-- **Discovery:** `<name>` matches `^[a-z0-9][a-z0-9-]*$`; names come from `[stages].<stage>`, or only from the
-  repeatable `--ext NAME` for `stack run`, and run in that order. Core picks the first runnable `stack-<name>` in the
+- **Discovery:** `<name>` matches `^[a-z0-9][a-z0-9-]*$`; names come from `[stages].<stage>` (at `stack pr merge`'s message
+  check, from `[merge].message_checks` instead), or only from the repeatable `--ext NAME` for `stack run`, and run in
+  that order. Core picks the first runnable `stack-<name>` in the
   absolute `PATH` entries (on Windows `stack-<name>.exe`; `PATHEXT` is ignored). A missing name is skipped without a
   warning; `stack run` lists it under `skipped` (or in the `--dry-run` plan).
 - **Invocation:** no arguments; cwd is the invoker's; the environment is inherited, with `STACK_STAGE` set to the
@@ -102,7 +103,8 @@ fixtures) are in `docs/design/phase2-core.md` §4.7.
 ## 4. Named Stages & Session Lifecycle
 
 The core defines every stage; extensions attach only to these and never add one. Precedence within a stage is the
-configured order (`[stages].<stage>`, or `--ext` for `stack run`), run sequentially under one stage deadline;
+configured order (`[stages].<stage>`, `[merge].message_checks` for `stack pr merge`'s message check, or `--ext`
+for `stack run`), run sequentially under one stage deadline;
 results aggregate `block > warn > pass`. A stage may have no built-in behaviour; it still runs its extensions.
 Session identity and kits are core and not stages: `SessionStart` exports `STACK_SESSION_ID` via `CLAUDE_ENV_FILE`
 (when Claude Code provides it) on every event (startup, resume, clear, compact, fork), and on `compact` restores
