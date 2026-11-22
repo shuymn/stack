@@ -142,6 +142,9 @@ type table struct {
 	positional []string
 	// remaining takes the positional arguments past positional ("" when there is none).
 	remaining string
+	// exclusive lists pairs of parameters in different parameter sets: pwsh refuses a call that
+	// binds both, also when one of them would only take a positional argument.
+	exclusive [][2]string
 }
 
 var commonParams = []param{
@@ -174,6 +177,9 @@ func withCommon(sp bool, ps ...param) []param {
 
 var (
 	literalPath = param{"LiteralPath", []string{"PSPath", "LP"}, false}
+	// pathSets: `-Path` and `-LiteralPath` are in different parameter sets, so
+	// `Remove-Item -LiteralPath '.git'build` is refused (PositionalParameterNotFound, 5.1 and 7.7).
+	pathSets = [][2]string{{"Path", "LiteralPath"}}
 
 	tables = map[string]*table{
 		"Remove-Item": {
@@ -184,12 +190,14 @@ var (
 				param{"Force", nil, true}, param{"Credential", nil, false},
 				param{"Stream", nil, false}),
 			positional: []string{"Path"},
+			exclusive:  pathSets,
 		},
 		"Set-Location": {
 			params: withCommon(false,
 				param{"Path", nil, false}, literalPath,
 				param{"PassThru", nil, true}, param{"StackName", nil, false}),
 			positional: []string{"Path"},
+			exclusive:  pathSets,
 		},
 		"New-PSDrive": {
 			params: withCommon(true,
@@ -358,7 +366,17 @@ func (t *table) bind(items []item) bool {
 			return false
 		}
 	}
-	return true
+	return !t.excluded(bound)
+}
+
+// excluded reports whether bound holds both parameters of an exclusive pair.
+func (t *table) excluded(bound map[string]bool) bool {
+	for _, e := range t.exclusive {
+		if bound[e[0]] && bound[e[1]] {
+			return true
+		}
+	}
+	return false
 }
 
 func setParam(ws []Word, name string) {

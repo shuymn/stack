@@ -166,6 +166,7 @@ func TestGhPublishPowerShell(t *testing.T) {
 			"cd sub && gh pr create -t t --body-file b.md",
 			"@'\nsee " + lp + "\n'@ | gh pr comment 1 -F -",
 			"gh pr create --bogus -b '" + lp + "'",
+			"gh pr comment 1 '--%' --body-file=b.md",
 		},
 		allow: []string{
 			"cd sub; gh pr create -t t --body-file b.md",
@@ -180,6 +181,9 @@ func TestGhPublishPowerShell(t *testing.T) {
 			`gh pr comment 1 -F "$env:SystemDrive\b.md"`,
 			"cd '" + dir + "'; gh pr create -t x -b y",
 			"gh pr create -t t --body-file clean.md",
+			// After a quoted `--%`, a `"` moves the later boundaries on 5.1 (`--body=ab --body-file=b.md`
+			// is one inline body there): the rest is dynamic and skipped.
+			`gh pr comment 1 '--%' '--body=a"b' --body-file=b.md`,
 		},
 	}
 	for _, windows := range bothOS {
@@ -250,6 +254,10 @@ func TestRmRootPowerShell(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.write("wt/.git", "gitdir: ../.git/worktrees/wt\n")
+	// A literal `~foo` directory: `~'foo'/.git` names it on both engines (not a home form).
+	if err := os.MkdirAll(filepath.Join(f.cwd, "~foo", ".git"), 0o700); err != nil {
+		t.Fatal(err)
+	}
 
 	both := psCases{
 		rule: RuleRmRoot,
@@ -283,6 +291,7 @@ func TestRmRootPowerShell(t *testing.T) {
 			`Remove-Item -Recurse .git\.\`,
 			"Remove-Item -Recurse .git/././",
 			"Remove-Item -Recurse $HOME; Write-Output ok",
+			"& rm.exe -r ~'foo'/.git",
 		},
 		allow: []string{
 			"Remove-Item -Recurse:$false ~",
@@ -309,6 +318,12 @@ func TestRmRootPowerShell(t *testing.T) {
 			"Remove-Item -Recurse $x",
 			"Remove-Item -Recurse:$y ~",
 			"Remove-Item -Recurse $HOME; Write-Output \"",
+			// `-LiteralPath` with a positional `Path` mixes parameter sets: pwsh refuses it.
+			"Remove-Item -Recurse -LiteralPath '.git'build",
+			// A cmdlet keeps `--%` as a value and its tail as one more positional: refused.
+			"Remove-Item -Recurse -Path `--% ~",
+			"Remove-Item -Recurse -Path --% ~",
+			"Remove-Item -Recurse `--% ~",
 		},
 	}
 	for _, windows := range bothOS {
@@ -350,6 +365,11 @@ func TestRmRootPowerShell(t *testing.T) {
 			`Remove-Item -Recurse -LP ~\`,
 			"Remove-Item -Recurse -PSPath '~/'",
 			"Remove-Item -Recurse -LiteralPath a, '~'",
+			`Remove-Item -Recurse -LiteralPath '~\.'`,
+			"Remove-Item -Recurse -LiteralPath '~/./'",
+			`& rm.exe -r ~"\"`,
+			"& rm.exe -r ~\\`.",
+			"& rm.exe -r ~`\\",
 			// A declared drive leaves only its own root opaque.
 			`New-PSDrive -Name X -PSProvider FileSystem -Root C:\work\build; Remove-Item -Recurse C:\`,
 			`Remove-Item -Recurse X:\`,
@@ -367,7 +387,6 @@ func TestRmRootPowerShell(t *testing.T) {
 			`& 'C:\x\rm.exe' -r ~\src`,
 			`& 'C:\x\rm.exe' -r x~`,
 			`& 'C:\x\rm.exe' -r ~user`,
-			`& rm.exe -r ~"\"`,
 			`& rm.exe --% -r ~`,
 			`& rm.exe '--%' -r ~`,
 			"Remove-Item -Recurse -LiteralPath '~' -WhatIf",
@@ -375,7 +394,7 @@ func TestRmRootPowerShell(t *testing.T) {
 			`Remove-Item -Recurse -LiteralPath '.\~'`,
 			`Remove-Item -Recurse -LiteralPath '~\child'`,
 			`Remove-Item -Recurse -LiteralPath '~user'`,
-			`Remove-Item -Recurse -LiteralPath '~\.'`,
+			"Remove-Item -Recurse -LiteralPath '~.'",
 			`New-PSDrive -Name X -PSProvider FileSystem -Root C:\x; Remove-Item -Recurse \`,
 			`New-PSDrive -Name X -PSProvider FileSystem -Root C:\work\build; Remove-Item -Recurse X:\`,
 			`New-PSDrive x FileSystem C:\work\build; Remove-Item -Recurse X:/`,

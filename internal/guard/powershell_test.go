@@ -67,11 +67,16 @@ func TestRawMergePowerShell(t *testing.T) {
 		`& gh.exe "--%" pr merge 7`,
 		`gh pr '--%' "merge 7"`,
 		`& gh.exe '--%' pr "merge 7 --squash"`,
+		"gh pr \"--`%\" \"merge 7\"",
 		"git `--% x && gh pr merge 7",
 		// A token that starts with a quote ends at its closing quote.
 		"gh pr 'merge'7",
 		`gh pr "merge"7`,
 		"gh 'pr'merge 7",
+		// After a quoted `--%` an unknown boundary leaves `--help` unproven: 5.1 joins
+		// `--body=ab --help` into one argument, and `%X%` expands to an unknown value.
+		`gh pr merge 7 --squash '--%' '--body=a"b' --help`,
+		"gh pr merge 7 '--%' %X% --help",
 	}
 	allow := []string{
 		"gh pr merge 7 2>&1 --help",
@@ -89,6 +94,9 @@ func TestRawMergePowerShell(t *testing.T) {
 		"gh pr 'view'7",
 		"gh pr merge 7 'a'--help",
 		"gh pr merge 'x'--help",
+		"gh pr merge 7 '--%' x --help",
+		// Each quote-started array element ends at its quote: `--help` is its own argument.
+		"gh pr merge 7 'a','b'--help",
 	}
 	for _, os := range bothOS {
 		for _, cmd := range deny {

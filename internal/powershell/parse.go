@@ -766,7 +766,7 @@ func (p *parser) redirection() bool {
 // args lexes a command's arguments up to the end of its pipeline element.
 func (p *parser) args(kind Kind) []item {
 	var items []item
-	joined := false
+	var j joining
 	for {
 		p.skipBlank()
 		if p.atEnd() {
@@ -776,8 +776,23 @@ func (p *parser) args(kind Kind) []item {
 			continue
 		}
 		if n := p.verbatimMarkAt(); n > 0 {
+			mark := Word{Raw: p.src[p.pos : p.pos+n], Text: verbatimMark, Static: true}
 			p.pos += n
-			for _, w := range p.verbatim() {
+			start := p.pos
+			tail := p.verbatim()
+			if kind == Cmdlet {
+				// A cmdlet keeps the token as a value and gets the rest as one literal argument
+				// (5.1 and 7.7: `Write-Output a --% $x b` writes `a`, `--%`, `$x b`).
+				items = append(items, item{words: []Word{mark}})
+				if t := strings.TrimSpace(p.src[start:p.pos]); t != "" {
+					items = append(
+						items,
+						item{words: []Word{{Raw: t, Text: t, Static: true, Verbatim: true}}},
+					)
+				}
+				return items
+			}
+			for _, w := range tail {
 				items = append(items, item{words: []Word{w}})
 			}
 			return items
@@ -791,11 +806,11 @@ func (p *parser) args(kind Kind) []item {
 		it := p.valueItem(kind)
 		switch {
 		case kind != Native:
-		case quotedMark(it.words[0]):
-			joined = true // dropped from argv; the later arguments are joined verbatim
+		case !j.on && quotedMark(it.words[0]):
+			j.on = true // dropped from argv; the later arguments are joined verbatim
 			continue
-		case joined:
-			if it.words = joinedWords(it.words[0]); len(it.words) == 0 {
+		case j.on:
+			if it.words = j.words(it.words[0]); len(it.words) == 0 {
 				continue
 			}
 		}
@@ -814,33 +829,41 @@ func (p *parser) verbatimMarkAt() int {
 	return 0
 }
 
-// quotedMark reports a native argument whose value is `--%` written in another form (`'--%'`,
-// `"--%"`, a here-string, `-'-%'`): pwsh 5.1 and 7 drop it from argv without stopping parsing, and
-// pass every later argument joined into the command line as written (a value with blanks becomes
-// several arguments; a `~` is not expanded). A quoted word must be one token: `'--'%` is two.
+// quotedMark reports a native argument whose decoded value is `--%` written in another form than
+// the stop-parsing token (`'--%'`, `"--%"`, "\"--`%\"", a here-string, `-'-%'`): pwsh 5.1 and 7
+// drop it from argv without stopping parsing, and pass every later argument joined into the command
+// line as written. A quote-started token ends at its quote, so `'--'%` is two words.
 func quotedMark(w Word) bool {
-	if !w.Static || w.Known != NotKnown || w.Block || w.Text != verbatimMark {
-		return false
-	}
-	switch w.Quote {
-	case Single, Double:
-		r := []rune(w.Raw)
-		return len(r) > 2 && string(r[1:len(r)-1]) == verbatimMark
-	case Bare, HereSingle, HereDouble:
-	}
-	return true
+	return w.Static && w.Known == NotKnown && !w.Block && w.Text == verbatimMark
 }
 
-// joinedWords is the argv a native argument after a quoted `--%` becomes: its value split at blanks,
-// each part literal; a value holding a `"` or a line break is dynamic (the command-line parser
-// reads it), and an empty one disappears. A word that is not static stays as it is, marked joined.
-func joinedWords(w Word) []Word {
+// percentVar matches a `%NAME%` reference, which both engines expand in a joined argument.
+var percentVar = regexp.MustCompile(`%[^%]+%`)
+
+// joining is the state of the native arguments after a quoted `--%`.
+type joining struct {
+	on bool
+	// lost is set once the argument boundaries are unknown: from there every word is dynamic.
+	lost bool
+}
+
+// words is the argv a native argument after a quoted `--%` becomes (5.1 and 7.7, argv stub): its
+// value split at blanks, each part literal and never a home `~`. A value holding a `"` or a line
+// break splits differently on 5.1 and 7.7 (`'--body=a"b' --help` is one argument on 5.1, two on
+// 7.7), a `%NAME%` is expanded to an unknown value, and an empty value is an argument on 7.7 but
+// none on 5.1: each makes that word and every later one dynamic, since the boundaries are unknown.
+// A dynamic word stays one dynamic word.
+func (j *joining) words(w Word) []Word {
+	if !j.lost && w.Static && w.Known == NotKnown &&
+		(w.Text == "" || strings.ContainsAny(w.Text, "\"\r\n") || percentVar.MatchString(w.Text)) {
+		j.lost = true
+	}
+	if j.lost {
+		return []Word{{Raw: w.Raw, joined: true}}
+	}
 	w.joined = true
 	if !w.Static || w.Known != NotKnown {
 		return []Word{w}
-	}
-	if strings.ContainsAny(w.Text, "\"\r\n") {
-		return []Word{{Raw: w.Raw, joined: true}}
 	}
 	var out []Word
 	for _, f := range strings.FieldsFunc(w.Text, func(r rune) bool { return r == ' ' || r == '\t' }) {

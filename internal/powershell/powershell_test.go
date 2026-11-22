@@ -364,9 +364,35 @@ var parseTests = []struct {
 	},
 	{
 		"quoted stop-parsing value dropped, later arguments joined",
-		`gh pr '--%' "merge 7" '' x`,
+		"gh pr '--%' \"merge 7\" x; gh pr \"--`%\" \"merge 7\"",
 		Windows,
-		calls{{"gh", "pr", "merge", "7", "x"}},
+		calls{{"gh", "pr", "merge", "7", "x"}, {"gh", "pr", "merge", "7"}},
+	},
+	{
+		// An empty value, a `%NAME%` or a `"` splits differently or unknowably on 5.1 and 7.7: the
+		// rest of the call is dynamic.
+		"joined arguments past an unknown boundary are dynamic",
+		"git '--%' a '' b; git '--%' %X% b; git '--%' 'a\"b' --help",
+		Windows,
+		calls{{"git", "a", "$", "$"}, {"git", "$", "$"}, {"git", "$", "$"}},
+	},
+	{
+		"a quote-started token ends at its quote, also before %",
+		`git '--'% a`,
+		Unix,
+		calls{{"git", "--", "%", "a"}},
+	},
+	{
+		"each quote-started element of a native array ends at its quote",
+		`git 'a','b'c d; gh pr merge 7 'a','b'--help`,
+		Windows,
+		calls{{"git", "$", "c", "d"}, {"gh", "pr", "merge", "7", "$", "--help"}},
+	},
+	{
+		"a cmdlet keeps the stop-parsing token and gets its tail as one argument",
+		"Write-Output a --% $x b; Write-Output a `--% $x b",
+		Unix,
+		calls{{"Write-Output", "a", "--%", "$x b; Write-Output a `--% $x b"}},
 	},
 	{
 		"double-quoted and here-string stop-parsing values",
@@ -384,7 +410,7 @@ var parseTests = []struct {
 		"joined value with a quote is dynamic",
 		`git '--%' 'a"b' c`,
 		Unix,
-		calls{{"git", "$", "c"}},
+		calls{{"git", "$", "$"}},
 	},
 	{
 		"a token starting with a quote ends at its closing quote",
@@ -581,8 +607,8 @@ func TestParse(t *testing.T) {
 	}
 }
 
-// TestQuotedMark checks that only a word that is one token valued `--%` counts: pwsh reads `'--'%`
-// as two tokens, so it is no stop-parsing value.
+// TestQuotedMark checks that a word counts by its decoded value `--%` (the lexer ends a
+// quote-started token at its quote, so `'--'%` never reaches it as one word).
 func TestQuotedMark(t *testing.T) {
 	for _, tt := range []struct {
 		w    Word
@@ -590,8 +616,8 @@ func TestQuotedMark(t *testing.T) {
 	}{
 		{Word{Raw: "'--%'", Text: "--%", Static: true, Quote: Single}, true},
 		{Word{Raw: `"--%"`, Text: "--%", Static: true, Quote: Double}, true},
+		{Word{Raw: "\"--`%\"", Text: "--%", Static: true, Quote: Double}, true},
 		{Word{Raw: "-'-%'", Text: "--%", Static: true, Quote: Bare}, true},
-		{Word{Raw: "'--'%", Text: "--%", Static: true, Quote: Single}, false},
 		{Word{Raw: "'--%x'", Text: "--%x", Static: true, Quote: Single}, false},
 		{Word{Raw: `"--$(x)"`, Quote: Double}, false},
 	} {
@@ -991,11 +1017,13 @@ func TestShellCall(t *testing.T) {
 			t.Errorf("os %d ShellCall args = %+v, want %+v", tt.os, sc.Args, tt.want)
 		}
 	}
-	// Native `~`: a home word (`~`, `~/…`, on Windows `~\…`, written plain or with only its `~`
-	// backtick-escaped) is Tilde, except in ShellCall on Windows, where it is dynamic; a word mixing
-	// quotes after the `~` is dynamic; a quoted one, `~user`, `~foo/.git`, `x~`, one in a `--%` tail
-	// and one after a quoted `'--%'` are literal.
-	native := "rm.exe -r ~ ~/x ~\\ ~\\b.md `~ '~' \"~\" x~ ~user ~foo/.git ~\"\\x\" ~'/x' '--%' ~"
+	// Native `~`: a word whose first part is unquoted and whose decoded value is `~`, `~/…` or on
+	// Windows `~\…` is Tilde however quotes and backticks spell it, except in ShellCall on Windows,
+	// where it is dynamic; a value holding a blank and a quote-started `~`, `~user`, `~foo/.git`
+	// (also as `~'foo'/.git`), `x~`, one in a `--%` tail and one after a quoted `'--%'` are literal;
+	// one holding a `"` is dynamic.
+	native := "rm.exe -r ~ ~/x ~\\ ~\\b.md `~ '~' \"~\" x~ ~user ~foo/.git ~\"\\x\" ~'/x' " +
+		"~\\`. ~`\\ ~'foo'/.git ~'\\a b' ~\\`\"x '--%' ~"
 	lit := func(s string) shell.Word { return shell.Word{Text: s, Static: true} }
 	for _, tt := range []struct {
 		os      OS
@@ -1019,17 +1047,18 @@ func TestShellCall(t *testing.T) {
 			return shell.Word{Text: s, Static: true, Tilde: true}
 		}
 		backslash := lit
+		dynamicOnWindows := lit // `~\"x` is a home form only on Windows, where its `"` is unmeasured
 		if tt.os == Windows {
 			backslash = homeWord
+			dynamicOnWindows = func(string) shell.Word { return shell.Word{} }
 		}
 		want := []shell.Word{
 			lit("rm.exe"), lit("-r"),
 			homeWord("~"), homeWord("~/x"), backslash(`~\`), backslash(`~\b.md`), homeWord("~"),
 			lit("~"), lit("~"), lit("x~"), lit("~user"), lit("~foo/.git"),
-			{},
-			{},
+			backslash(`~\x`), homeWord("~/x"), backslash(`~\.`), backslash(`~\`), lit("~foo/.git"),
+			lit(`~\a b`), dynamicOnWindows(`~\"x`),
 			lit("~"), // `'--%'` is dropped
-
 		}
 		if !slices.Equal(sc.Args, want) {
 			t.Errorf("os %d rm %v native ~ args = %+v, want %+v", tt.os, tt.rm, sc.Args, want)

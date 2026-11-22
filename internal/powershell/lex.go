@@ -488,6 +488,7 @@ func (p *parser) argWord(kind Kind) Word {
 		b.part(Bare)
 		b.dyn() // splatting
 	}
+	elem := start // where the current element of a native array starts
 	for !p.eof() {
 		c := p.peek()
 		if isBlank(c) || strings.IndexByte("\n;|&)}{>", c) >= 0 || (kind == Cmdlet && c == ',') {
@@ -495,7 +496,7 @@ func (p *parser) argWord(kind Kind) Word {
 		}
 		sq, dq := p.quoteAt(singleQuotes), p.quoteAt(doubleQuotes)
 		if sq > 0 || dq > 0 {
-			first := p.pos == start
+			first := p.pos == elem
 			if sq > 0 {
 				p.single(&b, sq)
 			} else {
@@ -506,9 +507,13 @@ func (p *parser) argWord(kind Kind) Word {
 			}
 			// A token that starts with a quote ends at its closing quote: `'a'b` is two arguments
 			// (5.1 and 7.7, cmdlets and native commands). A native `,` after it makes an array,
-			// which 5.1 and 7.7 pass differently (`a,b` vs `'a',b`): the word is dynamic.
+			// which 5.1 and 7.7 pass differently (`a,b` vs `'a',b`): the word is dynamic, and each
+			// quote-started element ends at its quote too (`'a','b'c` is the array, then `c`).
 			if kind != Cmdlet && p.peek() == ',' {
 				b.dyn()
+				b.part(Bare)
+				p.char(&b)
+				elem = p.pos
 				continue
 			}
 			break

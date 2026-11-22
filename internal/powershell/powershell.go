@@ -161,7 +161,7 @@ func (c Call) Is(name string) bool {
 // known variable is dynamic; a script block is dynamic. A home `~` word (see tildeOf) is Tilde on
 // non-Windows hosts and dynamic on Windows, where whether it is expanded depends on the engine
 // (PowerShell 7.6+ expands it, 5.1 and 7.0–7.5 pass it as written), so the file it names is
-// unknown. A mixed `~` word is dynamic; a quoted one, `~user` and `x~` are literal.
+// unknown. A quoted `~`, `~user`, `x~` and a home form holding a blank are literal.
 func (c Call) ShellCall() shell.Call {
 	return c.shellCall(false)
 }
@@ -185,26 +185,27 @@ func (c Call) shellCall(windowsTilde bool) shell.Call {
 type tildeKind int
 
 const (
-	tildeNone  tildeKind = iota // no leading unquoted `~`, or one that is not a home form
-	tildeHome                   // expanded as home (on Windows from 7.6)
-	tildeMixed                  // quotes after the `~`: unmeasured
+	tildeNone    tildeKind = iota // passed as written
+	tildeHome                     // expanded as home (on Windows from 7.6)
+	tildeUnknown                  // a home form holding `"`: unmeasured
 )
 
-// tildeOf classifies a native word: a home word is unquoted, outside a `--%` tail and not after a
-// quoted `--%` (both pass it as written), written as a
-// plain bareword (or with only its leading `~` backtick-escaped), and exactly `~`, `~/…` or, on
-// Windows, `~\…` (paths.TildeForm). A word mixing quotes after the `~` (`~"\x"`, `~'\x'`) is
-// mixed; `~user` and `~foo/x` are none.
+// tildeOf classifies a native word by its decoded value, as PowerShell 7.7 does (argv stub): a
+// word whose first part is unquoted, outside a `--%` tail and not after a quoted `--%`, and whose
+// value is exactly `~`, `~/…` or, on Windows, `~\…` (paths.TildeForm) is home, whatever quotes or
+// backtick escapes spell it (“ `~ “, “ ~\`. “, `~'\x'`, `~"\x"`), unless the value holds a blank
+// (`~'\a b'` is passed as written). `~'foo'/.git` is the literal `~foo/.git`.
 func (c Call) tildeOf(w Word) tildeKind {
 	switch {
-	case w.Flag != "", w.Verbatim, w.joined, w.Quote != Bare, !strings.HasPrefix(w.Text, "~"):
+	case w.Flag != "", w.Verbatim, w.joined, w.Quote != Bare,
+		!paths.TildeForm(w.Text, c.os == Windows):
 		return tildeNone
-	case w.Raw != w.Text && w.Raw != "`"+w.Text:
-		return tildeMixed
-	case paths.TildeForm(w.Text, c.os == Windows):
-		return tildeHome
+	case strings.Contains(w.Text, `"`):
+		return tildeUnknown
+	case strings.ContainsAny(w.Text, " \t"):
+		return tildeNone
 	default:
-		return tildeNone
+		return tildeHome
 	}
 }
 
@@ -227,7 +228,7 @@ func (c Call) nativeWord(w Word, windowsTilde bool) shell.Word {
 			return shell.Word{}
 		}
 		return shell.Word{Text: w.Text, Static: true, Tilde: true}
-	case tildeMixed:
+	case tildeUnknown:
 		return shell.Word{}
 	case tildeNone:
 	}

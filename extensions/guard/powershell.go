@@ -277,12 +277,15 @@ func removeItemTarget(
 }
 
 // literalTildeOpaque reports a `-LiteralPath` value whose `~` expansion is unmeasured, so it is not
-// judged. On Windows only `~` with at most trailing separators was measured to name home (W3), so
-// every other value starting with `~` is opaque; elsewhere nothing was measured, so the home forms
+// judged. On Windows only `~` followed by nothing but separators and `.` components (`~\`, `~\.`,
+// `~/./`) was measured to name home (W3, 5.1 and 7.7), so every other value starting with `~` is
+// opaque; elsewhere nothing was measured, so the home forms
 // `~`, `~/…` and `~\…` are opaque and `~user` is a literal name.
 func literalTildeOpaque(p string, windows bool) bool {
 	if windows {
-		return strings.HasPrefix(p, "~") && strings.Trim(p[1:], `\/`) != ""
+		rest, ok := strings.CutPrefix(p, "~")
+		home := ok && (rest == "" || isSep(rest[0])) && onlyCurrent(rest)
+		return ok && !home
 	}
 	return paths.TildeForm(p, true)
 }
