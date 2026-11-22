@@ -1058,7 +1058,8 @@ func fitsBlockSet(c Call) bool {
 		return false
 	}
 	for _, w := range c.Args[1:] {
-		if !set[w.Param] {
+		endOfParams := w.IsParam && w.Param == "" && w.Text == "--" // the binder's first `--`
+		if !set[w.Param] && !endOfParams {
 			return false
 		}
 	}
