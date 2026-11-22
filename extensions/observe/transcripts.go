@@ -33,7 +33,12 @@ var (
 // wiredTools are the tools the PreToolUse hooks are wired for: the union of the matchers of `stack
 // hook claude pre-tool-use` (phase2-core.md §4.3) and `stack-guard` (core-stages.md §4.5).
 var wiredTools = map[string]bool{
-	"Bash": true, "Read": true, "NotebookRead": true, "Grep": true, "Glob": true,
+	"Bash":                 true,
+	"PowerShell":           true,
+	"Read":                 true,
+	"NotebookRead":         true,
+	"Grep":                 true,
+	"Glob":                 true,
 	"mcp__pencil__execute": true,
 }
 
@@ -445,7 +450,7 @@ func guardInput(tool string, raw json.RawMessage) bool {
 		return false
 	}
 	switch tool {
-	case "Bash":
+	case "Bash", "PowerShell":
 		var in struct {
 			Command string `json:"command"`
 		}

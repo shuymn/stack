@@ -221,7 +221,7 @@ until` (`observe.py:204-207,407`). Each item: `id, signal, kind (miss|waste), wh
 provenance (owner|public|synthetic), repo, ts`.
 
 **Replay of PreToolUse decisions** (owner-approved addition). For every assistant `tool_use` block in a window
-transcript whose name is one the guard is wired for (`Bash`, `Read`, `NotebookRead`, `Grep`, `Glob`,
+transcript whose name is one the guard is wired for (`Bash`, `PowerShell`, `Read`, `NotebookRead`, `Grep`, `Glob`,
 `mcp__pencil__execute`; `phase2-core.md` §4.3 wiring):
 
 1. *Recorded decision*, from the `tool_result` with the same `tool_use_id`: content starting
@@ -241,7 +241,7 @@ transcript whose name is one the guard is wired for (`Bash`, `Read`, `NotebookRe
    A record whose `cwd` no longer exists, or whose `tool_input` lacks the input the guard needs for that tool, is
    `unrecoverable`: not run and excluded from comparison. The guard returns without a decision or diagnostic when it
    cannot decode the fields it reads or the field it judges is empty (`internal/guard/guard.go:48-60`,
-   `secrets.go`, `pencil.go`), so a `Bash` call needs a non-empty string `command`, `Read` a `file_path`,
+   `secrets.go`, `pencil.go`), so a `Bash` or `PowerShell` call needs a non-empty string `command`, `Read` a `file_path`,
    `NotebookRead` a `notebook_path` or `file_path`, `Glob` a `pattern`, `mcp__pencil__execute` an `input` or
    `edits`, and every file tool string path fields. Identical `(cwd, tool_name, tool_input)` payloads run once, and
    that one replayed decision is compared with each recorded decision separately. A payload's input is re-read

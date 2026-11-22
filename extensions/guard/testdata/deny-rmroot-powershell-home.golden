@@ -1,0 +1,1 @@
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"stack-guard (rmroot): Remove-Item would recursively delete the home directory ($HOME). Delete only what the task needs, by its own path."}}

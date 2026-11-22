@@ -1,0 +1,1 @@
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"stack guard (raw-merge): gh api graphql runs the mutation field mergePullRequest. Merge with stack pr merge <pr> <head-sha> [--merge|--squash|--rebase]: it merges only that head, once every check on it passed, and reads the result back."}}
