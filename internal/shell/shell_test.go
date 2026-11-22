@@ -98,6 +98,25 @@ func TestParseCalls(t *testing.T) {
 	}
 }
 
+func TestParseDepth(t *testing.T) {
+	const cmd = `bash -c 'gh x'`
+	tests := []struct {
+		depth int
+		want  [][]string
+	}{
+		{0, [][]string{{"bash", "-c", "gh x"}, {"gh", "x"}}},
+		{1, [][]string{{"bash", "-c", "gh x"}, {"gh", "x"}}},
+		{2, [][]string{{"bash", "-c", "gh x"}}},
+		{3, [][]string{}},
+	}
+	for _, tt := range tests {
+		got := argvs(ParseDepth(cmd, "", "", tt.depth))
+		if !slices.EqualFunc(got, tt.want, slices.Equal) {
+			t.Errorf("ParseDepth(%q, %d) calls = %q, want %q", cmd, tt.depth, got, tt.want)
+		}
+	}
+}
+
 func TestParseWords(t *testing.T) {
 	r := Parse(`rm -rf '~' ~ ~/x "~" a$B`, "", "")
 	c := find(t, r, "rm")
