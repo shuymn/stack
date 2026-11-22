@@ -319,6 +319,16 @@ func result(a map[string]any, content any) map[string]any {
 	}
 }
 
+// errorResult is result marked is_error, as Claude Code records a hook deny.
+func errorResult(a map[string]any, content any) map[string]any {
+	r := result(a, content)
+	message, _ := r["message"].(map[string]any)
+	blocks, _ := message["content"].([]any)
+	block, _ := blocks[0].(map[string]any)
+	block["is_error"] = true
+	return r
+}
+
 func signalItems(l Latest, signal string) []Item {
 	var out []Item
 	for _, it := range l.Items {

@@ -56,6 +56,7 @@ type block struct {
 	Input     json.RawMessage `json:"input"`
 	ToolUseID string          `json:"tool_use_id"` //nolint:tagliatelle // transcript format
 	Content   json.RawMessage `json:"content"`
+	IsError   bool            `json:"is_error"` //nolint:tagliatelle // transcript format
 }
 
 type record struct {
@@ -552,7 +553,7 @@ func (s *state) recordResults(line []byte, pending map[string]*toolCall, st *Sou
 		}
 		delete(pending, b.ToolUseID)
 		if text, ok := resultText(b.Content); ok {
-			call.recorded = recordedDecision(call.tool, text, r)
+			call.recorded = recordedDecision(call.tool, text, b.IsError, r)
 		} // else a missing or malformed result stays unknown
 	}
 }
@@ -605,7 +606,9 @@ const (
 var reBracketed = regexp.MustCompile(`^\[(?:[^\[\]]|\[[^\[\]]*\])*\]: \s*`)
 
 // recordedDecision classifies the tool_result of a guard-wired call (design §3.3 replay step 1).
-func recordedDecision(tool, text string, r record) string {
+// Only an error result is a deny: a successful result whose output reads like a hook error is the
+// tool's own output.
+func recordedDecision(tool, text string, isError bool, r record) string {
 	switch r.ToolDenialKind {
 	case "user-rejected", "cancelled", "interrupted":
 		return decUnknown
@@ -615,6 +618,9 @@ func recordedDecision(tool, text string, r record) string {
 		case "user_reject", "user_abort":
 			return decUnknown
 		}
+	}
+	if !isError {
+		return decNoDeny
 	}
 	prefix := "PreToolUse:" + tool + hookErrorMark
 	if !strings.HasPrefix(text, prefix) {

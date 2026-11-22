@@ -66,9 +66,15 @@ func TestRecordedDecision(t *testing.T) {
 		{"Bash", "Exit code 1\nPreToolUse:Bash hook error: stack guard (secrets): x", decNoDeny},
 		{"Bash", "", decNoDeny},
 	} {
-		if got := recordedDecision(tc.tool, tc.text, record{}); got != tc.want {
+		if got := recordedDecision(tc.tool, tc.text, true, record{}); got != tc.want {
 			t.Errorf("recordedDecision(%q, %q) = %q, want %q", tc.tool, tc.text, got, tc.want)
 		}
+	}
+	// A successful result is never a deny, whatever its output says.
+	if got := recordedDecision(
+		"Bash", "PreToolUse:Bash hook error: stack-guard (secrets): x", false, record{},
+	); got != decNoDeny {
+		t.Errorf("successful result = %q, want %q", got, decNoDeny)
 	}
 	for _, r := range []record{
 		{ToolDenialKind: "user-rejected"},
@@ -79,6 +85,7 @@ func TestRecordedDecision(t *testing.T) {
 		if got := recordedDecision(
 			"Bash",
 			"Permission to use Bash has been denied.",
+			true,
 			r,
 		); got != decUnknown {
 			t.Errorf("refusal %+v = %q", r, got)
@@ -86,11 +93,15 @@ func TestRecordedDecision(t *testing.T) {
 	}
 }
 
-// bashCall is an in-window Bash call in cwd with its recorded result; result "" leaves it unanswered.
+// bashCall is an in-window Bash call in cwd with its recorded result; result "" leaves it
+// unanswered, and a result starting "PreToolUse:" is an error result, as a hook deny is recorded.
 func bashCall(at time.Time, cwd string, input map[string]any, resultText string) []map[string]any {
 	a := assistant(at, cwd, tool{"Bash", input})
-	if resultText == "" {
+	switch {
+	case resultText == "":
 		return []map[string]any{a}
+	case strings.HasPrefix(resultText, "PreToolUse:"):
+		return []map[string]any{a, errorResult(a, resultText)}
 	}
 	return []map[string]any{a, result(a, resultText)}
 }
@@ -374,7 +385,7 @@ func TestReplayInputs(t *testing.T) {
 		recs := make([][]map[string]any, 0, len(tools))
 		for _, tl := range tools {
 			a := assistant(hourAgo, f.cwd, tl)
-			recs = append(recs, []map[string]any{a, result(a, fmt.Sprintf(denied, tl.name))})
+			recs = append(recs, []map[string]any{a, errorResult(a, fmt.Sprintf(denied, tl.name))})
 		}
 		f.calls("r", recs...)
 		stack := f.fake("stack", stackModel, proctest.Response{
@@ -406,6 +417,19 @@ func TestReplayInputs(t *testing.T) {
 		})
 		resp, l := f.run()
 		if l.Replay != (ReplayTotals{}) || len(findings(resp, kindReplayChange)) != 0 {
+			t.Errorf("replay = %+v, findings %+v", l.Replay, resp.Findings)
+		}
+	})
+	t.Run("a successful result that reads like a deny: no-deny", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t)
+		a := assistant(hourAgo, f.cwd, tool{"Bash", cmd("echo")})
+		f.calls("r", []map[string]any{
+			a, result(a, "PreToolUse:Bash hook error: stack-guard (synthetic-marker): example"),
+		})
+		f.fake("stack", stackModel, proctest.Response{Args: hookArgs})
+		resp, l := f.run()
+		if l.Replay != (ReplayTotals{Compared: 1}) || len(findings(resp, kindReplayChange)) != 0 {
 			t.Errorf("replay = %+v, findings %+v", l.Replay, resp.Findings)
 		}
 	})
