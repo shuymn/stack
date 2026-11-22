@@ -1,0 +1,85 @@
+{
+  "request": {
+    "body": "macOS と Windows の手順を追加しました。",
+    "branch": "topic/ja-install-windows-claim",
+    "jev": {
+      "records": {
+        "sha256:d0f67e69ea7f22ea14d38a8632bd0b96c54bfbd89d38086b254d5ec95e56d0c1": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.02
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.96
+              }
+            },
+            "usage": {
+              "input_tokens": 860,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "docs: インストール手順を追加"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-unsupported-claim",
+        "where": "message",
+        "detail": "p=0.96 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: the PR text claims something the diff does not show (p=0.96 ≥ 0.5 (jev-1.14.0))"
+  },
+  "repo": {
+    "base": {
+      "README.md": "# tool\n\n## 使い方\n\n    tool run\n"
+    },
+    "commits": [
+      {
+        "message": "docs: インストール手順を追加\n\nmacOS と Windows の手順を追加しました。",
+        "files": {
+          "README.md": "# tool\n\n## 使い方\n\n    tool run\n\n## インストール\n\nmacOS:\n\n    brew install tool\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "README.md": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": true,
+    "split": "heldout",
+    "why": "adds macOS steps only; the Windows steps the body claims are absent",
+    "lang": "ja"
+  },
+  "samples": {
+    "sha256:d0f67e69ea7f22ea14d38a8632bd0b96c54bfbd89d38086b254d5ec95e56d0c1": {
+      "meta_duty_regression": [
+        0.02,
+        0.02,
+        0.02
+      ],
+      "unsupported_claim": [
+        0.96,
+        0.95,
+        0.95
+      ]
+    }
+  }
+}

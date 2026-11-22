@@ -1,0 +1,91 @@
+{
+  "request": {
+    "body": "全テストが通ることを確認済み。境界値テストを追加。",
+    "branch": "topic/ja-loosened-comparison-claims-test",
+    "jev": {
+      "records": {
+        "sha256:9b79b606da8019bf55cae1c73cae4ae59e5de69710cb50366f0f230e0518ac79": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.48
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.9
+              }
+            },
+            "usage": {
+              "input_tokens": 915,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "fix: 境界値の比較を修正"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-unsupported-claim",
+        "where": "message",
+        "detail": "p=0.9 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: the PR text claims something the diff does not show (p=0.9 ≥ 0.5 (jev-1.14.0))"
+  },
+  "repo": {
+    "base": {
+      "limit/limit.go": "package limit\n\nfunc Cap(n int) int { return min(n, 10) }\n",
+      "limit/limit_test.go": "package limit\n\nimport \"testing\"\n\nfunc TestCap(t *testing.T) {\n\tif Cap(12) != 10 {\n\t\tt.Fatal(\"cap\")\n\t}\n}\n"
+    },
+    "commits": [
+      {
+        "message": "fix: 境界値の比較を修正\n\n全テストが通ることを確認済み。境界値テストを追加。",
+        "files": {
+          "limit/limit_test.go": "package limit\n\nimport \"testing\"\n\nfunc TestCap(t *testing.T) {\n\tif Cap(12) < 10 {\n\t\tt.Fatal(\"cap\")\n\t}\n}\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "limit/limit_test.go": {
+        "meta_duty_regression": true
+      }
+    },
+    "unsupported_claim": true,
+    "split": "fit",
+    "why": "loosens == to >= in an assertion and claims an added boundary test that is not there",
+    "lang": "ja",
+    "hard": [
+      "meta_duty_regression",
+      "unsupported_claim"
+    ],
+    "group": "limit"
+  },
+  "samples": {
+    "sha256:9b79b606da8019bf55cae1c73cae4ae59e5de69710cb50366f0f230e0518ac79": {
+      "meta_duty_regression": [
+        0.48,
+        0.46,
+        0.43
+      ],
+      "unsupported_claim": [
+        0.9,
+        0.9,
+        0.91
+      ]
+    }
+  }
+}

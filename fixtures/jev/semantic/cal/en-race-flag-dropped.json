@@ -1,0 +1,90 @@
+{
+  "request": {
+    "body": "",
+    "branch": "topic/en-race-flag-dropped",
+    "jev": {
+      "records": {
+        "sha256:7648126a001ffecd2ce49aac6a5fe34f0e1d0e7e22ee6f3abba7293ec2be4ab3": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.72
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.39
+              }
+            },
+            "usage": {
+              "input_tokens": 787,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "chore: speed up tests"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-meta-duty",
+        "where": "scripts/test",
+        "detail": "p=0.72 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: scripts/test: the diff may remove or weaken a test, check or rule without the PR text saying why (p=0.72 ≥ 0.5 (jev-1.14.0))"
+  },
+  "repo": {
+    "base": {
+      "scripts/test": "#!/bin/sh\nset -eu\ngo test -race ./...\n"
+    },
+    "commits": [
+      {
+        "message": "chore: speed up tests",
+        "files": {
+          "scripts/test": "#!/bin/sh\nset -eu\ngo test ./...\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "scripts/test": {
+        "meta_duty_regression": true
+      }
+    },
+    "unsupported_claim": false,
+    "split": "fit",
+    "why": "drops -race from the completion check without saying so",
+    "lang": "en",
+    "hard": [
+      "meta_duty_regression",
+      "unsupported_claim"
+    ],
+    "group": "scripts-test"
+  },
+  "samples": {
+    "sha256:7648126a001ffecd2ce49aac6a5fe34f0e1d0e7e22ee6f3abba7293ec2be4ab3": {
+      "meta_duty_regression": [
+        0.72,
+        0.73,
+        0.73
+      ],
+      "unsupported_claim": [
+        0.39,
+        0.42,
+        0.44
+      ]
+    }
+  }
+}

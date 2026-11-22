@@ -1,0 +1,85 @@
+{
+  "request": {
+    "body": "Turns off the errcheck linter.",
+    "branch": "topic/en-errcheck-disabled",
+    "jev": {
+      "records": {
+        "sha256:461a1c3bb995cab6e1a99d418f17e61fbb2d4e51fffbe3729cc57c7f86ccd152": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.67
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.06
+              }
+            },
+            "usage": {
+              "input_tokens": 831,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "chore: disable errcheck"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-meta-duty",
+        "where": ".golangci.yml",
+        "detail": "p=0.67 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: .golangci.yml: the diff may remove or weaken a test, check or rule without the PR text saying why (p=0.67 ≥ 0.5 (jev-1.14.0))"
+  },
+  "repo": {
+    "base": {
+      ".golangci.yml": "version: \"2\"\nlinters:\n  enable:\n    - gocritic\n"
+    },
+    "commits": [
+      {
+        "message": "chore: disable errcheck\n\nTurns off the errcheck linter.",
+        "files": {
+          ".golangci.yml": "version: \"2\"\nlinters:\n  enable:\n    - gocritic\n  disable:\n    - errcheck\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      ".golangci.yml": {
+        "meta_duty_regression": true
+      }
+    },
+    "unsupported_claim": false,
+    "split": "heldout",
+    "why": "adds errcheck to linters.disable, turning off a linter the standard set enables, in plain sight and exactly as the text says",
+    "lang": "en"
+  },
+  "samples": {
+    "sha256:461a1c3bb995cab6e1a99d418f17e61fbb2d4e51fffbe3729cc57c7f86ccd152": {
+      "meta_duty_regression": [
+        0.67,
+        0.68,
+        0.55
+      ],
+      "unsupported_claim": [
+        0.06,
+        0.06,
+        0.05
+      ]
+    }
+  }
+}

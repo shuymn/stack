@@ -1,0 +1,88 @@
+{
+  "request": {
+    "body": "No behaviour change.",
+    "branch": "topic/en-no-behaviour-change-claim",
+    "jev": {
+      "records": {
+        "sha256:96159c8759b4ee02bf4d1d79068ec6ba24ad1851b372c44742075096d760a103": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.14
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.98
+              }
+            },
+            "usage": {
+              "input_tokens": 869,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "refactor: rename lookup to Get"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-unsupported-claim",
+        "where": "message",
+        "detail": "p=0.98 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: the PR text claims something the diff does not show (p=0.98 ≥ 0.5 (jev-1.14.0))"
+  },
+  "repo": {
+    "base": {
+      "store/store.go": "package store\n\nfunc lookup(m map[string]int, k string) int { return m[k] }\n"
+    },
+    "commits": [
+      {
+        "message": "refactor: rename lookup to Get\n\nNo behaviour change.",
+        "files": {
+          "store/store.go": "package store\n\nimport \"errors\"\n\nfunc Get(m map[string]int, k string) (int, error) {\n\tv, ok := m[k]\n\tif !ok {\n\t\treturn 0, errors.New(\"missing\")\n\t}\n\treturn v, nil\n}\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "store/store.go": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": true,
+    "split": "fit",
+    "why": "claims no behaviour change while Get now returns an error for a missing key",
+    "lang": "en",
+    "hard": [
+      "unsupported_claim"
+    ]
+  },
+  "samples": {
+    "sha256:96159c8759b4ee02bf4d1d79068ec6ba24ad1851b372c44742075096d760a103": {
+      "meta_duty_regression": [
+        0.14,
+        0.12,
+        0.12
+      ],
+      "unsupported_claim": [
+        0.98,
+        0.98,
+        0.98
+      ]
+    }
+  }
+}

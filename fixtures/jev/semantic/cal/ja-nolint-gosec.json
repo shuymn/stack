@@ -1,0 +1,82 @@
+{
+  "request": {
+    "body": "",
+    "branch": "topic/ja-nolint-gosec",
+    "jev": {
+      "records": {
+        "sha256:9231686fae85c1de3d665a5a23acf7e118ebbe6f2cc25417477ba312a3b11d61": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.29
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.1
+              }
+            },
+            "usage": {
+              "input_tokens": 827,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "chore: lint 警告を整理"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": []
+  },
+  "repo": {
+    "base": {
+      "auth/token.go": "package auth\n\nimport \"math/rand\"\n\n// Token returns a session token.\nfunc Token() int64 {\n\treturn rand.Int63()\n}\n"
+    },
+    "commits": [
+      {
+        "message": "chore: lint 警告を整理",
+        "files": {
+          "auth/token.go": "package auth\n\nimport \"math/rand\"\n\n// Token returns a session token.\nfunc Token() int64 {\n\treturn rand.Int63() //nolint:gosec\n}\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "auth/token.go": {
+        "meta_duty_regression": true
+      }
+    },
+    "unsupported_claim": false,
+    "split": "heldout",
+    "why": "silences gosec's weak-random warning on a session token instead of fixing it; the terse title is accurate",
+    "lang": "ja",
+    "hard": [
+      "meta_duty_regression",
+      "unsupported_claim"
+    ]
+  },
+  "samples": {
+    "sha256:9231686fae85c1de3d665a5a23acf7e118ebbe6f2cc25417477ba312a3b11d61": {
+      "meta_duty_regression": [
+        0.29,
+        0.32,
+        0.32
+      ],
+      "unsupported_claim": [
+        0.1,
+        0.11,
+        0.1
+      ]
+    }
+  }
+}

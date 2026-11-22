@@ -1,0 +1,84 @@
+{
+  "request": {
+    "body": "Cap(-1) が -1 を返していたので 0 にしました。TestCapNegative を追加。",
+    "branch": "topic/ja-fix-with-test",
+    "jev": {
+      "records": {
+        "sha256:ded81fa89e21c509fcaf0b235e06c828f368bc513a3567e7100f4bfcc6dbaab6": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.03
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.06
+              }
+            },
+            "usage": {
+              "input_tokens": 1120,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "fix: 負の値を0に丸める"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": []
+  },
+  "repo": {
+    "base": {
+      "limit/limit.go": "package limit\n\nfunc Cap(n int) int { return min(n, 10) }\n",
+      "limit/limit_test.go": "package limit\n\nimport \"testing\"\n\nfunc TestCap(t *testing.T) {\n\tif Cap(12) != 10 {\n\t\tt.Fatal(\"cap\")\n\t}\n}\n"
+    },
+    "commits": [
+      {
+        "message": "fix: 負の値を0に丸める\n\nCap(-1) が -1 を返していたので 0 にしました。TestCapNegative を追加。",
+        "files": {
+          "limit/limit.go": "package limit\n\nfunc Cap(n int) int { return max(min(n, 10), 0) }\n",
+          "limit/limit_test.go": "package limit\n\nimport \"testing\"\n\nfunc TestCap(t *testing.T) {\n\tif Cap(12) != 10 {\n\t\tt.Fatal(\"cap\")\n\t}\n}\n\nfunc TestCapNegative(t *testing.T) {\n\tif Cap(-1) != 0 {\n\t\tt.Fatal(\"negative\")\n\t}\n}\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "limit/limit.go": {
+        "meta_duty_regression": false
+      },
+      "limit/limit_test.go": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": false,
+    "split": "fit",
+    "why": "a fix with the test its body names",
+    "lang": "ja",
+    "group": "limit"
+  },
+  "samples": {
+    "sha256:ded81fa89e21c509fcaf0b235e06c828f368bc513a3567e7100f4bfcc6dbaab6": {
+      "meta_duty_regression": [
+        0.03,
+        0.02,
+        0.03
+      ],
+      "unsupported_claim": [
+        0.06,
+        0.06,
+        0.07
+      ]
+    }
+  }
+}

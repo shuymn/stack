@@ -1,0 +1,87 @@
+{
+  "request": {
+    "body": "README も更新しました。",
+    "branch": "topic/ja-readme-claim",
+    "jev": {
+      "records": {
+        "sha256:33804994e3a47b2eec8bafc919869add7cde4a68edbf85cfeeda97dcbff78a8b": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.02
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.95
+              }
+            },
+            "usage": {
+              "input_tokens": 892,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "feat: 設定ファイルの検証を追加"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-unsupported-claim",
+        "where": "message",
+        "detail": "p=0.95 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: the PR text claims something the diff does not show (p=0.95 ≥ 0.5 (jev-1.14.0))"
+  },
+  "repo": {
+    "base": {
+      "README.md": "# tool\n",
+      "config/config.go": "package config\n\ntype Config struct{ Name string }\n\n// Load reads c.\nfunc Load(c *Config) string {\n\treturn c.Name\n}\n"
+    },
+    "commits": [
+      {
+        "message": "feat: 設定ファイルの検証を追加\n\nREADME も更新しました。",
+        "files": {
+          "config/validate.go": "package config\n\nimport \"errors\"\n\n// Validate rejects an empty name.\nfunc Validate(c Config) error {\n\tif c.Name == \"\" {\n\t\treturn errors.New(\"name is empty\")\n\t}\n\treturn nil\n}\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "config/validate.go": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": true,
+    "split": "fit",
+    "why": "claims a README update the diff does not contain",
+    "lang": "ja",
+    "group": "config"
+  },
+  "samples": {
+    "sha256:33804994e3a47b2eec8bafc919869add7cde4a68edbf85cfeeda97dcbff78a8b": {
+      "meta_duty_regression": [
+        0.02,
+        0.02,
+        0.02
+      ],
+      "unsupported_claim": [
+        0.95,
+        0.94,
+        0.95
+      ]
+    }
+  }
+}

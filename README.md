@@ -23,10 +23,16 @@ GOBIN="$HOME/.local/bin" go install ./cmd/stack ./extensions/observe/cmd/stack-o
   ./extensions/auditdue/cmd/stack-audit-due
 GOBIN="$HOME/.local/bin" go install ./extensions/public/cmd/stack-public ./extensions/guard/cmd/stack-guard
 GOBIN="$HOME/.local/bin" go install ./extensions/improve/cmd/stack-improve
+GOBIN="$HOME/.local/bin" go install ./extensions/jev/semantic/cmd/stack-jev-semantic
 ```
 
 Install `stack-improve` after `stack-public`: improve's public check runs `stack-public check`, which reads
 `~/.config/stack/safety.toml`. `stack-improve` embeds `extensions/improve/writing.md`; reinstall after changing it.
+
+`stack-jev-semantic` answers `pass` without `TYPESAFE_API_KEY`; the key opts in to live use, and it then sends the
+PR's texts and diff to Jev for the questions it can assess under an enabled decision, warning on a likely hit. The
+committed placeholder cutoffs disable both decisions, so nothing is sent until `jev-calibrate` has run. It embeds
+its cutoffs (`extensions/jev/semantic/cutoffs.json`); reinstall after `jev-calibrate` changes them.
 
 `stack-guard` is a Claude Code hook of its own, not a stage extension: wire it as a separate `PreToolUse` entry
 (matcher `Bash|PowerShell|Read|NotebookRead|Grep|Glob|mcp__pencil__execute`, exec form `stack-guard hook claude pre-tool-use`,

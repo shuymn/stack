@@ -1,0 +1,78 @@
+{
+  "request": {
+    "body": "-json を付けると結果を JSON で出力します。",
+    "branch": "topic/ja-json-option",
+    "jev": {
+      "records": {
+        "sha256:77cf86dada3984d6581d3d2adbd64c3e483adc5d605e5d437d26b243c66e3de9": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.03
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.1
+              }
+            },
+            "usage": {
+              "input_tokens": 943,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "feat: -json オプションを追加"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": []
+  },
+  "repo": {
+    "base": {
+      "cmd/report/main.go": "package main\n\nimport (\n\t\"flag\"\n\t\"fmt\"\n)\n\nfunc main() {\n\tflag.Parse()\n\tfmt.Printf(\"%d files\\n\", len(flag.Args()))\n}\n"
+    },
+    "commits": [
+      {
+        "message": "feat: -json オプションを追加\n\n-json を付けると結果を JSON で出力します。",
+        "files": {
+          "cmd/report/main.go": "package main\n\nimport (\n\t\"encoding/json\"\n\t\"flag\"\n\t\"fmt\"\n\t\"os\"\n)\n\nfunc main() {\n\tasJSON := flag.Bool(\"json\", false, \"print the result as JSON\")\n\tflag.Parse()\n\tif *asJSON {\n\t\t_ = json.NewEncoder(os.Stdout).Encode(map[string]int{\"files\": len(flag.Args())})\n\t\treturn\n\t}\n\tfmt.Printf(\"%d files\\n\", len(flag.Args()))\n}\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "cmd/report/main.go": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": false,
+    "split": "heldout",
+    "why": "adds -json, which prints the result as JSON, as described",
+    "lang": "ja"
+  },
+  "samples": {
+    "sha256:77cf86dada3984d6581d3d2adbd64c3e483adc5d605e5d437d26b243c66e3de9": {
+      "meta_duty_regression": [
+        0.03,
+        0.03,
+        0.03
+      ],
+      "unsupported_claim": [
+        0.1,
+        0.08,
+        0.09
+      ]
+    }
+  }
+}

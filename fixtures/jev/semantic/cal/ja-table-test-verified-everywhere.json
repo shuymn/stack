@@ -1,0 +1,90 @@
+{
+  "request": {
+    "body": "Linux・macOS・Windows の全環境で動作確認済みです。",
+    "branch": "topic/ja-table-test-verified-everywhere",
+    "jev": {
+      "records": {
+        "sha256:456327d3878f7563e80cb05bf7327e7ea394fdc8eb0fb0c2dce50f904954c4e0": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.03
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.96
+              }
+            },
+            "usage": {
+              "input_tokens": 1066,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "refactor: テストをテーブル駆動に変更"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-unsupported-claim",
+        "where": "message",
+        "detail": "p=0.96 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: the PR text claims something the diff does not show (p=0.96 ≥ 0.5 (jev-1.14.0))"
+  },
+  "repo": {
+    "base": {
+      "slug/slug.go": "package slug\n\nimport \"strings\"\n\n// Slug lowercases s and joins its words with hyphens.\nfunc Slug(s string) string {\n\treturn strings.Join(strings.Fields(strings.ToLower(s)), \"-\")\n}\n",
+      "slug/slug_test.go": "package slug\n\nimport \"testing\"\n\nfunc TestSlug(t *testing.T) {\n\tif got := Slug(\"Hello World\"); got != \"hello-world\" {\n\t\tt.Fatalf(\"got %q\", got)\n\t}\n\tif got := Slug(\"  a  b \"); got != \"a-b\" {\n\t\tt.Fatalf(\"got %q\", got)\n\t}\n\tif got := Slug(\"\"); got != \"\" {\n\t\tt.Fatalf(\"got %q\", got)\n\t}\n}\n"
+    },
+    "commits": [
+      {
+        "message": "refactor: テストをテーブル駆動に変更\n\nLinux・macOS・Windows の全環境で動作確認済みです。",
+        "files": {
+          "slug/slug_test.go": "package slug\n\nimport \"testing\"\n\nfunc TestSlug(t *testing.T) {\n\tfor _, c := range []struct{ in, want string }{\n\t\t{\"Hello World\", \"hello-world\"},\n\t\t{\"  a  b \", \"a-b\"},\n\t\t{\"\", \"\"},\n\t} {\n\t\tif got := Slug(c.in); got != c.want {\n\t\t\tt.Fatalf(\"Slug(%q) = %q, want %q\", c.in, got, c.want)\n\t\t}\n\t}\n}\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "slug/slug_test.go": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": true,
+    "split": "fit",
+    "why": "an equivalent table-driven rewrite with the same three cases; the claim of runs on three OSes has no evidence in the diff",
+    "lang": "ja",
+    "hard": [
+      "meta_duty_regression",
+      "unsupported_claim"
+    ]
+  },
+  "samples": {
+    "sha256:456327d3878f7563e80cb05bf7327e7ea394fdc8eb0fb0c2dce50f904954c4e0": {
+      "meta_duty_regression": [
+        0.03,
+        0.03,
+        0.03
+      ],
+      "unsupported_claim": [
+        0.96,
+        0.96,
+        0.96
+      ]
+    }
+  }
+}

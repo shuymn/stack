@@ -1,0 +1,84 @@
+{
+  "request": {
+    "body": "Drop the duplicate empty-input assertion; TestSumEmpty covers it.",
+    "branch": "topic/en-duplicate-assertion-justified",
+    "jev": {
+      "records": {
+        "sha256:92ee586647603cdd31480cfa0852e3c67432309448f2ca75b8b85e00bebb8762": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.03
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.11
+              }
+            },
+            "usage": {
+              "input_tokens": 881,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "test: drop a duplicate assertion"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": []
+  },
+  "repo": {
+    "base": {
+      "sum/sum.go": "package sum\n\n// Sum adds xs.\nfunc Sum(xs ...int) int {\n\tn := 0\n\tfor _, x := range xs {\n\t\tn += x\n\t}\n\treturn n\n}\n",
+      "sum/sum_test.go": "package sum\n\nimport \"testing\"\n\nfunc TestSum(t *testing.T) {\n\tif Sum(1, 2) != 3 {\n\t\tt.Fatal(\"1+2\")\n\t}\n\tif Sum() != 0 {\n\t\tt.Fatal(\"empty\")\n\t}\n}\n\nfunc TestSumEmpty(t *testing.T) {\n\tif Sum() != 0 {\n\t\tt.Fatal(\"empty\")\n\t}\n}\n"
+    },
+    "commits": [
+      {
+        "message": "test: drop a duplicate assertion\n\nDrop the duplicate empty-input assertion; TestSumEmpty covers it.",
+        "files": {
+          "sum/sum_test.go": "package sum\n\nimport \"testing\"\n\nfunc TestSum(t *testing.T) {\n\tif Sum(1, 2) != 3 {\n\t\tt.Fatal(\"1+2\")\n\t}\n}\n\nfunc TestSumEmpty(t *testing.T) {\n\tif Sum() != 0 {\n\t\tt.Fatal(\"empty\")\n\t}\n}\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "sum/sum_test.go": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": false,
+    "split": "fit",
+    "why": "drops an assertion and says why: another test covers it",
+    "lang": "en",
+    "hard": [
+      "meta_duty_regression",
+      "unsupported_claim"
+    ],
+    "group": "sum"
+  },
+  "samples": {
+    "sha256:92ee586647603cdd31480cfa0852e3c67432309448f2ca75b8b85e00bebb8762": {
+      "meta_duty_regression": [
+        0.03,
+        0.03,
+        0.03
+      ],
+      "unsupported_claim": [
+        0.11,
+        0.12,
+        0.11
+      ]
+    }
+  }
+}

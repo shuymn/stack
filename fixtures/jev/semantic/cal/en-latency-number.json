@@ -1,0 +1,88 @@
+{
+  "request": {
+    "body": "Reduces p99 latency from 120 ms to 40 ms.",
+    "branch": "topic/en-latency-number",
+    "jev": {
+      "records": {
+        "sha256:c9b4859fe39024419cd73c21de0e5702655d26d98666b53fd7e1bd9f68034271": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.03
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.93
+              }
+            },
+            "usage": {
+              "input_tokens": 890,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "perf: cache lookups"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-unsupported-claim",
+        "where": "message",
+        "detail": "p=0.93 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: the PR text claims something the diff does not show (p=0.93 ≥ 0.5 (jev-1.14.0))"
+  },
+  "repo": {
+    "base": {
+      "cache/cache.go": "package cache\n\nfunc Lookup(k string) string { return slow(k) }\n\nfunc slow(k string) string { return k }\n"
+    },
+    "commits": [
+      {
+        "message": "perf: cache lookups\n\nReduces p99 latency from 120 ms to 40 ms.",
+        "files": {
+          "cache/cache.go": "package cache\n\nvar memo = map[string]string{}\n\nfunc Lookup(k string) string {\n\tif v, ok := memo[k]; ok {\n\t\treturn v\n\t}\n\tv := slow(k)\n\tmemo[k] = v\n\treturn v\n}\n\nfunc slow(k string) string { return k }\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "cache/cache.go": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": true,
+    "split": "fit",
+    "why": "claims a measured latency drop with no evidence",
+    "lang": "en",
+    "hard": [
+      "unsupported_claim"
+    ]
+  },
+  "samples": {
+    "sha256:c9b4859fe39024419cd73c21de0e5702655d26d98666b53fd7e1bd9f68034271": {
+      "meta_duty_regression": [
+        0.03,
+        0.03,
+        0.03
+      ],
+      "unsupported_claim": [
+        0.93,
+        0.94,
+        0.94
+      ]
+    }
+  }
+}

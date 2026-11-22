@@ -1,0 +1,84 @@
+{
+  "request": {
+    "body": "Adds Mean; TestMean covers it.",
+    "branch": "topic/en-feature-with-test",
+    "jev": {
+      "records": {
+        "sha256:cc695c55752038341d15f3d7b3509b16a350c959d03dd47a661865f08cd168dc": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.02
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.09
+              }
+            },
+            "usage": {
+              "input_tokens": 1064,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "feat: add Mean"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": []
+  },
+  "repo": {
+    "base": {
+      "sum/sum.go": "package sum\n\n// Sum adds xs.\nfunc Sum(xs ...int) int {\n\tn := 0\n\tfor _, x := range xs {\n\t\tn += x\n\t}\n\treturn n\n}\n",
+      "sum/sum_test.go": "package sum\n\nimport \"testing\"\n\nfunc TestSum(t *testing.T) {\n\tif Sum(1, 2) != 3 {\n\t\tt.Fatal(\"1+2\")\n\t}\n}\n"
+    },
+    "commits": [
+      {
+        "message": "feat: add Mean\n\nAdds Mean; TestMean covers it.",
+        "files": {
+          "sum/sum.go": "package sum\n\n// Sum adds xs.\nfunc Sum(xs ...int) int {\n\tn := 0\n\tfor _, x := range xs {\n\t\tn += x\n\t}\n\treturn n\n}\n\n// Mean averages xs.\nfunc Mean(xs ...int) int {\n\tif len(xs) == 0 {\n\t\treturn 0\n\t}\n\treturn Sum(xs...) / len(xs)\n}\n",
+          "sum/sum_test.go": "package sum\n\nimport \"testing\"\n\nfunc TestSum(t *testing.T) {\n\tif Sum(1, 2) != 3 {\n\t\tt.Fatal(\"1+2\")\n\t}\n}\n\nfunc TestMean(t *testing.T) {\n\tif Mean(2, 4) != 3 {\n\t\tt.Fatal(\"mean\")\n\t}\n}\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "sum/sum.go": {
+        "meta_duty_regression": false
+      },
+      "sum/sum_test.go": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": false,
+    "split": "fit",
+    "why": "adds Mean with the test its body names",
+    "lang": "en",
+    "group": "sum"
+  },
+  "samples": {
+    "sha256:cc695c55752038341d15f3d7b3509b16a350c959d03dd47a661865f08cd168dc": {
+      "meta_duty_regression": [
+        0.02,
+        0.02,
+        0.02
+      ],
+      "unsupported_claim": [
+        0.09,
+        0.07,
+        0.07
+      ]
+    }
+  }
+}

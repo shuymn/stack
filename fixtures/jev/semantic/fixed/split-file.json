@@ -1,0 +1,101 @@
+{
+  "synthetic": "records written by hand: 0.9 for a labelled hit, 0.1 otherwise, and mixed-size's second request a 400 max_tokens_exceeded; fixed fixtures check behaviour and are never recorded live (jev-calibrate records the cal cases)",
+  "request": {
+    "body": "Shorter lines.",
+    "branch": "refactor/golden",
+    "jev": {
+      "records": {
+        "sha256:53f3adcf4cca1caf4706b1438f00b3a5c9e9c24a34a31ad205472b3838fed89e": {
+          "answer": {
+            "answers": {
+              "meta_duty_regression": {
+                "noul": 0.9,
+                "type": "noul"
+              }
+            },
+            "model": "jev-1.14.0"
+          }
+        },
+        "sha256:aa348d05bc6fc7881f57a62539eac1adfde6cfe684368b5dcc0b4818eb3e72be": {
+          "answer": {
+            "answers": {
+              "meta_duty_regression": {
+                "noul": 0.9,
+                "type": "noul"
+              }
+            },
+            "model": "jev-1.14.0"
+          }
+        },
+        "sha256:d94857217ef2e707b33c9191cfc780e4d06f7f028d2c70887f90b35a822a178f": {
+          "answer": {
+            "answers": {
+              "meta_duty_regression": {
+                "noul": 0.9,
+                "type": "noul"
+              }
+            },
+            "model": "jev-1.14.0"
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "refactor: tidy golden tests"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-meta-duty",
+        "where": "golden/golden_test.go"
+      },
+      {
+        "kind": "jev-meta-duty",
+        "where": "golden/golden_test.go"
+      },
+      {
+        "kind": "jev-meta-duty",
+        "where": "golden/golden_test.go"
+      },
+      {
+        "kind": "jev-unassessed",
+        "where": "message"
+      }
+    ]
+  },
+  "repo": {
+    "base": {
+      "golden/golden_test.go": {
+        "line": "\tcheck(t, \"case {n}\", render({n}), want[{n}])",
+        "repeat": 1500
+      }
+    },
+    "commits": [
+      {
+        "message": "refactor: tidy golden tests",
+        "files": {
+          "golden/golden_test.go": {
+            "line": "\t_ = render({n}) // case {n}",
+            "repeat": 1500
+          }
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "golden/golden_test.go": {
+        "meta_duty_regression": true
+      }
+    },
+    "unsupported_claim": false,
+    "split": "fixed",
+    "why": "every golden check becomes a discarded call; the file is split into parts, each of which shows checks removed"
+  }
+}

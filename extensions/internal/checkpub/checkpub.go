@@ -39,13 +39,6 @@ var (
 	errGit   = errors.New("git failed")
 
 	shaRe = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
-
-	// repoVars point git at a repository. A git hook that runs `stack-public check` exports some of
-	// them, so they are dropped and the repository is found from the working directory instead.
-	repoVars = []string{
-		"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY",
-		"GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE",
-	}
 )
 
 // Text is one piece of metadata to scan.
@@ -172,7 +165,8 @@ func (o Options) commits(ctx context.Context, s *scanner) error {
 	if o.Env == nil {
 		o.Env = os.Environ()
 	}
-	o.Env = DropRepoVars(o.Env)
+	// A git hook that runs `stack-public check` exports repository-location variables.
+	o.Env = proc.DropRepoVars(o.Env)
 	top, err := o.toplevel(ctx)
 	if err != nil {
 		return err
@@ -239,18 +233,6 @@ func (o Options) commit(ctx context.Context, s *scanner, sha string) error {
 			}
 			return nil
 		}))
-}
-
-// DropRepoVars returns env without the repository-location variables (GIT_DIR, GIT_WORK_TREE, …),
-// which a git hook exports; git then finds the repository from its working directory.
-func DropRepoVars(env []string) []string {
-	return slices.DeleteFunc(slices.Clone(env), func(kv string) bool {
-		name, _, _ := strings.Cut(kv, "=")
-		return slices.ContainsFunc(
-			repoVars,
-			func(v string) bool { return strings.EqualFold(v, name) },
-		)
-	})
 }
 
 // toplevel returns the work tree that contains o.Dir.

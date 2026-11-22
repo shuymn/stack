@@ -1,0 +1,82 @@
+{
+  "request": {
+    "body": "",
+    "branch": "topic/ja-validate-extracted-fix-title",
+    "jev": {
+      "records": {
+        "sha256:55ca536c849980e3b5bb7c61c1688a4a96b36a475c99e2a7f0c2ddfa1e6e679a": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.04
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.12
+              }
+            },
+            "usage": {
+              "input_tokens": 937,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "fix: 空の名前を拒否する"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": []
+  },
+  "repo": {
+    "base": {
+      "user/user.go": "package user\n\nimport \"errors\"\n\n// User is an account.\ntype User struct{ Name string }\n\n// New checks name and returns its User.\nfunc New(name string) (User, error) {\n\tif name == \"\" {\n\t\treturn User{}, errors.New(\"empty name\")\n\t}\n\tif len(name) > 32 {\n\t\treturn User{}, errors.New(\"name too long\")\n\t}\n\treturn User{Name: name}, nil\n}\n"
+    },
+    "commits": [
+      {
+        "message": "fix: 空の名前を拒否する",
+        "files": {
+          "user/user.go": "package user\n\nimport \"errors\"\n\n// User is an account.\ntype User struct{ Name string }\n\n// New checks name and returns its User.\nfunc New(name string) (User, error) {\n\tif err := validate(name); err != nil {\n\t\treturn User{}, err\n\t}\n\treturn User{Name: name}, nil\n}\n\nfunc validate(name string) error {\n\tif name == \"\" {\n\t\treturn errors.New(\"empty name\")\n\t}\n\tif len(name) > 32 {\n\t\treturn errors.New(\"name too long\")\n\t}\n\treturn nil\n}\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "user/user.go": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": true,
+    "split": "heldout",
+    "why": "moves the existing checks into validate unchanged; empty names were already rejected, so the title's fix is not in the diff",
+    "lang": "ja",
+    "hard": [
+      "meta_duty_regression",
+      "unsupported_claim"
+    ]
+  },
+  "samples": {
+    "sha256:55ca536c849980e3b5bb7c61c1688a4a96b36a475c99e2a7f0c2ddfa1e6e679a": {
+      "meta_duty_regression": [
+        0.04,
+        0.04,
+        0.04
+      ],
+      "unsupported_claim": [
+        0.12,
+        0.11,
+        0.1
+      ]
+    }
+  }
+}

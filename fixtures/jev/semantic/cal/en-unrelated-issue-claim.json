@@ -1,0 +1,85 @@
+{
+  "request": {
+    "body": "Also fixes #31 (timeout in Fetch).",
+    "branch": "topic/en-unrelated-issue-claim",
+    "jev": {
+      "records": {
+        "sha256:160da8c796f005cde90b59a8a5184690392ab3aa7bf3210a6908e8bebdaf037c": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.03
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.97
+              }
+            },
+            "usage": {
+              "input_tokens": 849,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "fix: close file on error"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-unsupported-claim",
+        "where": "message",
+        "detail": "p=0.97 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: the PR text claims something the diff does not show (p=0.97 ≥ 0.5 (jev-1.14.0))"
+  },
+  "repo": {
+    "base": {
+      "files/files.go": "package files\n\nimport \"os\"\n\nfunc Read(p string) ([]byte, error) {\n\tf, err := os.Open(p)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tb := make([]byte, 10)\n\t_, err = f.Read(b)\n\treturn b, err\n}\n"
+    },
+    "commits": [
+      {
+        "message": "fix: close file on error\n\nAlso fixes #31 (timeout in Fetch).",
+        "files": {
+          "files/files.go": "package files\n\nimport \"os\"\n\nfunc Read(p string) ([]byte, error) {\n\tf, err := os.Open(p)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tdefer f.Close()\n\tb := make([]byte, 10)\n\t_, err = f.Read(b)\n\treturn b, err\n}\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "files/files.go": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": true,
+    "split": "fit",
+    "why": "claims to fix a Fetch timeout that the diff does not touch",
+    "lang": "en"
+  },
+  "samples": {
+    "sha256:160da8c796f005cde90b59a8a5184690392ab3aa7bf3210a6908e8bebdaf037c": {
+      "meta_duty_regression": [
+        0.03,
+        0.03,
+        0.03
+      ],
+      "unsupported_claim": [
+        0.97,
+        0.96,
+        0.96
+      ]
+    }
+  }
+}

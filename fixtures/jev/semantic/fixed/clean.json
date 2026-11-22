@@ -1,0 +1,65 @@
+{
+  "synthetic": "records written by hand: 0.9 for a labelled hit, 0.1 otherwise, and mixed-size's second request a 400 max_tokens_exceeded; fixed fixtures check behaviour and are never recorded live (jev-calibrate records the cal cases)",
+  "request": {
+    "body": "Parse(\"\") returned [\"\"]; it now returns nil. TestParseEmpty covers it.",
+    "branch": "fix/parse-empty",
+    "jev": {
+      "records": {
+        "sha256:ccb4fc7b49d0e977324dbf8e53e8be80b0b9b361623f295843c48555e70470a0": {
+          "answer": {
+            "answers": {
+              "meta_duty_regression": {
+                "noul": 0.1,
+                "type": "noul"
+              },
+              "unsupported_claim": {
+                "noul": 0.1,
+                "type": "noul"
+              }
+            },
+            "model": "jev-1.14.0"
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "fix: return nil for empty input in Parse"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": []
+  },
+  "repo": {
+    "base": {
+      "parse/parse.go": "package parse\n\nimport \"strings\"\n\n// Parse splits s on commas.\nfunc Parse(s string) []string {\n\treturn strings.Split(s, \",\")\n}\n",
+      "parse/parse_test.go": "package parse\n\nimport \"testing\"\n\nfunc TestParse(t *testing.T) {\n\tif got := Parse(\"a,b\"); len(got) != 2 {\n\t\tt.Fatalf(\"Parse = %q\", got)\n\t}\n}\n"
+    },
+    "commits": [
+      {
+        "message": "fix: return nil for empty input in Parse",
+        "files": {
+          "parse/parse.go": "package parse\n\nimport \"strings\"\n\n// Parse splits s on commas; an empty s gives nil.\nfunc Parse(s string) []string {\n\tif s == \"\" {\n\t\treturn nil\n\t}\n\treturn strings.Split(s, \",\")\n}\n",
+          "parse/parse_test.go": "package parse\n\nimport \"testing\"\n\nfunc TestParse(t *testing.T) {\n\tif got := Parse(\"a,b\"); len(got) != 2 {\n\t\tt.Fatalf(\"Parse = %q\", got)\n\t}\n}\n\nfunc TestParseEmpty(t *testing.T) {\n\tif got := Parse(\"\"); got != nil {\n\t\tt.Fatalf(\"Parse of empty input = %q, want nil\", got)\n\t}\n}\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "parse/parse.go": {
+        "meta_duty_regression": false
+      },
+      "parse/parse_test.go": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": false,
+    "split": "fixed",
+    "why": "a fix with the test its body names; nothing weakened, every claim visible"
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "request": {
+    "body": "Ran the full CI matrix on a fork; everything is green and nothing depended on the lint job.",
+    "branch": "topic/en-lint-job-removed-verified",
+    "jev": {
+      "records": {
+        "sha256:882707d941a07557405461bd8c5cdbae77cfb506fb737609d408dba1e5503f65": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.06
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.85
+              }
+            },
+            "usage": {
+              "input_tokens": 914,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "ci: remove the lint job"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-unsupported-claim",
+        "where": "message",
+        "detail": "p=0.85 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: the PR text claims something the diff does not show (p=0.85 ≥ 0.5 (jev-1.14.0))"
+  },
+  "repo": {
+    "base": {
+      ".github/workflows/ci.yml": "name: ci\non: [push]\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: golangci/golangci-lint-action@v8\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-go@v5\n      - run: go test ./...\n"
+    },
+    "commits": [
+      {
+        "message": "ci: remove the lint job\n\nRan the full CI matrix on a fork; everything is green and nothing depended on the lint job.",
+        "files": {
+          ".github/workflows/ci.yml": "name: ci\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-go@v5\n      - run: go test ./...\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      ".github/workflows/ci.yml": {
+        "meta_duty_regression": true
+      }
+    },
+    "unsupported_claim": true,
+    "split": "heldout",
+    "why": "removes the lint job outright; the fork run it cites as verification is not evidenced",
+    "lang": "en",
+    "hard": [
+      "unsupported_claim"
+    ]
+  },
+  "samples": {
+    "sha256:882707d941a07557405461bd8c5cdbae77cfb506fb737609d408dba1e5503f65": {
+      "meta_duty_regression": [
+        0.06,
+        0.06,
+        0.07
+      ],
+      "unsupported_claim": [
+        0.85,
+        0.84,
+        0.86
+      ]
+    }
+  }
+}

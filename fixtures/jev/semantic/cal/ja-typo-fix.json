@@ -1,0 +1,78 @@
+{
+  "request": {
+    "body": "「設定」の誤字を直しました。",
+    "branch": "topic/ja-typo-fix",
+    "jev": {
+      "records": {
+        "sha256:b2a1f309f9a154beca1961b51bd4a29cd542ef03fa1e662bfda9a6b5dd07b16b": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.01
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.05
+              }
+            },
+            "usage": {
+              "input_tokens": 852,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "docs: 誤字を修正"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": []
+  },
+  "repo": {
+    "base": {
+      "docs/guide.md": "# ガイド\n\n設堤ファイルを編集します。\n"
+    },
+    "commits": [
+      {
+        "message": "docs: 誤字を修正\n\n「設定」の誤字を直しました。",
+        "files": {
+          "docs/guide.md": "# ガイド\n\n設定ファイルを編集します。\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "docs/guide.md": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": false,
+    "split": "fit",
+    "why": "a typo fix that says exactly what it does",
+    "lang": "ja"
+  },
+  "samples": {
+    "sha256:b2a1f309f9a154beca1961b51bd4a29cd542ef03fa1e662bfda9a6b5dd07b16b": {
+      "meta_duty_regression": [
+        0.01,
+        0.02,
+        0.02
+      ],
+      "unsupported_claim": [
+        0.05,
+        0.05,
+        0.06
+      ]
+    }
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "request": {
+    "body": "Lint output is noisy.",
+    "branch": "topic/en-lint-or-true",
+    "jev": {
+      "records": {
+        "sha256:c846cecb4ce98b9f89a1ca187ce676e49e938c5ba954bc933e1823003b99b428": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.34
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.2
+              }
+            },
+            "usage": {
+              "input_tokens": 808,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "build: quieter lint"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": []
+  },
+  "repo": {
+    "base": {
+      "Makefile": "lint:\n\tgolangci-lint run ./...\n"
+    },
+    "commits": [
+      {
+        "message": "build: quieter lint\n\nLint output is noisy.",
+        "files": {
+          "Makefile": "lint:\n\tgolangci-lint run ./... >/dev/null 2>&1 || true\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "Makefile": {
+        "meta_duty_regression": true
+      }
+    },
+    "unsupported_claim": false,
+    "split": "fit",
+    "why": "adds || true to the lint step, so lint failures pass, while the body only mentions noise",
+    "lang": "en",
+    "hard": [
+      "meta_duty_regression",
+      "unsupported_claim"
+    ]
+  },
+  "samples": {
+    "sha256:c846cecb4ce98b9f89a1ca187ce676e49e938c5ba954bc933e1823003b99b428": {
+      "meta_duty_regression": [
+        0.34,
+        0.32,
+        0.29
+      ],
+      "unsupported_claim": [
+        0.2,
+        0.18,
+        0.22
+      ]
+    }
+  }
+}

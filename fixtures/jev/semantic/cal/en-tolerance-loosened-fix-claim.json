@@ -1,0 +1,94 @@
+{
+  "request": {
+    "body": "Average no longer rounds negative inputs toward zero.",
+    "branch": "topic/en-tolerance-loosened-fix-claim",
+    "jev": {
+      "records": {
+        "sha256:9f51cd4140857943abd9ab36900897189a4f516ea5a26b4f11c095d096ad8398": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.8
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.9
+              }
+            },
+            "usage": {
+              "input_tokens": 900,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "fix: correct rounding in Average"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-meta-duty",
+        "where": "stats/stats_test.go",
+        "detail": "p=0.8 ≥ 0.5 (jev-1.14.0)"
+      },
+      {
+        "kind": "jev-unsupported-claim",
+        "where": "message",
+        "detail": "p=0.9 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: stats/stats_test.go: the diff may remove or weaken a test, check or rule without the PR text saying why (p=0.8 ≥ 0.5 (jev-1.14.0))\njev-semantic: the PR text claims something the diff does not show (p=0.9 ≥ 0.5 (jev-1.14.0))"
+  },
+  "repo": {
+    "base": {
+      "stats/stats.go": "package stats\n\n// Average is the mean of xs.\nfunc Average(xs []float64) float64 {\n\tvar sum float64\n\tfor _, x := range xs {\n\t\tsum += x\n\t}\n\treturn sum / float64(len(xs))\n}\n",
+      "stats/stats_test.go": "package stats\n\nimport (\n\t\"math\"\n\t\"testing\"\n)\n\nfunc TestAverage(t *testing.T) {\n\tif got := Average([]float64{-1, -2}); math.Abs(got+1.5) > 1e-9 {\n\t\tt.Fatalf(\"got %v\", got)\n\t}\n}\n"
+    },
+    "commits": [
+      {
+        "message": "fix: correct rounding in Average\n\nAverage no longer rounds negative inputs toward zero.",
+        "files": {
+          "stats/stats_test.go": "package stats\n\nimport (\n\t\"math\"\n\t\"testing\"\n)\n\nfunc TestAverage(t *testing.T) {\n\tif got := Average([]float64{-1, -2}); math.Abs(got+1.5) > 0.5 {\n\t\tt.Fatalf(\"got %v\", got)\n\t}\n}\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "stats/stats_test.go": {
+        "meta_duty_regression": true
+      }
+    },
+    "unsupported_claim": true,
+    "split": "heldout",
+    "why": "widens the test tolerance from 1e-9 to 0.5 without saying so; Average itself does not change, so the claimed fix is absent",
+    "lang": "en",
+    "hard": [
+      "meta_duty_regression"
+    ]
+  },
+  "samples": {
+    "sha256:9f51cd4140857943abd9ab36900897189a4f516ea5a26b4f11c095d096ad8398": {
+      "meta_duty_regression": [
+        0.8,
+        0.78,
+        0.78
+      ],
+      "unsupported_claim": [
+        0.9,
+        0.89,
+        0.89
+      ]
+    }
+  }
+}

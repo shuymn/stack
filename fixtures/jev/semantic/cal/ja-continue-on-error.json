@@ -1,0 +1,78 @@
+{
+  "request": {
+    "body": "test ステップに continue-on-error を設定します。",
+    "branch": "topic/ja-continue-on-error",
+    "jev": {
+      "records": {
+        "sha256:18293b76bc903dd230a0ba445e8eaf405d6a5d11827fe60aca3cd013b7e934b8": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.28
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.07
+              }
+            },
+            "usage": {
+              "input_tokens": 889,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "ci: テストが失敗しても CI を続行する"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": []
+  },
+  "repo": {
+    "base": {
+      ".github/workflows/test.yml": "name: test\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-go@v5\n      - name: test\n        run: go test ./...\n"
+    },
+    "commits": [
+      {
+        "message": "ci: テストが失敗しても CI を続行する\n\ntest ステップに continue-on-error を設定します。",
+        "files": {
+          ".github/workflows/test.yml": "name: test\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-go@v5\n      - name: test\n        run: go test ./...\n        continue-on-error: true\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      ".github/workflows/test.yml": {
+        "meta_duty_regression": true
+      }
+    },
+    "unsupported_claim": false,
+    "split": "heldout",
+    "why": "failing tests no longer fail CI, which the text states plainly",
+    "lang": "ja"
+  },
+  "samples": {
+    "sha256:18293b76bc903dd230a0ba445e8eaf405d6a5d11827fe60aca3cd013b7e934b8": {
+      "meta_duty_regression": [
+        0.28,
+        0.3,
+        0.35
+      ],
+      "unsupported_claim": [
+        0.07,
+        0.07,
+        0.07
+      ]
+    }
+  }
+}

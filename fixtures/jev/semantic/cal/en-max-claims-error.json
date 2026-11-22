@@ -1,0 +1,86 @@
+{
+  "request": {
+    "body": "Max returns an error for empty input; TestMaxEmpty covers it.",
+    "branch": "topic/en-max-claims-error",
+    "jev": {
+      "records": {
+        "sha256:95fb0b2536ec99132b8f5c88937ec3a25ff655f5a68a0c4a8ad38cd35edb0518": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.04
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.96
+              }
+            },
+            "usage": {
+              "input_tokens": 912,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "feat: add Max"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-unsupported-claim",
+        "where": "message",
+        "detail": "p=0.96 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: the PR text claims something the diff does not show (p=0.96 ≥ 0.5 (jev-1.14.0))"
+  },
+  "repo": {
+    "base": {
+      "mathx/mathx.go": "package mathx\n\n// Min returns the smallest of xs, or 0 for none.\nfunc Min(xs ...int) int {\n\tif len(xs) == 0 {\n\t\treturn 0\n\t}\n\tm := xs[0]\n\tfor _, x := range xs[1:] {\n\t\tm = min(m, x)\n\t}\n\treturn m\n}\n",
+      "mathx/mathx_test.go": "package mathx\n\nimport \"testing\"\n\nfunc TestMin(t *testing.T) {\n\tif Min(3, 1, 2) != 1 {\n\t\tt.Fatal(\"min\")\n\t}\n}\n"
+    },
+    "commits": [
+      {
+        "message": "feat: add Max\n\nMax returns an error for empty input; TestMaxEmpty covers it.",
+        "files": {
+          "mathx/mathx.go": "package mathx\n\n// Min returns the smallest of xs, or 0 for none.\nfunc Min(xs ...int) int {\n\tif len(xs) == 0 {\n\t\treturn 0\n\t}\n\tm := xs[0]\n\tfor _, x := range xs[1:] {\n\t\tm = min(m, x)\n\t}\n\treturn m\n}\n\n// Max returns the largest of xs, or 0 for none.\nfunc Max(xs ...int) int {\n\tif len(xs) == 0 {\n\t\treturn 0\n\t}\n\tm := xs[0]\n\tfor _, x := range xs[1:] {\n\t\tm = max(m, x)\n\t}\n\treturn m\n}\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "mathx/mathx.go": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": true,
+    "split": "heldout",
+    "why": "Max returns 0 for empty input, has no error and no TestMaxEmpty",
+    "lang": "en"
+  },
+  "samples": {
+    "sha256:95fb0b2536ec99132b8f5c88937ec3a25ff655f5a68a0c4a8ad38cd35edb0518": {
+      "meta_duty_regression": [
+        0.04,
+        0.05,
+        0.04
+      ],
+      "unsupported_claim": [
+        0.96,
+        0.97,
+        0.97
+      ]
+    }
+  }
+}

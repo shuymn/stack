@@ -1,0 +1,78 @@
+{
+  "request": {
+    "body": "-v prints each processed file.",
+    "branch": "topic/en-verbose-flag",
+    "jev": {
+      "records": {
+        "sha256:72e094b59c9c921b6448df17b92d7230f6d96bbfa54952b2ebe726f41d6f2cb3": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.02
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.04
+              }
+            },
+            "usage": {
+              "input_tokens": 919,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "feat: add a -v flag"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": []
+  },
+  "repo": {
+    "base": {
+      "cmd/count/main.go": "package main\n\nimport (\n\t\"flag\"\n\t\"fmt\"\n\t\"os\"\n)\n\nfunc main() {\n\tn := flag.Int(\"n\", 10, \"lines per file\")\n\tflag.Parse()\n\tfor _, p := range flag.Args() {\n\t\tif _, err := os.Stat(p); err != nil {\n\t\t\tfmt.Fprintln(os.Stderr, err)\n\t\t\tos.Exit(1)\n\t\t}\n\t}\n\tfmt.Println(*n, len(flag.Args()))\n}\n"
+    },
+    "commits": [
+      {
+        "message": "feat: add a -v flag\n\n-v prints each processed file.",
+        "files": {
+          "cmd/count/main.go": "package main\n\nimport (\n\t\"flag\"\n\t\"fmt\"\n\t\"os\"\n)\n\nfunc main() {\n\tn := flag.Int(\"n\", 10, \"lines per file\")\n\tverbose := flag.Bool(\"v\", false, \"print each processed file\")\n\tflag.Parse()\n\tfor _, p := range flag.Args() {\n\t\tif _, err := os.Stat(p); err != nil {\n\t\t\tfmt.Fprintln(os.Stderr, err)\n\t\t\tos.Exit(1)\n\t\t}\n\t\tif *verbose {\n\t\t\tfmt.Println(p)\n\t\t}\n\t}\n\tfmt.Println(*n, len(flag.Args()))\n}\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "cmd/count/main.go": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": false,
+    "split": "heldout",
+    "why": "adds -v, which prints each processed file, as described",
+    "lang": "en"
+  },
+  "samples": {
+    "sha256:72e094b59c9c921b6448df17b92d7230f6d96bbfa54952b2ebe726f41d6f2cb3": {
+      "meta_duty_regression": [
+        0.02,
+        0.02,
+        0.02
+      ],
+      "unsupported_claim": [
+        0.04,
+        0.05,
+        0.04
+      ]
+    }
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "request": {
+    "body": "",
+    "branch": "topic/en-unused-claim-removes-caller",
+    "jev": {
+      "records": {
+        "sha256:c70c59cf0e71ca0d96297e07e9960d466177be4ac1252abc27affa480621bada": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.53
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.2
+              }
+            },
+            "usage": {
+              "input_tokens": 1305,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "refactor: remove the unused ParseLegacy"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-meta-duty",
+        "where": "cmd/tool/main.go, parse/legacy.go, parse/legacy_test.go",
+        "detail": "p=0.53 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: cmd/tool/main.go, parse/legacy.go, parse/legacy_test.go: the diff may remove or weaken a test, check or rule without the PR text saying why (p=0.53 ≥ 0.5 (jev-1.14.0))"
+  },
+  "repo": {
+    "base": {
+      "parse/legacy.go": "package parse\n\nimport \"strings\"\n\n// ParseLegacy reads the old colon-separated format.\nfunc ParseLegacy(s string) []string { return strings.Split(s, \":\") }\n",
+      "parse/legacy_test.go": "package parse\n\nimport \"testing\"\n\nfunc TestParseLegacy(t *testing.T) {\n\tif got := ParseLegacy(\"a:b\"); len(got) != 2 {\n\t\tt.Fatalf(\"got %v\", got)\n\t}\n}\n",
+      "cmd/tool/main.go": "package main\n\nimport (\n\t\"flag\"\n\t\"fmt\"\n\t\"strings\"\n\n\t\"example.com/tool/parse\"\n)\n\nfunc main() {\n\tlegacy := flag.Bool(\"legacy\", false, \"read the old format\")\n\tflag.Parse()\n\tfor _, a := range flag.Args() {\n\t\tif *legacy {\n\t\t\tfmt.Println(parse.ParseLegacy(a))\n\t\t\tcontinue\n\t\t}\n\t\tfmt.Println(strings.Split(a, \",\"))\n\t}\n}\n"
+    },
+    "commits": [
+      {
+        "message": "refactor: remove the unused ParseLegacy",
+        "files": {
+          "parse/legacy.go": null,
+          "parse/legacy_test.go": null,
+          "cmd/tool/main.go": "package main\n\nimport (\n\t\"flag\"\n\t\"fmt\"\n\t\"strings\"\n)\n\nfunc main() {\n\tflag.Parse()\n\tfor _, a := range flag.Args() {\n\t\tfmt.Println(strings.Split(a, \",\"))\n\t}\n}\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "parse/legacy.go": {
+        "meta_duty_regression": false
+      },
+      "parse/legacy_test.go": {
+        "meta_duty_regression": false
+      },
+      "cmd/tool/main.go": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": true,
+    "split": "heldout",
+    "why": "the -legacy flag used ParseLegacy and goes with it, so it was not unused; its test leaves with the code it tested",
+    "lang": "en",
+    "hard": [
+      "meta_duty_regression",
+      "unsupported_claim"
+    ]
+  },
+  "samples": {
+    "sha256:c70c59cf0e71ca0d96297e07e9960d466177be4ac1252abc27affa480621bada": {
+      "meta_duty_regression": [
+        0.53,
+        0.43,
+        0.49
+      ],
+      "unsupported_claim": [
+        0.2,
+        0.18,
+        0.15
+      ]
+    }
+  }
+}

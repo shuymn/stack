@@ -1,0 +1,89 @@
+{
+  "request": {
+    "body": "CONTRIBUTING.md に同じ規則があり、AGENTS.md から従うよう指示しているため削除します。CHANGELOG も更新しました。",
+    "branch": "topic/ja-duplicate-rule-removed-changelog",
+    "jev": {
+      "records": {
+        "sha256:cc86810ec97df50fbcfd4c7c790d72fd5463f1baaf4022a580d28cce285de806": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.11
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.88
+              }
+            },
+            "usage": {
+              "input_tokens": 954,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "docs: AGENTS.md の重複した規則を削除"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-unsupported-claim",
+        "where": "message",
+        "detail": "p=0.88 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: the PR text claims something the diff does not show (p=0.88 ≥ 0.5 (jev-1.14.0))"
+  },
+  "repo": {
+    "base": {
+      "AGENTS.md": "# Rules\n\n- Run scripts/test before every push.\n- Keep commits small.\n\nSee CONTRIBUTING.md for the review rules.\n",
+      "CONTRIBUTING.md": "# Contributing\n\n- Run scripts/test before every push.\n- Every PR needs one review.\n"
+    },
+    "commits": [
+      {
+        "message": "docs: AGENTS.md の重複した規則を削除\n\nCONTRIBUTING.md に同じ規則があり、AGENTS.md から従うよう指示しているため削除します。CHANGELOG も更新しました。",
+        "files": {
+          "AGENTS.md": "# Rules\n\n- Follow every rule in CONTRIBUTING.md.\n- Keep commits small.\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "AGENTS.md": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": true,
+    "split": "fit",
+    "why": "the removed push rule stays in CONTRIBUTING.md, which AGENTS.md now says to follow; the CHANGELOG update the body claims is not in the diff",
+    "lang": "ja",
+    "hard": [
+      "meta_duty_regression"
+    ]
+  },
+  "samples": {
+    "sha256:cc86810ec97df50fbcfd4c7c790d72fd5463f1baaf4022a580d28cce285de806": {
+      "meta_duty_regression": [
+        0.11,
+        0.1,
+        0.12
+      ],
+      "unsupported_claim": [
+        0.88,
+        0.89,
+        0.9
+      ]
+    }
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "request": {
+    "body": "",
+    "branch": "topic/ja-test-retry",
+    "jev": {
+      "records": {
+        "sha256:2cd35e59fd4d1080dfe77c58ad09f373d9f8018bfcead0cd6ca99289db6f5d72": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.1
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.09
+              }
+            },
+            "usage": {
+              "input_tokens": 866,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "ci: 失敗したテストを再実行する"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": []
+  },
+  "repo": {
+    "base": {
+      ".github/workflows/ci.yml": "name: ci\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-go@v5\n      - run: go test ./...\n"
+    },
+    "commits": [
+      {
+        "message": "ci: 失敗したテストを再実行する",
+        "files": {
+          ".github/workflows/ci.yml": "name: ci\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-go@v5\n      - run: go test ./... || go test ./...\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      ".github/workflows/ci.yml": {
+        "meta_duty_regression": true
+      }
+    },
+    "unsupported_claim": false,
+    "split": "fit",
+    "why": "a test that fails once now passes CI on the rerun, hiding failures; the terse title is accurate",
+    "lang": "ja",
+    "hard": [
+      "meta_duty_regression",
+      "unsupported_claim"
+    ]
+  },
+  "samples": {
+    "sha256:2cd35e59fd4d1080dfe77c58ad09f373d9f8018bfcead0cd6ca99289db6f5d72": {
+      "meta_duty_regression": [
+        0.1,
+        0.09,
+        0.09
+      ],
+      "unsupported_claim": [
+        0.09,
+        0.08,
+        0.09
+      ]
+    }
+  }
+}
