@@ -61,6 +61,7 @@ func Main(args []string, env Env) int {
 		func(in hookio.Input) ([]byte, error) {
 			d, ok := Decide(in, Options{
 				Safety: loadSafety(env.Home), Home: env.Home, OS: powershell.HostOS(),
+				Drives: hostDrives(),
 			})
 			if !ok {
 				return nil, nil
@@ -91,6 +92,9 @@ type Options struct {
 	// OS is the host a PowerShell command runs on (powershell.HostOS() in the hook): it decides the
 	// command's aliases, case and path rules.
 	OS powershell.OS
+	// Drives are the letters of the host's existing volumes (Windows: GetLogicalDrives in the
+	// hook; "" elsewhere), which a New-PSDrive declaration cannot shadow.
+	Drives string
 }
 
 // Decision is a deny.

@@ -94,7 +94,7 @@ func rmRootPowerShell(calls []powershell.Call, cwd string, opts Options) (Decisi
 	windows := opts.OS == windowsHost
 	var declared drives // drives exist only on Windows
 	if windows {
-		declared = declaredDrives(calls, existingDrives(cwd, opts.Home))
+		declared = declaredDrives(calls, existingDrives(cwd, opts.Home, opts.Drives))
 	}
 	for _, c := range calls {
 		switch {
@@ -119,13 +119,19 @@ type drives struct {
 	names        map[string]bool
 }
 
-// existingDrives returns the lower-case letters of the drives the payload cwd and home lie on:
-// volumes PowerShell has mounted as FileSystem drives before the script runs.
-func existingDrives(cwd, home string) map[string]bool {
+// existingDrives returns the lower-case letters of the host's volumes (letters) and of the drives
+// the payload cwd and home lie on: volumes PowerShell has mounted as FileSystem drives before the
+// script runs.
+func existingDrives(cwd, home, letters string) map[string]bool {
 	m := map[string]bool{}
 	for _, p := range []string{cwd, home} {
 		if len(p) >= 2 && p[1] == ':' && isLetter(p[0]) {
 			m[strings.ToLower(p[:1])] = true
+		}
+	}
+	for i := range len(letters) {
+		if isLetter(letters[i]) {
+			m[strings.ToLower(letters[i:i+1])] = true
 		}
 	}
 	return m

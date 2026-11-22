@@ -219,9 +219,12 @@ PowerShell expands it.
   `$env:SystemDrive\`, `${env:SystemDrive}\` (recognised symbolically). A drive the script declares with a static
   `New-PSDrive -Name X` is a custom drive, so paths on `X:` are opaque, as resolved operands (a relative one under a
   cwd on `X:` too); a name that is not static makes every letter opaque, and a call pwsh refuses to bind declares
-  nothing, and so does a declaration named after the drive of the payload cwd or home (that volume is
-  already a drive, so `New-PSDrive` fails with DriveAlreadyExists and its root and bare roots stay judged). Declarations are collected script-wide, not in statement order, so a later declaration also makes an
-  earlier `X:\` opaque. Another volume's root (`C:\`) still denies. `C:` alone is the current directory of drive C
+  nothing, and so does a declaration named after an existing volume: a letter of the host's logical drives
+  (`GetLogicalDrives`, read by the hook on Windows) or the drive of the payload cwd or home (`New-PSDrive` fails
+  with DriveAlreadyExists, so that root and bare roots stay judged). Declarations are collected script-wide, not in
+  statement order and not by scope, so a later declaration also makes an earlier `X:\` opaque, and a declaration
+  inside a block that shadows an existing drive in that child scope still leaves the drive judged (over-judging
+  only that contrived form). Another volume's root (`C:\`) still denies. `C:` alone is the current directory of drive C
   and is not judged.
 - **Allowed:** `Remove-Item -Recurse .\build`, `Remove-Item -Recurse .\build ~` (two positionals: pwsh refuses it),
   `Remove-Item ~\x -Recurse`, `Remove-Item C:\` without `-Recurse`, `Remove-Item -Recurse .git\hooks`, a worktree's
