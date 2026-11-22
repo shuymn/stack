@@ -105,7 +105,8 @@ func TestParseCalls(t *testing.T) {
 // known cwd and home so the cwd and handoff fields are compared too.
 func TestParseDepthZero(t *testing.T) {
 	cwd, home := t.TempDir(), t.TempDir()
-	cmds := []string{`cd sub && gh x; K="$(cat f)" gh y`, "bash <<'EOF'\ngh x\nEOF\n"}
+	cmds := make([]string, 0, len(parseCallsTests)+2)
+	cmds = append(cmds, `cd sub && gh x; K="$(cat f)" gh y`, "bash <<'EOF'\ngh x\nEOF\n")
 	for _, tt := range parseCallsTests {
 		cmds = append(cmds, tt.cmd)
 	}

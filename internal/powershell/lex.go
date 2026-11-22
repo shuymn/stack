@@ -392,7 +392,8 @@ func (p *parser) members() bool {
 		switch {
 		case p.peek() == '[':
 			p.bracket()
-		case p.peek() == '.' && isIdent(p.at(p.pos+1)), p.has("::") && isIdent(p.at(p.pos+2)):
+		case p.peek() == '.' && isIdent(p.at(p.pos+1)),
+			p.has("::") && isIdent(p.at(p.pos+len("::"))):
 			for p.peek() == '.' || p.peek() == ':' {
 				p.pos++
 			}
