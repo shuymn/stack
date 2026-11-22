@@ -979,7 +979,7 @@ func (p *parser) cdTarget(c Call) (string, bool) {
 	if p.cdSteps >= maxCdSteps {
 		return "", true // bounds the cwd strings a long `cd x &&` chain builds
 	}
-	t, ok := fileSystemPath(target[0].Text, p.os)
+	t, ok := fileSystemPath(target[0].Text, target[0].Param == "LiteralPath", p.os)
 	// The result is at most the target joined to the longer of home and cwd: past the cap the
 	// candidate is never built.
 	if !ok || max(len(p.home), len(p.cwd))+len(`\`)+len(t) > maxCwdLen {
@@ -995,10 +995,11 @@ func (p *parser) cdTarget(c Call) (string, bool) {
 
 // fileSystemPath returns a Set-Location target as a FileSystem path of the host, where `\` and `/`
 // both separate. ok is false for a target whose location is not known statically: the history
-// forms `-` and `+`, a wildcard, or a provider-qualified or drive-qualified path other than a
+// forms `-` and `+`, a wildcard (unless literal, for -LiteralPath), or a provider-qualified or drive-qualified path other than a
 // Windows drive letter.
-func fileSystemPath(t string, os OS) (string, bool) {
-	if t == "-" || t == "+" || strings.ContainsAny(t, "*?[") || strings.Contains(t, "::") {
+func fileSystemPath(t string, literal bool, os OS) (string, bool) {
+	if t == "-" || t == "+" || (!literal && strings.ContainsAny(t, "*?[")) ||
+		strings.Contains(t, "::") {
 		return "", false
 	}
 	if os == Windows {

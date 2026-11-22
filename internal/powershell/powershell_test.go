@@ -417,7 +417,7 @@ var parseTests = []struct {
 	},
 	{
 		"using directive consumed whole",
-		"using module @{ ModuleName = 'Microsoft.PowerShell.Management'; ModuleVersion = '1.0' }; git status\nusing namespace System.IO\ngit diff",
+		"using module @{ ModuleName = 'Microsoft.PowerShell.Management'; ModuleVersion = '1.0' }\nusing namespace System.IO; git status\ngit diff",
 		Unix,
 		calls{{"git", "status"}, {"git", "diff"}},
 	},
@@ -771,6 +771,8 @@ func TestParseCwd(t *testing.T) {
 		{`cd s* && gh x`, ""},
 		{`cd su? && gh x`, ""},
 		{`cd [s]ub && gh x`, ""},
+		{`Set-Location -Path '[s]ub' && gh x`, ""},
+		{`Set-Location -LiteralPath '[s]ub' && gh x`, cwd + string(filepath.Separator) + "[s]ub"},
 		{`cd Env:\ && gh x`, ""},
 		{`cd FileSystem::/tmp && gh x`, ""},
 	}
