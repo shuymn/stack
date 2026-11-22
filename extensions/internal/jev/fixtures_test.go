@@ -253,7 +253,7 @@ func (m starts) add(t *testing.T, path string, repo json.RawMessage, l semantic.
 			if !ok {
 				continue
 			}
-			key := name + "\x00" + base.Text + "\x00" + base.Line
+			key := name + "\x00" + base.String()
 			if s, ok := m[key]; ok && s.split != l.Split && (s.group == "" || s.group != l.Group) {
 				t.Fatalf("%s and %s change %s from the same content across splits without a "+
 					"shared group", s.path, path, name)
