@@ -19,11 +19,11 @@ import (
 	"github.com/shuymn/stack/internal/proc/proctest"
 )
 
-// built holds the binaries TestMain builds: the real stack (replay, protocol) and, for the
-// protocol test, stack-observe with the observetest tag.
+// built holds the binaries TestMain builds: the real stack and stack-guard (replay, protocol)
+// and, for the protocol test, stack-observe with the observetest tag.
 var built struct {
-	dir, stack, observe string
-	err                 error
+	dir, stack, guard, observe string
+	err                        error
 }
 
 func TestMain(m *testing.M) {
@@ -47,10 +47,12 @@ func buildBinaries() func() {
 		exe = ".exe"
 	}
 	built.stack = filepath.Join(dir, "stack"+exe)
+	built.guard = filepath.Join(dir, "stack-guard"+exe)
 	built.observe = filepath.Join(dir, "stack-observe"+exe)
 	env := gittest.CleanEnv(os.Environ())
 	for _, c := range [][]string{
 		{"build", "-o", built.stack, "../../cmd/stack"},
+		{"build", "-o", built.guard, "../guard/cmd/stack-guard"},
 		{"build", "-tags", "observetest", "-o", built.observe, "./cmd/stack-observe"},
 	} {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -144,11 +146,16 @@ func (f *fixture) lookPath(name string) (string, error) {
 	return "", fmt.Errorf("%s: %w", name, errNotOnPath)
 }
 
-// fake installs a proctest fake as name.
+// fake installs a proctest fake as name. A fake stack comes with a stack-guard that denies
+// nothing, as both are installed together, unless the test set stack-guard already; a test that
+// wants stack-guard absent deletes it from tools.
 func (f *fixture) fake(name string, responses ...proctest.Response) string {
 	f.t.Helper()
 	p := proctest.InstallAt(f.t, f.bin, name, proctest.Scenario{Responses: responses})
 	f.tools[name] = p
+	if _, ok := f.tools["stack-guard"]; name == "stack" && !ok {
+		f.fake("stack-guard", proctest.Response{Args: hookArgs})
+	}
 	return p
 }
 
@@ -310,6 +317,16 @@ func result(a map[string]any, content any) map[string]any {
 		"message":       map[string]any{"role": "user", "content": []any{block}},
 		"toolUseResult": "result",
 	}
+}
+
+// errorResult is result marked is_error, as Claude Code records a hook deny.
+func errorResult(a map[string]any, content any) map[string]any {
+	r := result(a, content)
+	message, _ := r["message"].(map[string]any)
+	blocks, _ := message["content"].([]any)
+	block, _ := blocks[0].(map[string]any)
+	block["is_error"] = true
+	return r
 }
 
 func signalItems(l Latest, signal string) []Item {

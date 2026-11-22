@@ -30,7 +30,8 @@ var (
 	typedPrefixs = []string{"<command-", "<task-notification>", "<local-command"}
 )
 
-// wiredTools are the tools stack hook claude pre-tool-use is wired for (phase2-core.md §4.3).
+// wiredTools are the tools the PreToolUse hooks are wired for: the union of the matchers of `stack
+// hook claude pre-tool-use` (phase2-core.md §4.3) and `stack-guard` (core-stages.md §4.5).
 var wiredTools = map[string]bool{
 	"Bash": true, "Read": true, "NotebookRead": true, "Grep": true, "Glob": true,
 	"mcp__pencil__execute": true,
@@ -55,6 +56,7 @@ type block struct {
 	Input     json.RawMessage `json:"input"`
 	ToolUseID string          `json:"tool_use_id"` //nolint:tagliatelle // transcript format
 	Content   json.RawMessage `json:"content"`
+	IsError   bool            `json:"is_error"` //nolint:tagliatelle // transcript format
 }
 
 type record struct {
@@ -435,8 +437,9 @@ func compact(raw json.RawMessage) []byte {
 
 // guardInput reports whether input holds what the guard reads for tool. The guard decodes the
 // same fields the same way and returns no decision, without a diagnostic, when it cannot or when
-// the field it judges is empty (internal/guard guard.go Decide, secrets.go secretsFileTool,
-// pencil.go pencil): such a replay says nothing about the recorded decision.
+// the field it judges is empty (extensions/guard guard.go Decide, secrets.go secretsFileTool,
+// pencil.go pencil; internal/guard guard.go Decide for raw merge): such a replay says nothing
+// about the recorded decision.
 func guardInput(tool string, raw json.RawMessage) bool {
 	if !opens(raw, '{') {
 		return false
@@ -551,7 +554,7 @@ func (s *state) recordResults(line []byte, pending map[string]*toolCall, st *Sou
 		}
 		delete(pending, b.ToolUseID)
 		if text, ok := resultText(b.Content); ok {
-			call.recorded = recordedDecision(call.tool, text, r)
+			call.recorded = recordedDecision(call.tool, text, b.IsError, r)
 		} // else a missing or malformed result stays unknown
 	}
 }
@@ -596,7 +599,6 @@ const (
 	decUnknown       = "unknown"
 	decNotComparable = "not-comparable"
 	denyPrefix       = "deny:"
-	guardPrefix      = "stack guard ("
 	hookErrorMark    = " hook error: "
 )
 
@@ -605,7 +607,9 @@ const (
 var reBracketed = regexp.MustCompile(`^\[(?:[^\[\]]|\[[^\[\]]*\])*\]: \s*`)
 
 // recordedDecision classifies the tool_result of a guard-wired call (design §3.3 replay step 1).
-func recordedDecision(tool, text string, r record) string {
+// Only an error result is a deny: a successful result whose output reads like a hook error is the
+// tool's own output.
+func recordedDecision(tool, text string, isError bool, r record) string {
 	switch r.ToolDenialKind {
 	case "user-rejected", "cancelled", "interrupted":
 		return decUnknown
@@ -616,6 +620,9 @@ func recordedDecision(tool, text string, r record) string {
 			return decUnknown
 		}
 	}
+	if !isError {
+		return decNoDeny
+	}
 	prefix := "PreToolUse:" + tool + hookErrorMark
 	if !strings.HasPrefix(text, prefix) {
 		if strings.HasPrefix(text, "PreToolUse:") && strings.Contains(text, hookErrorMark) {
@@ -624,19 +631,35 @@ func recordedDecision(tool, text string, r record) string {
 		return decNoDeny
 	}
 	rest := reBracketed.ReplaceAllString(text[len(prefix):], "")
-	// Several hooks: a second hook error in the same result. Only a lone stack guard deny counts.
-	if strings.Contains(rest, hookErrorMark) || !strings.HasPrefix(rest, guardPrefix) {
+	// Several hooks: a second hook error in the same result. Only a lone guard deny counts.
+	if strings.Contains(rest, hookErrorMark) {
 		return decOtherDeny
 	}
-	rule, _, ok := strings.Cut(rest[len(guardPrefix):], ")")
-	if !ok || !reRuleID.MatchString(rule) {
-		return decOtherDeny
+	if d, ok := guardDeny(rest); ok {
+		return d
 	}
-	return denyPrefix + rule
+	return decOtherDeny
 }
 
-// reRuleID is the shape of the guard's rule ids (internal/guard Rule*); anything else in the
-// parentheses is not a stack guard rule and is never copied into a finding.
+// guardPrefixes start the deny reasons of the core hook (`stack guard (<rule>): `, every rule until
+// v11, raw-merge since) and of stack-guard (`stack-guard (<rule>): `, core-stages.md §4.5). A rule
+// is the same whichever hook named it, so a v10 `stack guard (secrets)` deny replayed as
+// `stack-guard (secrets)` is unchanged.
+var guardPrefixes = []string{"stack guard (", "stack-guard ("}
+
+// guardDeny reads a guard deny reason as the decision deny:<rule>.
+func guardDeny(reason string) (string, bool) {
+	for _, p := range guardPrefixes {
+		if rest, ok := strings.CutPrefix(reason, p); ok {
+			rule, _, ok := strings.Cut(rest, ")")
+			return denyPrefix + rule, ok && reRuleID.MatchString(rule)
+		}
+	}
+	return "", false
+}
+
+// reRuleID is the shape of the guard's rule ids (internal/guard and extensions/guard Rule*);
+// anything else in the parentheses is not a guard rule and is never copied into a finding.
 var reRuleID = regexp.MustCompile(`^[a-z0-9-]+$`)
 
 // referenceUnread reports each live hiden reference no in-window Read named (observe.py:204-207).
