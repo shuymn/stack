@@ -150,7 +150,7 @@ installed, unsafe if left to extensions, stable); the reasoning per built-in is 
 - **Worker detection:** `agent_type == "opus-worker"`, `WORKER_LINE` in first prompt, or `-worktrees/agent-*` only. Never guess from `~/.t3/worktrees/`.
 
 ### Optional Jev (System One) Extensions
-- **Opt-in by key:** Live only when `TYPESAFE_API_KEY` is set, and then only for work it can assess under an enabled decision. An installed `jev-*` without the key opts out by answering `{"status":"pass"}` with no context and no call.
+- **Opt-in by key:** Live only when a key is available, from `TYPESAFE_API_KEY` or else the owner-only key file `~/.config/stack/jev/key`, and then only for work it can assess under an enabled decision. An installed `jev-*` with neither opts out by answering `{"status":"pass"}` with no context and no call; a key file it cannot use (unreadable, not a regular file, blank, or on Unix open to group or others or not the user's) is a `warn` naming the fix. `stack-guard` treats the key file as a secret. Design: `docs/design/phase4-jev.md` §3.1.
 - `jev-router` (`entry`): deferred. It would point at the hiden reference of each kit's step in progress; it is built only when missed re-reads after compaction are recorded despite a per-kit attention item to re-read it, or when the owner asks. `[stages].entry` keeps its name and the absent binary is skipped. Design: `docs/design/phase4-jev.md` §3.2.
 - `jev-semantic` (`outbound`): flags meta-duty regression or unsupported claims, advisory: a hit is `warn`, never `block`. Its supported caller is the hiden `commit-pr` step, which runs `stack run outbound --ext jev-semantic --range <merge-base>..<head>` with the PR's title, body and branch after `stack-public check` passes; CI does not invoke it live. Design: `docs/design/phase4-jev.md`.
 - `jev-classify` (`cycle`): batch-classifies 7-day transcripts for corrections/drift and pre-filters memory duplicates.
@@ -183,7 +183,8 @@ message_checks = []                   # outbound extensions pr merge requires fo
 ```
 
 Extensions keep their own settings beside it: `~/.config/stack/safety.toml` (`stack-guard`, `stack-public`; the v10
-`[safety]` keys `secrets`, `private_terms` and `deny_pencil_generate` with their v10 defaults), `~/.config/stack/improve.toml`
+`[safety]` keys `secrets`, `private_terms` and `deny_pencil_generate` with their v10 defaults; `secrets` always also
+holds the Jev key file), `~/.config/stack/improve.toml`
 and `~/.config/stack/audit-due.toml`. A missing `safety.toml` or key gives its default. A broken `safety.toml` means
 the default rules apply (custom entries are not kept until it is fixed), so a typo never turns a deny off:
 `stack-guard` denies by the defaults, `stack-public check` exits 2 and `stack-public` at a stage answers `block`.

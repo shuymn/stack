@@ -29,15 +29,27 @@ GOBIN="$HOME/.local/bin" go install ./extensions/jev/semantic/cmd/stack-jev-sema
 Install `stack-improve` after `stack-public`: improve's public check runs `stack-public check`, which reads
 `~/.config/stack/safety.toml`. `stack-improve` embeds `extensions/improve/writing.md`; reinstall after changing it.
 
-`stack-jev-semantic` answers `pass` without `TYPESAFE_API_KEY`; the key opts in to live use, and it then sends the
-PR's texts and diff to Jev for the questions it can assess under an enabled decision, warning on a likely hit. The
-committed placeholder cutoffs disable both decisions, so nothing is sent until `jev-calibrate` has run. It embeds
-its cutoffs (`extensions/jev/semantic/cutoffs.json`); reinstall after `jev-calibrate` changes them.
+`stack-jev-semantic` answers `pass` without a key; the key opts in to live use, and it then sends the PR's texts and
+diff to Jev for the questions it can assess under an enabled decision, warning on a likely hit. The committed
+placeholder cutoffs disable both decisions, so nothing is sent until `jev-calibrate` has run. It embeds its cutoffs
+(`extensions/jev/semantic/cutoffs.json`); reinstall after `jev-calibrate` changes them.
+
+The Jev extensions and `jev-calibrate` read the key from `TYPESAFE_API_KEY`, else from `~/.config/stack/jev/key`.
+Put it in that file, readable only by you; this reads it from stdin, so it stays out of the shell history:
+
+```sh
+(umask 077 && mkdir -p ~/.config/stack/jev && cat > ~/.config/stack/jev/key)
+```
+
+On Unix a key file that group or others can access, or that another user owns, is refused with a `warn` naming the
+fix (`chmod 600 ~/.config/stack/jev/key`); on Windows the profile's permissions guard it and no mode is checked.
+Removing the file (and leaving the variable unset) opts out. `stack-guard` denies reading the file as a secret.
 
 `stack-guard` is a Claude Code hook of its own, not a stage extension: wire it as a separate `PreToolUse` entry
 (matcher `Bash|PowerShell|Read|NotebookRead|Grep|Glob|mcp__pencil__execute`, exec form `stack-guard hook claude pre-tool-use`,
 `timeout: 5`, `onFailure: "continue"`) and never list it in `[stages]`, where it prints usage and exits 2. Without
-`safety.toml` it applies the defaults, without custom `secrets` entries. The core hook does not have these rules:
+`safety.toml` it applies the defaults, without custom `secrets` entries; any `secrets` list also keeps the Jev key
+file. The core hook does not have these rules:
 without `stack-guard` wired, nothing denies them.
 
 To check `stack pr merge` messages for local paths and private terms, list `public` in `~/.config/stack/config.toml`
