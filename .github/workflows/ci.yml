@@ -10,6 +10,10 @@ on:
 
 permissions: {}
 
+env:
+  # Windows runners already ship MinGW gcc for cgo; skip the local-development copy.
+  MISE_DISABLE_TOOLS: github:brechtsanders/winlibs_mingw
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
