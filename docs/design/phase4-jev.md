@@ -54,7 +54,8 @@ Every `jev-*` reads stdin to EOF first. Then:
 | Preparation fails (semantic: a git command exits non-zero or its output is cut) | `warn`, finding `jev-error` naming the command and exit | none |
 | Preparation reaches the work deadline (a slow git) | the questions are unassessed (`preparation deadline`) | none |
 | A request fails transiently (connect or TLS error, timeout, 429, 529, any 5xx) or is too large (400 `max_tokens_exceeded`, 413) | its questions are unassessed; one stderr line `jev: <n> requests skipped: <cause>` | no retry, no re-split |
-| A request fails persistently: any other non-200 (400, 401, 402, 403, 404, 415, 422, …), a body not of the §2 shape, `model` ≠ the pin, a missing or wrongly typed answer, a probability not finite in [0, 1], a body over 1 MiB | `warn`, finding `jev-error` (`detail`: status or fixed cause) and one context line naming the cause and the action (`jev-router: Jev answered 401: check TYPESAFE_API_KEY`) | — |
+| A request fails persistently: any other non-200 (400, 401, 402, 403, 404, 415, 422, …, and any 3xx: redirects are not followed), classified at its headers, a body not of the §2 shape, `model` ≠ the pin, a body over 1 MiB | `warn`, finding `jev-error` (`detail`: status or fixed cause) and one context line naming the cause and the action (`jev-router: Jev answered 401: check TYPESAFE_API_KEY`) | — |
+| An answer in a valid body is missing or wrongly typed, or a probability is not finite in [0, 1] | `warn`, finding `jev-error` for that question; the request's valid answers still decide | — |
 
 **Unassessed** work never changes the status: it is a finding `jev-unassessed` (`detail`: which questions, how
 much, why) and a context line. A `warn` means the owner must act (a wrong key, a changed API, a retired pin, a git
@@ -72,7 +73,8 @@ determined by the input alone. Up to 4 requests are in flight; results are assem
 
 **Budgets.** Each extension's budget runs from process start: router 4 s, semantic 10 s, classify 5 min. The work
 deadline is the budget less a finalisation reserve (0.3 s, 0.5 s, 20 s) and bounds every cancellable step: git, file
-reads, requests, ledger appends; past it the rest is unassessed and the reserve assembles the response (and
+reads, requests (each cut 0.1 s before it, so a cut request is still ledgered), ledger appends (each waits at most
+0.1 s, then one stderr line); past it the rest is unassessed and the reserve assembles the response (and
 classify's file). Children get a 0.2 s pipe wait and a timeout 0.2 s before the work deadline, so killing git and
 reaping its pipes fit inside the budget. The response stays under 512 KiB, half core's 1 MiB stdout limit
 (`internal/ext/ext.go:211`): further findings become one `jev-omitted` count, context lines are cut with a marker.
@@ -213,7 +215,7 @@ state building, router configuration and classify's file stay with their extensi
 work deadline; no SDK. The endpoint is a link-time variable only test builds set (`-ldflags -X`), never
 configuration. Each body is marshalled once; those bytes are hashed (§3.4) and sent. **Ledger:** each live attempt
 appends `{run, time, extension, model, outcome, elapsed_ms, input_tokens}` (outcome `ok`, `max_tokens_exceeded`,
-`transient` or `error`; tokens `null` without `usage`) to `.local/state/stack/jev/usage.jsonl`; `run` is a random
+`transient` or `error`; tokens `null` without a `usage.input_tokens` count) to `.local/state/stack/jev/usage.jsonl`; `run` is a random
 per-process ID; appends are serialised; an I/O error is one stderr line and changes no status. Replay never writes.
 
 ### 3.4 `--replay` without a key (item 4)
