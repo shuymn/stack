@@ -2,6 +2,7 @@ package shell
 
 import (
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -39,61 +40,90 @@ func find(t *testing.T, r Result, name string) Call {
 	return Call{}
 }
 
+// parseCallsTests is the call corpus: TestParseCalls checks it, TestParseDepthZero reuses it.
+var parseCallsTests = []struct {
+	cmd  string
+	want [][]string
+}{
+	{`gh pr view "1" 'x y'`, [][]string{{"gh", "pr", "view", "1", "x y"}}},
+	{`gh "a"'b'c`, [][]string{{"gh", "abc"}}},
+	{`gh a\ b "q\"x" "\a"`, [][]string{{"gh", "a b", `q"x`, `\a`}}},
+	{`gh $VAR "$X" "a${b}"`, [][]string{{"gh", "$", "$", "$"}}},
+	{`gh $'a\tb\n' x$'\x41'`, [][]string{{"gh", "a\tb\n", "xA"}}},
+	{`A=1 B=2 gh x`, [][]string{{"gh", "x"}}},
+	{`env -- A=1 gh x`, [][]string{{"gh", "x"}}},
+	{`env -u A B=1 gh x`, [][]string{{"gh", "x"}}},
+	{`command -p nohup time -p gh x`, [][]string{{"gh", "x"}}},
+	{
+		`command -v gh x; command -pV gh y`,
+		[][]string{{"command", "-v", "gh", "x"}, {"command", "-pV", "gh", "y"}},
+	},
+	{`mise exec go@1 -- gh x`, [][]string{{"gh", "x"}}},
+	{`/opt/bin/gh.exe x`, [][]string{{"/opt/bin/gh.exe", "x"}}},
+	{`a && gh x || b; c | d`, [][]string{{"a"}, {"gh", "x"}, {"b"}, {"c"}, {"d"}}},
+	{
+		`bash -c 'gh x; rm -rf y'`,
+		[][]string{{"bash", "-c", "gh x; rm -rf y"}, {"gh", "x"}, {"rm", "-rf", "y"}},
+	},
+	{`sh -ec "gh x"`, [][]string{{"sh", "-ec", "gh x"}, {"gh", "x"}}},
+	{`eval 'gh x'`, [][]string{{"eval", "gh x"}, {"gh", "x"}}},
+	{"bash <<'EOF'\ngh x\nEOF\n", [][]string{{"bash"}, {"gh", "x"}}},
+	{"bash <<< 'gh x'", [][]string{{"bash"}, {"gh", "x"}}},
+	{`echo "$(gh x)" ` + "`gh y`", [][]string{{"gh", "x"}, {"gh", "y"}, {"echo", "$", "$"}}},
+	{`bash -c "bash -c 'bash -c \"gh deep\"'"`, [][]string{
+		{"bash", "-c", `bash -c 'bash -c "gh deep"'`},
+		{"bash", "-c", `bash -c "gh deep"`},
+		{"bash", "-c", "gh deep"},
+	}},
+	{
+		`echo "gh pr merge 1"; echo 'rm -rf /'`,
+		[][]string{{"echo", "gh pr merge 1"}, {"echo", "rm -rf /"}},
+	},
+	{"cat <<'EOF'\ngh pr merge 1\nEOF\n", [][]string{{"cat"}}},
+	{
+		"if true; then gh x; fi; for i in 1; do gh y; done",
+		[][]string{{"true"}, {"gh", "x"}, {"gh", "y"}},
+	},
+	{"f() { gh x; }", [][]string{{"gh", "x"}}},
+	{"if cd d; then gh x; elif cd e; then gh y; else gh z; fi", [][]string{
+		{"cd", "d"}, {"gh", "x"}, {"cd", "e"}, {"gh", "y"}, {"gh", "z"},
+	}},
+	{"( gh x ) && { gh y; }", [][]string{{"gh", "x"}, {"gh", "y"}}},
+	{"export A=\"$(gh x)\"", [][]string{{"gh", "x"}}},
+}
+
 func TestParseCalls(t *testing.T) {
-	tests := []struct {
-		cmd  string
-		want [][]string
-	}{
-		{`gh pr view "1" 'x y'`, [][]string{{"gh", "pr", "view", "1", "x y"}}},
-		{`gh "a"'b'c`, [][]string{{"gh", "abc"}}},
-		{`gh a\ b "q\"x" "\a"`, [][]string{{"gh", "a b", `q"x`, `\a`}}},
-		{`gh $VAR "$X" "a${b}"`, [][]string{{"gh", "$", "$", "$"}}},
-		{`gh $'a\tb\n' x$'\x41'`, [][]string{{"gh", "a\tb\n", "xA"}}},
-		{`A=1 B=2 gh x`, [][]string{{"gh", "x"}}},
-		{`env -- A=1 gh x`, [][]string{{"gh", "x"}}},
-		{`env -u A B=1 gh x`, [][]string{{"gh", "x"}}},
-		{`command -p nohup time -p gh x`, [][]string{{"gh", "x"}}},
-		{
-			`command -v gh x; command -pV gh y`,
-			[][]string{{"command", "-v", "gh", "x"}, {"command", "-pV", "gh", "y"}},
-		},
-		{`mise exec go@1 -- gh x`, [][]string{{"gh", "x"}}},
-		{`/opt/bin/gh.exe x`, [][]string{{"/opt/bin/gh.exe", "x"}}},
-		{`a && gh x || b; c | d`, [][]string{{"a"}, {"gh", "x"}, {"b"}, {"c"}, {"d"}}},
-		{
-			`bash -c 'gh x; rm -rf y'`,
-			[][]string{{"bash", "-c", "gh x; rm -rf y"}, {"gh", "x"}, {"rm", "-rf", "y"}},
-		},
-		{`sh -ec "gh x"`, [][]string{{"sh", "-ec", "gh x"}, {"gh", "x"}}},
-		{`eval 'gh x'`, [][]string{{"eval", "gh x"}, {"gh", "x"}}},
-		{"bash <<'EOF'\ngh x\nEOF\n", [][]string{{"bash"}, {"gh", "x"}}},
-		{"bash <<< 'gh x'", [][]string{{"bash"}, {"gh", "x"}}},
-		{`echo "$(gh x)" ` + "`gh y`", [][]string{{"gh", "x"}, {"gh", "y"}, {"echo", "$", "$"}}},
-		{`bash -c "bash -c 'bash -c \"gh deep\"'"`, [][]string{
-			{"bash", "-c", `bash -c 'bash -c "gh deep"'`},
-			{"bash", "-c", `bash -c "gh deep"`},
-			{"bash", "-c", "gh deep"},
-		}},
-		{
-			`echo "gh pr merge 1"; echo 'rm -rf /'`,
-			[][]string{{"echo", "gh pr merge 1"}, {"echo", "rm -rf /"}},
-		},
-		{"cat <<'EOF'\ngh pr merge 1\nEOF\n", [][]string{{"cat"}}},
-		{
-			"if true; then gh x; fi; for i in 1; do gh y; done",
-			[][]string{{"true"}, {"gh", "x"}, {"gh", "y"}},
-		},
-		{"f() { gh x; }", [][]string{{"gh", "x"}}},
-		{"if cd d; then gh x; elif cd e; then gh y; else gh z; fi", [][]string{
-			{"cd", "d"}, {"gh", "x"}, {"cd", "e"}, {"gh", "y"}, {"gh", "z"},
-		}},
-		{"( gh x ) && { gh y; }", [][]string{{"gh", "x"}, {"gh", "y"}}},
-		{"export A=\"$(gh x)\"", [][]string{{"gh", "x"}}},
-	}
-	for _, tt := range tests {
+	for _, tt := range parseCallsTests {
 		got := argvs(Parse(tt.cmd, "", ""))
 		if !slices.EqualFunc(got, tt.want, slices.Equal) {
 			t.Errorf("%q calls = %q, want %q", tt.cmd, got, tt.want)
+		}
+	}
+}
+
+// TestParseDepthZero checks that Parse is ParseDepth at depth 0 over the call corpus, with a
+// known cwd and home so the cwd and handoff fields are compared too.
+func TestParseDepthZero(t *testing.T) {
+	cwd, home := t.TempDir(), t.TempDir()
+	cmds := []string{`cd sub && gh x; K="$(cat f)" gh y`, "bash <<'EOF'\ngh x\nEOF\n"}
+	for _, tt := range parseCallsTests {
+		cmds = append(cmds, tt.cmd)
+	}
+	for _, cmd := range cmds {
+		if got, want := Parse(
+			cmd,
+			cwd,
+			home,
+		), ParseDepth(
+			cmd,
+			cwd,
+			home,
+			0,
+		); !reflect.DeepEqual(
+			got,
+			want,
+		) {
+			t.Errorf("%q: Parse = %+v, ParseDepth(0) = %+v", cmd, got, want)
 		}
 	}
 }
