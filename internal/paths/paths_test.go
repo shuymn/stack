@@ -498,3 +498,111 @@ func TestIsAgentWorktree(t *testing.T) {
 		t.Error("windows separators not recognised")
 	}
 }
+
+func TestResolvePowerShell(t *testing.T) {
+	t.Run("relative join opens the real file", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(dir, "sub"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "sub", "b.md"), []byte("ok"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		for _, tt := range []struct {
+			in      string
+			windows bool
+		}{{"sub/b.md", false}, {`sub\b.md`, true}, {`.\sub\b.md`, true}, {"sub/b.md", true}} {
+			got, ok := ResolvePowerShell("", dir, tt.in, tt.windows)
+			if !ok {
+				t.Errorf("ResolvePowerShell(%q, windows=%v) unknown", tt.in, tt.windows)
+				continue
+			}
+			if data, err := os.ReadFile(got); err != nil || string(data) != "ok" {
+				t.Errorf("ReadFile(ResolvePowerShell(%q, windows=%v) = %q) = %q, %v",
+					tt.in, tt.windows, got, data, err)
+			}
+		}
+	})
+
+	t.Run("home", func(t *testing.T) {
+		home := t.TempDir()
+		for _, tt := range []struct {
+			in      string
+			windows bool
+			want    string
+		}{
+			{"~", true, home},
+			{"~/b.md", false, home + sep + "b.md"},
+			{`~\b.md`, true, home + sep + "b.md"},
+		} {
+			if got, ok := ResolvePowerShell(home, "", tt.in, tt.windows); got != tt.want || !ok {
+				t.Errorf("ResolvePowerShell(%q, windows=%v) = %q, %v; want %q",
+					tt.in, tt.windows, got, ok, tt.want)
+			}
+		}
+		// Without a home `~` is a literal name; on POSIX `~\b.md` is one file name.
+		cwd := t.TempDir()
+		if got, _ := ResolvePowerShell(
+			"",
+			cwd,
+			"~/b.md",
+			false,
+		); got != cwd+sep+filepath.FromSlash(
+			"~/b.md",
+		) {
+			t.Errorf("ResolvePowerShell(no home, ~/b.md) = %q", got)
+		}
+		if got, _ := ResolvePowerShell(home, cwd, `~\b.md`, false); got != cwd+sep+`~\b.md` {
+			t.Errorf(`ResolvePowerShell(posix, ~\b.md) = %q`, got)
+		}
+	})
+
+	t.Run("rules", func(t *testing.T) {
+		tests := []struct {
+			windows bool
+			cwd, in string
+			want    string
+			ok      bool
+		}{
+			{true, `C:\work`, `\x`, `C:\x`, true},
+			{true, `C:\work`, "/x/y", `C:\x\y`, true},
+			{true, `D:\work`, "/c", `D:\c`, true},
+			{true, "", `\x`, "", false},
+			{true, `\\host\share\w`, `\x`, "", false},
+			{true, `C:\work`, "C:x", "", false},
+			{true, `C:\work`, "c:", "", false},
+			{true, `C:\work`, `D:\a\..\b`, `D:\a\..\b`, true},
+			{true, `C:\work`, "C:/a", "C:/a", true},
+			{true, `C:\work`, `\\host\share\x`, `\\host\share\x`, true},
+			{true, "", "x", "", false},
+			{false, "/w", "/usr/bin", "/usr/bin", true},
+			{false, "", "x", "", false},
+			{false, "/w", `C:\x`, "/w" + sep + `C:\x`, true},
+		}
+		for _, tt := range tests {
+			got, ok := ResolvePowerShell("", tt.cwd, tt.in, tt.windows)
+			if got != tt.want || ok != tt.ok {
+				t.Errorf("ResolvePowerShell(windows=%v, %q, %q) = %q, %v; want %q, %v",
+					tt.windows, tt.cwd, tt.in, got, ok, tt.want, tt.ok)
+			}
+		}
+	})
+
+	t.Run("windows-flagged comparison", func(t *testing.T) {
+		upper := winUsers("C", "Users", "Name")
+		lower := strings.ToLower(strings.ReplaceAll(upper, `\`, "/"))
+		if !SameFor(upper, lower, true) {
+			t.Errorf("SameFor(%q, %q, windows) = false", upper, lower)
+		}
+		if SameFor(upper, lower, false) {
+			t.Errorf("SameFor(%q, %q, posix) = true", upper, lower)
+		}
+		if got := NormFor(`C:\a\..\b\`, true); got != "c:/b" {
+			t.Errorf("NormFor windows = %q", got)
+		}
+		wantFold := runtime.GOOS == "darwin"
+		if got := SameFor("/a/B", "/a/b", false); got != wantFold {
+			t.Errorf("SameFor posix case = %v, want %v", got, wantFold)
+		}
+	})
+}

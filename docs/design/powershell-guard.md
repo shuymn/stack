@@ -92,13 +92,16 @@ dashes for cmdlet parameters only, never rewritten in native argv.
 not, or a built-in alias of one on that host) or *native* (any other name, and always an explicit path or a name
 ending in `.exe`). `& 'C:\Program Files\Git\usr\bin\rm.exe' -r '~'` is native, never `Remove-Item`.
 
-**`--%`.** Stripped from argv. The verbatim tail ends at an unquoted `|`, `&&`, `||` or newline (the 7.x tokenizer's
-boundaries; `;` and a quoted `"a|b"` stay in the tail), split at whitespace outside `"`; a word holding `%NAME%` is
-dynamic; what follows the boundary is parsed normally, so `git --% status && gh pr merge 7` denies.
+**`--%`.** Stripped from argv. The verbatim tail ends at a CR or LF, quoted or not, or at an unquoted `|`, `&&` or
+`||` (the 7.x tokenizer's boundaries; `;` and a quoted `"a|b"` stay in the tail), split at whitespace outside double
+quotes (`"`, `“`, `”`, `„`); a word holding one is dynamic (its argv depends on the native-argument mode), and so is
+one holding `%NAME%`; what
+follows the boundary is parsed normally, so `git --% status && gh pr merge 7` denies.
 
 **Words.** `powershell.Word` keeps `Text`, `Static`, its quoting (bare, single, double, here-string), the parameter
 it binds to after cmdlet binding, its `,`-list group, and a known-variable mark. A word is static when it holds no
-unescaped `$`, no leading `@` and no subexpression. A bare or double-quoted `$HOME`, `${HOME}`, `$env:USERPROFILE`,
+unescaped `$`, no leading `@` and no subexpression, and, in native argv on non-Windows hosts, no unquoted wildcard
+(`*`, `?`, `[`, backtick-escaped or not: PowerShell globs the unescaped bareword there). A bare or double-quoted `$HOME`, `${HOME}`, `$env:USERPROFILE`,
 `${env:USERPROFILE}`, `$env:SystemDrive` or `${env:SystemDrive}` (names case-insensitive, `` `$ `` escaped is
 literal), alone or followed by static path text, is a known-variable word; `'$HOME'` is the literal text `$HOME`. A
 known variable that the script assigns before the word (`$HOME =`, `$env:USERPROFILE =`, `Set-Variable`, `Set-Item
@@ -122,6 +125,7 @@ instead would leave `bash -c 'gh pr merge 1'` from PowerShell unguarded.
 |---|---|
 | payload `tool_input` undecodable, `command` not a string or empty | allow, no output (both hooks) |
 | top-level lexing fails (unclosed quote or here-string, unbalanced brackets) | no calls: raw-merge, gh-publish and rmroot judge nothing (pwsh runs nothing of a script it cannot parse); secrets still scans the whole text, so a mention denies even though the engine would reject the script (bash parity) |
+| a script nests deeper than the syntax recursion cap (200 levels of brackets, blocks, hash values and assignments; distinct from the nested-script depth 2) | no calls, as for a lexing failure (fail open) |
 | a nested PowerShell script fails to lex | only that nested script is skipped; the outer calls stand, so `gh pr merge 7; iex 'Write-Output "'` denies |
 | a nested Bash script has a syntax error | Bash's own rule: the complete lines before the error line are judged, so `bash -c 'gh pr merge 7`⏎`if ('` denies |
 
@@ -172,7 +176,9 @@ Any other pipe, including `Get-Content F | gh …` (encoding and provider semant
 
 Body files resolve against the call's known cwd: payload `cwd`, changed only by `Set-Location`/`cd`/`sl`/`chdir X
 &&` with a static `X`; `cd` with no argument, any other location change, `Push-Location`/`pushd` and
-`Pop-Location`/`popd` make it unknown. A native `~` follows §4.4's native rule: on non-Windows hosts an unquoted
+`Pop-Location`/`popd` make it unknown. Cwd updates are tracked for at most 32 steps and 4096 bytes; beyond that the
+cwd is unknown and call collection continues. The byte check is a conservative estimate made before building the path
+(from the current cwd, home and target lengths), so a very long home or cwd can leave a short result unknown. A native `~` follows §4.4's native rule: on non-Windows hosts an unquoted
 leading `~` is home (PowerShell 7 expands it for native commands); on Windows a native `~` input is skipped as
 unknown (W3), with no home substituted.
 
@@ -292,7 +298,8 @@ rule's last clause becomes "(local paths in prose, Git Bash path forms, the Powe
 phase2-core §6, "Out of static scope" row, Where-it-appears cell replaced by: "`gh` aliases, `xargs`, scripts,
 `python -c`, `$VAR` words, `cat f \| gh … -F -`, the unparsable tail after a syntax error (secrets still scan it as
 text). `PowerShell`, all call rules: a script that fails to lex (secrets still scan it), constructs outside the
-recognizer's listed command positions (script blocks other than the listed ones), `cmd /c`, `Start-Process`, .NET/COM calls, splatting, variables other than the known
+recognizer's listed command positions (script blocks other than the listed ones, calls inside method-call
+arguments other than `$()`), `cmd /c`, `Start-Process`, .NET/COM calls, splatting, variables other than the known
 home and drive names; raw-merge and gh-publish: `gh` reached only through those; gh-publish: file-producing pipes
 (`Get-Content F \| gh … -F -`), a native `~` argument on Windows, `$env:USERPROFILE` in native argv on other hosts, cwd after `;`, `Push-Location` or a bare `cd`; rmroot: pipeline
 input to `Remove-Item`, globs (`C:\*`), provider-qualified, `\\?\`, UNC and non-FileSystem paths (`HKCU:\`),

@@ -98,8 +98,17 @@ type Result struct {
 // Parse parses command, run in cwd ("" when unknown) by a user whose home is home ("" when
 // unknown).
 func Parse(command, cwd, home string) Result {
+	return ParseDepth(command, cwd, home, 0)
+}
+
+// ParseDepth is Parse for a script nested depth levels deep in another script (a PowerShell
+// command's `bash -c '…'`): the recursion allowance continues from depth, so a script at the limit
+// yields its own calls but none of the scripts nested in it, and a deeper one yields nothing.
+func ParseDepth(command, cwd, home string, depth int) Result {
 	w := &walker{home: home}
-	w.script(scope{src: command, base: 0}, cwd, 0)
+	if depth <= maxDepth {
+		w.script(scope{src: command, base: 0}, cwd, depth)
+	}
 	return w.res
 }
 
