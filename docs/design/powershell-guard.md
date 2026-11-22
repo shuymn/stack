@@ -99,7 +99,8 @@ follows the boundary is parsed normally, so `git --% status && gh pr merge 7` de
 
 **Words.** `powershell.Word` keeps `Text`, `Static`, its quoting (bare, single, double, here-string), the parameter
 it binds to after cmdlet binding, its `,`-list group, and a known-variable mark. A word is static when it holds no
-unescaped `$`, no leading `@` and no subexpression. A bare or double-quoted `$HOME`, `${HOME}`, `$env:USERPROFILE`,
+unescaped `$`, no leading `@` and no subexpression, and, in native argv on non-Windows hosts, no unquoted wildcard
+(`*`, `?`, `[`: PowerShell globs it there). A bare or double-quoted `$HOME`, `${HOME}`, `$env:USERPROFILE`,
 `${env:USERPROFILE}`, `$env:SystemDrive` or `${env:SystemDrive}` (names case-insensitive, `` `$ `` escaped is
 literal), alone or followed by static path text, is a known-variable word; `'$HOME'` is the literal text `$HOME`. A
 known variable that the script assigns before the word (`$HOME =`, `$env:USERPROFILE =`, `Set-Variable`, `Set-Item
