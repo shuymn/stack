@@ -20,7 +20,9 @@ const (
 	maxBaseline = 99
 	cutoffStep  = 1
 	// Margin is the predeclared margin δ of the margin test, in hundredths (0.05).
-	Margin       = 5
+	Margin = 5
+	// Delta is Margin as a score.
+	Delta        = float64(Margin) / percent
 	minRecall    = 0.5
 	unstableBand = 0.05
 	minFitCases  = 6
@@ -65,12 +67,11 @@ func Evaluate(samples []Sample, cutoff float64) Stats {
 // MarginEvaluate scores samples at cutoff under the margin test: a positive is a hit only at
 // cutoff+δ or above, a negative a false positive already at cutoff−δ. A missing score is a miss.
 func MarginEvaluate(samples []Sample, cutoff float64) Stats {
-	d := float64(Margin) / percent
 	return count(samples, func(x Sample) bool {
 		if x.Truth {
-			return *x.Score >= cutoff+d-scoreEpsilon
+			return *x.Score >= cutoff+Delta-scoreEpsilon
 		}
-		return *x.Score >= cutoff-d-scoreEpsilon
+		return *x.Score >= cutoff-Delta-scoreEpsilon
 	})
 }
 
@@ -178,7 +179,7 @@ func Calibrate(fit, heldout []Sample, target float64) Decision {
 			hs.Positives, hs.Negatives, minHeldCases, minHeldCases)
 	case !ok:
 		d.Reason = fmt.Sprintf("no cutoff of 0.05-0.95 passes the margin test (±%.2f) with "+
-			"precision %.2f and recall %.2f on fit; review the corpus", float64(Margin)/percent,
+			"precision %.2f and recall %.2f on fit; review the corpus", Delta,
 			target, minRecall)
 	case hs.TP == 0 || hs.Precision < target || hs.Recall < minRecall:
 		d.Reason = fmt.Sprintf("heldout precision %.2f, recall %.2f miss the target %.2f / %.2f",

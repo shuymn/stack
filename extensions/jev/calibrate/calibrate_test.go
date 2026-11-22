@@ -559,3 +559,57 @@ func TestUnansweredSample(t *testing.T) {
 		}
 	}
 }
+
+// synthCase is a one-batch cal case with recorded scores: unsupported_claim answers scores, and
+// meta_duty_regression a constant low score on a case with no labelled file.
+func synthCase(name, lang, split string, unsupported bool, scores ...float64) Case {
+	hash := "sha256:" + name
+	qs := []jev.Question{{Name: semantic.MetaDuty}, {Name: semantic.Unsupported}}
+	low := 0.1
+	samples := map[string][]*float64{semantic.MetaDuty: {&low, &low, &low}}
+	for _, s := range scores {
+		samples[semantic.Unsupported] = append(samples[semantic.Unsupported], &s)
+	}
+	return Case{
+		Path:    filepath.Join("cal", name+".json"),
+		Fixture: jev.Fixture{Samples: map[string]map[string][]*float64{hash: samples}},
+		Label:   semantic.Label{Unsupported: unsupported, Split: split, Lang: lang},
+		Plan:    jev.Plan{Batches: []jev.Batch{{Hash: hash, Questions: qs}}},
+	}
+}
+
+func TestReport(t *testing.T) {
+	cases := make([]Case, 0, 18)
+	for i, lang := range []string{"en", "en", "en", "ja", "ja"} {
+		cases = append(cases, synthCase(fmt.Sprintf("%s-pos-%d", lang, i), lang, SplitFit, true,
+			0.9, 0.9, 0.9))
+	}
+	// Under the margin test 0.12 is a miss; at the runtime cutoff it flips the case's decision.
+	cases = append(cases, synthCase("ja-flip", "ja", SplitFit, true, 0.9, 0.9, 0.12))
+	for i, lang := range []string{"en", "en", "en", "ja", "ja", "ja"} {
+		cases = append(cases, synthCase(fmt.Sprintf("%s-neg-%d", lang, i), lang, SplitFit, false,
+			0.1, 0.1, 0.1))
+	}
+	for i, lang := range []string{"en", "ja", "ja"} {
+		cases = append(cases,
+			synthCase(fmt.Sprintf("%s-hpos-%d", lang, i), lang, SplitHeldout, true, 0.9, 0.9, 0.9),
+			synthCase(fmt.Sprintf("%s-hneg-%d", lang, i), lang, SplitHeldout, false, 0.1, 0.1, 0.1))
+	}
+	var out bytes.Buffer
+	Report(&out, cases, Refit(cases))
+	got := out.String()
+	for _, want := range []string{
+		"unsupported_claim: enabled true, cutoff 0.16, baseline 0.50 (old rule)",
+		"  fit at 0.16: TP 17 FP 0 FN 1 TN 18, precision 1.00, recall 0.94, 6 + 6 cases",
+		"  heldout at 0.16: TP 9 FP 0 FN 0 TN 9, precision 1.00, recall 1.00, 3 + 3 cases",
+		"  margin test (±0.05) on fit: TP 17 FP 0 FN 1 TN 18, precision 1.00, recall 0.94, 6 + 6 cases: pass",
+		"  baseline 0.50: fit TP 17 FP 0 FN 1 TN 18",
+		"  flips across calls at 0.16: en none; ja ja-flip",
+		"meta_duty_regression: enabled false, cutoff none, baseline none (old rule)",
+		"  REVIEW: no cutoff passes the margin test",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("report lacks %q:\n%s", want, got)
+		}
+	}
+}

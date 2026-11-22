@@ -79,6 +79,9 @@ type Case struct {
 // Fixed reports a fixture of fixed/, which keeps its hand-written want.
 func (c Case) Fixed() bool { return filepath.Base(filepath.Dir(c.Path)) == SplitFixed }
 
+// Name is the fixture's file name without .json.
+func (c Case) Name() string { return strings.TrimSuffix(filepath.Base(c.Path), ".json") }
+
 // Run records every cal fixture, refits the cutoffs and refreshes the cal fixtures' expect and
 // want. Fixed fixtures are never rewritten. When any cal case's first attempt of some body has no
 // replayable outcome, it writes nothing and returns an error asking for a rerun.
@@ -107,13 +110,7 @@ func Run(ctx context.Context, o Options) error {
 		return fmt.Errorf("%w: %s", errRerun, strings.Join(failed, ", "))
 	}
 	table := Refit(cal)
-	for name, d := range table.Decisions {
-		_, _ = fmt.Fprintf(o.Stdout, "%s: enabled %v, cutoff %s, %s\n", name, d.Enabled,
-			cutoffText(d), d.Reason)
-		for _, u := range d.Unstable {
-			_, _ = fmt.Fprintf(o.Stdout, "  unstable %s\n", u)
-		}
-	}
+	Report(o.Stdout, cal, table)
 	for i := range cal {
 		if err := Refresh(&cal[i], table.Decisions); err != nil {
 			return err
@@ -127,11 +124,11 @@ func Run(ctx context.Context, o Options) error {
 	return jev.WriteTable(o.Table, table)
 }
 
-func cutoffText(d jev.Decision) string {
-	if d.Cutoff == nil {
+func cutoffText(c *float64) string {
+	if c == nil {
 		return "none"
 	}
-	return fmt.Sprintf("%.2f", *d.Cutoff)
+	return fmt.Sprintf("%.2f", *c)
 }
 
 // Load reads every fixture under dir and rebuilds its plan from its synthetic repository.
@@ -263,9 +260,19 @@ func replayable(o jev.Outcome) (jev.Record, bool) {
 }
 
 // Refit fits each decision on the cal cases' fit samples and checks it on their heldout samples.
-// Each single-call score is one sample; a planned call with no score is a negative prediction. A
-// case whose plan splits a file is fixed-only and not fitted.
 func Refit(cases []Case) jev.Table {
+	fit, held := samples(cases)
+	t := jev.Table{Model: jev.Pin, Decisions: map[string]jev.Decision{}}
+	for _, q := range semantic.Questions {
+		t.Decisions[q.Name] = jev.Calibrate(fit[q.Name], held[q.Name], Targets[q.Name])
+	}
+	return t
+}
+
+// samples returns each decision's fit and heldout samples. Each single-call score is one sample;
+// a planned call with no score is a negative prediction. A case whose plan splits a file is
+// fixed-only and not fitted.
+func samples(cases []Case) (map[string][]jev.Sample, map[string][]jev.Sample) {
 	fit := map[string][]jev.Sample{}
 	held := map[string][]jev.Sample{}
 	for _, c := range cases {
@@ -276,7 +283,7 @@ func Refit(cases []Case) jev.Table {
 		if c.Label.Split == SplitHeldout {
 			dst = held
 		}
-		name := strings.TrimSuffix(filepath.Base(c.Path), ".json")
+		name := c.Name()
 		for _, b := range c.Plan.Batches {
 			files := b.Units(c.Units)
 			for _, q := range b.Questions {
@@ -304,11 +311,98 @@ func Refit(cases []Case) jev.Table {
 			}
 		}
 	}
-	t := jev.Table{Model: jev.Pin, Decisions: map[string]jev.Decision{}}
+	return fit, held
+}
+
+// Report writes, per decision, the cutoff and the old rule's baseline with their fit and heldout
+// counts, the margin test on fit, the cases whose decision flips across their calls by language,
+// and a review flag when no cutoff passes the margin test.
+func Report(w io.Writer, cases []Case, t jev.Table) {
+	fit, held := samples(cases)
 	for _, q := range semantic.Questions {
-		t.Decisions[q.Name] = jev.Calibrate(fit[q.Name], held[q.Name], Targets[q.Name])
+		d := t.Decisions[q.Name]
+		_, _ = fmt.Fprintf(w, "%s: enabled %v, cutoff %s, baseline %s (old rule)\n", q.Name,
+			d.Enabled, cutoffText(d.Cutoff), cutoffText(d.Baseline))
+		if d.Reason != "" {
+			_, _ = fmt.Fprintf(w, "  reason: %s\n", d.Reason)
+		}
+		at := d.Cutoff
+		if at == nil {
+			_, _ = fmt.Fprintf(w, "  REVIEW: no cutoff passes the margin test\n")
+		} else {
+			c := *at
+			_, _ = fmt.Fprintf(w, "  fit at %.2f: %s\n", c, statsText(jev.Evaluate(fit[q.Name], c)))
+			_, _ = fmt.Fprintf(w, "  heldout at %.2f: %s\n", c,
+				statsText(jev.Evaluate(held[q.Name], c)))
+			_, _ = fmt.Fprintf(w, "  margin test (±%.2f) on fit: %s: pass\n",
+				jev.Delta, statsText(jev.MarginEvaluate(fit[q.Name], c)))
+		}
+		if b := d.Baseline; b != nil {
+			_, _ = fmt.Fprintf(w, "  baseline %.2f: fit %s; heldout %s\n", *b,
+				statsText(jev.Evaluate(fit[q.Name], *b)), statsText(jev.Evaluate(held[q.Name], *b)))
+			if at == nil {
+				at = b
+			}
+		}
+		if at != nil {
+			_, _ = fmt.Fprintf(w, "  flips across calls at %.2f: %s\n", *at,
+				flipText(flips(cases, q.Name, *at)))
+		}
+		for _, u := range d.Unstable {
+			_, _ = fmt.Fprintf(w, "  unstable %s\n", u)
+		}
 	}
-	return t
+}
+
+func statsText(s jev.Stats) string {
+	return fmt.Sprintf("TP %d FP %d FN %d TN %d, precision %.2f, recall %.2f, %d + %d cases",
+		s.TP, s.FP, s.FN, s.TN, s.Precision, s.Recall, s.Positives, s.Negatives)
+}
+
+// flips maps each language to the cal cases whose single-call decisions on question differ across
+// the calls of one body at cutoff.
+func flips(cases []Case, question string, cutoff float64) map[string][]string {
+	out := map[string][]string{}
+	for _, c := range cases {
+		if c.Fixed() || c.Fixture.Samples == nil || splits(c.Plan) {
+			continue
+		}
+		for _, b := range c.Plan.Batches {
+			scores := c.Fixture.Samples[b.Hash][question]
+			hits := make([]bool, 0, len(scores))
+			for _, p := range scores {
+				hits = append(hits, p != nil && jev.Hit(*p, cutoff))
+			}
+			if slices.Contains(hits, true) && slices.Contains(hits, false) {
+				out[c.Label.Lang] = append(out[c.Label.Lang], c.Name())
+				break
+			}
+		}
+	}
+	return out
+}
+
+// flipText lists flips per language, en and ja first, then any other.
+func flipText(byLang map[string][]string) string {
+	langs := []string{"en", "ja"}
+	for l := range byLang {
+		if !slices.Contains(langs, l) {
+			langs = append(langs, l)
+		}
+	}
+	slices.Sort(langs[2:])
+	parts := make([]string, 0, len(langs))
+	for _, l := range langs {
+		names := "none"
+		if len(byLang[l]) > 0 {
+			names = strings.Join(byLang[l], ", ")
+		}
+		if l == "" {
+			l = "unlabelled"
+		}
+		parts = append(parts, l+" "+names)
+	}
+	return strings.Join(parts, "; ")
 }
 
 func splits(p jev.Plan) bool {

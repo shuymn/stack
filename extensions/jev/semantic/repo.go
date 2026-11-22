@@ -166,6 +166,13 @@ type Label struct {
 	// Split is fit or heldout for a cal case, fixed for a fixed one.
 	Split string `json:"split"`
 	Why   string `json:"why"`
+	// Lang is the language of a cal case's texts, ja or en.
+	Lang string `json:"lang,omitempty"`
+	// Hard lists the decisions for which a cal case is a hard one rather than a straightforward
+	// control (§3.5).
+	Hard []string `json:"hard,omitempty"`
+	// Group names a set of translations or near-duplicate cases, which share a split.
+	Group string `json:"group,omitempty"`
 }
 
 // MetaTruth is the ground truth of a request carrying files: any of them labelled true.
