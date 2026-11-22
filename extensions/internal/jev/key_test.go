@@ -161,8 +161,13 @@ func TestKeyFileSymlink(t *testing.T) {
 	wantKeyError(t, key, err, KeyDangling)
 }
 
-// TestKeyFixes: only the causes about mode name chmod 600.
+// TestKeyFixes: only the causes about mode name chmod 600, and an unreadable file asks for
+// searchable parent directories.
 func TestKeyFixes(t *testing.T) {
+	if msg := (&KeyError{Cause: KeyUnreadable}).Error(); !strings.Contains(msg,
+		"parent directories searchable") {
+		t.Errorf("unreadable: %q does not ask for searchable parent directories", msg)
+	}
 	for _, cause := range []string{KeyUnreadable, KeyNotRegular, KeyBlank, KeyTooLarge, KeyDangling} {
 		if msg := (&KeyError{Cause: cause}).Error(); strings.Contains(msg, "chmod") {
 			t.Errorf("%s: %q names chmod", cause, msg)

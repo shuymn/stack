@@ -34,7 +34,8 @@ const MaxKeyFile = 4 << 10
 
 // keyFixes is the action each cause asks of the owner.
 var keyFixes = map[string]string{
-	KeyUnreadable: "make it and its directories readable by you, or remove it to opt out",
+	KeyUnreadable: "make it readable and its parent directories searchable (x) by you, " +
+		"or remove it to opt out",
 	KeyNotRegular: "replace it with a regular file holding only the key, or remove it to opt out",
 	KeyBlank:      "write the key into it, or remove it to opt out",
 	KeyTooLarge:   "keep only the key in it (at most 4 KiB), or remove it to opt out",
