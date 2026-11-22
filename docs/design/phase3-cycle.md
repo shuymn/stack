@@ -26,8 +26,8 @@ and C21 there); `gh_model` (§3.2) is unchanged.
 3. **No over-defensive machinery** (`docs/architecture.md` §1 drop list): no live swapper, no owner-only merge list,
    no `--restricted` sandbox, no `commit-tree -S`, no recovery state machine, no budget caps. What remains is what
    publishing to a public repository needs: a public target and public evidence only, file tools confined to the
-   worktree, a verified single commit, `stack check public`, a read-only Codex check, one open PR at a time, a
-   spending cap.
+   worktree, a verified single commit, `stack check public`, a read-only Codex check, one open PR at a time, at
+   most one model attempt per ISO week (the recorded cost is observed, not capped).
 4. **Never block.** The `cycle` stage has no caller to stop. Both extensions answer `pass` or `warn`, never `block`.
    `stack run cycle` then exits 0 when every result is `pass`/`warn`, 1 when another configured extension blocks,
    and 2 when core itself fails (`internal/cli/run.go:60-84`); the wrapper (§3.6) handles each.
@@ -716,9 +716,9 @@ owner, not of the repository.
 
 | Option | Gains | Gives up | Reversibility |
 |---|---|---|---|
-| **One `flock` run lock plus the week stamp (chosen)** | the stamp only blocks re-billing; the lock keeps the worktree, the open-PR check and cleanup single-run, across week boundaries; released by the kernel on death | one lock file | high |
+| **One `flock` run lock plus the week stamp (chosen)** | the stamp only blocks a second model attempt in the week; the lock keeps the worktree, the open-PR check and cleanup single-run, across week boundaries; released by the kernel on death | one lock file | high |
 | week stamp alone | no lock | a Sunday run still in the model and a Monday run both see no open PR, and the later cleanup removes the running worktree | high |
-| lock alone | no stamp | no weekly spending bound | high |
+| lock alone | no stamp | no weekly bound on model attempts | high |
 
 ## 5. Dotfiles Instruction Changes
 
@@ -869,7 +869,7 @@ I7); no remote write without enough time (I14); one run at a time (I5); a Codex 
 | I4 | When an open `improve/` or `kaizen/` PR of the same repository exists on any page, improve shall not create a stamp, and shall warn when it is older than 14 days. | `improve.TestOpenPR` | match on page 2; fork head with same ref ignored; 13 vs 15 days; gh error → warn |
 | I5 | Improve shall hold one run lock from the open-PR check through cleanup and stamp finalisation, so that concurrent runs on one machine make at most one model call and never remove a running worktree. | `improve.TestRunLock` (two real processes, `improvetest` build) | A in week W blocks in fake claude, B starts at W+1 → B `pass` "active", A's worktree intact; A ends unbilled (stamp removed after cleanup), B starts right after → one new claim, no overlap |
 | I6 | If the claude child never started or a complete result proves zero cost, improve shall remove the stamp after the child exits and cleanup; otherwise it shall keep it. | `improve.TestBilling` | start failure, worktree failure, too little time right before start → removed; cost 0 with all four counters 0 → removed; kept with cost `unknown` and `cost-unknown`: cost 0 + `usage: {}`, cost 0 + one counter missing, cost 0 + a counter that is a string, negative or fractional; kept: cost 0 + a non-zero counter, missing response, timeout; kept with cost `unknown`: a zero result followed by more bytes (also after a `change: false` result), a zero result from a child killed by a signal, a result without `type: result` |
-| I7 | Improve shall run `claude -p` with the stated flags, settings and environment, cwd = worktree, the brief, `writing.md` and the task on stdin, and kill it at its timeout. | `improve.TestModelInvocation` | argv exact (`--setting-sources user`; no `--restricted`, `--safe-mode`, `--add-dir`; `--settings` sets `autoMemoryEnabled: false` and blocks reads and writes); env has `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`; stdin contains brief ids and `writing.md`; timeout → `failed:timeout`, cost `unknown`, child gone |
+| I7 | Improve shall run `claude -p` with the stated flags, settings and environment, cwd = worktree, the brief, `writing.md` and the task on stdin, and kill it at its timeout. | `improve.TestModelInvocation` | argv exact (`--setting-sources user`; no `--restricted`, `--safe-mode`, `--add-dir`, `--max-budget-usd`; `--settings` sets `autoMemoryEnabled: false` and blocks reads and writes); env has `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`; stdin contains brief ids and `writing.md`; timeout → `failed:timeout`, cost `unknown`, child gone |
 | I8 | If the worktree has anything but modifications of existing `100644` files within `paths`, or evidence ids are not ⊆ brief ids, then improve shall record a proposal with the patch and not commit. | `improve.TestProposal` | add, delete, rename, mode change, type change (file → symlink), out-of-scope path, `**` boundary (`skills` vs `skills2`), empty diff with `change: true`, foreign id; `git rev-parse HEAD` still `base_oid` and no new ref |
 | I9 | Improve shall commit with the repository's hooks and the owner's config, without `--no-verify`. | `improve.TestCommit` (real git) | a failing `commit-msg` hook → `failed:commit` with patch; argv has no `--no-verify` |
 | I10 | Improve shall verify the pinned OID as one commit on `base_oid` changing only allowed existing files, run the credential check, `stack-public check` and the Codex check on that OID and the fixed title and body, and push exactly that OID. | `improve.TestCommitScope` (real git), `improve.TestPublicCheck` (real `stack-public` built in `TestMain`) | a `pre-commit` hook that succeeds after staging an extra file → `proposal:commit-scope`, no push; HEAD moved after the check → pushed OID is still the pinned one; a `post-commit` hook that replaces the commit (with the extra file) by an allowed one through `git replace` → still `proposal:commit-scope`; a `pre-push` hook that rewrites the body file → `gh pr create` gets the checked body; real `stack-public check` with a dummy private term in the diff, message, title or body → `proposal:public-check`; exit 2, or `stack-public` absent from `PATH` → `failed:check` with no Codex call, push or `gh pr create` |
