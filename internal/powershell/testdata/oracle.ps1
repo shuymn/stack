@@ -19,7 +19,6 @@ Import-Module Microsoft.PowerShell.Management, Microsoft.PowerShell.Utility
 
 $utf8 = New-Object System.Text.UTF8Encoding $false
 $req = [System.IO.File]::ReadAllText($In, $utf8) | ConvertFrom-Json
-$A = 'System.Management.Automation.Language'
 
 function Convert-Element($e) {
     $o = [ordered]@{ k = 'expr'; t = $e.Extent.Text; ast = $e.GetType().Name }
@@ -31,7 +30,7 @@ function Convert-Element($e) {
     } elseif ($e -is [System.Management.Automation.Language.ConstantExpressionAst]) {
         $o.k = 'str'; $o.v = $e.Extent.Text; $o.q = 'Constant'
     } elseif ($e -is [System.Management.Automation.Language.CommandParameterAst]) {
-        $o.k = 'param'; $o.pn = $e.ParameterName
+        $o.k = 'param'
         if ($null -ne $e.Argument) {
             $o.prefix = $e.Extent.Text.Substring(0, $e.Argument.Extent.StartOffset - $e.Extent.StartOffset)
             $o.arg = Convert-Element $e.Argument
@@ -228,22 +227,23 @@ function Get-NestedText($cmd) {
     $null
 }
 
-# Get-NestedCommands returns the commands of the nested scripts that the plain commands of $ast
+# Get-NestedCommands returns the commands of the nested scripts that the plain commands $plain
 # run, down to depth 2 (as the recognizer's allowance), in source order: each plain one with a
 # static name, and each one whose position cannot be decided (ctx 'unknown:<why>').
-function Get-NestedCommands($ast, [int] $depth) {
+function Get-NestedCommands($plain, [int] $depth) {
     $out = New-Object System.Collections.ArrayList
     if ($depth -ge 2) { return , $out }
-    foreach ($cmd in (Find-Commands $ast)) {
-        if ((Get-Context $cmd) -ne 'plain') { continue }
+    foreach ($cmd in $plain) {
         $text = Get-NestedText $cmd
         if ($null -eq $text) { continue }
         $tk = $null; $er = $null
         $inner = [System.Management.Automation.Language.Parser]::ParseInput($text, [ref]$tk, [ref]$er)
         if (@($er).Count -gt 0) { continue }
+        $innerPlain = New-Object System.Collections.ArrayList
         foreach ($c in (Find-Commands $inner)) {
             $n = $c.GetCommandName()
             $ctx = Get-Context $c
+            if ($ctx -eq 'plain') { [void]$innerPlain.Add($c) }
             if (($null -ne $n -and $ctx -eq 'plain') -or $ctx.StartsWith('unknown:')) {
                 [void]$out.Add([ordered]@{
                         name = $n
@@ -252,7 +252,7 @@ function Get-NestedCommands($ast, [int] $depth) {
                     })
             }
         }
-        foreach ($n in (Get-NestedCommands $inner ($depth + 1))) { [void]$out.Add($n) }
+        foreach ($n in (Get-NestedCommands $innerPlain ($depth + 1))) { [void]$out.Add($n) }
     }
     , $out
 }
@@ -284,11 +284,13 @@ foreach ($c in $req.cases) {
     $ast = [System.Management.Automation.Language.Parser]::ParseInput($c.text, [ref]$tokens, [ref]$errors)
     $failed = @($errors).Count -gt 0
     $cmds = New-Object System.Collections.ArrayList
+    $plain = New-Object System.Collections.ArrayList
     $all = @(Find-Commands $ast)
     for ($i = 0; $i -lt $all.Count; $i++) {
         $cmd = $all[$i]
         $name = $cmd.GetCommandName()
         $ctx = Get-Context $cmd
+        if ($ctx -eq 'plain') { [void]$plain.Add($cmd) }
         $text = $null
         # Only a plain native call is evidence: the stub runs no other.
         if ($null -ne $name -and -not $failed -and $ctx -eq 'plain' -and (Resolve-Name $name) -eq 'native') {
@@ -307,7 +309,7 @@ foreach ($c in $req.cases) {
         id = $c.id
         errors = @($errors | ForEach-Object { [ordered]@{ id = $_.ErrorId; offset = $_.Extent.StartOffset; text = $_.Extent.Text } })
         commands = @($cmds)
-        nested = @((Get-NestedCommands $ast 0) | ForEach-Object { $_ })
+        nested = @((Get-NestedCommands $plain 0) | ForEach-Object { $_ })
     })
 }
 foreach ($n in $req.names) { [void](Resolve-Name $n) }

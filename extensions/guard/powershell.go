@@ -115,8 +115,8 @@ func rmRootPowerShell(calls []powershell.Call, cwd string, opts Options) (Decisi
 // be made the current one, so a bare root is opaque once any is declared; a declared name's own
 // root is opaque too, and every letter's when a name is not static.
 type drives struct {
-	any, dynamic bool
-	names        map[string]bool
+	hasCustomDriveDeclaration, dynamic bool
+	names                              map[string]bool
 }
 
 // existingDrives returns the lower-case letters of the host's volumes (letters) and of the drives
@@ -162,7 +162,7 @@ func declaredDrives(calls []powershell.Call, existing map[string]bool) drives {
 			}
 			d.names[strings.ToLower(name.Text)] = true
 		}
-		d.any = true
+		d.hasCustomDriveDeclaration = true
 	}
 	return d
 }
@@ -261,7 +261,7 @@ func removeItemTarget(
 	}
 	if windows && p != "" && isSep(p[0]) && onlyCurrent(p) {
 		// The root of the current drive, whatever that drive is.
-		if declared.any {
+		if declared.hasCustomDriveDeclaration {
 			return "", false
 		}
 		return "a drive root", true

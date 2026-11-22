@@ -253,11 +253,10 @@ func (ob observation) declaredBy(text string) declared {
 // verdict judges one case: Pass only when the engine's observation matches the declaration and
 // Parse agrees with it on every supported position, Fail on a disagreement, Inconclusive when the
 // engine's evidence is missing or incomplete.
-func verdict(e evidence, st *stats) (Verdict, []string) {
+func verdict(e evidence, ob observation, st *stats) (Verdict, []string) {
 	if e.engine == nil || e.engine.LanguageMode != "FullLanguage" || e.oc == nil {
 		return Inconclusive, []string{"no engine evidence"}
 	}
-	ob := observe(e, st)
 	if len(ob.missing) > 0 {
 		return Inconclusive, ob.missing
 	}
@@ -277,7 +276,7 @@ func verdict(e evidence, st *stats) (Verdict, []string) {
 			{"skipped", ob.skipped, e.decl.Skipped},
 			{"nested", ob.nested, e.decl.Nested},
 		} {
-			if !slices.Equal(d.got, d.want) && (len(d.got) > 0 || len(d.want) > 0) {
+			if !slices.Equal(d.got, d.want) {
 				fails = append(
 					fails,
 					fmt.Sprintf("engine %s %q, declared %q", d.what, d.got, d.want),
@@ -397,7 +396,7 @@ func compareCalls(e evidence, st *stats, ob *observation, partial bool) {
 				dynamicEngine++
 			}
 		default:
-			j := matchCall(e.r.Calls, used, *oc.Name, oc)
+			j := matchCall(e.r.Calls, used, *oc.Name, oc.Elements)
 			if j < 0 {
 				ob.fails = append(ob.fails, fmt.Sprintf("missed call %q", *oc.Name))
 				continue
@@ -407,24 +406,21 @@ func compareCalls(e evidence, st *stats, ob *observation, partial bool) {
 			compareCall(e, e.r.Calls[j], oc, fmt.Sprintf("%d/%d", e.oc.ID, i), st, ob)
 		}
 	}
-	// Then the calls of nested scripts: each engine record pairs with a call of its name, and
-	// their static words are compared.
-	if !partial {
-		for _, n := range e.oc.Nested {
-			if n.Ctx != "plain" || n.Name == nil {
-				continue
-			}
-			rec := oCmd{Name: n.Name, Ctx: n.Ctx, Elements: n.Elements}
-			j := matchCall(e.r.Calls, used, *n.Name, rec)
-			if j < 0 {
-				ob.fails = append(ob.fails, fmt.Sprintf("missed nested call %q", *n.Name))
-				continue
-			}
-			used[j] = true
-			f, notes := compareArgv(e.r.Calls[j], rec, dynamicWords(e))
-			ob.fails = append(ob.fails, prefixed("nested: ", f)...)
-			ob.notes = append(ob.notes, prefixed("nested: ", notes)...)
+	// Then the calls of nested scripts (none in a partial comparison): each engine record pairs
+	// with a call of its name, and their static words are compared.
+	for _, n := range e.oc.Nested {
+		if n.Ctx != "plain" || n.Name == nil {
+			continue
 		}
+		j := matchCall(e.r.Calls, used, *n.Name, n.Elements)
+		if j < 0 {
+			ob.fails = append(ob.fails, fmt.Sprintf("missed nested call %q", *n.Name))
+			continue
+		}
+		used[j] = true
+		f, notes := compareArgv(e.r.Calls[j], n.Elements, dynamicWords(e))
+		ob.fails = append(ob.fails, prefixed("nested: ", f)...)
+		ob.notes = append(ob.notes, prefixed("nested: ", notes)...)
 	}
 	// A call left over that an opaque command explains was returned from an opaque position.
 	for _, i := range opaque {
@@ -432,7 +428,7 @@ func compareCalls(e evidence, st *stats, ob *observation, partial bool) {
 		if oc.Name == nil {
 			continue
 		}
-		if j := matchCall(e.r.Calls, used, *oc.Name, oc); j >= 0 {
+		if j := matchCall(e.r.Calls, used, *oc.Name, oc.Elements); j >= 0 {
 			used[j] = true
 			ob.fails = append(ob.fails,
 				fmt.Sprintf("call %q returned from an opaque position (%s)", *oc.Name, oc.Ctx))
@@ -475,7 +471,7 @@ func dynamicWords(e evidence) []string {
 
 // matchCall returns the first unused call named name, preferring one whose static words agree with
 // the engine's, or -1.
-func matchCall(calls []Call, used []bool, name string, oc oCmd) int {
+func matchCall(calls []Call, used []bool, name string, els []oElem) int {
 	first := -1
 	for j, c := range calls {
 		if used[j] || !c.Args[0].Static || c.Args[0].Text != name {
@@ -484,7 +480,7 @@ func matchCall(calls []Call, used []bool, name string, oc oCmd) int {
 		if first < 0 {
 			first = j
 		}
-		if f, _ := compareArgv(c, oc, nil); len(f) == 0 {
+		if f, _ := compareArgv(c, els, nil); len(f) == 0 {
 			return j
 		}
 	}
@@ -528,25 +524,14 @@ func compareCall(e evidence, c Call, oc oCmd, id string, st *stats, ob *observat
 	default:
 		ob.notes = append(ob.notes, fmt.Sprintf("%q resolves to %s", name, res))
 	}
-	f, n := compareArgv(c, oc, dynamicWords(e))
+	f, n := compareArgv(c, oc.Elements, dynamicWords(e))
 	ob.fails = append(ob.fails, f...)
 	ob.notes = append(ob.notes, n...)
 	st.argvWords += len(c.Args) - 1
 
-	if res != "native" || len(e.oc.Errors) > 0 {
-		return
-	}
-	if want := stubShaped(oc.Elements[1:]); oc.Eligible != want {
-		ob.missing = append(ob.missing,
-			fmt.Sprintf("%q: eligible = %v, its arguments' shape says %v", name, oc.Eligible, want))
-		return
-	}
-	if !oc.Eligible {
-		return
-	}
+	// checkStubContract has checked that the stub ran exactly the eligible calls.
 	got, ok := e.stub[id]
 	if !ok {
-		ob.missing = append(ob.missing, fmt.Sprintf("%q: no stub argv for call %s", name, id))
 		return
 	}
 	st.stubCalls++
@@ -640,9 +625,9 @@ func expected(els []oElem, k Kind) []want {
 // compareArgv compares the recognizer's words after the name with the engine's elements: a static
 // word must equal the engine's static value, no word the engine computes may be static, and a word
 // the engine reads as static may be dynamic only when the case declares its text in dynamic.
-func compareArgv(c Call, oc oCmd, dynamic []string) ([]string, []string) {
+func compareArgv(c Call, els []oElem, dynamic []string) ([]string, []string) {
 	var fails, notes []string
-	ws := expected(oc.Elements[1:], c.Kind)
+	ws := expected(els[1:], c.Kind)
 	got := c.Args[1:]
 	if n := len(ws); n > 0 && ws[n-1].verbatimSkipped {
 		ws = ws[:n-1]
@@ -1411,11 +1396,12 @@ func judge(t *testing.T, key string, o *oracleOut, stubs map[string][]string, co
 			r:    Parse(text, "", o.Home, HostOS()),
 			stub: stubs,
 		}
-		obs[id] = observe(e, &stats{})
 		if *updateOracle && byCmd[text] == nil {
+			obs[id] = observe(e, &stats{})
 			continue
 		}
-		v, notes := verdict(e, &st)
+		obs[id] = observe(e, &st)
+		v, notes := verdict(e, obs[id], &st)
 		counts[v]++
 		switch v {
 		case Pass:
