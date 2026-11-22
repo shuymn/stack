@@ -47,11 +47,8 @@ const (
 	SplitFixed   = "fixed"
 )
 
-var (
-	// errRerun reports cal cases whose first attempt had no replayable outcome; nothing was
-	// written.
-	errRerun = errors.New("nothing written; rerun jev-calibrate: no replayable first outcome for")
-)
+// errRerun reports cal cases whose first attempt had no replayable outcome; nothing was written.
+var errRerun = errors.New("nothing written; rerun jev-calibrate: no replayable first outcome for")
 
 // Options configures a run.
 type Options struct {

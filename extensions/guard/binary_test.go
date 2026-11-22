@@ -243,9 +243,16 @@ func TestJevKeySecret(t *testing.T) {
 		assertDeny(t, name+": cat the key file",
 			runHook(t, home, bashPayload(t, cwd, "cat "+safety.JevKey)), RuleSecrets)
 		if file != "" {
-			assertDeny(t, name+": custom secret",
-				runHook(t, home, payload(t, cwd, "Read", map[string]any{"file_path": "custom.key"})),
-				RuleSecrets)
+			assertDeny(
+				t,
+				name+": custom secret",
+				runHook(
+					t,
+					home,
+					payload(t, cwd, "Read", map[string]any{"file_path": "custom.key"}),
+				),
+				RuleSecrets,
+			)
 		}
 	}
 }

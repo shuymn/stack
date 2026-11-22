@@ -3,6 +3,7 @@
 package jev
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"syscall"
@@ -12,7 +13,11 @@ import (
 var currentUID = os.Getuid
 
 func openKey(p string) (*os.File, error) {
-	return os.OpenFile(p, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	f, err := os.OpenFile(p, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, fmt.Errorf("open key file: %w", err)
+	}
+	return f, nil
 }
 
 // keyAccess returns why the key file's owner or mode is unsafe, or "".

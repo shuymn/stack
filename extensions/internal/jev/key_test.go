@@ -13,8 +13,8 @@ import (
 // keySentinel is file content no diagnostic may show.
 const keySentinel = "sentinel-key-content"
 
-// writeKey creates the key file under home with content and mode, and returns its path.
-func writeKey(t *testing.T, home, content string, mode os.FileMode) string {
+// writeKey creates the key file under home with content and mode.
+func writeKey(t *testing.T, home, content string, mode os.FileMode) {
 	t.Helper()
 	p := KeyPath(home)
 	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
@@ -26,7 +26,6 @@ func writeKey(t *testing.T, home, content string, mode os.FileMode) string {
 	if err := os.Chmod(p, mode); err != nil {
 		t.Fatal(err)
 	}
-	return p
 }
 
 func envOf(v string) func(string) string {

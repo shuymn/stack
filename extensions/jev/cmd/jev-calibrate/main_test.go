@@ -32,7 +32,8 @@ func TestRunUnusableKeyFile(t *testing.T) {
 	}
 	var stdout, stderr bytes.Buffer
 	code := run(t.Context(), nil, noEnv, home, &stdout, &stderr)
-	if code != 2 || !strings.Contains(stderr.String(), "key file ~/.config/stack/jev/key is blank") {
+	if code != 2 ||
+		!strings.Contains(stderr.String(), "key file ~/.config/stack/jev/key is blank") {
 		t.Fatalf("exit %d, stderr %q", code, stderr.String())
 	}
 }
