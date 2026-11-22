@@ -196,6 +196,10 @@ func TestRawMergePowerShellNoNewAllow(t *testing.T) {
 		{`gh pr merge 7 "--help".foo`, true, ""},
 		{"gh pr merge 7 --squash '--disable-auto'.foo", true, ""},
 		{"gh pr merge 7 'a','b'--help", true, "both engines pass the array, then --help"},
+		{
+			"git -'-%' x; gh pr merge 7", true,
+			"both engines read -'-%' as the stop-parsing token: the rest is git's argv",
+		},
 		{"gh pr merge 7 '--%' --help", true, "both engines drop '--%' and pass --help"},
 		{"gh pr merge 7 '--%' x --help", true, "both engines drop '--%' and pass x, --help"},
 		{"gh pr merge 7 'a'--help", true, "both engines pass a, --help"},

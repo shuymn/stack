@@ -401,10 +401,12 @@ var parseTests = []struct {
 		calls{{"Write-Output", "a", "--%", "$x b; Write-Output a `--% $x b"}},
 	},
 	{
-		"double-quoted and here-string stop-parsing values",
+		// A token that starts unquoted is a generic token: `-'-%'` is the stop-parsing token, so the
+		// rest of the line is its tail (5.1 and 7.7, argv stub).
+		"double-quoted and here-string values are dropped, a generic token stops parsing",
 		"& gh.exe \"--%\" pr; git @'\n--%\n'@ a; git -'-%' b; git a '--%'",
 		Unix,
-		calls{{"gh.exe", "pr"}, {"git", "a"}, {"git", "b"}, {"git", "a"}},
+		calls{{"gh.exe", "pr"}, {"git", "a"}, {"git", "b;", "git", "a", "'--%'"}},
 	},
 	{
 		"quoted stop-parsing value keeps later calls and variables",
@@ -658,7 +660,7 @@ func TestQuotedMark(t *testing.T) {
 		{Word{Raw: "'--%'", Text: "--%", Static: true, Quote: Single}, true},
 		{Word{Raw: `"--%"`, Text: "--%", Static: true, Quote: Double}, true},
 		{Word{Raw: "\"--`%\"", Text: "--%", Static: true, Quote: Double}, true},
-		{Word{Raw: "-'-%'", Text: "--%", Static: true, Quote: Bare}, true},
+		{Word{Raw: "-'-%'", Text: "--%", Static: true, Quote: Bare}, false},
 		{Word{Raw: "'--%x'", Text: "--%x", Static: true, Quote: Single}, false},
 		{Word{Raw: `"--$(x)"`, Quote: Double}, false},
 	} {

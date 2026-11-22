@@ -780,26 +780,7 @@ func (p *parser) args(kind Kind) []item {
 		if n := p.verbatimMarkAt(); n > 0 {
 			mark := Word{Raw: p.src[p.pos : p.pos+n], Text: verbatimMark, Static: true}
 			p.pos += n
-			start := p.pos
-			tail := p.verbatim()
-			if kind == Cmdlet {
-				// A cmdlet keeps the token as a value and gets the rest as one literal argument
-				// (5.1 and 7.7: `Write-Output a --% $x b` writes `a`, `--%`, `$x b`).
-				items = append(items, item{words: []Word{mark}})
-				if t := strings.TrimSpace(p.src[start:p.pos]); t != "" {
-					items = append(
-						items,
-						item{words: []Word{{Raw: t, Text: t, Static: true, Verbatim: true}}},
-					)
-				}
-				return items
-			}
-			for _, w := range tail {
-				// After a quoted `--%`, a later stop-parsing token is one more ambiguity.
-				w.ambiguous = j.on
-				items = append(items, item{words: []Word{w}})
-			}
-			return items
+			return append(items, p.stopParsing(kind, mark, j.on)...)
 		}
 		if kind == Cmdlet {
 			if it, ok := p.paramItem(); ok {
@@ -809,6 +790,12 @@ func (p *parser) args(kind Kind) []item {
 		}
 		it := p.valueItem(kind)
 		switch {
+		case len(it.words) == 1 && genericMark(it.words[0]):
+			// The tokenizer reads a token that does not start with a quote as one generic token,
+			// so `-'-%'` and `--'%'` are the stop-parsing token too (5.1 and 7.7, argv stub).
+			mark := it.words[0]
+			mark.Text = verbatimMark
+			return append(items, p.stopParsing(kind, mark, j.on)...)
 		case kind != Native:
 		case quotedMark(it.words[0]):
 			// Dropped from argv; the later arguments are joined verbatim. A second one is dropped
@@ -825,6 +812,38 @@ func (p *parser) args(kind Kind) []item {
 	}
 }
 
+// stopParsing lexes the tail after a stop-parsing token, which ends the call's arguments. After a
+// quoted `--%` (joined), the tail is one more ambiguity.
+func (p *parser) stopParsing(kind Kind, mark Word, joined bool) []item {
+	start := p.pos
+	tail := p.verbatim()
+	if kind == Cmdlet {
+		// A cmdlet keeps the token as a value and gets the rest as one literal argument
+		// (5.1 and 7.7: `Write-Output a --% $x b` writes `a`, `--%`, `$x b`).
+		items := []item{{words: []Word{mark}}}
+		if t := strings.TrimSpace(p.src[start:p.pos]); t != "" {
+			items = append(
+				items,
+				item{words: []Word{{Raw: t, Text: t, Static: true, Verbatim: true}}},
+			)
+		}
+		return items
+	}
+	items := make([]item, len(tail))
+	for i, w := range tail {
+		w.ambiguous = joined
+		items[i] = item{words: []Word{w}}
+	}
+	return items
+}
+
+// genericMark reports a word that starts unquoted and whose decoded value is `--%`, spelt with
+// quotes or escapes inside (`-'-%'`, `--"%"`): the tokenizer's generic token, and so the
+// stop-parsing token. One that starts with a quote is a string, which quotedMark covers.
+func genericMark(w Word) bool {
+	return w.Static && w.Known == NotKnown && !w.Block && w.Quote == Bare && w.Text == verbatimMark
+}
+
 // verbatimMarkAt returns the length of the stop-parsing token at pos, `--%` or the backtick-escaped
 // “ `--% “, followed by a boundary; 0 when there is none.
 func (p *parser) verbatimMarkAt() int {
@@ -837,11 +856,11 @@ func (p *parser) verbatimMarkAt() int {
 }
 
 // quotedMark reports a native argument whose decoded value is `--%` written in another form than
-// the stop-parsing token (`'--%'`, `"--%"`, "\"--`%\"", a here-string, `-'-%'`): pwsh 5.1 and 7
+// the stop-parsing token, starting with a quote (`'--%'`, `"--%"`, "\"--`%\"", a here-string): pwsh 5.1 and 7
 // drop it from argv without stopping parsing, and pass every later argument joined into the command
 // line as written. A quote-started token ends at its quote, so `'--'%` is two words.
 func quotedMark(w Word) bool {
-	return w.Static && w.Known == NotKnown && !w.Block && w.Text == verbatimMark
+	return w.Static && w.Known == NotKnown && !w.Block && w.Quote != Bare && w.Text == verbatimMark
 }
 
 // paramToken reports a bare word PowerShell lexes as a parameter token: a dash, then a letter, `_`
