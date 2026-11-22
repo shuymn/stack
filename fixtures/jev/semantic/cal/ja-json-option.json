@@ -1,16 +1,41 @@
 {
-  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
   "request": {
     "body": "-json を付けると結果を JSON で出力します。",
     "branch": "topic/ja-json-option",
     "jev": {
-      "records": {}
+      "records": {
+        "sha256:77cf86dada3984d6581d3d2adbd64c3e483adc5d605e5d437d26b243c66e3de9": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.03
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.09
+              }
+            },
+            "usage": {
+              "input_tokens": 943,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
     },
     "prompt": "",
     "range": "jev-mb..jev-head",
     "repo": "",
     "stage": "outbound",
     "title": "feat: -json オプションを追加"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": []
   },
   "repo": {
     "base": {
@@ -35,5 +60,19 @@
     "split": "heldout",
     "why": "adds -json, which prints the result as JSON, as described",
     "lang": "ja"
+  },
+  "samples": {
+    "sha256:77cf86dada3984d6581d3d2adbd64c3e483adc5d605e5d437d26b243c66e3de9": {
+      "meta_duty_regression": [
+        0.03,
+        0.03,
+        0.03
+      ],
+      "unsupported_claim": [
+        0.09,
+        0.08,
+        0.08
+      ]
+    }
   }
 }

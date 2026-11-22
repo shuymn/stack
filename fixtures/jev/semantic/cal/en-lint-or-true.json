@@ -1,16 +1,41 @@
 {
-  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
   "request": {
     "body": "Lint output is noisy.",
     "branch": "topic/en-lint-or-true",
     "jev": {
-      "records": {}
+      "records": {
+        "sha256:c846cecb4ce98b9f89a1ca187ce676e49e938c5ba954bc933e1823003b99b428": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.31
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.16
+              }
+            },
+            "usage": {
+              "input_tokens": 808,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
     },
     "prompt": "",
     "range": "jev-mb..jev-head",
     "repo": "",
     "stage": "outbound",
     "title": "build: quieter lint"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": []
   },
   "repo": {
     "base": {
@@ -39,5 +64,19 @@
       "meta_duty_regression",
       "unsupported_claim"
     ]
+  },
+  "samples": {
+    "sha256:c846cecb4ce98b9f89a1ca187ce676e49e938c5ba954bc933e1823003b99b428": {
+      "meta_duty_regression": [
+        0.31,
+        0.25,
+        0.31
+      ],
+      "unsupported_claim": [
+        0.16,
+        0.19,
+        0.19
+      ]
+    }
   }
 }

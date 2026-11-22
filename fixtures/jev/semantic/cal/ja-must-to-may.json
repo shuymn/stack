@@ -1,16 +1,48 @@
 {
-  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
   "request": {
     "body": "表現を整えました。",
     "branch": "topic/ja-must-to-may",
     "jev": {
-      "records": {}
+      "records": {
+        "sha256:7ba13ab0a93ccbcada1b372f1f41748ec0a1cb4a5ec04e18c65bc942841d1435": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.92
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.27
+              }
+            },
+            "usage": {
+              "input_tokens": 825,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
     },
     "prompt": "",
     "range": "jev-mb..jev-head",
     "repo": "",
     "stage": "outbound",
     "title": "docs: 文言を整理"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-meta-duty",
+        "where": "AGENTS.md",
+        "detail": "p=0.92 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: AGENTS.md: the diff may remove or weaken a test, check or rule without the PR text saying why (p=0.92 ≥ 0.5 (jev-1.14.0))"
   },
   "repo": {
     "base": {
@@ -39,5 +71,19 @@
       "meta_duty_regression",
       "unsupported_claim"
     ]
+  },
+  "samples": {
+    "sha256:7ba13ab0a93ccbcada1b372f1f41748ec0a1cb4a5ec04e18c65bc942841d1435": {
+      "meta_duty_regression": [
+        0.92,
+        0.94,
+        0.92
+      ],
+      "unsupported_claim": [
+        0.27,
+        0.3,
+        0.31
+      ]
+    }
   }
 }

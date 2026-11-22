@@ -1,16 +1,53 @@
 {
-  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
   "request": {
     "body": "Adds tests for Sum.",
     "branch": "topic/en-deleted-assertion-claims-tests",
     "jev": {
-      "records": {}
+      "records": {
+        "sha256:5705e83d1d37b0c7d985dbc000df0c8fdce655e553cbbf1c0d9c100f7ef2f8ef": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.93
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.89
+              }
+            },
+            "usage": {
+              "input_tokens": 853,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
     },
     "prompt": "",
     "range": "jev-mb..jev-head",
     "repo": "",
     "stage": "outbound",
     "title": "refactor: simplify tests"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-meta-duty",
+        "where": "sum/sum_test.go",
+        "detail": "p=0.93 ≥ 0.5 (jev-1.14.0)"
+      },
+      {
+        "kind": "jev-unsupported-claim",
+        "where": "message",
+        "detail": "p=0.89 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: sum/sum_test.go: the diff may remove or weaken a test, check or rule without the PR text saying why (p=0.93 ≥ 0.5 (jev-1.14.0))\njev-semantic: the PR text claims something the diff does not show (p=0.89 ≥ 0.5 (jev-1.14.0))"
   },
   "repo": {
     "base": {
@@ -37,5 +74,19 @@
     "why": "deletes the empty-input assertion and claims to add tests",
     "lang": "en",
     "group": "sum"
+  },
+  "samples": {
+    "sha256:5705e83d1d37b0c7d985dbc000df0c8fdce655e553cbbf1c0d9c100f7ef2f8ef": {
+      "meta_duty_regression": [
+        0.93,
+        0.93,
+        0.94
+      ],
+      "unsupported_claim": [
+        0.89,
+        0.84,
+        0.86
+      ]
+    }
   }
 }

@@ -1,16 +1,48 @@
 {
-  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
   "request": {
     "body": "README も更新しました。",
     "branch": "topic/ja-readme-claim",
     "jev": {
-      "records": {}
+      "records": {
+        "sha256:33804994e3a47b2eec8bafc919869add7cde4a68edbf85cfeeda97dcbff78a8b": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.02
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.94
+              }
+            },
+            "usage": {
+              "input_tokens": 892,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
     },
     "prompt": "",
     "range": "jev-mb..jev-head",
     "repo": "",
     "stage": "outbound",
     "title": "feat: 設定ファイルの検証を追加"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-unsupported-claim",
+        "where": "message",
+        "detail": "p=0.94 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: the PR text claims something the diff does not show (p=0.94 ≥ 0.5 (jev-1.14.0))"
   },
   "repo": {
     "base": {
@@ -37,5 +69,19 @@
     "why": "claims a README update the diff does not contain",
     "lang": "ja",
     "group": "config"
+  },
+  "samples": {
+    "sha256:33804994e3a47b2eec8bafc919869add7cde4a68edbf85cfeeda97dcbff78a8b": {
+      "meta_duty_regression": [
+        0.02,
+        0.02,
+        0.02
+      ],
+      "unsupported_claim": [
+        0.94,
+        0.94,
+        0.94
+      ]
+    }
   }
 }

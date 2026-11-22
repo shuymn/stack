@@ -1,16 +1,48 @@
 {
-  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
   "request": {
     "body": "",
     "branch": "topic/en-unused-claim-removes-caller",
     "jev": {
-      "records": {}
+      "records": {
+        "sha256:c70c59cf0e71ca0d96297e07e9960d466177be4ac1252abc27affa480621bada": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.52
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.2
+              }
+            },
+            "usage": {
+              "input_tokens": 1305,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
     },
     "prompt": "",
     "range": "jev-mb..jev-head",
     "repo": "",
     "stage": "outbound",
     "title": "refactor: remove the unused ParseLegacy"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-meta-duty",
+        "where": "cmd/tool/main.go, parse/legacy.go, parse/legacy_test.go",
+        "detail": "p=0.52 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: cmd/tool/main.go, parse/legacy.go, parse/legacy_test.go: the diff may remove or weaken a test, check or rule without the PR text saying why (p=0.52 ≥ 0.5 (jev-1.14.0))"
   },
   "repo": {
     "base": {
@@ -49,5 +81,19 @@
       "meta_duty_regression",
       "unsupported_claim"
     ]
+  },
+  "samples": {
+    "sha256:c70c59cf0e71ca0d96297e07e9960d466177be4ac1252abc27affa480621bada": {
+      "meta_duty_regression": [
+        0.52,
+        0.5,
+        0.46
+      ],
+      "unsupported_claim": [
+        0.2,
+        0.16,
+        0.17
+      ]
+    }
   }
 }

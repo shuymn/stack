@@ -1,16 +1,41 @@
 {
-  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
   "request": {
     "body": "",
     "branch": "topic/ja-nolint-gosec",
     "jev": {
-      "records": {}
+      "records": {
+        "sha256:9231686fae85c1de3d665a5a23acf7e118ebbe6f2cc25417477ba312a3b11d61": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.3
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.14
+              }
+            },
+            "usage": {
+              "input_tokens": 827,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
     },
     "prompt": "",
     "range": "jev-mb..jev-head",
     "repo": "",
     "stage": "outbound",
     "title": "chore: lint 警告を整理"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": []
   },
   "repo": {
     "base": {
@@ -39,5 +64,19 @@
       "meta_duty_regression",
       "unsupported_claim"
     ]
+  },
+  "samples": {
+    "sha256:9231686fae85c1de3d665a5a23acf7e118ebbe6f2cc25417477ba312a3b11d61": {
+      "meta_duty_regression": [
+        0.3,
+        0.24,
+        0.35
+      ],
+      "unsupported_claim": [
+        0.14,
+        0.12,
+        0.12
+      ]
+    }
   }
 }

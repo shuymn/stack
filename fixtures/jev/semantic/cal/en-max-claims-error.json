@@ -1,16 +1,48 @@
 {
-  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
   "request": {
     "body": "Max returns an error for empty input; TestMaxEmpty covers it.",
     "branch": "topic/en-max-claims-error",
     "jev": {
-      "records": {}
+      "records": {
+        "sha256:95fb0b2536ec99132b8f5c88937ec3a25ff655f5a68a0c4a8ad38cd35edb0518": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.04
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.97
+              }
+            },
+            "usage": {
+              "input_tokens": 912,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
     },
     "prompt": "",
     "range": "jev-mb..jev-head",
     "repo": "",
     "stage": "outbound",
     "title": "feat: add Max"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-unsupported-claim",
+        "where": "message",
+        "detail": "p=0.97 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: the PR text claims something the diff does not show (p=0.97 ≥ 0.5 (jev-1.14.0))"
   },
   "repo": {
     "base": {
@@ -36,5 +68,19 @@
     "split": "heldout",
     "why": "Max returns 0 for empty input, has no error and no TestMaxEmpty",
     "lang": "en"
+  },
+  "samples": {
+    "sha256:95fb0b2536ec99132b8f5c88937ec3a25ff655f5a68a0c4a8ad38cd35edb0518": {
+      "meta_duty_regression": [
+        0.04,
+        0.04,
+        0.04
+      ],
+      "unsupported_claim": [
+        0.97,
+        0.97,
+        0.97
+      ]
+    }
   }
 }

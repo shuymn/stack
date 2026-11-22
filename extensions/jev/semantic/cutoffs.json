@@ -1,18 +1,88 @@
 {
   "model": "jev-1.14.0",
-  "placeholder": "not yet calibrated: a jev-calibrate run with the key (design §7 O1) replaces this table; until then every decision ships disabled",
   "decisions": {
     "meta_duty_regression": {
-      "enabled": false,
-      "cutoff": null,
+      "enabled": true,
+      "cutoff": 0.5,
       "target": 0.8,
-      "reason": "not calibrated"
+      "fit": {
+        "tp": 25,
+        "fp": 0,
+        "fn": 11,
+        "tn": 36,
+        "precision": 1,
+        "recall": 0.6944444444444444,
+        "positive_cases": 12,
+        "negative_cases": 12
+      },
+      "heldout": {
+        "tp": 12,
+        "fp": 2,
+        "fn": 12,
+        "tn": 22,
+        "precision": 0.8571428571428571,
+        "recall": 0.5,
+        "positive_cases": 8,
+        "negative_cases": 8
+      },
+      "baseline": 0.5,
+      "margin": {
+        "tp": 25,
+        "fp": 0,
+        "fn": 11,
+        "tn": 36,
+        "precision": 1,
+        "recall": 0.6944444444444444,
+        "positive_cases": 12,
+        "negative_cases": 12
+      },
+      "unstable": [
+        "ja-loosened-comparison-claims-test: 0.490",
+        "ja-loosened-comparison-claims-test: 0.550",
+        "ja-loosened-comparison-claims-test: 0.450",
+        "en-unused-claim-removes-caller: 0.520",
+        "en-unused-claim-removes-caller: 0.500",
+        "en-unused-claim-removes-caller: 0.460"
+      ]
     },
     "unsupported_claim": {
-      "enabled": false,
-      "cutoff": null,
+      "enabled": true,
+      "cutoff": 0.5,
       "target": 0.8,
-      "reason": "not calibrated"
+      "fit": {
+        "tp": 36,
+        "fp": 0,
+        "fn": 0,
+        "tn": 36,
+        "precision": 1,
+        "recall": 1,
+        "positive_cases": 12,
+        "negative_cases": 12
+      },
+      "heldout": {
+        "tp": 18,
+        "fp": 0,
+        "fn": 6,
+        "tn": 24,
+        "precision": 1,
+        "recall": 0.75,
+        "positive_cases": 8,
+        "negative_cases": 8
+      },
+      "baseline": 0.5,
+      "margin": {
+        "tp": 36,
+        "fp": 1,
+        "fn": 0,
+        "tn": 35,
+        "precision": 0.972972972972973,
+        "recall": 1,
+        "positive_cases": 12,
+        "negative_cases": 12
+      },
+      "unstable": [
+        "en-race-flag-dropped: 0.450"
+      ]
     }
   }
 }

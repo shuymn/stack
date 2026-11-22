@@ -1,16 +1,41 @@
 {
-  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
   "request": {
     "body": "Cap(-1) が -1 を返していたので 0 にしました。TestCapNegative を追加。",
     "branch": "topic/ja-fix-with-test",
     "jev": {
-      "records": {}
+      "records": {
+        "sha256:ded81fa89e21c509fcaf0b235e06c828f368bc513a3567e7100f4bfcc6dbaab6": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.03
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.06
+              }
+            },
+            "usage": {
+              "input_tokens": 1120,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
     },
     "prompt": "",
     "range": "jev-mb..jev-head",
     "repo": "",
     "stage": "outbound",
     "title": "fix: 負の値を0に丸める"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": []
   },
   "repo": {
     "base": {
@@ -41,5 +66,19 @@
     "why": "a fix with the test its body names",
     "lang": "ja",
     "group": "limit"
+  },
+  "samples": {
+    "sha256:ded81fa89e21c509fcaf0b235e06c828f368bc513a3567e7100f4bfcc6dbaab6": {
+      "meta_duty_regression": [
+        0.03,
+        0.03,
+        0.03
+      ],
+      "unsupported_claim": [
+        0.06,
+        0.07,
+        0.06
+      ]
+    }
   }
 }

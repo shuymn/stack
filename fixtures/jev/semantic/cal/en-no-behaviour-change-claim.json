@@ -1,16 +1,48 @@
 {
-  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
   "request": {
     "body": "No behaviour change.",
     "branch": "topic/en-no-behaviour-change-claim",
     "jev": {
-      "records": {}
+      "records": {
+        "sha256:96159c8759b4ee02bf4d1d79068ec6ba24ad1851b372c44742075096d760a103": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.14
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.98
+              }
+            },
+            "usage": {
+              "input_tokens": 869,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
     },
     "prompt": "",
     "range": "jev-mb..jev-head",
     "repo": "",
     "stage": "outbound",
     "title": "refactor: rename lookup to Get"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-unsupported-claim",
+        "where": "message",
+        "detail": "p=0.98 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: the PR text claims something the diff does not show (p=0.98 ≥ 0.5 (jev-1.14.0))"
   },
   "repo": {
     "base": {
@@ -38,5 +70,19 @@
     "hard": [
       "unsupported_claim"
     ]
+  },
+  "samples": {
+    "sha256:96159c8759b4ee02bf4d1d79068ec6ba24ad1851b372c44742075096d760a103": {
+      "meta_duty_regression": [
+        0.14,
+        0.11,
+        0.14
+      ],
+      "unsupported_claim": [
+        0.98,
+        0.98,
+        0.98
+      ]
+    }
   }
 }

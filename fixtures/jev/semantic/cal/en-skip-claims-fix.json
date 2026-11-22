@@ -1,16 +1,53 @@
 {
-  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
   "request": {
     "body": "Fixes #12 by checking for a nil config.",
     "branch": "topic/en-skip-claims-fix",
     "jev": {
-      "records": {}
+      "records": {
+        "sha256:cc048e1da2e4aa54a91e58e51b6949818f28383815a25f501bc4fadd43cb9569": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.78
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.89
+              }
+            },
+            "usage": {
+              "input_tokens": 843,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
     },
     "prompt": "",
     "range": "jev-mb..jev-head",
     "repo": "",
     "stage": "outbound",
     "title": "fix: handle nil config"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-meta-duty",
+        "where": "config/config_test.go",
+        "detail": "p=0.78 ≥ 0.5 (jev-1.14.0)"
+      },
+      {
+        "kind": "jev-unsupported-claim",
+        "where": "message",
+        "detail": "p=0.89 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: config/config_test.go: the diff may remove or weaken a test, check or rule without the PR text saying why (p=0.78 ≥ 0.5 (jev-1.14.0))\njev-semantic: the PR text claims something the diff does not show (p=0.89 ≥ 0.5 (jev-1.14.0))"
   },
   "repo": {
     "base": {
@@ -37,5 +74,19 @@
     "why": "skips the nil test while claiming the nil case is fixed in code that does not change",
     "lang": "en",
     "group": "config"
+  },
+  "samples": {
+    "sha256:cc048e1da2e4aa54a91e58e51b6949818f28383815a25f501bc4fadd43cb9569": {
+      "meta_duty_regression": [
+        0.78,
+        0.79,
+        0.82
+      ],
+      "unsupported_claim": [
+        0.89,
+        0.92,
+        0.9
+      ]
+    }
   }
 }

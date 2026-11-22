@@ -1,16 +1,48 @@
 {
-  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
   "request": {
     "body": "Linux・macOS・Windows の全環境で動作確認済みです。",
     "branch": "topic/ja-table-test-verified-everywhere",
     "jev": {
-      "records": {}
+      "records": {
+        "sha256:456327d3878f7563e80cb05bf7327e7ea394fdc8eb0fb0c2dce50f904954c4e0": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.03
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.96
+              }
+            },
+            "usage": {
+              "input_tokens": 1066,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
     },
     "prompt": "",
     "range": "jev-mb..jev-head",
     "repo": "",
     "stage": "outbound",
     "title": "refactor: テストをテーブル駆動に変更"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-unsupported-claim",
+        "where": "message",
+        "detail": "p=0.96 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: the PR text claims something the diff does not show (p=0.96 ≥ 0.5 (jev-1.14.0))"
   },
   "repo": {
     "base": {
@@ -40,5 +72,19 @@
       "meta_duty_regression",
       "unsupported_claim"
     ]
+  },
+  "samples": {
+    "sha256:456327d3878f7563e80cb05bf7327e7ea394fdc8eb0fb0c2dce50f904954c4e0": {
+      "meta_duty_regression": [
+        0.03,
+        0.03,
+        0.03
+      ],
+      "unsupported_claim": [
+        0.96,
+        0.96,
+        0.96
+      ]
+    }
   }
 }

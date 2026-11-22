@@ -1,16 +1,41 @@
 {
-  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
   "request": {
     "body": "Drop the duplicate empty-input assertion; TestSumEmpty covers it.",
     "branch": "topic/en-duplicate-assertion-justified",
     "jev": {
-      "records": {}
+      "records": {
+        "sha256:92ee586647603cdd31480cfa0852e3c67432309448f2ca75b8b85e00bebb8762": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.03
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.09
+              }
+            },
+            "usage": {
+              "input_tokens": 881,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
     },
     "prompt": "",
     "range": "jev-mb..jev-head",
     "repo": "",
     "stage": "outbound",
     "title": "test: drop a duplicate assertion"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": []
   },
   "repo": {
     "base": {
@@ -41,5 +66,19 @@
       "unsupported_claim"
     ],
     "group": "sum"
+  },
+  "samples": {
+    "sha256:92ee586647603cdd31480cfa0852e3c67432309448f2ca75b8b85e00bebb8762": {
+      "meta_duty_regression": [
+        0.03,
+        0.03,
+        0.03
+      ],
+      "unsupported_claim": [
+        0.09,
+        0.13,
+        0.12
+      ]
+    }
   }
 }

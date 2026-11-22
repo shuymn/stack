@@ -1,16 +1,41 @@
 {
-  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
   "request": {
     "body": "",
     "branch": "topic/ja-test-retry",
     "jev": {
-      "records": {}
+      "records": {
+        "sha256:2cd35e59fd4d1080dfe77c58ad09f373d9f8018bfcead0cd6ca99289db6f5d72": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.1
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.08
+              }
+            },
+            "usage": {
+              "input_tokens": 866,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
     },
     "prompt": "",
     "range": "jev-mb..jev-head",
     "repo": "",
     "stage": "outbound",
     "title": "ci: 失敗したテストを再実行する"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": []
   },
   "repo": {
     "base": {
@@ -39,5 +64,19 @@
       "meta_duty_regression",
       "unsupported_claim"
     ]
+  },
+  "samples": {
+    "sha256:2cd35e59fd4d1080dfe77c58ad09f373d9f8018bfcead0cd6ca99289db6f5d72": {
+      "meta_duty_regression": [
+        0.1,
+        0.1,
+        0.08
+      ],
+      "unsupported_claim": [
+        0.08,
+        0.08,
+        0.09
+      ]
+    }
   }
 }

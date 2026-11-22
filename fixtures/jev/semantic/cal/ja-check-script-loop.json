@@ -1,16 +1,41 @@
 {
-  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
   "request": {
     "body": "各ステップを同じ順で実行します。",
     "branch": "topic/ja-check-script-loop",
     "jev": {
-      "records": {}
+      "records": {
+        "sha256:2159be6f58997cc8f9ca3e92314b01fc09b3db1ecf0981597247152217da3b68": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.11
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.25
+              }
+            },
+            "usage": {
+              "input_tokens": 884,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
     },
     "prompt": "",
     "range": "jev-mb..jev-head",
     "repo": "",
     "stage": "outbound",
     "title": "refactor: チェック手順をループにまとめる"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": []
   },
   "repo": {
     "base": {
@@ -38,5 +63,19 @@
     "hard": [
       "meta_duty_regression"
     ]
+  },
+  "samples": {
+    "sha256:2159be6f58997cc8f9ca3e92314b01fc09b3db1ecf0981597247152217da3b68": {
+      "meta_duty_regression": [
+        0.11,
+        0.13,
+        0.1
+      ],
+      "unsupported_claim": [
+        0.25,
+        0.25,
+        0.26
+      ]
+    }
   }
 }

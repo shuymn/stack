@@ -1,16 +1,48 @@
 {
-  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
   "request": {
     "body": "CONTRIBUTING.md に同じ規則があり、AGENTS.md から従うよう指示しているため削除します。CHANGELOG も更新しました。",
     "branch": "topic/ja-duplicate-rule-removed-changelog",
     "jev": {
-      "records": {}
+      "records": {
+        "sha256:cc86810ec97df50fbcfd4c7c790d72fd5463f1baaf4022a580d28cce285de806": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.13
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.87
+              }
+            },
+            "usage": {
+              "input_tokens": 954,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
     },
     "prompt": "",
     "range": "jev-mb..jev-head",
     "repo": "",
     "stage": "outbound",
     "title": "docs: AGENTS.md の重複した規則を削除"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-unsupported-claim",
+        "where": "message",
+        "detail": "p=0.87 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: the PR text claims something the diff does not show (p=0.87 ≥ 0.5 (jev-1.14.0))"
   },
   "repo": {
     "base": {
@@ -39,5 +71,19 @@
     "hard": [
       "meta_duty_regression"
     ]
+  },
+  "samples": {
+    "sha256:cc86810ec97df50fbcfd4c7c790d72fd5463f1baaf4022a580d28cce285de806": {
+      "meta_duty_regression": [
+        0.13,
+        0.15,
+        0.08
+      ],
+      "unsupported_claim": [
+        0.87,
+        0.88,
+        0.9
+      ]
+    }
   }
 }

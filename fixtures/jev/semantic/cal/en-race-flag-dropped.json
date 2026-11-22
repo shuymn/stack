@@ -1,16 +1,48 @@
 {
-  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
   "request": {
     "body": "",
     "branch": "topic/en-race-flag-dropped",
     "jev": {
-      "records": {}
+      "records": {
+        "sha256:7648126a001ffecd2ce49aac6a5fe34f0e1d0e7e22ee6f3abba7293ec2be4ab3": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.75
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.43
+              }
+            },
+            "usage": {
+              "input_tokens": 787,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
     },
     "prompt": "",
     "range": "jev-mb..jev-head",
     "repo": "",
     "stage": "outbound",
     "title": "chore: speed up tests"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-meta-duty",
+        "where": "scripts/test",
+        "detail": "p=0.75 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: scripts/test: the diff may remove or weaken a test, check or rule without the PR text saying why (p=0.75 ≥ 0.5 (jev-1.14.0))"
   },
   "repo": {
     "base": {
@@ -40,5 +72,19 @@
       "unsupported_claim"
     ],
     "group": "scripts-test"
+  },
+  "samples": {
+    "sha256:7648126a001ffecd2ce49aac6a5fe34f0e1d0e7e22ee6f3abba7293ec2be4ab3": {
+      "meta_duty_regression": [
+        0.75,
+        0.74,
+        0.77
+      ],
+      "unsupported_claim": [
+        0.43,
+        0.41,
+        0.45
+      ]
+    }
   }
 }

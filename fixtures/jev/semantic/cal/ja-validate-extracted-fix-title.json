@@ -1,16 +1,41 @@
 {
-  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
   "request": {
     "body": "",
     "branch": "topic/ja-validate-extracted-fix-title",
     "jev": {
-      "records": {}
+      "records": {
+        "sha256:55ca536c849980e3b5bb7c61c1688a4a96b36a475c99e2a7f0c2ddfa1e6e679a": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.05
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.11
+              }
+            },
+            "usage": {
+              "input_tokens": 937,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
     },
     "prompt": "",
     "range": "jev-mb..jev-head",
     "repo": "",
     "stage": "outbound",
     "title": "fix: 空の名前を拒否する"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": []
   },
   "repo": {
     "base": {
@@ -39,5 +64,19 @@
       "meta_duty_regression",
       "unsupported_claim"
     ]
+  },
+  "samples": {
+    "sha256:55ca536c849980e3b5bb7c61c1688a4a96b36a475c99e2a7f0c2ddfa1e6e679a": {
+      "meta_duty_regression": [
+        0.05,
+        0.04,
+        0.04
+      ],
+      "unsupported_claim": [
+        0.11,
+        0.11,
+        0.13
+      ]
+    }
   }
 }

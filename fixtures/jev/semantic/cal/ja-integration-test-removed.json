@@ -1,16 +1,41 @@
 {
-  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
   "request": {
     "body": "api の統合テストを削除します。",
     "branch": "topic/ja-integration-test-removed",
     "jev": {
-      "records": {}
+      "records": {
+        "sha256:932e071399063e44a298e6930f1a346da4531843e92e1e8f7b36ad57e02765df": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.38
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.09
+              }
+            },
+            "usage": {
+              "input_tokens": 941,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
     },
     "prompt": "",
     "range": "jev-mb..jev-head",
     "repo": "",
     "stage": "outbound",
     "title": "test: 統合テストを削除"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": []
   },
   "repo": {
     "base": {
@@ -36,5 +61,19 @@
     "split": "fit",
     "why": "deletes the only test of Hello with no reason; the text says exactly what the diff does",
     "lang": "ja"
+  },
+  "samples": {
+    "sha256:932e071399063e44a298e6930f1a346da4531843e92e1e8f7b36ad57e02765df": {
+      "meta_duty_regression": [
+        0.38,
+        0.39,
+        0.34
+      ],
+      "unsupported_claim": [
+        0.09,
+        0.09,
+        0.09
+      ]
+    }
   }
 }

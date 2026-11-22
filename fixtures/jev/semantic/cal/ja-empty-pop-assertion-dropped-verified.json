@@ -1,16 +1,53 @@
 {
-  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
   "request": {
     "body": "ローカルと CI の両方で全テストの通過を確認済みで、カバレッジも維持しています。",
     "branch": "topic/ja-empty-pop-assertion-dropped-verified",
     "jev": {
-      "records": {}
+      "records": {
+        "sha256:60b748d1659ec79084ceddaf247d3fee72587b14e72115130f8c9ed429a5647d": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.84
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.91
+              }
+            },
+            "usage": {
+              "input_tokens": 961,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
     },
     "prompt": "",
     "range": "jev-mb..jev-head",
     "repo": "",
     "stage": "outbound",
     "title": "refactor: テストを簡潔にする"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-meta-duty",
+        "where": "stack/stack_test.go",
+        "detail": "p=0.84 ≥ 0.5 (jev-1.14.0)"
+      },
+      {
+        "kind": "jev-unsupported-claim",
+        "where": "message",
+        "detail": "p=0.91 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: stack/stack_test.go: the diff may remove or weaken a test, check or rule without the PR text saying why (p=0.84 ≥ 0.5 (jev-1.14.0))\njev-semantic: the PR text claims something the diff does not show (p=0.91 ≥ 0.5 (jev-1.14.0))"
   },
   "repo": {
     "base": {
@@ -39,5 +76,19 @@
     "hard": [
       "unsupported_claim"
     ]
+  },
+  "samples": {
+    "sha256:60b748d1659ec79084ceddaf247d3fee72587b14e72115130f8c9ed429a5647d": {
+      "meta_duty_regression": [
+        0.84,
+        0.86,
+        0.83
+      ],
+      "unsupported_claim": [
+        0.91,
+        0.93,
+        0.91
+      ]
+    }
   }
 }
