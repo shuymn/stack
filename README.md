@@ -18,53 +18,6 @@ A minimal, extensible Go CLI (`stack`) for personal AI coding agent orchestratio
 Install `stack` and the extensions from this checkout into one absolute directory on `PATH` (for scheduled runs,
 also on the job's `PATH`), so core finds each extension as `stack-<name>`.
 
-### Upgrading from v10
-
-The v11 `stack` hook denies only raw merges, reads no `[safety]` table (a leftover one in `config.toml` only gets an
-unknown-key warning) and checks merge messages only when `[merge].message_checks` lists a check. Replacing `stack`
-first would drop the secrets, `gh` publish, catastrophic `rm` and Pencil Generate denies and the merge message check
-until the rest is in place. Follow these steps in order, and replace `stack` last:
-
-1. Write `~/.config/stack/safety.toml` from the `[safety]` table of `~/.config/stack/config.toml`, if it has one:
-   the same keys (`secrets`, `private_terms`, `deny_pencil_generate`) at the top level, without the `[safety]`
-   header (a `[safety]` table in `safety.toml` is an unknown key, and the defaults apply). For example:
-
-   ```toml
-   private_terms = "~/.config/stack/private-terms"
-   deny_pencil_generate = true
-   ```
-
-   Compare custom `secrets` paths, a custom `private_terms` file and an explicit `deny_pencil_generate = false`; a
-   key left out takes the v10 default. Copy the values and keep the `[safety]` table in `config.toml`: v10 still
-   reads it until step 6, and again after a rollback to v10.
-2. Install `stack-public` and check that `command -v stack-public` finds it both in an interactive shell and on the
-   scheduled job's `PATH`:
-
-   ```sh
-   GOBIN="$HOME/.local/bin" go install ./extensions/public/cmd/stack-public
-   ```
-
-3. Install `stack-guard` and wire it (below), then check in a live session that `stack-guard` itself denies each
-   moved rule: its reasons start with `stack-guard (<rule>): `, the core hook's with `stack guard (`.
-
-   ```sh
-   GOBIN="$HOME/.local/bin" go install ./extensions/guard/cmd/stack-guard
-   ```
-
-4. To keep v10's check of `stack pr merge --subject/--body` for local paths and private terms, add
-   `message_checks = ["public"]` under `[merge]` in `config.toml`.
-5. Before replacing `stack`, check v11 with the applied settings: put a v11 `stack` built from this checkout first
-   on a session's `PATH` (not installed) and confirm that the moved rules are denied only with `stack-guard (`
-   reasons (including each custom `secrets` path; Pencil Generate is allowed when `deny_pencil_generate = false`),
-   a raw `gh pr merge` with `stack guard (raw-merge): `, and that `stack pr merge --body` with a local path is
-   refused before any `gh` call with `outbound blocked: public` naming that path (a refusal for an unreadable
-   `safety.toml` or terms file means the copied values are not in effect).
-6. Only then replace `stack` and the other extensions (the command below), and install or reinstall
-   `stack-improve`; without `stack-public` it stops at `failed:check`. After installing, repeat the `--body` check
-   with a local path on the installed `PATH`. To roll back, reinstall the v10 `stack` first.
-
-### Install
-
 ```sh
 GOBIN="$HOME/.local/bin" go install ./cmd/stack ./extensions/observe/cmd/stack-observe \
   ./extensions/auditdue/cmd/stack-audit-due
@@ -76,7 +29,7 @@ Install `stack-improve` after `stack-public`: improve's public check runs `stack
 `~/.config/stack/safety.toml`. `stack-improve` embeds `extensions/improve/writing.md`; reinstall after changing it.
 
 `stack-guard` is a Claude Code hook of its own, not a stage extension: wire it as a separate `PreToolUse` entry
-(matcher `Bash|Read|NotebookRead|Grep|Glob|mcp__pencil__execute`, exec form `stack-guard hook claude pre-tool-use`,
+(matcher `Bash|PowerShell|Read|NotebookRead|Grep|Glob|mcp__pencil__execute`, exec form `stack-guard hook claude pre-tool-use`,
 `timeout: 5`, `onFailure: "continue"`) and never list it in `[stages]`, where it prints usage and exits 2. Without
 `safety.toml` it applies the defaults, without custom `secrets` entries. The core hook does not have these rules:
 without `stack-guard` wired, nothing denies them.
@@ -118,9 +71,7 @@ patterns:
 paths = ["home/dot_claude/skills/**"]
 ```
 
-Moving from the legacy kaizen cycle, keep improve disabled until the cutover order of
-[docs/design/phase3-cycle.md](docs/design/phase3-cycle.md) §6 reaches its opt-in step: the old job stopped, the
-private terms copied and verified, and a fresh observe run checked. The scheduled daily run (`launchd`, macOS) is
-part of that cutover in `shuymn/dotfiles`.
+The scheduled daily run (`launchd`, macOS) lives in `shuymn/dotfiles`: each morning the `stack-cycle` job runs
+observe and, when observe wrote a fresh `latest.json`, improve (which does nothing unless enabled as above).
 
 See [docs/architecture.md](docs/architecture.md) for the full design and migration roadmap.
