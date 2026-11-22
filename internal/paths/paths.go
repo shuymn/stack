@@ -95,6 +95,49 @@ func resolve(home, cwd, p string, expand, windows bool) (string, bool) {
 	return join(cwd, p, windows), true
 }
 
+// ResolvePowerShell turns p, a path a PowerShell command opens, into an absolute path, with the rules
+// of the host PowerShell runs on (windows) and no Git Bash forms. A leading `~`, `~/` or `~\` is
+// expanded when home is not "" (pass "" for a word whose `~` is literal); `~\` only on Windows,
+// where `\` is a separator. On Windows `\x` and `/x`
+// are rooted on the cwd's drive (unknown when the cwd has none) and `C:x` is unknown. A relative p is
+// joined to cwd with the separator of the OS this code runs on, turning `\` into it on Windows, so
+// the file opens on every OS a test runs on. ok is false when the result is unknown.
+func ResolvePowerShell(home, cwd, p string, windows bool) (string, bool) {
+	if home != "" && (windows || !strings.HasPrefix(p, `~\`)) {
+		if s, ok := tilde(home, hostSeps(p, windows), isWindows); ok {
+			return s, true
+		}
+	}
+	switch {
+	case !windows:
+		if strings.HasPrefix(p, "/") {
+			return p, true
+		}
+	case isAbs(p, true):
+		return p, true
+	case hasDrive(p):
+		return "", false
+	case p != "" && isSep(p[0], true):
+		if !hasDrive(cwd) {
+			return "", false
+		}
+		return cwd[:2] + strings.ReplaceAll(p, "/", `\`), true
+	}
+	if cwd == "" {
+		return "", false
+	}
+	return join(cwd, hostSeps(p, windows), isWindows), true
+}
+
+// hostSeps turns the `\` separators of a Windows PowerShell path into the separator of the OS this
+// code runs on.
+func hostSeps(p string, windows bool) string {
+	if !windows {
+		return p
+	}
+	return filepath.FromSlash(strings.ReplaceAll(p, `\`, "/"))
+}
+
 // isAbs is filepath.IsAbs for the given OS, so both rule sets are testable everywhere.
 func isAbs(p string, windows bool) bool {
 	if !windows {
@@ -218,6 +261,18 @@ func windowsVolume(p string) string {
 // Same reports whether a and b name the same path after Norm.
 func Same(a, b string) bool {
 	return Norm(a) == Norm(b)
+}
+
+// NormFor is Norm with the path rules of a named host: Windows rules (case folded, `\` a separator,
+// the volume kept whole) when windows, else POSIX rules with the case rule of the OS this code runs
+// on (folded on darwin). A PowerShell check uses it to judge Windows paths on any CI OS.
+func NormFor(p string, windows bool) string {
+	return norm(p, windows, windows || runtime.GOOS == "darwin")
+}
+
+// SameFor reports whether a and b name the same path after NormFor.
+func SameFor(a, b string, windows bool) bool {
+	return NormFor(a, windows) == NormFor(b, windows)
 }
 
 // Within reports whether p is root or lies under it, comparing whole components, so
