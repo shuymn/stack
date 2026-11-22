@@ -321,9 +321,12 @@ func TestProtocol(t *testing.T) {
 	}{
 		{"pass", []proctest.Response{ghAuthOK, ghVersion}, nil, StatusPass, time.Minute},
 		{
-			"one-second budget",
+			"short work deadline",
 			[]proctest.Response{{Args: []string{"auth", "status"}, Sleep: time.Minute}, ghVersion},
-			[]string{"STACK_OBSERVE_BUDGET=1s", "STACK_OBSERVE_RESERVE=300ms"},
+			// The hung gh is cut after 700ms of work, as before; the reserve leaves room for
+			// stopping it and writing latest.json on a loaded machine (with 300ms, a parallel
+			// -race run on Windows passed the deadline first and skipped the write by design).
+			[]string{"STACK_OBSERVE_BUDGET=5s", "STACK_OBSERVE_RESERVE=4300ms"},
 			StatusWarn, 15 * time.Second,
 		},
 	} {
