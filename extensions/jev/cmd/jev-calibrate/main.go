@@ -1,6 +1,7 @@
 // Command jev-calibrate records live Jev answers into fixtures/jev/semantic and refits
 // jev-semantic's cutoffs (docs/design/phase4-jev.md §3.5). Run it from the repository
-// root with the key (TYPESAFE_API_KEY or the key file); it is not a stage binary. Each planned body is sent three times.
+// root with the key (TYPESAFE_API_KEY or the key file); it is not a stage binary. Each planned
+// body is sent three times.
 package main
 
 import (
@@ -22,10 +23,7 @@ const exitUsage = 2
 var errNoKey = errors.New("no key: set " + jev.KeyEnv + " or create " + jev.KeyDisplay)
 
 func main() {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		home = ""
-	}
+	home, _ := os.UserHomeDir() // "" when unknown; run reports it
 	os.Exit(run(context.Background(), os.Args[1:], os.Getenv, home, os.Stdout, os.Stderr))
 }
 
