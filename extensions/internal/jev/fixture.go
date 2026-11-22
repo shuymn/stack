@@ -10,13 +10,15 @@ import (
 
 // Fixture is a `--replay` file of fixtures/jev (§3.4). Core reads only request and expect.
 type Fixture struct {
-	// Placeholder, when set, marks records written by hand until jev-calibrate records live ones.
-	Placeholder string          `json:"placeholder,omitempty"`
-	Request     json.RawMessage `json:"request"`
-	Expect      *Expect         `json:"expect,omitempty"`
-	Want        *Want           `json:"want,omitempty"`
-	Repo        json.RawMessage `json:"repo,omitempty"`
-	Label       json.RawMessage `json:"label,omitempty"`
+	// Placeholder, when set, marks a cal case awaiting its first live recording (PendingPrefix).
+	Placeholder string `json:"placeholder,omitempty"`
+	// Synthetic, when set, says why a fixed fixture's records are written by hand.
+	Synthetic string          `json:"synthetic,omitempty"`
+	Request   json.RawMessage `json:"request"`
+	Expect    *Expect         `json:"expect,omitempty"`
+	Want      *Want           `json:"want,omitempty"`
+	Repo      json.RawMessage `json:"repo,omitempty"`
+	Label     json.RawMessage `json:"label,omitempty"`
 	// Samples maps a body hash to each question's three scores (nil for an unscored attempt).
 	Samples map[string]map[string][]*float64 `json:"samples,omitempty"`
 }

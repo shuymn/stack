@@ -1,5 +1,5 @@
 {
-  "placeholder": "synthetic records: 0.9 for a labelled hit, 0.1 otherwise (mixed-size: its second request a recorded 400); a jev-calibrate run with the key replaces them with live answers and adds samples",
+  "synthetic": "records written by hand: 0.9 for a labelled hit, 0.1 otherwise, and mixed-size's second request a 400 max_tokens_exceeded; fixed fixtures check behaviour and are never recorded live (jev-calibrate records the cal cases)",
   "request": {
     "body": "Adds table tests for Parse covering empty and quoted input. All tests pass.",
     "branch": "feat/parse-tests",

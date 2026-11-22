@@ -5,13 +5,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/shuymn/stack/extensions/internal/jev"
 	"github.com/shuymn/stack/extensions/internal/proc"
@@ -22,7 +27,62 @@ import (
 const fixtures = "../../../fixtures/jev/semantic"
 
 func TestMain(m *testing.M) {
-	os.Exit(gittest.Main(m))
+	cleanup := buildBinaries()
+	code := gittest.Main(m)
+	cleanup()
+	os.Exit(code)
+}
+
+// refreshCutoff is the non-0.50 cutoff TestRefreshReplays refreshes and replays at.
+const refreshCutoff = "0.56"
+
+// built holds stack, a stack-jev-semantic test build with refreshCutoff injected for both
+// decisions, and in committed/ one with the committed table. Replay never reaches the endpoint;
+// it is set to a closed local port all the same.
+var built struct {
+	dir, stack, committed string
+	err                   error
+}
+
+func buildBinaries() func() {
+	dir, err := os.MkdirTemp("", "jev-calibrate-test-")
+	if err != nil {
+		built.err = err
+		return func() {}
+	}
+	exe := ""
+	if runtime.GOOS == "windows" {
+		exe = ".exe"
+	}
+	built.dir, built.committed = dir, filepath.Join(dir, "committed")
+	built.stack = filepath.Join(dir, "stack"+exe)
+	endpoint := "-X github.com/shuymn/stack/extensions/internal/jev.endpoint=http://127.0.0.1:9"
+	cutoffs := " -X github.com/shuymn/stack/extensions/jev/semantic.testCutoffs=" +
+		semantic.MetaDuty + "=" + refreshCutoff + "," + semantic.Unsupported + "=" + refreshCutoff
+	env := gittest.CleanEnv(os.Environ())
+	for _, c := range [][]string{
+		{"build", "-o", built.stack, "../../../cmd/stack"},
+		{
+			"build", "-ldflags", endpoint + cutoffs, "-o",
+			filepath.Join(dir, "stack-jev-semantic"+exe), "../semantic/cmd/stack-jev-semantic",
+		},
+		{
+			"build", "-ldflags", endpoint, "-o",
+			filepath.Join(built.committed, "stack-jev-semantic"+exe),
+			"../semantic/cmd/stack-jev-semantic",
+		},
+	} {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		cmd := exec.CommandContext(ctx, "go", c...)
+		cmd.Env = env
+		out, err := cmd.CombinedOutput()
+		cancel()
+		if err != nil {
+			built.err = fmt.Errorf("go %s: %w: %s", strings.Join(c, " "), err, out)
+			break
+		}
+	}
+	return func() { _ = os.RemoveAll(dir) }
 }
 
 func cleanEnv() []string { return gittest.CleanEnv(os.Environ()) }
@@ -55,7 +115,8 @@ func copyFixtures(t *testing.T) string {
 }
 
 // fakeJev answers each planned body from the case labels, with a small spread per attempt; it
-// rejects mixed-size's second body for size and gives one fixture's first attempt no status.
+// answers 200 for every body, including mixed-size's second one, which its fixed fixture records
+// as a size rejection, and gives one cal case's first attempt no status.
 type fakeJev struct {
 	mu       sync.Mutex
 	byHash   map[string]planned
@@ -80,7 +141,8 @@ func newFake(t *testing.T, cases []Case) *fakeJev {
 	return f
 }
 
-const unreplayable = "clean.json"
+// unreplayable is an extra cal case the test adds, so the corpus keeps its floors.
+const unreplayable = "zz-unreplayable.json"
 
 func (f *fakeJev) Send(_ context.Context, b jev.Batch) jev.Outcome {
 	f.mu.Lock()
@@ -93,11 +155,8 @@ func (f *fakeJev) Send(_ context.Context, b jev.Batch) jev.Outcome {
 		return jev.Outcome{Class: jev.Persistent, Cause: "unplanned"}
 	}
 	name := filepath.Base(p.c.Path)
-	switch {
-	case name == unreplayable && n == 0:
+	if name == unreplayable && n == 0 {
 		return jev.Outcome{Class: jev.Transient, Cause: jev.CauseNetwork}
-	case name == "mixed-size.json" && p.batch == 1:
-		return jev.Outcome{Class: jev.TooLarge, Status: 400, Cause: jev.CauseMaxTokens}
 	}
 	spread := []float64{0, 0.01, -0.01}[n%3]
 	answers := map[string]any{}
@@ -127,14 +186,30 @@ func (f *fakeJev) Send(_ context.Context, b jev.Batch) jev.Outcome {
 //nolint:gocyclo // one run, then each of its effects checked in turn
 func TestCalibrate(t *testing.T) {
 	dir := copyFixtures(t)
+	extra, err := jev.ReadFixture(filepath.Join(dir, "cal", "ja-typo-fix.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var req map[string]any
+	if err := json.Unmarshal(extra.Request, &req); err != nil {
+		t.Fatal(err)
+	}
+	req["title"] = "docs: fix a typo, without a live answer"
+	if extra.Request, err = json.Marshal(req); err != nil {
+		t.Fatal(err)
+	}
+	if err := jev.WriteFixture(filepath.Join(dir, "cal", unreplayable), extra); err != nil {
+		t.Fatal(err)
+	}
 	cases, err := Load(t.Context(), dir, proc.Exec{}, cleanEnv())
 	if err != nil {
 		t.Fatal(err)
 	}
-	before, err := os.ReadFile(filepath.Join(dir, "fixed", unreplayable))
+	before, err := os.ReadFile(filepath.Join(dir, "cal", unreplayable))
 	if err != nil {
 		t.Fatal(err)
 	}
+	fixedBefore := readAll(t, filepath.Join(dir, "fixed"))
 	fake := newFake(t, cases)
 	table := filepath.Join(dir, "cutoffs.json")
 	var stdout bytes.Buffer
@@ -150,8 +225,16 @@ func TestCalibrate(t *testing.T) {
 		if n != Attempts {
 			t.Fatalf("body %s sent %d times", h, n)
 		}
+		if fake.byHash[h].c.Fixed() {
+			t.Fatalf("a fixed fixture's body %s was sent", h)
+		}
 	}
-	after, err := os.ReadFile(filepath.Join(dir, "fixed", unreplayable))
+	// Fixed fixtures keep their synthetic answers and failures, e.g. mixed-size's 400.
+	if fixedAfter := readAll(t, filepath.Join(dir, "fixed")); !maps.EqualFunc(fixedBefore,
+		fixedAfter, bytes.Equal) {
+		t.Fatal("calibration rewrote a fixed fixture")
+	}
+	after, err := os.ReadFile(filepath.Join(dir, "cal", unreplayable))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +248,7 @@ func TestCalibrate(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, c := range recorded {
-		if filepath.Base(c.Path) == unreplayable {
+		if filepath.Base(c.Path) == unreplayable || c.Fixed() {
 			continue
 		}
 		replay, err := c.Fixture.RequestRecords()
@@ -187,15 +270,6 @@ func TestCalibrate(t *testing.T) {
 		}
 		if c.Fixture.Placeholder != "" {
 			t.Fatalf("%s: placeholder kept", c.Path)
-		}
-		if filepath.Base(c.Path) == "mixed-size.json" {
-			rec := replay.Records[c.Plan.Batches[1].Hash]
-			if rec.Status != 400 || rec.Error != jev.CauseMaxTokens {
-				t.Fatalf("size rejection recorded as %+v", rec)
-			}
-		}
-		if c.Fixed() {
-			continue
 		}
 		if c.Fixture.Expect == nil || c.Fixture.Want == nil {
 			t.Fatalf("%s: expect or want not refreshed", c.Path)
@@ -299,5 +373,148 @@ func TestBuilders(t *testing.T) {
 				t.Fatalf("%s: body %d differs between the builders", c.Path, i)
 			}
 		}
+	}
+}
+
+// readAll maps each file of dir to its bytes.
+func readAll(t *testing.T, dir string) map[string][]byte {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := map[string][]byte{}
+	for _, e := range entries {
+		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		out[e.Name()] = data
+	}
+	return out
+}
+
+// slowLog delays git log until its context ends, as a hung git would.
+type slowLog struct{ proc.Exec }
+
+func (s slowLog) Run(ctx context.Context, c proc.Cmd) (proc.Result, error) {
+	if slices.Contains(c.Args, "log") {
+		<-ctx.Done()
+		return proc.Result{ExitCode: -1, TimedOut: true}, nil
+	}
+	return s.Exec.Run(ctx, c)
+}
+
+func TestPrepareDeadline(t *testing.T) {
+	defer func(d time.Duration) { PrepareTimeout = d }(PrepareTimeout)
+	PrepareTimeout = 500 * time.Millisecond
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	start := time.Now()
+	_, err := Load(ctx, fixtures, slowLog{}, cleanEnv())
+	if err == nil || time.Since(start) > 5*time.Second {
+		t.Fatalf("Load returned %v after %v", err, time.Since(start))
+	}
+}
+
+// replayResult runs `stack run outbound --ext jev-semantic --replay path` in r with binDir first
+// on PATH and returns the extension's result.
+func replayResult(t *testing.T, r *gittest.Repo, binDir, path string) jev.Response {
+	t.Helper()
+	if built.err != nil {
+		t.Fatalf("building the test binaries failed: %v", built.err)
+	}
+	env := slices.DeleteFunc(slices.Clone(r.Env), func(kv string) bool {
+		k, _, _ := strings.Cut(kv, "=")
+		return strings.EqualFold(k, "HOME") || strings.EqualFold(k, "USERPROFILE") ||
+			strings.EqualFold(k, "PATH")
+	})
+	home := t.TempDir()
+	sep := string(os.PathListSeparator)
+	env = append(env, "HOME="+home, "USERPROFILE="+home,
+		"PATH="+binDir+sep+built.dir+sep+os.Getenv("PATH"))
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, built.stack, "run", "outbound", "--ext", "jev-semantic",
+		"--replay", path)
+	cmd.Dir, cmd.Env = r.Dir, env
+	out, err := cmd.Output()
+	if err != nil && cmd.ProcessState.ExitCode() < 0 {
+		t.Fatal(err)
+	}
+	var agg struct {
+		Results []struct {
+			Status   string        `json:"status"`
+			Context  string        `json:"context"`
+			Findings []jev.Finding `json:"findings"`
+			Error    string        `json:"error"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal(out, &agg); err != nil || len(agg.Results) != 1 ||
+		agg.Results[0].Error != "" {
+		t.Fatalf("stack run: %s (%v)", out, err)
+	}
+	x := agg.Results[0]
+	return jev.Response{Status: x.Status, Context: x.Context, Findings: x.Findings}
+}
+
+// TestRefreshReplays refreshes a cal case at a cutoff other than the fixed fixtures' test
+// cutoff, and with the committed table, and replays each through the build that carries those
+// cutoffs: the replay must give exactly the refreshed expect and want.
+func TestRefreshReplays(t *testing.T) {
+	dir := copyFixtures(t)
+	cases, err := Load(t.Context(), dir, proc.Exec{}, cleanEnv())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var c *Case
+	for i := range cases {
+		if filepath.Base(cases[i].Path) == "en-deleted-assertion-claims-tests.json" {
+			c = &cases[i]
+		}
+	}
+	fake := newFake(t, cases)
+	ok, err := record(t.Context(), Options{Transport: fake, Stdout: io.Discard}, c)
+	if err != nil || !ok {
+		t.Fatalf("record: %v %v", ok, err)
+	}
+	var spec semantic.RepoSpec
+	if err := json.Unmarshal(c.Fixture.Repo, &spec); err != nil {
+		t.Fatal(err)
+	}
+	r := gittest.New(t)
+	if err := spec.Build(gitOps{r}); err != nil {
+		t.Fatal(err)
+	}
+	cutoff, err := strconv.ParseFloat(refreshCutoff, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range []struct {
+		name      string
+		decisions map[string]jev.Decision
+		binDir    string
+	}{
+		{"cutoff " + refreshCutoff, map[string]jev.Decision{
+			semantic.MetaDuty:    {Enabled: true, Cutoff: &cutoff},
+			semantic.Unsupported: {Enabled: true, Cutoff: &cutoff},
+		}, built.dir},
+		{"committed table", semantic.Decisions(), built.committed},
+	} {
+		t.Run(v.name, func(t *testing.T) {
+			if err := Refresh(c, v.decisions); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(t.TempDir(), "case.json")
+			if err := jev.WriteFixture(path, c.Fixture); err != nil {
+				t.Fatal(err)
+			}
+			got := replayResult(t, r, v.binDir, path)
+			want := c.Fixture.Want
+			if got.Status != c.Fixture.Expect.Status || got.Context != want.Context ||
+				!slices.Equal(got.Findings, want.Findings) {
+				t.Fatalf("replay %+v\nrefreshed %s %+v", got, c.Fixture.Expect.Status, *want)
+			}
+		})
 	}
 }

@@ -1,8 +1,8 @@
 // Package calibrate is jev-calibrate (docs/design/phase4-jev.md §3.5), run with the
-// key: it builds each fixture's synthetic repository and requests with jev-semantic's own
+// key: it builds each cal case's synthetic repository and requests with jev-semantic's own
 // builders, sends every planned body through the transport three times, records the first
-// outcome and all scores in the fixture, refits the cutoffs on the cal cases and refreshes the
-// cal fixtures' expect and want.
+// outcome and all scores in the case, refits the cutoffs and refreshes the cases' expect and
+// want. Fixed fixtures keep their synthetic records.
 package calibrate
 
 import (
@@ -24,6 +24,9 @@ import (
 
 // Attempts is how many times each body is sent.
 const Attempts = 3
+
+// PrepareTimeout bounds git log and git diff of one fixture. A variable only for tests.
+var PrepareTimeout = 2 * time.Minute
 
 // SendTimeout bounds each attempt.
 const SendTimeout = time.Minute
@@ -71,20 +74,28 @@ type Case struct {
 // Fixed reports a fixture of fixed/, which keeps its hand-written want.
 func (c Case) Fixed() bool { return filepath.Base(filepath.Dir(c.Path)) == SplitFixed }
 
-// Run records every fixture, refits the cutoffs and refreshes the cal fixtures. A fixture whose
-// first attempt of some body has no replayable outcome is left unchanged and reported.
+// Run records every cal fixture, refits the cutoffs and refreshes the cal fixtures' expect and
+// want. Fixed fixtures are never rewritten. A cal fixture whose first attempt of some body has no
+// replayable outcome is left unchanged and reported.
 func Run(ctx context.Context, o Options) error {
 	cases, err := Load(ctx, o.Fixtures, o.Runner, o.Environ)
 	if err != nil {
 		return err
 	}
+	unchanged := map[string]bool{}
 	for i := range cases {
 		c := &cases[i]
+		// Fixed fixtures keep their synthetic answers and failures: they check behaviour, which
+		// live answers would change. Live answers live in the cal corpus.
+		if c.Fixed() {
+			continue
+		}
 		ok, err := record(ctx, o, c)
 		if err != nil {
 			return err
 		}
 		if !ok {
+			unchanged[c.Path] = true
 			continue
 		}
 		if err := jev.WriteFixture(c.Path, c.Fixture); err != nil {
@@ -105,7 +116,7 @@ func Run(ctx context.Context, o Options) error {
 	decisions := table.Decisions
 	for i := range cases {
 		c := &cases[i]
-		if c.Fixed() {
+		if c.Fixed() || unchanged[c.Path] {
 			continue
 		}
 		if err := Refresh(c, decisions); err != nil {
@@ -178,7 +189,9 @@ func loadCase(
 		return Case{}, err
 	}
 	g := semantic.Git{Runner: runner, Dir: repo.Dir, Env: environ}
-	st, err := semantic.Prepare(ctx, g, semantic.FixtureRange)
+	pctx, cancel := context.WithTimeout(ctx, PrepareTimeout)
+	defer cancel()
+	st, err := semantic.Prepare(pctx, g, semantic.FixtureRange)
 	if err != nil {
 		return Case{}, fmt.Errorf("prepare: %w", err)
 	}
@@ -322,8 +335,7 @@ func Refresh(c *Case, decisions map[string]jev.Decision) error {
 	if err != nil {
 		return err
 	}
-	outcomes := jev.Do(context.Background(), replay, c.Plan.Batches)
-	resp := semantic.Respond(c.Plan, c.Units, outcomes, decisions, nil)
+	resp := semantic.Evaluate(context.Background(), c.Plan, c.Units, replay, decisions, nil)
 	c.Fixture.Expect = &jev.Expect{Status: resp.Status}
 	c.Fixture.Want = &jev.Want{Findings: resp.Findings, Context: resp.Context}
 	return nil
