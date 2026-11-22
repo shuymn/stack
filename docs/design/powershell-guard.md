@@ -43,8 +43,10 @@ only in a child process (a per-call start-up cost on the hottest hook path) and 
 the core otherwise avoids (§3's `cygpath` row makes the same call). The recognizer keeps §3's aim, no calls found
 inside quotes, by tokenizing as PowerShell does and never matching regexes over raw text. (c) is rejected.
 
-PowerShell 5.1 and 7 are the test oracles: on Windows, a corpus of the §7.2 commands is parsed by both
-(`[Parser]::ParseInput`) and the extracted command names and argv are compared with `powershell.Parse` (W2). The
+PowerShell 5.1 and 7 are the test oracles (C11): the §7.2 commands are parsed by each installed engine
+(`[Parser]::ParseInput`; 5.1 and 7 on Windows, 7 on Linux) and the command names, kinds and argv it finds are
+compared with `powershell.Parse`; native calls also run against an argv-printing stub and their argv is compared
+with `Call.ShellCall()` (W2). The
 choice flips to (b) on a material syntax or argv disagreement the subset cannot be narrowed around, if end-to-end
 Windows timings of both real hooks with (b) stay near today's hook, or if Claude Code's payload starts carrying a
 parsed AST (a third option with no child process). A binding or provider disagreement would survive a switch to
@@ -135,10 +137,11 @@ passes raw-merge; `echo "$(gh pr merge 1)"` and `& 'gh' pr merge 1` deny. Secret
 ## 4. Decision 2: matching per rule
 
 Host semantics come from an injected OS parameter (`Windows` or not), defaulting to `runtime.GOOS`, so Linux CI runs
-both sets. On Windows: case-insensitive names and paths, `\`≡`/`, drive roots, and `rm`, `rmdir`, `ri`, `del`,
-`erase`, `rd` are `Remove-Item` aliases. Elsewhere: the host's case rule (`paths`' fold on darwin, none on Linux),
-`/` roots only, and `rm`/`rmdir` are native commands (PowerShell defines them as aliases only on Windows; `ri`,
-`del`, `erase` and `rd` stay aliases, confirmed by the 7 oracle, W2). Path syntax follows the command kind, not only
+both sets. On Windows: case-insensitive names and paths, `\`≡`/`, drive roots, `rm`, `rmdir`, `ri`, `del`,
+`erase`, `rd` are `Remove-Item` aliases, and `mount` and `ndr` are `New-PSDrive` aliases. Elsewhere: the host's
+case rule (`paths`' fold on darwin, none on Linux), `/` roots only, and `rm`, `rmdir` and `mount` are native
+commands (PowerShell defines them as aliases only on Windows; `ri`, `del`, `erase`, `rd` and `ndr` stay aliases;
+confirmed by the oracle on 5.1 and 7 on Windows and 7 on Linux, W2). Path syntax follows the command kind, not only
 the host: `Remove-Item` and its real aliases use FileSystem-provider syntax (`\` and `/` both separators) on every
 host, so `Remove-Item -Recurse '.\.git'` on Linux is judged; native commands use the host's native path syntax.
 
@@ -211,7 +214,7 @@ PowerShell expands it.
   equal to the payload home under the host comparison. `'$HOME'` is a directory named `$HOME` and passes.
 - **Drive roots (Windows):** `C:\`, `C:/`, `c:\.`, and bare `\`, `/`, `\.`, `/.` (the root of the current drive,
   whatever that drive is, so a root even with an unknown cwd; a non-FileSystem current location is out of scope, and
-  a script that runs `New-PSDrive` (`ndr`) leaves bare roots opaque, since the current drive may then be a custom one;
+  a script that runs `New-PSDrive` (`ndr`, and `mount` on Windows) leaves bare roots opaque, since the current drive may then be a custom one;
   this also skips a bare root that is still on the OS volume, a limitation kept for the no-false-positive rule), and
   `$env:SystemDrive\`, `${env:SystemDrive}\` (recognised symbolically). A drive the script declares with a static
   `New-PSDrive -Name X` is a custom drive, so paths on `X:` are opaque, as resolved operands (a relative one under a
@@ -291,6 +294,7 @@ Every allow case is paired with a deny fixture that differs only in the behaviou
 | C8 | When a PowerShell command matches no rule, both hooks shall print nothing. | U5 | goldens `allow-powershell-*` in both packages, each next to its deny pair: `Get-Content README.md`, `Remove-Item -Recurse .\build`, `gh pr view 5`, `echo "gh pr merge"`, `git status; git diff --stat` |
 | C9 | When observe scans `PowerShell` tool calls, it shall replay each through both hooks like a `Bash` call. | §6 observe | `observe.TestReplayRealHook`: a transcript with a core-only PowerShell deny (raw-merge) and an extension-only one (rmroot), both matched; exact `Compared` and `Unrecoverable` totals; a `{}` input counted as not replayable with no hook invocation |
 | C10 | `paths.ResolvePowerShell` and the `windows`-flagged `Norm`/`Same` shall resolve PowerShell paths without Git Bash forms. | §6 | `paths.TestResolvePowerShell`: relative join opens the real file on every OS; Windows `\x` on the cwd's drive, unknown without one; `C:x` unknown; `/c` with cwd `D:\work` resolves to `D:\c` on Windows (not drive C); `C:\Users\<Name>` ≡ `c:/users/<name>` only with `windows` |
+| C11 | Where a PowerShell engine is installed, `powershell.Parse` shall return, for each §7.2 command, the calls the engine's own parser finds at the §3 positions, with the engine's command kind and static argv, and `ShellCall()` the argv a native program receives. | §3, §4, W2 | `powershell.TestOracle`, run only with `STACK_PS_ORACLE=1` (the non-required `powershell-oracle` CI job on `windows-latest` and `ubuntu-latest`): the corpus is C1's tables, the command lists of C2–C5 and their nested PowerShell scripts, each declared in `testdata/oracle_cases.json` (calls at supported positions, names in opaque positions, nested-script calls, rejecting engines; `-update-oracle` rewrites it from a Windows run of both engines); one engine process per version runs `testdata/oracle.ps1`; each case's verdict is pass, fail or inconclusive (engine missing or failing, timeout, not `FullLanguage`, a case or stub record missing, a positive control failing), and the test fails on any fail or inconclusive; native calls with inert arguments run only against the test binary as stub (deduplicated); words starting with an unquoted `~` are not compared; documented differences are asserted by name: 5.1 rejects `&&`, `\|\|` and a trailing `&`, the engine rejects a bare command inside method arguments (the recognizer still judges it), 5.1 legacy argument passing of a word holding `"`, `-UseTransaction` (5.1) and Where-Object's comparison parameters absent from the binding tables; also the alias set of §4 per host and `Remove-Item -p` ambiguous by binding and by parameter metadata |
 
 ## 8. Where the contracts are stated
 
@@ -314,15 +318,19 @@ recorded PowerShell input exists yet; the first Windows transcript lines replace
 golden per rule. `mise exec -- scripts/test` on all three CI OSes.
 
 Risks: the subset diverges from pwsh on a construct (miss or false deny; the oracle comparison and flip of §3);
-5.1 vs 7 differences (`&&`/`||` are 5.1 parse errors, so judging them only denies what would not run; on 5.1 the
+5.1 vs 7 differences (`&&`, `||` and a trailing `&` are 5.1 parse errors, so judging them only denies what would not run; 5.1 passes a native word holding `"` split or unquoted; on 5.1 the
 `cd X &&` cwd form does not exist, so a `cd sub; gh … --body-file b.md` stays a miss); `Remove-Item` parameter table
 drift (a new parameter starting with `r` makes `-r` ambiguous, so the rule over-judges only a call pwsh refuses).
 
-Left for Windows hardware (not chased from macOS):
+Windows hardware checks (not chased from macOS):
 
 - W1: record a real `PowerShell` tool call and a live hook run; confirm `tool_name`, `tool_input` fields and launch.
-- W2: oracle run of the §7.2 corpus through PowerShell 5.1 and 7 `[Parser]::ParseInput`, comparing command names and
-  argv with `powershell.Parse` (native argv, incl. `--%` tails, through an argv-printing stub); confirm the Unix alias set on PowerShell 7 for Linux and the `-p` ambiguity.
+- W2 (done, C11): the oracle passes all 291 declared cases on Windows PowerShell 5.1.26100 and PowerShell 7.7.0
+  (Windows) and 7.6.5 (Linux), command names, kinds and argv, native argv through the stub (`--%` tails; a tail
+  holding quotes or `%NAME%` is dynamic in the recognizer and not compared); it found `mount` missing from the
+  `New-PSDrive` aliases on Windows (added). On Linux `rm` and `rmdir` resolve to native commands and `ri`, `del`,
+  `erase`, `rd` to `Remove-Item`; `Remove-Item -p` is refused as ambiguous on all three engines. The
+  `powershell-oracle` CI job keeps it running.
 - W3: `~` expansion by `Remove-Item -LiteralPath '~'` and by native arguments on 5.1 and 7; adopt a form only once
   confirmed.
 - W4: U1–U6 against `stack.exe`/`stack-guard.exe` with the dotfiles matchers in a live dual-tool session, and both
