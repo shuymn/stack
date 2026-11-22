@@ -16,7 +16,7 @@ func cases(prefix string, truth bool, scores ...float64) []Sample {
 	return s
 }
 
-//nolint:gocyclo // one subtest per claim of C10
+//nolint:gocyclo,maintidx // one subtest per claim of C10
 func TestCutoff(t *testing.T) {
 	fit := slices.Concat(
 		cases("pos", true, 0.95, 0.9, 0.85, 0.8, 0.75, 0.6),
@@ -87,8 +87,10 @@ func TestCutoff(t *testing.T) {
 			truth bool
 			hit   bool
 		}{
-			{0.55, true, true}, {0.5499999995, true, false},
-			{0.45, false, true}, {0.4499999995, false, false},
+			{0.55, true, true},
+			{0.5499999995, true, false},
+			{0.45, false, true},
+			{0.4499999995, false, false},
 		} {
 			s := MarginEvaluate([]Sample{{Case: "c", Score: new(c.score), Truth: c.truth}}, 0.5)
 			if got := s.TP+s.FP == 1; got != c.hit {
