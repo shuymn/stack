@@ -96,7 +96,7 @@ func Key(getenv func(string) string, home string) (string, error) {
 	if cause := keyAccess(fi); cause != "" {
 		return "", &KeyError{Cause: cause}
 	}
-	data, err := io.ReadAll(io.LimitReader(f, MaxKeyFile+1))
+	data, err := readKey(f)
 	if err != nil {
 		return "", &KeyError{Cause: KeyUnreadable}
 	}
@@ -108,4 +108,10 @@ func Key(getenv func(string) string, home string) (string, error) {
 		return "", &KeyError{Cause: KeyBlank}
 	}
 	return k, nil
+}
+
+// readKey reads the key file's content: at most MaxKeyFile bytes and one more, so a longer file
+// is detected without reading it whole.
+func readKey(r io.Reader) ([]byte, error) {
+	return io.ReadAll(io.LimitReader(r, MaxKeyFile+1)) //nolint:wrapcheck // mapped to a fixed cause
 }

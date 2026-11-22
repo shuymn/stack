@@ -2,6 +2,7 @@ package jev
 
 import (
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -166,5 +167,30 @@ func TestKeyFixes(t *testing.T) {
 		if msg := (&KeyError{Cause: cause}).Error(); strings.Contains(msg, "chmod") {
 			t.Errorf("%s: %q names chmod", cause, msg)
 		}
+	}
+}
+
+// countingReader yields n bytes of 'k' and counts what it handed out.
+type countingReader struct{ n, read int }
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	if c.read >= c.n {
+		return 0, io.EOF
+	}
+	m := min(len(p), c.n-c.read)
+	for i := range m {
+		p[i] = 'k'
+	}
+	c.read += m
+	return m, nil
+}
+
+// TestReadKeyBounded: a key file far over the cap is read no further than one byte past it.
+func TestReadKeyBounded(t *testing.T) {
+	r := &countingReader{n: 1 << 20}
+	data, err := readKey(r)
+	if err != nil || len(data) != MaxKeyFile+1 || r.read > MaxKeyFile+1 {
+		t.Fatalf("readKey = %d bytes, %v; consumed %d, want at most %d", len(data), err, r.read,
+			MaxKeyFile+1)
 	}
 }
