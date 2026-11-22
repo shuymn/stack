@@ -26,4 +26,4 @@ commit-msg:
 pre-push:
   commands:
     test:
-      run: mise exec -- scripts/test
+      run: mise exec -- bash scripts/test

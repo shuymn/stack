@@ -14,7 +14,7 @@ Go and development tools are pinned with mise (`mise.toml`, exact versions in `m
 mise install
 mise exec -- lefthook install
 mise exec -- go build ./cmd/stack
-mise exec -- scripts/test
+mise exec -- bash scripts/test
 ```
 
 `scripts/test` is the completion check of every change: `gofmt`, `golangci-lint`, and `go test -race ./...`. The hooks in `lefthook.yml` check formatting, workflows (`actionlint`, `ghalint`), and staged secrets (`betterleaks`) on commit, the commit message (`pommitlint`, Conventional Commits) on `commit-msg`, and run `scripts/test` on push.
