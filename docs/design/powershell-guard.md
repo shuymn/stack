@@ -256,9 +256,12 @@ exists, or ask the user."
 ### 7.1 Purpose layer
 
 Real-CLI check: build both binaries into a temp dir inside the worktree, set `USERPROFILE`/`HOME` to a temp home
-whose `safety.toml` lists `.dev.vars`, and pipe a payload:
-`printf '%s' '{"hook_event_name":"PreToolUse","tool_name":"PowerShell","cwd":"<tmp>","tool_input":{"command":"<cmd>"}}' | <tmp>/stack hook claude pre-tool-use`
+whose `safety.toml` lists `.dev.vars`, and pipe a payload built with `jq`:
+`jq -nc --arg cwd '<tmp>' --arg cmd '<cmd>' '{hook_event_name:"PreToolUse",tool_name:"PowerShell",cwd:$cwd,tool_input:{command:$cmd}}' | <tmp>/stack hook claude pre-tool-use`
 (likewise `<tmp>/stack-guard hook claude pre-tool-use`); deny = the JSON reason, allow = empty stdout, exit 0 always.
+Build the payload with `jq --arg`, never by pasting the command into a JSON string (`printf`, `echo`): a Windows path
+or a backtick escape then leaves `\` unescaped, the payload is invalid JSON, and both hooks allow it silently (U6), so
+every case looks allowed.
 
 | ID | EARS criterion | Source | Scenario → observable result / failure | Real-CLI check |
 |---|---|---|---|---|
