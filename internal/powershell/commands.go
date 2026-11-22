@@ -272,20 +272,23 @@ func (t *table) lookup(name string) (param, bool) {
 			}
 		}
 	}
-	var found []param
-	for _, p := range t.params {
+	var found *param
+	for i, p := range t.params {
 		match := strings.HasPrefix(strings.ToLower(p.name), n)
 		for _, a := range p.aliases {
 			match = match || strings.HasPrefix(strings.ToLower(a), n)
 		}
 		if match {
-			found = append(found, p)
+			if found != nil {
+				return param{}, false // ambiguous
+			}
+			found = &t.params[i]
 		}
 	}
-	if len(found) != 1 {
+	if found == nil {
 		return param{}, false
 	}
-	return found[0], true
+	return *found, true
 }
 
 // item is one argument as written: a parameter token (with its colon-bound value), or a value

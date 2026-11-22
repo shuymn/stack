@@ -81,6 +81,9 @@ const (
 	KnownSystemDrive
 )
 
+// knownSet marks known variables, indexed by Known.
+type knownSet [KnownSystemDrive + 1]bool
+
 // Word is one argument of a call.
 type Word struct {
 	// Raw is the word's source text.
@@ -218,7 +221,7 @@ type Result struct {
 // Parse recognizes cmd, run in cwd ("" when unknown) by a user whose home is home ("" when
 // unknown), on host os.
 func Parse(cmd, cwd, home string, os OS) Result {
-	p := newParser(cmd, cwd, home, os, 0, map[Known]bool{})
+	p := newParser(cmd, cwd, home, os, 0, knownSet{})
 	if err := p.run(); err != nil {
 		return Result{Err: err}
 	}

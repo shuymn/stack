@@ -67,8 +67,9 @@ func TestParseCwdGrowth(t *testing.T) {
 	})
 }
 
-// TestParseCwdBudgetInBlocks checks that the lookahead over a block spends no cd steps of its own:
-// an inert block leaves the budget whole, and an executed one counts its steps once.
+// TestParseCwdBudgetInBlocks checks that the lookahead over a block uses a cd-step budget of its
+// own and restores the caller's: an inert block leaves the budget whole, and an executed one counts
+// its steps once.
 func TestParseCwdBudgetInBlocks(t *testing.T) {
 	sep := string(filepath.Separator)
 	gitCwd := func(cmd string) string {

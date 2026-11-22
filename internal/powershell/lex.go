@@ -44,7 +44,7 @@ type wordBuilder struct {
 	quoteSet bool
 	known    Known
 	dynamic  bool
-	// glob reports an unquoted, unescaped wildcard character.
+	// glob reports an unquoted wildcard character, backtick-escaped or not.
 	glob bool
 }
 
@@ -66,7 +66,7 @@ func (b *wordBuilder) dyn() {
 }
 
 // variable adds a variable: known when it is the word's first part and not assigned.
-func (b *wordBuilder) variable(k Known, assigned map[Known]bool) {
+func (b *wordBuilder) variable(k Known, assigned knownSet) {
 	if b.segs == 0 && k != NotKnown && !assigned[k] {
 		b.known = k
 	} else {
@@ -196,23 +196,23 @@ func (p *parser) char(b *wordBuilder) {
 func (p *parser) single(b *wordBuilder, n int) {
 	p.pos += n
 	b.part(Single)
-	var s strings.Builder
+	start := p.pos
 	for {
 		if p.eof() {
 			p.fail("unclosed string")
 		}
 		if m := p.quoteAt(singleQuotes); m > 0 {
+			b.text.WriteString(p.src[start:p.pos])
 			p.pos += m
 			if m2 := p.quoteAt(singleQuotes); m2 > 0 {
-				s.WriteString(p.src[p.pos : p.pos+m2])
+				start = p.pos // the second quote of a doubled pair is literal
 				p.pos += m2
 				continue
 			}
-			b.lit(s.String())
+			b.segs++ // the string is one part, even when empty
 			return
 		}
 		_, sz := utf8.DecodeRuneInString(p.src[p.pos:])
-		s.WriteString(p.src[p.pos : p.pos+sz])
 		p.pos += sz
 	}
 }
@@ -413,7 +413,8 @@ func (p *parser) members() bool {
 }
 
 // methodArgs skips the `(…)` arguments of a method call. They are expressions, not command
-// positions: only an explicit `$(…)` in them is walked.
+// positions: nested `(…)` and `@(…)` stay opaque, while `$(…)`, expandable strings and `[…]`
+// (which walks a parenthesized expression) are lexed as elsewhere.
 func (p *parser) methodArgs() {
 	p.enter()
 	defer p.leave()
@@ -429,10 +430,7 @@ func (p *parser) methodArgs() {
 			return
 		case c == '}' || c == ']':
 			p.fail("unbalanced closing bracket in method arguments")
-		case c == '(':
-			p.methodArgs()
-		case p.has("@("):
-			p.pos++
+		case c == '(': // also the `(` of `@(`, after the default arm consumed the `@`
 			p.methodArgs()
 		case p.has("@{"):
 			p.quietly(p.hash)
@@ -539,18 +537,17 @@ func (p *parser) argWord(kind Kind) Word {
 // is one holding `%NAME%`.
 func (p *parser) verbatim() []Word {
 	var words []Word
-	var text strings.Builder
-	start, have, quoted, hadQuote := p.pos, false, false, false
+	start, quoted, hadQuote := p.pos, false, false
 	flush := func() {
-		if have {
+		if start < p.pos {
+			// Without quotes a word's text is its source span.
 			w := Word{Raw: p.src[start:p.pos], Verbatim: true}
-			if t := text.String(); !hadQuote && !percentRe.MatchString(t) {
-				w.Text, w.Static = t, true
+			if !hadQuote && !percentRe.MatchString(w.Raw) {
+				w.Text, w.Static = w.Raw, true
 			}
 			words = append(words, w)
 		}
-		text.Reset()
-		have, hadQuote = false, false
+		hadQuote = false
 	}
 	for !p.eof() {
 		c := p.peek()
@@ -558,20 +555,16 @@ func (p *parser) verbatim() []Word {
 			break
 		}
 		if n := p.quoteAt(verbatimQuotes); n > 0 {
-			quoted, hadQuote, have = !quoted, true, true
+			quoted, hadQuote = !quoted, true
 			p.pos += n
 			continue
 		}
-		switch {
-		case !quoted && isBlank(c):
+		if !quoted && isBlank(c) {
 			flush()
 			p.pos++
 			start = p.pos
 			continue
-		default:
-			text.WriteByte(c)
 		}
-		have = true
 		p.pos++
 	}
 	flush()

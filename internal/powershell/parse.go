@@ -2,7 +2,6 @@ package powershell
 
 import (
 	"fmt"
-	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -49,14 +48,14 @@ type parser struct {
 	// moved reports a location change in the current statement.
 	moved bool
 	// assigned holds the known variables the script has assigned so far.
-	assigned map[Known]bool
+	assigned knownSet
 	groups   int
 	// cdSteps counts the `Set-Location` targets resolved so far.
 	cdSteps int
 	res     Result
 }
 
-func newParser(src, cwd, home string, os OS, depth int, assigned map[Known]bool) *parser {
+func newParser(src, cwd, home string, os OS, depth int, assigned knownSet) *parser {
 	return &parser{src: src, os: os, home: home, depth: depth, cwd: cwd, assigned: assigned}
 }
 
@@ -967,22 +966,20 @@ func (p *parser) cdTarget(c Call) (string, bool) {
 	if !c.Bound || c.Refused {
 		return "", false
 	}
-	var target []Word
-	for _, w := range c.Args[1:] {
-		if !w.IsParam && (w.Param == "Path" || w.Param == "LiteralPath") {
-			target = append(target, w)
-		}
-	}
-	if len(target) != 1 || !target[0].Static || target[0].Group != 0 || target[0].Text == "" {
+	target := soleValue(c, "Path", "LiteralPath")
+	if target == nil || !target.Static || target.Group != 0 || target.Text == "" {
 		return "", false
 	}
 	if p.cdSteps >= maxCdSteps {
 		return "", true // bounds the cwd strings a long `cd x &&` chain builds
 	}
-	t, ok := fileSystemPath(target[0].Text, target[0].Param == "LiteralPath", p.os)
 	// The result is at most the target joined to the longer of home and cwd: past the cap the
 	// candidate is never built.
-	if !ok || max(len(p.home), len(p.cwd))+len(`\`)+len(t) > maxCwdLen {
+	if max(len(p.home), len(p.cwd))+len(`\`)+len(target.Text) > maxCwdLen {
+		return "", true
+	}
+	t, ok := fileSystemPath(target.Text, target.Param == "LiteralPath", p.os)
+	if !ok {
 		return "", true
 	}
 	dir, ok := paths.ResolvePowerShell(p.home, p.cwd, t, p.os == Windows)
@@ -998,10 +995,10 @@ func (p *parser) cdTarget(c Call) (string, bool) {
 // forms `-` and `+`, a wildcard (unless literal, for -LiteralPath), or a provider-qualified or drive-qualified path other than a
 // Windows drive letter.
 func fileSystemPath(t string, literal bool, os OS) (string, bool) {
-	if t == "-" || t == "+" || (!literal && strings.ContainsAny(t, "*?[")) ||
-		strings.Contains(t, "::") {
+	if t == "-" || t == "+" || (!literal && strings.ContainsAny(t, "*?[")) {
 		return "", false
 	}
+	// A provider-qualified `X::path` fails the colon checks below.
 	if os == Windows {
 		rest := t
 		if len(t) >= 2 && t[1] == ':' && isLetter(t[0]) {
@@ -1072,15 +1069,24 @@ func (p *parser) invokeExpression(c Call) {
 	if !c.Bound || c.Refused {
 		return
 	}
-	var cmd []Word
-	for _, w := range c.Args[1:] {
-		if w.Param == "Command" && !w.IsParam {
-			cmd = append(cmd, w)
+	if cmd := soleValue(c, "Command"); cmd != nil && cmd.Static {
+		p.nestedPowerShell(cmd.Text, c.Cwd, true)
+	}
+}
+
+// soleValue returns the one value word of c bound to one of names, or nil when there is none or
+// more than one.
+func soleValue(c Call, names ...string) *Word {
+	var found *Word
+	for i := 1; i < len(c.Args); i++ {
+		if w := &c.Args[i]; !w.IsParam && slices.Contains(names, w.Param) {
+			if found != nil {
+				return nil
+			}
+			found = w
 		}
 	}
-	if len(cmd) == 1 && cmd[0].Static {
-		p.nestedPowerShell(cmd[0].Text, c.Cwd, true)
-	}
+	return found
 }
 
 var (
@@ -1127,8 +1133,7 @@ func (p *parser) nestedPowerShell(text, cwd string, shared bool) {
 	if p.quiet > 0 || p.depth >= maxDepth {
 		return
 	}
-	assigned := maps.Clone(p.assigned)
-	q := newParser(text, cwd, p.home, p.os, p.depth+1, assigned)
+	q := newParser(text, cwd, p.home, p.os, p.depth+1, p.assigned)
 	s := Script{Dialect: PowerShell, Text: text, Cwd: cwd, Depth: p.depth + 1}
 	if err := q.run(); err != nil {
 		s.Err = err
@@ -1138,7 +1143,7 @@ func (p *parser) nestedPowerShell(text, cwd string, shared bool) {
 	p.res.Nested = append(append(p.res.Nested, s), q.res.Nested...)
 	p.res.Calls = append(p.res.Calls, q.res.Calls...)
 	if shared {
-		maps.Copy(p.assigned, assigned)
+		p.assigned = q.assigned
 	}
 }
 
