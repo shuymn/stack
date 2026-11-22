@@ -287,7 +287,7 @@ func Refit(cases []Case) jev.Table {
 		}
 		name := strings.TrimSuffix(filepath.Base(c.Path), ".json")
 		for _, b := range c.Plan.Batches {
-			files := batchFiles(b, c.Units)
+			files := b.Units(c.Units)
 			for _, q := range b.Questions {
 				truth := c.Label.Unsupported
 				if q.Name == semantic.MetaDuty {
@@ -324,16 +324,6 @@ func splits(p jev.Plan) bool {
 	return slices.ContainsFunc(p.Batches, func(b jev.Batch) bool {
 		return slices.ContainsFunc(b.Pieces, func(x jev.Piece) bool { return x.Parts > 0 })
 	})
-}
-
-func batchFiles(b jev.Batch, units []jev.Unit) []string {
-	var files []string
-	for _, p := range b.Pieces {
-		if n := units[p.Unit].Name; !slices.Contains(files, n) {
-			files = append(files, n)
-		}
-	}
-	return files
 }
 
 // Refresh sets a cal fixture's expect and want to what replaying its records gives under

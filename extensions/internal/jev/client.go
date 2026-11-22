@@ -52,7 +52,6 @@ const (
 	CauseMissing       = "missing or wrongly typed answer"
 	CauseProbability   = "probability not in [0, 1]"
 	CauseUnrecorded    = "no recorded answer for this body"
-	CauseBadRecord     = "invalid replay record"
 )
 
 // Outcome is the result of one request.
@@ -195,11 +194,17 @@ func (l Live) send(ctx context.Context, b Batch) Outcome {
 	if err != nil {
 		return transportFailure(ctx, err)
 	}
+	return okOutcome(body, b.Questions)
+}
+
+// okOutcome is the outcome of a 200 body, live or recorded: over MaxAnswer it is persistent
+// without the body, otherwise validated with the body kept for jev-calibrate's records.
+func okOutcome(body []byte, qs []Question) Outcome {
 	if len(body) > MaxAnswer {
-		return Outcome{Class: Persistent, Status: resp.StatusCode, Cause: CauseAnswerTooLong}
+		return Outcome{Class: Persistent, Status: http.StatusOK, Cause: CauseAnswerTooLong}
 	}
-	o := Validate(body, b.Questions)
-	o.Status, o.Body = resp.StatusCode, body
+	o := Validate(body, qs)
+	o.Status, o.Body = http.StatusOK, body
 	return o
 }
 
@@ -227,7 +232,7 @@ func statusOutcome(status int, mte bool) Outcome {
 		return Outcome{Class: TooLarge, Status: status, Cause: CauseMaxTokens}
 	case status == http.StatusRequestEntityTooLarge:
 		return Outcome{Class: TooLarge, Status: status, Cause: cause}
-	case status == http.StatusTooManyRequests || status == 529 || status >= 500:
+	case status == http.StatusTooManyRequests || status >= 500:
 		return Outcome{Class: Transient, Status: status, Cause: cause}
 	default:
 		return Outcome{Class: Persistent, Status: status, Cause: cause}
@@ -267,17 +272,7 @@ func Validate(body []byte, qs []Question) Outcome {
 	}
 	out := Outcome{Class: OK, Answers: map[string]Answer{}, Usage: doc.Usage}
 	for _, q := range qs {
-		// Each answer is decoded alone: a wrongly typed field fails only its question.
-		var raw *answerJSON
-		cause := ""
-		if err := json.Unmarshal(doc.Answers[q.Name], &raw); doc.Answers[q.Name] != nil &&
-			err != nil {
-			cause = CauseMissing
-		}
-		a, vcause := validAnswer(raw, q)
-		if cause == "" {
-			cause = vcause
-		}
+		a, cause := validAnswer(doc.Answers[q.Name], q)
 		if cause != "" {
 			if out.Invalid == nil {
 				out.Invalid = map[string]string{}
@@ -290,7 +285,14 @@ func Validate(body []byte, qs []Question) Outcome {
 	return out
 }
 
-func validAnswer(a *answerJSON, q Question) (Answer, string) {
+// validAnswer decodes and checks one answer alone: a wrongly typed field fails only its question.
+func validAnswer(raw json.RawMessage, q Question) (Answer, string) {
+	var a *answerJSON
+	if raw != nil {
+		if err := json.Unmarshal(raw, &a); err != nil {
+			return Answer{}, CauseMissing
+		}
+	}
 	if a == nil || a.Type == nil || *a.Type != q.Type {
 		return Answer{}, CauseMissing
 	}

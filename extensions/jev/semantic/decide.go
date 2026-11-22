@@ -124,7 +124,7 @@ func Respond(
 		if i < len(outcomes) {
 			o = outcomes[i]
 		}
-		files := batchFiles(b, units)
+		files := b.Units(units)
 		where := strings.Join(files, ", ")
 		switch {
 		case o.Class == jev.OK:
@@ -241,14 +241,6 @@ func action(o jev.Outcome) string {
 	default:
 		return "the Jev API may have changed; check its docs and status"
 	}
-}
-
-func batchFiles(b jev.Batch, units []jev.Unit) []string {
-	var files []string
-	for _, p := range b.Pieces {
-		files = appendNew(files, units[p.Unit].Name)
-	}
-	return files
 }
 
 func appendNew(list []string, items ...string) []string {

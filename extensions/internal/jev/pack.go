@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -80,6 +81,17 @@ type Batch struct {
 	Hash      string
 	Pieces    []Piece
 	Questions []Question
+}
+
+// Units returns the names of the units b carries, each once, in first-occurrence order.
+func (b Batch) Units(units []Unit) []string {
+	var names []string
+	for _, p := range b.Pieces {
+		if n := units[p.Unit].Name; !slices.Contains(names, n) {
+			names = append(names, n)
+		}
+	}
+	return names
 }
 
 // Unasked is a question asked on no request, and why.

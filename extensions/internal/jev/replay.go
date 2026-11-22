@@ -70,10 +70,5 @@ func (rec Record) Outcome(qs []Question) Outcome {
 	if rec.Status != 0 {
 		return statusOutcome(rec.Status, rec.Error == CauseMaxTokens)
 	}
-	if len(rec.Answer) > MaxAnswer {
-		return Outcome{Class: Persistent, Status: http.StatusOK, Cause: CauseAnswerTooLong}
-	}
-	o := Validate(rec.Answer, qs)
-	o.Status, o.Body = http.StatusOK, rec.Answer
-	return o
+	return okOutcome(rec.Answer, qs)
 }

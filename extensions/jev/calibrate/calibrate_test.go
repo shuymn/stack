@@ -132,16 +132,17 @@ type fakeJev struct {
 
 type planned struct {
 	c     Case
-	batch int
 	files []string
 }
 
 func newFake(t *testing.T, cases []Case) *fakeJev {
 	t.Helper()
 	f := &fakeJev{byHash: map[string]planned{}, attempts: map[string]int{}, t: t}
+	// Fixed cases are indexed too, although calibration never sends their bodies: TestCalibrate
+	// then names a fixed fixture's body sent by mistake.
 	for _, c := range cases {
-		for i, b := range c.Plan.Batches {
-			f.byHash[b.Hash] = planned{c, i, batchFiles(b, c.Units)}
+		for _, b := range c.Plan.Batches {
+			f.byHash[b.Hash] = planned{c, b.Units(c.Units)}
 		}
 	}
 	return f
