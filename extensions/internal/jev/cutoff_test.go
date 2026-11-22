@@ -60,11 +60,12 @@ func TestCutoff(t *testing.T) {
 		}
 	})
 
-	t.Run("the scan runs from 0.05 to 0.95", func(t *testing.T) {
-		low := slices.Concat(cases("pos", true, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5),
+	t.Run("the scan runs from 0.50 to 0.95", func(t *testing.T) {
+		// The margin test passes from 0.16 here, but a score under 0.50 leans no: the floor holds.
+		low := slices.Concat(cases("pos", true, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9),
 			cases("neg", false, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1))
-		if c, ok := FitCutoff(low, 0.8); !ok || c != 0.16 {
-			t.Fatalf("cutoff %v ok %v, want 0.16", c, ok)
+		if c, ok := FitCutoff(low, 0.8); !ok || c != 0.5 {
+			t.Fatalf("cutoff %v ok %v, want 0.50", c, ok)
 		}
 		// Clearing negatives at 0.92 needs 0.98, past the scan.
 		high := slices.Concat(cases("pos", true, 1, 1, 1, 1, 1, 1),

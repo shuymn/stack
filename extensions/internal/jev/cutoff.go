@@ -12,11 +12,11 @@ import (
 // Calibration constants (§3.5); cutoffs are scanned in hundredths.
 const (
 	percent = 100
-	// The cutoff scan of the margin rule.
-	minCutoff = 5
-	maxCutoff = 95
-	// The scan of the old rule, kept as the reported baseline.
-	minBaseline = 50
+	// minCutoff is the floor of both scans: a score under 0.50 leans no, and easy negatives would
+	// otherwise pull the cutoff down to where live false positives rise.
+	minCutoff = 50
+	// maxCutoff ends the margin rule's scan; maxBaseline the old rule's.
+	maxCutoff   = 95
 	maxBaseline = 99
 	cutoffStep  = 1
 	// Margin is the predeclared margin δ of the margin test, in hundredths (0.05).
@@ -107,7 +107,7 @@ func count(samples []Sample, hit func(Sample) bool) Stats {
 	return s
 }
 
-// FitCutoff is the lowest cutoff of 0.05–0.95 (step 0.01) that passes the margin test on fit:
+// FitCutoff is the lowest cutoff of 0.50–0.95 (step 0.01) that passes the margin test on fit:
 // precision ≥ target, TP > 0 and recall ≥ 0.5 under MarginEvaluate; ok is false when none does.
 // The runtime decision at the cutoff stays Hit.
 func FitCutoff(fit []Sample, target float64) (float64, bool) {
@@ -117,7 +117,7 @@ func FitCutoff(fit []Sample, target float64) (float64, bool) {
 // BaselineCutoff is the old rule, reported for comparison: the lowest cutoff of 0.50–0.99 whose
 // plain Evaluate on fit meets the same targets.
 func BaselineCutoff(fit []Sample, target float64) (float64, bool) {
-	return scan(fit, target, minBaseline, maxBaseline, Evaluate)
+	return scan(fit, target, minCutoff, maxBaseline, Evaluate)
 }
 
 func scan(
@@ -178,7 +178,7 @@ func Calibrate(fit, heldout []Sample, target float64) Decision {
 		d.Reason = fmt.Sprintf("heldout has %d positive and %d negative cases, under %d + %d",
 			hs.Positives, hs.Negatives, minHeldCases, minHeldCases)
 	case !ok:
-		d.Reason = fmt.Sprintf("no cutoff of 0.05-0.95 passes the margin test (±%.2f) with "+
+		d.Reason = fmt.Sprintf("no cutoff of 0.50-0.95 passes the margin test (±%.2f) with "+
 			"precision %.2f and recall %.2f on fit; review the corpus", Delta,
 			target, minRecall)
 	case hs.TP == 0 || hs.Precision < target || hs.Recall < minRecall:

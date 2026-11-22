@@ -276,9 +276,8 @@ func TestCalibrate(t *testing.T) {
 	}
 	for _, q := range semantic.Questions {
 		d := got.Decisions[q.Name]
-		// The fake's negatives reach 0.16, so the margin test clears them from 0.22; the old rule
-		// would take its floor, 0.50.
-		if !d.Enabled || d.Cutoff == nil || *d.Cutoff != 0.22 || d.Baseline == nil ||
+		// The fake's negatives reach 0.16 and its positives 0.84: both rules take the 0.50 floor.
+		if !d.Enabled || d.Cutoff == nil || *d.Cutoff != 0.5 || d.Baseline == nil ||
 			*d.Baseline != 0.5 || got.Placeholder != "" {
 			t.Fatalf("%s: %+v", q.Name, d)
 		}
@@ -599,12 +598,12 @@ func TestReport(t *testing.T) {
 	Report(&out, cases, Refit(cases))
 	got := out.String()
 	for _, want := range []string{
-		"unsupported_claim: enabled true, cutoff 0.16, baseline 0.50 (old rule)",
-		"  fit at 0.16: TP 17 FP 0 FN 1 TN 18, precision 1.00, recall 0.94, 6 + 6 cases",
-		"  heldout at 0.16: TP 9 FP 0 FN 0 TN 9, precision 1.00, recall 1.00, 3 + 3 cases",
+		"unsupported_claim: enabled true, cutoff 0.50, baseline 0.50 (old rule)",
+		"  fit at 0.50: TP 17 FP 0 FN 1 TN 18, precision 1.00, recall 0.94, 6 + 6 cases",
+		"  heldout at 0.50: TP 9 FP 0 FN 0 TN 9, precision 1.00, recall 1.00, 3 + 3 cases",
 		"  margin test (±0.05) on fit: TP 17 FP 0 FN 1 TN 18, precision 1.00, recall 0.94, 6 + 6 cases: pass",
 		"  baseline 0.50: fit TP 17 FP 0 FN 1 TN 18",
-		"  flips across calls at 0.16: en none; ja ja-flip",
+		"  flips across calls at 0.50: en none; ja ja-flip",
 		"meta_duty_regression: enabled false, cutoff none, baseline none (old rule)",
 		"  REVIEW: no cutoff passes the margin test",
 	} {
