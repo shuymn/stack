@@ -259,7 +259,7 @@ Ground truth is bound to the scored unit, derived from per-unit labels with the 
 | classify qualification | item | item label | `probabilities["correction"]`, `probabilities["drift"]` | 1 each, via the decision function |
 | classify duplicate | (reply, index) | item label | `noul` | 1 |
 
-`jev-calibrate` (owner, with the key) builds each case's synthetic repository and requests with the extension's own
+`jev-calibrate` (owner, with the key) builds each `cal` case's synthetic repository and requests with the extension's own
 builders, sends them through the live transport 3 times, writes the first answer (or status) to `records` and all
 three scores to `samples` (`null` for an attempt with no score), then refits; when the first attempt has no
 replayable outcome (e.g. a timeout before headers), the fixture is left unchanged and reported. Fitting uses the `fit` cases, each single-call score one sample (live
@@ -268,7 +268,9 @@ dropped): the cutoff is the lowest of 0.50–0.99 (step 0.01) with precision ≥
 0.8, router 0.7), true positives > 0 and recall ≥ 0.5; samples within ±0.05 are listed as unstable. Each decision
 needs ≥ 6 + 6 positive and negative `fit` cases and ≥ 3 + 3 `heldout` cases, and must meet its precision target
 and recall ≥ 0.5 on `heldout`; otherwise it ships disabled and its context says so. Calibrate refreshes `expect`
-and `want` of the `cal` fixtures (matched exactly). The `fixed` semantic fixtures (meta-duty hit, unsupported-claim
+and `want` of the `cal` fixtures (matched exactly) and never rewrites a `fixed` fixture, whose records are written
+by hand so a live answer cannot erase the scenario it checks; until its first run C11 fails in CI (`CI=true`) and
+skips locally, naming the command. The `fixed` semantic fixtures (meta-duty hit, unsupported-claim
 hit, clean, diverged base, split file, one batch hit with another rejected for size) keep hand-written `want`,
 matched on status, finding `kind` and `where`, non-empty context with hits, and no `jev-unrecorded`/`jev-error`
 (not probability, cutoff or pin text), so lost detection fails them; they run with test cutoffs injected by the test build (`-ldflags -X`, as the endpoint; no runtime override),

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/shuymn/stack/extensions/internal/jev"
@@ -155,18 +156,41 @@ func TestFixturesPinned(t *testing.T) {
 // repository root.
 const calibrateCommand = "TYPESAFE_API_KEY=<key> mise exec -- go run ./extensions/jev/cmd/jev-calibrate"
 
-// checkRefit is the gate on the first calibration run: it fails while the cutoff table is a
-// placeholder or any cal case is pending, and afterwards while the committed table differs from
-// the refit of the recorded samples.
+// Gate actions on an uncalibrated corpus.
+const (
+	gateFail = "fail"
+	gateSkip = "skip"
+)
+
+// calibrationGate decides the gate on the first calibration run: while the cutoff table is a
+// placeholder or any cal case is pending it fails in CI (ci is the CI variable, "true" on GitHub
+// Actions) and skips elsewhere, so the pre-push check still passes; msg names the command to run.
+// It returns the action, "" once calibrated, and the message.
+func calibrationGate(table jev.Table, pending int, ci string) (string, string) {
+	if table.Placeholder == "" && pending == 0 {
+		return "", ""
+	}
+	msg := fmt.Sprintf("not calibrated: the cutoff table is a placeholder (%v) and %d cal cases "+
+		"are pending; from the repository root run\n\t%s\nwhich records "+
+		"fixtures/jev/semantic/cal/*.json (records, samples, expect, want) and rewrites "+
+		"extensions/jev/semantic/cutoffs.json", table.Placeholder != "", pending,
+		calibrateCommand)
+	if ci == "true" {
+		return gateFail, msg
+	}
+	return gateSkip, msg
+}
+
+// checkRefit applies the calibration gate, then requires the committed table to be the refit of
+// the recorded samples.
 func checkRefit(t *testing.T, cases []calibrate.Case, table jev.Table, pending int) {
 	t.Helper()
-	if table.Placeholder != "" || pending != 0 {
-		t.Errorf("not calibrated: the cutoff table is a placeholder (%v) and %d cal cases are "+
-			"pending; from the repository root run\n\t%s\nwhich records "+
-			"fixtures/jev/semantic/cal/*.json (records, samples, expect, want) and rewrites "+
-			"extensions/jev/semantic/cutoffs.json", table.Placeholder != "", pending,
-			calibrateCommand)
+	switch action, msg := calibrationGate(table, pending, os.Getenv("CI")); action {
+	case gateFail:
+		t.Error(msg)
 		return
+	case gateSkip:
+		t.Skip(msg)
 	}
 	refit, err := json.Marshal(calibrate.Refit(cases))
 	if err != nil {
@@ -199,4 +223,32 @@ func (o gitOps) Remove(name string) error {
 func (o gitOps) Git(args ...string) error {
 	o.r.Git(args...)
 	return nil
+}
+
+func TestCalibrationGate(t *testing.T) {
+	placeholder := jev.Table{Model: jev.Pin, Placeholder: "not yet calibrated"}
+	calibrated := jev.Table{Model: jev.Pin}
+	for _, c := range []struct {
+		name    string
+		table   jev.Table
+		pending int
+		ci      string
+		want    string
+	}{
+		{"placeholder table in CI fails", placeholder, 18, "true", gateFail},
+		{"placeholder table alone in CI fails", placeholder, 0, "true", gateFail},
+		{"pending cases in CI fail", calibrated, 1, "true", gateFail},
+		{"placeholder table locally skips", placeholder, 18, "", gateSkip},
+		{"calibrated corpus passes in CI", calibrated, 0, "true", ""},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			action, msg := calibrationGate(c.table, c.pending, c.ci)
+			if action != c.want {
+				t.Fatalf("action %q, want %q", action, c.want)
+			}
+			if action != "" && !strings.Contains(msg, calibrateCommand) {
+				t.Fatalf("message %q does not name the command", msg)
+			}
+		})
+	}
 }
