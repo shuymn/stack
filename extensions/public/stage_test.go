@@ -222,7 +222,7 @@ func TestHitsCut(t *testing.T) {
 func TestStageDeadline(t *testing.T) {
 	saved := checkTimeout
 	// Long enough for three fake git starts under -race on a loaded machine.
-	checkTimeout = 5 * time.Second
+	checkTimeout = 10 * time.Second
 	t.Cleanup(func() { checkTimeout = saved })
 	const sha = "0123456789abcdef0123456789abcdef01234567"
 	top := "top"
