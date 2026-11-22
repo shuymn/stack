@@ -50,8 +50,9 @@ Every `jev-*` reads stdin to EOF first. Then:
 | Stdin is not one JSON object with a string `stage` | `warn`, finding `jev-error` "invalid request", context the same line | none |
 | `stage` is not the extension's own | `pass` (as `extensions/public/stage.go:95`) | none |
 | `TYPESAFE_API_KEY` unset or empty and no `jev` object (§3.4) | `pass`, no context, no file read or written | none |
-| Nothing to ask (outbound: empty `range`, since both questions need the diff; entry: no kit and empty `prompt`; cycle: no `owner-reply` item) | `pass`, no context | none |
-| Preparation fails (semantic: a git command exits non-zero, is cut or times out) | `warn`, finding `jev-error` naming the command and exit | none |
+| Nothing to ask (outbound: empty `range` or a diff with no files, since both questions need the diff; entry: no kit and empty `prompt`; cycle: no `owner-reply` item) | `pass`, no context | none |
+| Preparation fails (semantic: a git command exits non-zero or its output is cut) | `warn`, finding `jev-error` naming the command and exit | none |
+| Preparation reaches the work deadline (a slow git) | the questions are unassessed (`preparation deadline`) | none |
 | A request fails transiently (connect or TLS error, timeout, 429, 529, any 5xx) or is too large (400 `max_tokens_exceeded`, 413) | its questions are unassessed; one stderr line `jev: <n> requests skipped: <cause>` | no retry, no re-split |
 | A request fails persistently: any other non-200 (400, 401, 402, 403, 404, 415, 422, …), a body not of the §2 shape, `model` ≠ the pin, a missing or wrongly typed answer, a probability not finite in [0, 1], a body over 1 MiB | `warn`, finding `jev-error` (`detail`: status or fixed cause) and one context line naming the cause and the action (`jev-router: Jev answered 401: check TYPESAFE_API_KEY`) | — |
 
@@ -62,40 +63,40 @@ jev-lint). Details are fixed strings and the HTTP status, never the body, which 
 
 **Batching.** Provider limits shape batches and never drop input. Packing is decided before sending, from encoded
 sizes alone, by one function in `extensions/internal/jev` (also used by §3.6 and the tests). Each request carries
-the fixed fields its questions need (semantic: the texts) and units in a fixed order (diff files, kits, items), packed
-greedily up to a unit budget of 48 KiB less the encoded fixed fields; a larger unit is split by lines (a longer line
-at UTF-8 boundaries) into parts marked `part k of n` that fit. When the fixed fields alone leave no budget, the
-questions that need them are unassessed. Encoded questions stay ≤ 16 KiB per request; more go to another request
-on the same state. Every sent body is thus determined by the input alone. Up to 4 requests are in flight; results
-are assembled in unit order, whatever order they complete in.
+the fixed fields its questions need (semantic: the texts) and units in a fixed order (diff files, kits, items),
+packed greedily up to a unit budget of 48 KiB less the encoded fixed fields; a larger unit is split by lines (a
+longer line at UTF-8 boundaries) into parts marked `part k of n`, each measured in its complete encoded state.
+When the budget is under 1 KiB or the smallest non-empty part cannot fit, the questions that need it are
+unassessed. Questions stay ≤ 16 KiB per request; more go to another request on the same state. Every body is thus
+determined by the input alone. Up to 4 requests are in flight; results are assembled in unit order.
 
 **Budgets.** Each extension's budget runs from process start: router 4 s, semantic 10 s, classify 5 min. The work
 deadline is the budget less a finalisation reserve (0.3 s, 0.5 s, 20 s) and bounds every cancellable step: git, file
-reads, requests, ledger appends; when it passes, the rest is unassessed and the reserve assembles the response (and
-classify's file). The encoded response stays under 512 KiB, half core's 1 MiB stdout limit (`internal/ext/ext.go:211`):
-findings past it become one `jev-omitted` finding counting them, context lines are cut with a marker. Core's
-deadlines are separate (`internal/ext/ext.go:47-50`): entry 10 s at `kit open`, at compaction the earlier of 10 s and
-the hook's 55 s cut-off less 2 s, run when ≥ 1 s remains (`internal/session/session.go:255-289`); outbound 120 s
-after `public`, whose scan stops at 100 s (`extensions/public/stage.go:29-40`), so semantic usually starts with
-≥ 18 s left; cycle 30 min for classify's own call. When core cuts a child it records a synthetic `warn` (`timed out:
-stage deadline …`), a distinct outcome from a self-answered partial result; at compaction the router's stderr is
-discarded.
+reads, requests, ledger appends; past it the rest is unassessed and the reserve assembles the response (and
+classify's file). Children get a 0.2 s pipe wait and a timeout 0.2 s before the work deadline, so killing git and
+reaping its pipes fit inside the budget. The response stays under 512 KiB, half core's 1 MiB stdout limit
+(`internal/ext/ext.go:211`): further findings become one `jev-omitted` count, context lines are cut with a marker.
+Core's deadlines are separate (`internal/ext/ext.go:47-50`): entry 10 s at `kit open`, at compaction the earlier of
+10 s and the hook's 55 s cut-off less 2 s, run when ≥ 1 s remains (`internal/session/session.go:255-289`); outbound
+120 s after `public`, whose scan stops at 100 s (`extensions/public/stage.go:29-40`), leaving semantic ≥ 18 s
+usually; cycle 30 min. When core cuts a child it records a synthetic `warn`, distinct from a self-answered partial
+result; at compaction the router's stderr is discarded.
 
 ### 3.2 What each extension sends and returns (item 2)
 
-All requests use `model: "jev-1.14.0"`. Metadata the extensions generate in sent fields holds no wall-clock time and
-no local absolute path; source text is sent as it is.
+All requests use `model: "jev-1.14.0"`; generated metadata in them has no wall-clock time or local absolute path.
 
 **`jev-semantic` (outbound).** Read from `repo` (the cwd when `""`). Git runs with the repository-location variables
 dropped (as `extensions/internal/checkpub/checkpub.go:244-253`), `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_COUNT` and its
 `GIT_CONFIG_KEY_*`/`GIT_CONFIG_VALUE_*` dropped, `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL` the null device, and
 `-c` overrides that beat repository-local config: `core.quotePath=false`, `diff.noprefix=false`,
 `diff.mnemonicPrefix=false`, `diff.suppressBlankEmpty=false`, `diff.relative=false`, `diff.renames=false`,
-`diff.context=3`, `diff.interHunkContext=0`, `diff.algorithm=myers`, `diff.orderFile` neutralised,
-`i18n.logOutputEncoding=UTF-8`. Commands: `git log --encoding=UTF-8 --no-show-signature --format=%B%x00 <range>`
-(messages split on NUL into `commits`) and `git diff --text --no-ext-diff --no-textconv --no-color --no-renames
---no-relative --ignore-submodules=none --submodule=short --full-index --src-prefix=a/ --dst-prefix=b/ -U3 <range>`
-(`--full-index` so `core.abbrev` and object count cannot change `index` lines); output is LF-normalised. Fixed
+`diff.context=3`, `diff.interHunkContext=0`, `diff.algorithm=myers`, `diff.indentHeuristic=true`, `diff.orderFile`
+neutralised, `i18n.logOutputEncoding=UTF-8`. Commands: `git log -z --encoding=UTF-8 --no-show-signature --format=%B
+--end-of-options <range>` (NUL-separated into `commits`, the empty last field dropped) and `git diff --text
+--no-ext-diff --no-textconv --no-color --no-renames --no-relative --ignore-submodules=none --submodule=short
+--full-index --src-prefix=a/ --dst-prefix=b/ -U3 --end-of-options <range> --` (`--full-index` against
+`core.abbrev`), LF-normalised; bodies are reproducible in this environment for the settings C6 exercises. Fixed
 fields are `title`, `body`, `branch` and `commits`; units are the diff's files in diff order. Two `noul` questions:
 
 - `meta_duty_regression`. Instructions: "Does `diff` remove or weaken a duty the project performs on itself,
@@ -126,7 +127,8 @@ create or edit; that call is unchanged. A dotfiles PR adds, after it passes: pin
 `mb=$(git merge-base <PR base> <head>)` (the comparison GitHub shows for a PR), and run `stack run outbound --ext
 jev-semantic --range <mb>..<head>` with the same three text flags; the agent reports the findings and the exit code
 does not stop the push. `stack run outbound` already accepts these flags (`docs/architecture.md` §3); no core
-change. A bare `@{upstream}..HEAD` run is not the PR comparison; CI is not wired (it would need the key as a secret).
+change; CI is not wired (it would need the key as a secret). The dotfiles PR tests that on a diverged repository
+where only the base adds a test, the `--range` it passes starts at the merge base, so that test never shows deleted.
 
 **`jev-router` (entry).** Candidates are the files matching `references` globs from the router's `jev.toml`
 (`.config/stack/jev.toml` under the home directory, optional; broken → `warn` and the defaults), default
@@ -147,17 +149,15 @@ jev-router (jev-1.14.0): references likely needed now; read each before the step
 - <Claude config dir>/skills/hiden/references/review.md (0.91): <first heading>
 ```
 
-Paths are the absolute local paths read (local context), never cut: a line over 300 UTF-16 units drops its summary,
-and a line that would take the context over 1,000 units is dropped whole (units as core counts,
-`internal/session/budget.go:14-16`). Partial coverage adds `(n of m inputs not scored)`, alone when nothing hit; no
-hit with full coverage → `pass`, no context. Placement at compaction is best-effort
-(`internal/session/session.go:292-309`).
+Paths are the absolute local paths read, never cut: a line over 300 UTF-16 units drops its summary, one that would
+pass 1,000 units is dropped whole (`internal/session/budget.go:14-16`). Partial coverage adds `(n of m inputs not
+scored)`, alone when nothing hit; no hit with full coverage → `pass`, no context. Compaction placement is
+best-effort (`internal/session/session.go:292-309`).
 
 **`jev-classify` (cycle).** Input: the observe file (`.local/state/stack/observe/latest.json` under the home
-directory, `extensions/observe/observe.go:601`), fresh when its `window.until` is within 24 h of classify's clock
-(missing → `pass` "no observation"; stale → `pass` "stale observation"; unparsable or unknown `version` → `warn`).
-Its `owner-reply` items follow observe's rule (`extensions/observe/transcripts.go:369-375`,
-`extensions/observe/sources.go:93-104`), with two locator forms, resolved grouped by source:
+directory), fresh when `window.until` is within 24 h of classify's clock (missing or stale → `pass` saying so;
+unparsable or unknown `version` → `warn`). Its `owner-reply` items follow observe's rule
+(`extensions/observe/transcripts.go:369-375`, `sources.go:93-104`), two locator forms, resolved grouped by source:
 
 - `path:line` (Claude transcripts), split on the last `:`: the user record at that line gives the reply; the text
   blocks of the assistant records since the previous genuine user turn (a user record that is not a tool result,
@@ -175,9 +175,9 @@ cases: an item **qualifies** as `correction` or `drift` when `probabilities[labe
 **Duplicates.** Claude Code keeps auto memory in `projects/<project>/memory/` under the Claude configuration
 directory, `<project>` derived from the Git repository so all worktrees share it, `MEMORY.md` its index, or
 `autoMemoryDirectory` when set (https://code.claude.com/docs/en/memory "Storage location"). Classify resolves the
-repository from the record's `cwd` (`git rev-parse --path-format=absolute --git-common-dir`, its parent) and encodes
-it as Claude Code names project directories (every character outside `[A-Za-z0-9]` → `-`; **assumption**,
-observed), honouring `autoMemoryDirectory` in the user settings. Question `dup_<id>` `noul` on `{memory_index,
+repository from the record's `cwd` (`git rev-parse --path-format=absolute --git-common-dir`, its parent), encodes it
+as Claude Code names project directories (non-`[A-Za-z0-9]` → `-`; **assumption**, observed) and honours the user
+settings' `autoMemoryDirectory`. Question `dup_<id>` `noul` on `{memory_index,
 replies: [{id, reply}]}`: "Does a line of `memory_index` already state the rule that reply `<id>` in `replies`
 corrects?" Outcome: `duplicate` (at or above the cutoff), `new` (asked, below it), `unassessed` (no index, cwd or
 repository gone, unresolvable T3 cwd, transient or too large, deadline). Only the index is compared.
@@ -188,15 +188,14 @@ classified|unresolved|unevaluated, outcome, choice, probabilities, duplicate, du
 run cut by its budget writes `complete: false`; an earlier file is dated by its `window` and `run.finished`.
 Context: counts, up to 10 `new` qualified items (`where`, ≤ 160-char excerpt), unresolved and unevaluated counts.
 
-**Cycle wiring (dotfiles).** The supported path, scheduled or manual, is the job's dedicated calls: after improve,
-`stack run cycle --ext jev-classify`, so classify never takes improve's time (`docs/design/phase3-cycle.md` §4.8).
-Observe's and improve's results stay authoritative: binary missing → under `skipped` in `last.json`; self-answered
-`pass`/`warn` → merged; exit ≠ 0, invalid output or a synthetic `error` → a merged `warn` result with that
-`error`, and the job still exits 0.
+**Cycle wiring (dotfiles).** The supported path, scheduled or manual, is the job's dedicated call after improve,
+`stack run cycle --ext jev-classify` (`docs/design/phase3-cycle.md` §4.8); observe's and improve's results stay
+authoritative: missing → `skipped`; self-answered → merged; exit ≠ 0, invalid output or a synthetic `error` → a
+merged `warn` result with that `error`, and the job still exits 0.
 
 **Settled in the PR 2 / PR 3 design round** (open here): router compaction tests with full, partial and no room;
-a fixture-backed T3 reader or `sqlite3` fake for replay; packing the memory index against the replies; an item
-split into parts whose answers disagree or are missing; a fake-`stack` test of the wrapper's classify outcomes.
+a T3 reader or `sqlite3` fake and a fixture memory index with a known duplicate for replay; packing the index
+against the replies; an item split into parts whose answers disagree or are missing; a fake-`stack` wrapper test.
 
 ### 3.3 Layout and shared client (item 5)
 
@@ -213,9 +212,9 @@ One shared package holds transport, validation, packing, replay, metering, cutof
 state building, router configuration and classify's file stay with their extension. `net/http` only, bound by the
 work deadline; no SDK. The endpoint is a link-time variable only test builds set (`-ldflags -X`), never
 configuration. Each body is marshalled once; those bytes are hashed (§3.4) and sent. **Ledger:** each live attempt
-appends `{run, time, extension, model, outcome, elapsed_ms, input_tokens}` (`null` without `usage`) to
-`.local/state/stack/jev/usage.jsonl`; `run` is a random per-process ID; appends are serialised; an I/O error is one
-stderr line and changes no status. Replay never writes it.
+appends `{run, time, extension, model, outcome, elapsed_ms, input_tokens}` (outcome `ok`, `max_tokens_exceeded`,
+`transient` or `error`; tokens `null` without `usage`) to `.local/state/stack/jev/usage.jsonl`; `run` is a random
+per-process ID; appends are serialised; an I/O error is one stderr line and changes no status. Replay never writes.
 
 ### 3.4 `--replay` without a key (item 4)
 
@@ -236,13 +235,12 @@ fields. Core gives no other replay marker, so the offline guarantee holds for a 
 ```
 
 A record maps the SHA-256 of a sent body to its answer or non-200 status; packing depends only on the input, so a
-fixture holds exactly the bodies the live run sends. With `jev` present the extension never calls the network, key
-or not; a body with no record → `warn` `jev-unrecorded`. Machine inputs come from the fixture: `repo`, a synthetic
-repository the test builds (fixed identity and dates, refs `jev-mb`, `jev-head`, a diverged base) as semantic's cwd;
-`jev.references` (router globs over fixture reference stubs) and `kits` dirs relative to the cwd; `jev.observe` and
-`jev.now` (classify's input and clock). `<REFS>` in `want` expands (`filepath.Join`) to the stub directory;
-classify's artifact is compared with `run.id` asserted non-empty and normalised and run times from `jev.now`. Core
-reads only `request` and `expect`; the tests read the rest.
+fixture holds exactly the live run's bodies. With `jev` present the extension never calls the network, key or not;
+a body with no record → `warn` `jev-unrecorded`. Machine inputs come from the fixture: `repo` (a synthetic repository
+the test builds with fixed identity and dates, refs `jev-mb`, `jev-head`, a diverged base; semantic's cwd);
+`jev.references` (globs over reference stubs) and `kits` relative to the cwd; `jev.observe` and `jev.now`. `<REFS>`
+in `want` expands to the stub directory; classify's `run.id` is asserted non-empty then normalised, its times come
+from `jev.now`. Core reads only `request` and `expect`.
 
 ### 3.5 Pinned model and cutoffs (item 3)
 
@@ -253,7 +251,7 @@ Ground truth is bound to the scored unit, derived from per-unit labels with the 
 
 | Decision | Scored unit | Ground truth | Score | Cutoffs |
 |---|---|---|---|---|
-| semantic meta-duty | one request | any of its files labelled true | `noul` | 1 |
+| semantic meta-duty | one request (cases that split a file are fixed-only, not fitted) | any of its files labelled true | `noul` | 1 |
 | semantic unsupported claim | the whole-PR request | case label | `noul` | 1 |
 | router relevance | (state unit, candidate) | the unit's relevant-candidate list | `noul` | 1 shared by all candidates |
 | classify qualification | item | item label | `probabilities["correction"]`, `probabilities["drift"]` | 1 each, via the decision function |
@@ -262,15 +260,17 @@ Ground truth is bound to the scored unit, derived from per-unit labels with the 
 `jev-calibrate` (owner, with the key) builds each case's synthetic repository and requests with the extension's own
 builders, sends them through the live transport 3 times, writes the first answer (or status) to `records` and all
 three scores to `samples`, then refits. Fitting uses the `fit` cases, each single-call score one sample (live
-decides on one call): the cutoff is the lowest of 0.50–0.99 (step 0.01) with precision ≥ the target (semantic 0.8,
-classify 0.8, router 0.7), true positives > 0 and recall ≥ 0.5; samples within ±0.05 are listed as unstable. Each
-decision needs ≥ 6 + 6 positive and negative `fit` cases and ≥ 3 + 3 `heldout` cases, and must meet its precision
-target and recall ≥ 0.5 on `heldout`; otherwise it ships disabled and its context says so.
-Calibrate refreshes `expect` and `want` of the `cal` fixtures from the first recorded answer; the `fixed` semantic
-fixtures (meta-duty hit, unsupported-claim hit, clean, diverged base) keep hand-written `want` it never rewrites, so
-lost detection fails them. Replay uses the recorded transport. **Model bump:** one PR changes the pin, re-records,
-refits, and reports old vs new on `heldout` (precision, recall, support, router top-3 hits). The synthetic corpus
-measures regressions on itself; the ledger does not measure live precision.
+decides on one call; a planned call with no score, e.g. a size rejection, is a negative prediction, never
+dropped): the cutoff is the lowest of 0.50–0.99 (step 0.01) with precision ≥ the target (semantic 0.8, classify
+0.8, router 0.7), true positives > 0 and recall ≥ 0.5; samples within ±0.05 are listed as unstable. Each decision
+needs ≥ 6 + 6 positive and negative `fit` cases and ≥ 3 + 3 `heldout` cases, and must meet its precision target
+and recall ≥ 0.5 on `heldout`; otherwise it ships disabled and its context says so. Calibrate refreshes `expect`
+and `want` of the `cal` fixtures (matched exactly). The `fixed` semantic fixtures (meta-duty hit, unsupported-claim
+hit, clean, diverged base, split file, one batch hit with another rejected for size) keep hand-written `want`,
+matched on status, finding `kind` and `where`, non-empty context with hits, and no `jev-unrecorded`/`jev-error`
+(not probability, cutoff or pin text), so lost detection fails them. Replay uses the recorded transport. **Model
+bump:** one PR changes the pin, re-records, refits, and reports old vs new on `heldout` (precision, recall, support,
+router top-3 hits). The corpus measures regressions on itself; the ledger does not measure live precision.
 
 ### 3.6 Cost and latency estimates (item 6)
 
@@ -316,8 +316,8 @@ About 100 pushes, 300 kit opens and 30 cycles a month ≈ $0.4, uncapped; O6 rep
 
 | ID | EARS criterion | Source | Scenario | Observable result / failure | Check |
 |---|---|---|---|---|---|
-| P1 | While no `TYPESAFE_API_KEY` is set, each `jev-*` shall answer `pass` with no context and make no call. | #57 opt-out | live request, key unset | `pass`, `context` `""`; failure: warn or a ledger line | `env -u TYPESAFE_API_KEY stack run outbound --ext jev-semantic --range <r>`, `stack run entry --ext jev-router`, `stack run cycle --ext jev-classify` |
-| P2 | When a PR's merge-base range weakens a test or check without saying so, `jev-semantic` shall answer `warn` with a `jev-meta-duty` finding naming the files; a test deleted only on the base shall not appear. | #57 | `fixed` hit and diverged-base fixtures | the `want` finding; failure: pass or other kinds | `replay-test`; key: O2 |
+| P1 | While no `TYPESAFE_API_KEY` is set, each `jev-*` shall answer `pass` with no context and make no call. | #57 opt-out | live request, key unset | `pass`, `context` `""`; failure: warn or a ledger line | each under `env -u TYPESAFE_API_KEY`: `stack run outbound --ext jev-semantic --range <r>`, `stack run entry --ext jev-router`, `stack run cycle --ext jev-classify` |
+| P2 | When a PR's merge-base range weakens a test or check without saying so, `jev-semantic` shall answer `warn` with a `jev-meta-duty` finding naming the files; a test added only on the base shall not show as deleted. | #57 | `fixed` hit and diverged-base fixtures; the dotfiles caller test (§3.2) | the `want` finding; failure: pass or other kinds | `replay-test`; key: O2 |
 | P3 | When the PR text claims what the diff does not show and the PR fits one request, `jev-semantic` shall answer `warn` with `jev-unsupported-claim`; when it does not fit, it shall report the question unassessed. | #57; owner decision | "add tests" without tests; a large PR | finding or `jev-unassessed` | `replay-test`; key: O2 |
 | P4 | `jev-semantic` shall never make `stack run outbound` exit 1, and `public`'s refusal shall still exit 1. | §1 | live run, both extensions | exit 0 with a semantic `warn`; exit 1 with `public: block` | C15 |
 | P5 | When a kit is open in a session and a reference scores at or above the cutoff, the entry context shall list ≤ 3 uncut paths within 1,000 UTF-16 units. | #57 | synthetic kit about a review | the `want` context | `replay-test`; key: O3 |
@@ -333,16 +333,16 @@ About 100 pushes, 300 kit opens and 30 cycles a month ≈ $0.4, uncapped; O6 rep
 |---|---|---|---|
 | C1 | While the key is empty and no `jev` object is present, `Main` shall write one valid `pass` after reading stdin to EOF, touch no file and open no connection. | P1 | `jev.TestOptOut` per binary |
 | C2 | The client shall treat network errors, timeout, 429, 529, 5xx, 400 `max_tokens_exceeded` and 413 as unassessed without retry, and every other non-200, a body over 1 MiB, missing or null fields, model mismatch and non-finite or out-of-range probabilities as persistent, never echoing the body (a sentinel in it is absent from output). | P9 | `jev.TestClientErrors` (`httptest`, slow body) |
-| C3 | Packing shall use the budget 48 KiB less the fixed fields, split an oversize unit into ordered parts that fit, keep questions ≤ 16 KiB, mark questions unassessed when the fixed fields leave no budget, and lose no unit. | §3.1 | `jev.TestPack` (25 KiB texts with a small diff; a single file over the budget; captured bodies reassemble every unit) |
-| C4 | Each extension shall stop at its work deadline, including slow git or file reads, report the rest unassessed (classify: `complete: false`), answer within its reserve, and keep the response under 512 KiB with `jev-omitted`; core's synthetic `warn` under a shorter parent deadline is a separate outcome. | §3.1 | `<ext>.TestBudget` (fake clock, slow server, delayed preparation, many-batch result accepted by core, shortened core deadline) |
-| C5 | Invalid stdin → `warn`; another stage, nothing to ask (empty range, no kits and prompt, no items) → `pass` with no request; results assemble in unit order under out-of-order completion. | §3.1 | `<ext>.TestNothingToAsk`, `jev.TestOrder` |
-| C6 | `jev-semantic` shall build identical bodies under config variants (system, global, `GIT_CONFIG_PARAMETERS`, repository-local `diff.suppressBlankEmpty`, `diff.noprefix`, `diff.relative`, `core.abbrev`, `diff.orderFile`), ask `unsupported_claim` only when the whole PR fits, and answer `warn` before any request on a git failure. | P2, P3 | `semantic.TestState` (synthetic repository) |
+| C3 | Packing shall use the budget 48 KiB less the fixed fields, split an oversize unit into ordered parts measured in their complete encoded state, keep questions ≤ 16 KiB, mark questions unassessed when the budget is under 1 KiB or the smallest part cannot fit, and lose no unit. | §3.1 | `jev.TestPack` (25 KiB texts with a small diff; a file over the budget; budgets just above and below 1 KiB; escaped runes and `part k of n` framing at the boundary; captured bodies reassemble every unit) |
+| C4 | Each extension shall stop at its work deadline, report the rest unassessed (classify: `complete: false`), answer within its reserve, and keep the response under 512 KiB with `jev-omitted`; core's synthetic `warn` under a shorter parent deadline is a separate outcome. | §3.1 | `<ext>.TestBudget`: slow git → no request, questions unassessed (`preparation deadline`), answer by 10 s; slow HTTP → answered batches kept, rest unassessed; many-batch result accepted by core; shortened core deadline |
+| C5 | Invalid stdin → `warn`; another stage, nothing to ask (empty range, a range whose diff has no files, no kits and prompt, no items) → `pass` with no request; results assemble in unit order under out-of-order completion. | §3.1 | `<ext>.TestNothingToAsk`, `jev.TestOrder` |
+| C6 | `jev-semantic` shall build identical bodies under config variants (system, global, `GIT_CONFIG_PARAMETERS`, repository-local `diff.suppressBlankEmpty`, `diff.noprefix`, `diff.relative`, `diff.indentHeuristic` on a patch whose hunks move, `core.abbrev`, `diff.orderFile`), ask `unsupported_claim` only when the whole PR fits, and answer `warn` before any request on a git failure. | P2, P3 | `semantic.TestState` (synthetic repository) |
 | C7 | A probability just below, at and above the cutoff shall decide pass, hit, hit; a disabled decision never flags; never `block`. | P2–P4 | `semantic.TestDecision` |
 | C8 | `jev-router` shall resolve, normalise and sort candidates, send slugs not dirs, take each candidate's maximum, rank by probability then path, never cut a path, report partial coverage with or without hits, and keep ≤ 1,000 UTF-16 units with astral characters; a broken `jev.toml` gives `warn` and the defaults. | P5 | `router.TestCandidates`, `router.TestContext`, `router.TestConfig` |
 | C9 | `jev-classify` shall resolve both locator forms (a tool result between the assistant text and the reply is skipped), report unresolved items, use the fixture clock, send only qualified items to `dup_` with their reply and ID, and write its file atomically. | P6 | `classify.TestRun` (missing, stale, malformed observe file; paused write and failed rename leave the old file whole) |
-| C10 | Cutoff selection shall meet the precision target with TP > 0 and recall ≥ 0.5, disable a decision under its fit or held-out floor, be unchanged when held-out samples change, and use the runtime decision function. | P7 | `jev.TestCutoff` |
-| C11 | Every record and cutoff table shall name the pin; cutoffs refitted from `samples` shall equal the committed ones; changing the root dir or clock keeps every key, and changing state, a question or the pin changes it. | P7, §3.4 | `jev.TestFixturesPinned` |
-| C12 | Every fixture shall, through `replay-test`, give exactly one self-answered result with empty `error`, its `expect` status, its exact `want` findings and context (classify: artifact), and no `jev-unrecorded` or `jev-error` unless wanted; once with the key unset and once with a dummy key and a test endpoint that fails the test on any request; a hit fixture with its records deleted shall fail the `want` assertion. | P2–P8 | `<ext>.TestFixtures` |
+| C10 | The fitted cutoff shall meet the precision target with TP > 0 and recall ≥ 0.5 on `fit` alone, count an unscored planned call as a negative prediction, and use the runtime decision function; held-out eligibility is asserted separately: changing held-out scores leaves the fitted number unchanged and can flip the decision to disabled; under a fit or held-out floor it is disabled. | P7 | `jev.TestCutoff` |
+| C11 | Every answer record and cutoff table shall name the pin, and every status record shall match a rebuilt body hash; cutoffs refitted from `samples` shall equal the committed ones; changing the root dir or clock keeps every key, and changing state, a question or the pin changes it. | P7, §3.4 | `jev.TestFixturesPinned` |
+| C12 | Every fixture shall, through `replay-test`, give exactly one self-answered result with empty `error`, its `expect` status, its `want` (`cal`: exact findings and context, classify: artifact; `fixed`: §3.5 matching), and no `jev-unrecorded` or `jev-error` unless wanted; once with the key unset and once with a dummy key and a test endpoint that fails the test on any request; a hit fixture with its records deleted shall fail the `want` assertion. The mixed fixture keeps the hit and reports the rejected batch's questions unassessed with no `jev-error`, and its live counterpart against a fake endpoint sends exactly one request per planned body. | P2–P9 | `<ext>.TestFixtures`, `semantic.TestMixedLive` |
 | C13 | No package under `cmd/` or `internal/` shall import `extensions/`, and the jev packages shall import no `internal/` package outside test helpers. | owner decision | existing `depguard` rules |
 | C14 | Each live attempt shall append one serialised ledger line with run, outcome, elapsed time and known or `null` usage; an I/O error shall be one stderr line with the status unchanged; replay shall write none. | P10 | `jev.TestLedger` |
 | C15 | A live `stack run outbound --ext public --ext jev-semantic --range <r>` with built binaries and a test endpoint answering a hit shall exit 0 with both named results (`public: pass`, semantic `warn`) on clean texts, and exit 1 with `public: block` and the semantic result on a texts hit. | P4 | `semantic.TestExitCodes` (non-replay) |
