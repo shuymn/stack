@@ -23,7 +23,9 @@ func TestParseCwdGrowth(t *testing.T) {
 		if r.Err != nil || len(r.Calls) != calls {
 			t.Fatalf("err %v, %d calls; want %d", r.Err, len(r.Calls), calls)
 		}
-		if alloc := after.TotalAlloc - before.TotalAlloc; alloc > 4096*uint64(calls)+64<<10 {
+		//nolint:gosec // G115: a call count is never negative.
+		budget := 4096*uint64(calls) + 64<<10
+		if alloc := after.TotalAlloc - before.TotalAlloc; alloc > budget {
 			t.Errorf("Parse allocated %d bytes for %d bytes of input", alloc, len(cmd))
 		}
 		return r
