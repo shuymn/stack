@@ -256,9 +256,15 @@ exists, or ask the user."
 ### 7.1 Purpose layer
 
 Real-CLI check: build both binaries into a temp dir inside the worktree, set `USERPROFILE`/`HOME` to a temp home
-whose `safety.toml` lists `.dev.vars`, and pipe a payload:
-`printf '%s' '{"hook_event_name":"PreToolUse","tool_name":"PowerShell","cwd":"<tmp>","tool_input":{"command":"<cmd>"}}' | <tmp>/stack hook claude pre-tool-use`
+whose `safety.toml` lists `.dev.vars`, write the PowerShell command to a file `<tmp>/cmd.ps1` with an editor, and
+pipe a payload built with `jq`:
+`jq -nc --arg cwd '<tmp>' --rawfile cmd '<tmp>/cmd.ps1' '{hook_event_name:"PreToolUse",tool_name:"PowerShell",cwd:$cwd,tool_input:{command:$cmd}}' | <tmp>/stack hook claude pre-tool-use`
 (likewise `<tmp>/stack-guard hook claude pre-tool-use`); deny = the JSON reason, allow = empty stdout, exit 0 always.
+Keep the command in the file: pasting it into a JSON string (`printf`, `echo`) can make the payload invalid (an
+unescaped `\` in a Windows path), which both hooks allow silently, or change the command (`\t` becomes a tab); and
+pasting it into a shell argument lets the shell consume its quotes (`& 'gh'` becomes `& gh`). Save the file as UTF-8
+without a BOM (Windows PowerShell 5.1 writes UTF-16 or a BOM by default, and the hooks then allow everything), and run
+the pipeline with `set -o pipefail` so a `jq` error is not read as an allow.
 
 | ID | EARS criterion | Source | Scenario → observable result / failure | Real-CLI check |
 |---|---|---|---|---|
