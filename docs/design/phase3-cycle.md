@@ -95,7 +95,7 @@ Every behaviour of the legacy cycle, with the v10 decision. "Owner command" rows
 | Preflight: `host.toml`, `private-terms`, signing key, `claude auth status` (`improve.py:502-515,533-548`) | **Changed**: no preflight; a step failing before the model starts removes the stamp and warns. A signing failure surfaces at commit, after billing, as `failed:commit` with the patch kept | the owner's every commit uses the same signer, so a broken one is noticed in daily work; a preflight duplicates it |
 | Minimal environment, endpoint env copied from settings because `--restricted` ignores them; credential redaction and leak check (`improve.py:257-281,517-531,605-606`) | **Changed**: `claude -p` loads only the owner's user settings source (endpoint included), auto memory off; file tools confined to the worktree by permission settings; endpoint-credential leak check and redaction **kept**, and extended to the pinned commit, title and body (§3.4 steps 9, 12) | §1 drops `--restricted`; the leak check is an independent guarantee |
 | Bare mirror of the public URL, `git archive` temp tree (`improve.py:554-555,596-598`) | **Changed**: fetch of the default branch into `refs/remotes/origin/<default>` in the target checkout, then a detached `git worktree add` of the pinned commit | §4 S3 "plain worktree" |
-| `claude -p` with `--safe-mode --restricted --strict-mcp-config`, tools `Read,Edit,Write,Grep,Glob`, JSON schema, Opus xhigh, `--max-budget-usd 50`, 40-min timeout (`improve.py:56-60,633-658`) | **Changed**: same tools, schema, model, effort and budget; `--safe-mode` and `--restricted` dropped (the owner's user hooks, including `stack hook claude pre-tool-use`, apply); `--setting-sources user` and `--settings` block project and local settings, auto memory, and file-tool reads and writes outside the worktree (Claude Code ≥ 2.1.314); timeout from the deadline (§3.9) | §1; §3.9 time budget |
+| `claude -p` with `--safe-mode --restricted --strict-mcp-config`, tools `Read,Edit,Write,Grep,Glob`, JSON schema, Opus xhigh, `--max-budget-usd 50`, 40-min timeout (`improve.py:56-60,633-658`) | **Changed**: same tools, schema, model and effort; no `--max-budget-usd` (owner decision: the run uses the subscription's usage allowance, so the cost is observed from the stamp rather than capped); `--safe-mode` and `--restricted` dropped (the owner's user hooks, including `stack hook claude pre-tool-use`, apply); `--setting-sources user` and `--settings` block project and local settings, auto memory, and file-tool reads and writes outside the worktree (Claude Code ≥ 2.1.314); timeout from the deadline (§3.9) | §1; §3.9 time budget |
 | Model `summary` and `watch` ("what to watch after the merge") shown in the digest (`improve.py:88-92`, `cycle.py:242-243`) | **Kept** in the schema; stored in the stamp and shown in `context` | the owner reads them with the PR |
 | Diff kept whatever follows the model (`improve.py:600-604`) | **Kept**: every outcome after the model that does not publish stores the redacted patch in the stamp | the owner can finish or discard the change |
 | Result checks: schema, success subtype, cited evidence ids ⊆ brief ids (`improve.py:610-611,650-658`) | **Kept** | |
@@ -375,7 +375,7 @@ step's timeout is cut to what the deadline leaves after the reserve and the late
    started (step 10 removes the stamp).
 9. **Model.** `claude -p --setting-sources user --strict-mcp-config --tools Read,Edit,Write,Grep,Glob
    --permission-mode acceptEdits --permission-prompts none --no-session-persistence --settings '<S>' --output-format
-   json --json-schema <schema> --model claude-opus-5-5 --effort xhigh --max-budget-usd 50`, cwd = the worktree, no
+   json --json-schema <schema> --model claude-opus-5-5 --effort xhigh`, cwd = the worktree, no
    `--add-dir`, environment inherited minus `CLAUDE_CONFIG_DIR` (step 1) plus `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`, timeout from §3.9. `<S>` =
    `{"autoMemoryEnabled":false,"permissions":{"blockReadsOutsideWorkingDirectories":true,
    "blockWritesOutsideWorkingDirectories":true}}`: the file tools refuse paths outside the working directory in
@@ -901,8 +901,10 @@ Decided by the owner on 2026-11-21:
   copy is verified, the orchestrator shows the exact list of legacy state paths (§6 "After retirement") and the
   owner decides.
 
-Decided without the owner (reasons above): observe and improve as two stage calls of one job (§4.8); $50 per attempt
-(`--max-budget-usd`, a client-side stop, not a billing limit) and Opus xhigh unchanged; one open PR at a time; the
+Owner decision: no per-attempt cost cap (`--max-budget-usd` dropped); the recorded cost is observed instead.
+
+Decided without the owner (reasons above): observe and improve as two stage calls of one job (§4.8); Opus xhigh
+unchanged; one open PR at a time; the
 default branch as the only base; the probe and `signals.py` kept outside the cycle; the T3 source via `sqlite3`;
 Codex cwd weights, ledgers, `ledger-miss`, `meta-effort` (narrowed) and `retro.md` kept; the Codex session count
 dropped; no daily history beyond `last.json`.

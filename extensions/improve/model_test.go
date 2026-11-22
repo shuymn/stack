@@ -206,13 +206,11 @@ func TestModelInvocation(t *testing.T) {
 			"claude-opus-5-5",
 			"--effort",
 			"xhigh",
-			"--max-budget-usd",
-			"50",
 		}
 		if !slices.Equal(calls[0].Args, want) {
 			t.Fatalf("argv = %q", calls[0].Args)
 		}
-		for _, banned := range []string{"--restricted", "--safe-mode", "--add-dir"} {
+		for _, banned := range []string{"--restricted", "--safe-mode", "--add-dir", "--max-budget-usd"} {
 			if slices.Contains(calls[0].Args, banned) {
 				t.Fatalf("argv has %s", banned)
 			}
