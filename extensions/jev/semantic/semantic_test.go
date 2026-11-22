@@ -462,7 +462,15 @@ func TestFailures(t *testing.T) {
 	}{
 		{
 			"401 warns with the action", 401, jev.StatusWarn, jev.KindError,
-			"jev-semantic: Jev answered HTTP 401: check TYPESAFE_API_KEY", "", `"outcome":"error"`,
+			"jev-semantic: Jev answered HTTP 401: verify the Jev API key in TYPESAFE_API_KEY if " +
+				"set and non-blank, otherwise in ~/.config/stack/jev/key",
+			"", `"outcome":"error"`,
+		},
+		{
+			"403 warns with the action", 403, jev.StatusWarn, jev.KindError,
+			"jev-semantic: Jev answered HTTP 403: verify the Jev API key in TYPESAFE_API_KEY if " +
+				"set and non-blank, otherwise in ~/.config/stack/jev/key",
+			"", `"outcome":"error"`,
 		},
 		{
 			"529 is unassessed", 529, jev.StatusPass, jev.KindUnassessed,

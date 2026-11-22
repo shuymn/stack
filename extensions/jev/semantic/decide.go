@@ -233,7 +233,8 @@ func Respond(
 func action(o jev.Outcome) string {
 	switch {
 	case o.Status == http.StatusUnauthorized || o.Status == http.StatusForbidden:
-		return "check " + jev.KeyEnv
+		return "verify the Jev API key in " + jev.KeyEnv + " if set and non-blank, otherwise in " +
+			jev.KeyDisplay
 	case o.Status == http.StatusPaymentRequired:
 		return "check the TypeSafe account's billing"
 	case o.Status == http.StatusNotFound || o.Cause == jev.CauseModel:
