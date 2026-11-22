@@ -21,10 +21,9 @@ import (
 var writing string
 
 const (
-	model        = "claude-opus-5-5"
-	effort       = "xhigh"
-	maxBudgetUSD = "50"
-	fileTools    = "Read,Edit,Write,Grep,Glob"
+	model     = "claude-opus-5-5"
+	effort    = "xhigh"
+	fileTools = "Read,Edit,Write,Grep,Glob"
 	// modelSettings turns auto memory off and blocks file-tool reads and writes outside the
 	// working directory (design §3.4 step 9).
 	modelSettings = `{"autoMemoryEnabled":false,"permissions":` +
@@ -183,7 +182,6 @@ func claudeArgs() []string {
 		"--permission-mode", "acceptEdits", "--permission-prompts", "none",
 		"--no-session-persistence", "--settings", modelSettings, "--output-format", "json",
 		"--json-schema", outputSchema, "--model", model, "--effort", effort,
-		"--max-budget-usd", maxBudgetUSD,
 	}
 }
 

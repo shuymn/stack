@@ -26,8 +26,8 @@ and C21 there); `gh_model` (§3.2) is unchanged.
 3. **No over-defensive machinery** (`docs/architecture.md` §1 drop list): no live swapper, no owner-only merge list,
    no `--restricted` sandbox, no `commit-tree -S`, no recovery state machine, no budget caps. What remains is what
    publishing to a public repository needs: a public target and public evidence only, file tools confined to the
-   worktree, a verified single commit, `stack check public`, a read-only Codex check, one open PR at a time, a
-   spending cap.
+   worktree, a verified single commit, `stack check public`, a read-only Codex check, one open PR at a time, at
+   most one model attempt per ISO week (the recorded cost is observed, not capped).
 4. **Never block.** The `cycle` stage has no caller to stop. Both extensions answer `pass` or `warn`, never `block`.
    `stack run cycle` then exits 0 when every result is `pass`/`warn`, 1 when another configured extension blocks,
    and 2 when core itself fails (`internal/cli/run.go:60-84`); the wrapper (§3.6) handles each.
@@ -95,7 +95,7 @@ Every behaviour of the legacy cycle, with the v10 decision. "Owner command" rows
 | Preflight: `host.toml`, `private-terms`, signing key, `claude auth status` (`improve.py:502-515,533-548`) | **Changed**: no preflight; a step failing before the model starts removes the stamp and warns. A signing failure surfaces at commit, after billing, as `failed:commit` with the patch kept | the owner's every commit uses the same signer, so a broken one is noticed in daily work; a preflight duplicates it |
 | Minimal environment, endpoint env copied from settings because `--restricted` ignores them; credential redaction and leak check (`improve.py:257-281,517-531,605-606`) | **Changed**: `claude -p` loads only the owner's user settings source (endpoint included), auto memory off; file tools confined to the worktree by permission settings; endpoint-credential leak check and redaction **kept**, and extended to the pinned commit, title and body (§3.4 steps 9, 12) | §1 drops `--restricted`; the leak check is an independent guarantee |
 | Bare mirror of the public URL, `git archive` temp tree (`improve.py:554-555,596-598`) | **Changed**: fetch of the default branch into `refs/remotes/origin/<default>` in the target checkout, then a detached `git worktree add` of the pinned commit | §4 S3 "plain worktree" |
-| `claude -p` with `--safe-mode --restricted --strict-mcp-config`, tools `Read,Edit,Write,Grep,Glob`, JSON schema, Opus xhigh, `--max-budget-usd 50`, 40-min timeout (`improve.py:56-60,633-658`) | **Changed**: same tools, schema, model, effort and budget; `--safe-mode` and `--restricted` dropped (the owner's user hooks, including `stack hook claude pre-tool-use`, apply); `--setting-sources user` and `--settings` block project and local settings, auto memory, and file-tool reads and writes outside the worktree (Claude Code ≥ 2.1.314); timeout from the deadline (§3.9) | §1; §3.9 time budget |
+| `claude -p` with `--safe-mode --restricted --strict-mcp-config`, tools `Read,Edit,Write,Grep,Glob`, JSON schema, Opus xhigh, `--max-budget-usd 50`, 40-min timeout (`improve.py:56-60,633-658`) | **Changed**: same tools, schema, model and effort; no `--max-budget-usd` (owner decision: the run uses the subscription's usage allowance, so the cost is observed from the stamp rather than capped); `--safe-mode` and `--restricted` dropped (the owner's user hooks, including `stack hook claude pre-tool-use`, apply); `--setting-sources user` and `--settings` block project and local settings, auto memory, and file-tool reads and writes outside the worktree (Claude Code ≥ 2.1.314); timeout from the deadline (§3.9) | §1; §3.9 time budget |
 | Model `summary` and `watch` ("what to watch after the merge") shown in the digest (`improve.py:88-92`, `cycle.py:242-243`) | **Kept** in the schema; stored in the stamp and shown in `context` | the owner reads them with the PR |
 | Diff kept whatever follows the model (`improve.py:600-604`) | **Kept**: every outcome after the model that does not publish stores the redacted patch in the stamp | the owner can finish or discard the change |
 | Result checks: schema, success subtype, cited evidence ids ⊆ brief ids (`improve.py:610-611,650-658`) | **Kept** | |
@@ -375,7 +375,7 @@ step's timeout is cut to what the deadline leaves after the reserve and the late
    started (step 10 removes the stamp).
 9. **Model.** `claude -p --setting-sources user --strict-mcp-config --tools Read,Edit,Write,Grep,Glob
    --permission-mode acceptEdits --permission-prompts none --no-session-persistence --settings '<S>' --output-format
-   json --json-schema <schema> --model claude-opus-5-5 --effort xhigh --max-budget-usd 50`, cwd = the worktree, no
+   json --json-schema <schema> --model claude-opus-5-5 --effort xhigh`, cwd = the worktree, no
    `--add-dir`, environment inherited minus `CLAUDE_CONFIG_DIR` (step 1) plus `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`, timeout from §3.9. `<S>` =
    `{"autoMemoryEnabled":false,"permissions":{"blockReadsOutsideWorkingDirectories":true,
    "blockWritesOutsideWorkingDirectories":true}}`: the file tools refuse paths outside the working directory in
@@ -716,9 +716,9 @@ owner, not of the repository.
 
 | Option | Gains | Gives up | Reversibility |
 |---|---|---|---|
-| **One `flock` run lock plus the week stamp (chosen)** | the stamp only blocks re-billing; the lock keeps the worktree, the open-PR check and cleanup single-run, across week boundaries; released by the kernel on death | one lock file | high |
+| **One `flock` run lock plus the week stamp (chosen)** | the stamp only blocks a second model attempt in the week; the lock keeps the worktree, the open-PR check and cleanup single-run, across week boundaries; released by the kernel on death | one lock file | high |
 | week stamp alone | no lock | a Sunday run still in the model and a Monday run both see no open PR, and the later cleanup removes the running worktree | high |
-| lock alone | no stamp | no weekly spending bound | high |
+| lock alone | no stamp | no weekly bound on model attempts | high |
 
 ## 5. Dotfiles Instruction Changes
 
@@ -869,7 +869,7 @@ I7); no remote write without enough time (I14); one run at a time (I5); a Codex 
 | I4 | When an open `improve/` or `kaizen/` PR of the same repository exists on any page, improve shall not create a stamp, and shall warn when it is older than 14 days. | `improve.TestOpenPR` | match on page 2; fork head with same ref ignored; 13 vs 15 days; gh error → warn |
 | I5 | Improve shall hold one run lock from the open-PR check through cleanup and stamp finalisation, so that concurrent runs on one machine make at most one model call and never remove a running worktree. | `improve.TestRunLock` (two real processes, `improvetest` build) | A in week W blocks in fake claude, B starts at W+1 → B `pass` "active", A's worktree intact; A ends unbilled (stamp removed after cleanup), B starts right after → one new claim, no overlap |
 | I6 | If the claude child never started or a complete result proves zero cost, improve shall remove the stamp after the child exits and cleanup; otherwise it shall keep it. | `improve.TestBilling` | start failure, worktree failure, too little time right before start → removed; cost 0 with all four counters 0 → removed; kept with cost `unknown` and `cost-unknown`: cost 0 + `usage: {}`, cost 0 + one counter missing, cost 0 + a counter that is a string, negative or fractional; kept: cost 0 + a non-zero counter, missing response, timeout; kept with cost `unknown`: a zero result followed by more bytes (also after a `change: false` result), a zero result from a child killed by a signal, a result without `type: result` |
-| I7 | Improve shall run `claude -p` with the stated flags, settings and environment, cwd = worktree, the brief, `writing.md` and the task on stdin, and kill it at its timeout. | `improve.TestModelInvocation` | argv exact (`--setting-sources user`; no `--restricted`, `--safe-mode`, `--add-dir`; `--settings` sets `autoMemoryEnabled: false` and blocks reads and writes); env has `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`; stdin contains brief ids and `writing.md`; timeout → `failed:timeout`, cost `unknown`, child gone |
+| I7 | Improve shall run `claude -p` with the stated flags, settings and environment, cwd = worktree, the brief, `writing.md` and the task on stdin, and kill it at its timeout. | `improve.TestModelInvocation` | argv exact (`--setting-sources user`; no `--restricted`, `--safe-mode`, `--add-dir`, `--max-budget-usd`; `--settings` sets `autoMemoryEnabled: false` and blocks reads and writes); env has `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`; stdin contains brief ids and `writing.md`; timeout → `failed:timeout`, cost `unknown`, child gone |
 | I8 | If the worktree has anything but modifications of existing `100644` files within `paths`, or evidence ids are not ⊆ brief ids, then improve shall record a proposal with the patch and not commit. | `improve.TestProposal` | add, delete, rename, mode change, type change (file → symlink), out-of-scope path, `**` boundary (`skills` vs `skills2`), empty diff with `change: true`, foreign id; `git rev-parse HEAD` still `base_oid` and no new ref |
 | I9 | Improve shall commit with the repository's hooks and the owner's config, without `--no-verify`. | `improve.TestCommit` (real git) | a failing `commit-msg` hook → `failed:commit` with patch; argv has no `--no-verify` |
 | I10 | Improve shall verify the pinned OID as one commit on `base_oid` changing only allowed existing files, run the credential check, `stack-public check` and the Codex check on that OID and the fixed title and body, and push exactly that OID. | `improve.TestCommitScope` (real git), `improve.TestPublicCheck` (real `stack-public` built in `TestMain`) | a `pre-commit` hook that succeeds after staging an extra file → `proposal:commit-scope`, no push; HEAD moved after the check → pushed OID is still the pinned one; a `post-commit` hook that replaces the commit (with the extra file) by an allowed one through `git replace` → still `proposal:commit-scope`; a `pre-push` hook that rewrites the body file → `gh pr create` gets the checked body; real `stack-public check` with a dummy private term in the diff, message, title or body → `proposal:public-check`; exit 2, or `stack-public` absent from `PATH` → `failed:check` with no Codex call, push or `gh pr create` |
@@ -901,8 +901,10 @@ Decided by the owner on 2026-11-21:
   copy is verified, the orchestrator shows the exact list of legacy state paths (§6 "After retirement") and the
   owner decides.
 
-Decided without the owner (reasons above): observe and improve as two stage calls of one job (§4.8); $50 per attempt
-(`--max-budget-usd`, a client-side stop, not a billing limit) and Opus xhigh unchanged; one open PR at a time; the
+Owner decision: no per-attempt cost cap (`--max-budget-usd` dropped); the recorded cost is observed instead.
+
+Decided without the owner (reasons above): observe and improve as two stage calls of one job (§4.8); Opus xhigh
+unchanged; one open PR at a time; the
 default branch as the only base; the probe and `signals.py` kept outside the cycle; the T3 source via `sqlite3`;
 Codex cwd weights, ledgers, `ledger-miss`, `meta-effort` (narrowed) and `retro.md` kept; the Codex session count
 dropped; no daily history beyond `last.json`.
