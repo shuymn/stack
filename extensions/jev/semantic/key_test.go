@@ -102,6 +102,24 @@ func TestKeyFile(t *testing.T) {
 		}
 	})
 
+	t.Run("a null jev object is an invalid replay", func(t *testing.T) {
+		srv, auths := authServer(t)
+		env := repoEnv(r)
+		env.Getenv, env.Endpoint, env.Home = noEnv, srv.URL, t.TempDir()
+		putKey(t, env.Home, "file-key", false)
+		req := outboundReq(r, "t", "b")
+		req["jev"] = nil
+		res := runMain(t, env, req)
+		if res.resp.Status != jev.StatusWarn || len(res.resp.Findings) != 1 ||
+			res.resp.Findings[0].Kind != jev.KindError ||
+			res.resp.Findings[0].Detail != "invalid replay records" {
+			t.Fatalf("response %+v", res.resp)
+		}
+		if n := len(auths()); n != 0 {
+			t.Fatalf("%d requests sent", n)
+		}
+	})
+
 	t.Run("replay never looks the key up", func(t *testing.T) {
 		env := repoEnv(r)
 		env.Getenv, env.Home = noEnv, t.TempDir()

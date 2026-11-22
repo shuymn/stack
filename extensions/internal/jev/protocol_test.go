@@ -48,9 +48,17 @@ func TestParseRequest(t *testing.T) {
 			t.Errorf("%q accepted", bad)
 		}
 	}
-	req, err := ParseRequest([]byte(`{"stage":"outbound","jev":null,"extra":1}`))
+	req, err := ParseRequest([]byte(`{"stage":"outbound","extra":1}`))
 	if err != nil || req.Stage != "outbound" || req.Jev != nil {
 		t.Fatalf("%+v %v", req, err)
+	}
+	// An explicit null is kept, so it is an invalid replay rather than a live request.
+	req, err = ParseRequest([]byte(`{"stage":"outbound","jev":null}`))
+	if err != nil || req.Jev == nil {
+		t.Fatalf("%+v %v", req, err)
+	}
+	if _, err := ParseReplay(req.Jev); err == nil {
+		t.Fatal("a null jev object parsed as replay records")
 	}
 	req, err = ParseRequest([]byte(`{"stage":"outbound","jev":{"records":{}}}`))
 	if err != nil || req.Jev == nil {
