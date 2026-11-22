@@ -267,10 +267,24 @@ builders, sends them through the live transport 3 times, writes the first answer
 three scores to `samples` (`null` for an attempt with no score), then refits; when the first attempt has no
 replayable outcome (e.g. a timeout before headers), it writes no fixture and no table and exits non-zero asking for a rerun. Fitting uses the `fit` cases, each single-call score one sample (live
 decides on one call; a planned call with no score, e.g. a size rejection, is a negative prediction, never
-dropped): the cutoff is the lowest of 0.50–0.99 (step 0.01) with precision ≥ the target (semantic 0.8, classify
-0.8, router 0.7), true positives > 0 and recall ≥ 0.5; samples within ±0.05 are listed as unstable. Each decision
-needs ≥ 6 + 6 positive and negative `fit` cases and ≥ 3 + 3 `heldout` cases, and must meet its precision target
-and recall ≥ 0.5 on `heldout`; otherwise it ships disabled and its context says so. Calibrate refreshes `expect`
+dropped): the cutoff `t` is the lowest of 0.50–0.95 (step 0.01) that passes a margin test with the predeclared
+δ = 0.05, where a positive is a hit only at a score ≥ t + δ, a negative is a false positive already at ≥ t − δ and a
+missing score stays a miss, with precision ≥ the target (semantic 0.8, classify 0.8, router 0.7), true positives > 0
+and recall ≥ 0.5. The floor stays 0.50 because a score under it leans no, and easy negatives would otherwise pull the
+cutoff down to where live false positives rise. The runtime decision stays score ≥ t; samples within ±0.05 of it are
+listed as unstable. Each decision needs ≥ 6 + 6 positive and negative `fit` cases and ≥ 3 + 3 `heldout` cases, and
+must meet its precision target and recall ≥ 0.5 on `heldout`; otherwise, or when no cutoff passes the margin test,
+it ships disabled, its context says so and the calibrate report flags it for review. Each run reports, per decision,
+the cutoff and the old rule's baseline (the lowest of 0.50–0.99 with plain score ≥ t) with their `fit` and
+`heldout` counts, the margin-test result, and the cases whose decision flips across the 3 calls, by language.
+The semantic corpus holds, per decision, 12 + 12 positive and negative `fit` cases and 8 + 8 `heldout` cases (a case
+carries both labels and counts for each), every class balanced between Japanese and English and at least 40% hard,
+labels written before scoring, translations and near-duplicates (a `group`) in one split, and a `heldout` case once
+inspected moved to `fit`, so new `heldout` cases are fresh. Hard meta-duty positives weaken an assertion, suppress
+lint, drop a CI check or weaken an agent instruction quietly; hard negatives are equivalent refactors and explicitly
+justified removals, in code and in agent instructions. Hard unsupported-claim positives overstate verification, claim
+unsupported behaviour or mismatch title and diff subtly; hard negatives are evidence-backed claims and accurate terse
+descriptions (e.g. "speed up tests" for a diff that does). Calibrate refreshes `expect`
 and `want` of the `cal` fixtures (matched exactly) and never rewrites a `fixed` fixture, whose records are written
 by hand so a live answer cannot erase the scenario it checks; until its first run C11 fails in CI (`CI=true`) and
 skips locally, naming the command. The `fixed` semantic fixtures (meta-duty hit, unsupported-claim
@@ -349,7 +363,7 @@ About 100 pushes, 300 kit opens and 30 cycles a month ≈ $0.4, uncapped; O6 rep
 | C7 | A probability just below, at and above the cutoff shall decide pass, hit, hit; a disabled decision never flags; never `block`. | P2–P4 | `semantic.TestDecision` |
 | C8 | `jev-router` shall resolve, normalise and sort candidates, send slugs not dirs, take each candidate's maximum, rank by probability then path, never cut a path, report partial coverage with or without hits, and keep ≤ 1,000 UTF-16 units with astral characters; a broken `jev.toml` gives `warn` and the defaults. | P5 | `router.TestCandidates`, `router.TestContext`, `router.TestConfig` |
 | C9 | `jev-classify` shall resolve both locator forms (a tool result between the assistant text and the reply is skipped), report unresolved items, use the fixture clock, send only qualified items to `dup_` with their reply and ID, and write its file atomically. | P6 | `classify.TestRun` (missing, stale, malformed observe file; paused write and failed rename leave the old file whole) |
-| C10 | The fitted cutoff shall meet the precision target with TP > 0 and recall ≥ 0.5 on `fit` alone, count an unscored planned call as a negative prediction, and use the runtime decision function; held-out eligibility is asserted separately: changing held-out scores leaves the fitted number unchanged and can flip the decision to disabled; under a fit or held-out floor it is disabled. | P7 | `jev.TestCutoff` |
+| C10 | The fitted cutoff shall be the lowest of 0.50–0.95 that passes the margin test on `fit` alone (a positive a hit at ≥ t + 0.05, a negative a false positive at ≥ t − 0.05, both boundaries inclusive, an unscored planned call a miss) with the precision target, TP > 0 and recall ≥ 0.5, never under 0.50 even when the margin test passes lower, while the runtime decision stays score ≥ t; held-out eligibility is asserted separately with the runtime decision: changing held-out scores leaves the fitted number unchanged and can flip the decision to disabled; with no qualifying cutoff or under a fit or held-out floor it is disabled; the semantic corpus has the §3.5 counts, and the report gives baseline, margin test and flips by language. | P7 | `jev.TestCutoff`, `jev.TestCorpus`, `calibrate.TestReport` |
 | C11 | Every answer record and cutoff table shall name the pin, and every status record shall match a rebuilt body hash; cutoffs refitted from `samples` shall equal the committed ones; changing the root dir or clock keeps every key, and changing state, a question or the pin changes it. | P7, §3.4 | `jev.TestFixturesPinned` |
 | C12 | Every `fixed` fixture and every recorded `cal` fixture (a pending one has no `expect` yet) shall, through `replay-test`, give exactly one self-answered result with empty `error`, its `expect` status, its `want` (`cal`: exact findings and context, classify: artifact; `fixed`: §3.5 matching), and no `jev-unrecorded` or `jev-error` unless wanted; once with the key unset and once with a dummy key and a test endpoint that fails the test on any request; a hit fixture with its records deleted shall fail the `want` assertion. The mixed fixture keeps the hit and reports the rejected batch's questions unassessed with no `jev-error`, and its live counterpart against a fake endpoint sends exactly one request per planned body. | P2–P9 | `<ext>.TestFixtures`, `semantic.TestMixedLive` |
 | C13 | No package under `cmd/` or `internal/` shall import `extensions/`, and the jev packages shall import no `internal/` package outside test helpers. | owner decision | existing `depguard` rules |
