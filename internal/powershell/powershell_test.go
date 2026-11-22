@@ -688,6 +688,16 @@ func TestParseCwd(t *testing.T) {
 		{`$p = { cd sub }; gh x`, cwd},
 		{`foreach ($d in $l) { gh x; cd sub }`, ""},
 		{`& ./script.ps1; gh x`, ""},
+		// FileSystem-provider separators on every host; history, wildcards and providers unknown.
+		{`Set-Location '.\sub' && gh x`, cwd + string(filepath.Separator) + filepath.FromSlash("./sub")},
+		{`cd sub\a && gh x`, filepath.Join(sub, "a")},
+		{`cd - && gh x`, ""},
+		{`cd + && gh x`, ""},
+		{`cd s* && gh x`, ""},
+		{`cd su? && gh x`, ""},
+		{`cd [s]ub && gh x`, ""},
+		{`cd Env:\ && gh x`, ""},
+		{`cd FileSystem::/tmp && gh x`, ""},
 	}
 	for _, tt := range tests {
 		r := Parse(tt.cmd, cwd, "", Unix)

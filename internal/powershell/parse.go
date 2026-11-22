@@ -972,12 +972,34 @@ func (p *parser) cdTarget(c Call) (string, bool) {
 	if p.cdSteps >= maxCdSteps {
 		return "", true // bounds the cwd strings a long `cd x &&` chain builds
 	}
-	dir, ok := paths.ResolvePowerShell(p.home, p.cwd, target[0].Text, p.os == Windows)
+	t, ok := fileSystemPath(target[0].Text, p.os)
+	if !ok {
+		return "", true
+	}
+	dir, ok := paths.ResolvePowerShell(p.home, p.cwd, t, p.os == Windows)
 	if !ok || len(dir) > maxCwdLen {
 		return "", true
 	}
 	p.cdSteps++
 	return dir, true
+}
+
+// fileSystemPath returns a Set-Location target as a FileSystem path of the host, where `\` and `/`
+// both separate. ok is false for a target whose location is not known statically: the history
+// forms `-` and `+`, a wildcard, or a provider-qualified or drive-qualified path other than a
+// Windows drive letter.
+func fileSystemPath(t string, os OS) (string, bool) {
+	if t == "-" || t == "+" || strings.ContainsAny(t, "*?[") || strings.Contains(t, "::") {
+		return "", false
+	}
+	if os == Windows {
+		rest := t
+		if len(t) >= 2 && t[1] == ':' && isLetter(t[0]) {
+			rest = t[2:]
+		}
+		return t, !strings.Contains(rest, ":")
+	}
+	return strings.ReplaceAll(t, `\`, "/"), !strings.Contains(t, ":")
 }
 
 // walkParams walks the script blocks bound to names.
