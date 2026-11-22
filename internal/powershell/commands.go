@@ -263,6 +263,7 @@ var (
 				param{"SSHConnection", nil, false},
 				param{"Options", nil, false},
 				param{"RemoteDebug", nil, true},
+				param{"ConnectingTimeout", nil, false},
 			),
 			positional: []string{"ScriptBlock"},
 		},
