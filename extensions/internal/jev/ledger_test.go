@@ -57,7 +57,7 @@ func TestLedger(t *testing.T) {
 		}))
 		defer srv.Close()
 		l := &Ledger{
-			Path: LedgerPath(home), Run: "r1", Extension: "jev-test",
+			Path: LedgerPath(home), Run: "r1", Extension: "jev-test", Wait: time.Minute,
 			Now: func() time.Time { return time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC) },
 		}
 		live := Live{Endpoint: srv.URL, Key: "k", Ledger: l}
@@ -155,7 +155,7 @@ func TestLedgerDeadline(t *testing.T) {
 		<-r.Context().Done()
 	}))
 	defer srv.Close()
-	l := &Ledger{Path: LedgerPath(home), Run: "r", Extension: "x"}
+	l := &Ledger{Path: LedgerPath(home), Run: "r", Extension: "x", Wait: time.Minute}
 	ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
 	defer cancel()
 	o := Live{Endpoint: srv.URL, Key: "k", Ledger: l}.Send(ctx, testBatch(noulQ))
