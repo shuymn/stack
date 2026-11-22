@@ -34,29 +34,17 @@ diff to Jev for the questions it can assess under an enabled decision, warning o
 placeholder cutoffs disable both decisions, so nothing is sent until `jev-calibrate` has run. It embeds its cutoffs
 (`extensions/jev/semantic/cutoffs.json`); reinstall after `jev-calibrate` changes them.
 
-The Jev extensions and `jev-calibrate` read the key from `TYPESAFE_API_KEY`, else from `~/.config/stack/jev/key`.
-Put it in that file, owned by you and readable only by you, working as yourself (not with `sudo`). First create the
-directory and check it before any key exists, since a new file inherits its ACLs:
+The Jev extensions and `jev-calibrate` take the key from `TYPESAFE_API_KEY`, or else from `~/.config/stack/jev/key`.
+They read the file only when it is a regular file (or a symlink to one) that you own with mode `0600` (no group or
+other permissions), and warn otherwise; on Windows no mode or owner is checked. Removing the file (and leaving the
+variable unset) opts out. To write it, type or paste the key at the silent prompt and press Enter; nothing is
+written on EOF or empty input:
 
 ```sh
-(umask 077; mkdir -p ~/.config/stack/jev)
-ls -lde ~/.config/stack/jev                                         # macOS: no ACL entries beyond yours
-ls -ld ~/.config/stack/jev && getfacl ~/.config/stack/jev          # Linux: only the three base entries
+(umask 077; mkdir -p ~/.config/stack/jev && IFS= read -rs k && [ -n "$k" ] && printf '%s\n' "$k" > ~/.config/stack/jev/key)
 ```
 
-Then type or paste the key at the silent prompt and press Enter; it stays out of the shell history and the
-scrollback:
-
-```sh
-(umask 077; IFS= read -rs k; printf '%s\n' "$k" > ~/.config/stack/jev/key)
-```
-
-Writing keeps an existing file's mode, so if a key file is already there with a wider mode, `chmod 600` it first.
-These steps treat your home directory as yours alone: nobody else can replace the file between the check and the
-write. The extensions validate only the file's mode and ownership, not ACLs: on Unix a key file that group or others
-can access is refused with a `warn` naming the fix (`chmod 600 ~/.config/stack/jev/key`), and one another user owns
-with a `warn` to recreate it as yourself; on Windows the profile's permissions guard it and no mode is checked.
-Removing the file (and leaving the variable unset) opts out.
+stack checks the file's mode and owner only, not ACLs or its parent directories.
 
 `stack-guard` treats the file as a secret. File tools resolve their paths against the working directory, and `Read`
 and `NotebookRead` also follow symlinks, so they are denied on the file by its resolved path or through a symlink; a
