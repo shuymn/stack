@@ -1,7 +1,7 @@
 // Package semantic is the jev-semantic outbound extension (docs/design/phase4-jev.md §3.2): it asks
 // Jev whether a PR's diff weakens a duty the project performs on itself without its texts saying
 // so, and whether the texts claim what the diff does not show. It is advisory: hits warn, it never
-// blocks, and with no TYPESAFE_API_KEY it answers pass.
+// blocks, and with no key (TYPESAFE_API_KEY or the key file) it answers pass.
 package semantic
 
 import (
@@ -27,9 +27,9 @@ type Env struct {
 	Stdin  io.Reader
 	Stdout io.Writer
 	Stderr io.Writer
-	// Home is the home directory, for the usage ledger; "" when unknown.
+	// Home is the home directory, for the key file and the usage ledger; "" when unknown.
 	Home string
-	// Getenv reads the key.
+	// Getenv reads TYPESAFE_API_KEY.
 	Getenv func(string) string
 	// Environ is git's base environment.
 	Environ []string
@@ -92,9 +92,10 @@ func respond(ctx context.Context, env Env) jev.Response {
 		}
 		transport = replay
 	} else {
-		key := ""
-		if env.Getenv != nil {
-			key = env.Getenv(jev.KeyEnv)
+		key, err := jev.Key(env.Getenv, env.Home)
+		if ke, ok := errors.AsType[*jev.KeyError](err); ok {
+			return warnLine(jev.Finding{Kind: jev.KindError, Detail: ke.Detail()},
+				name+": "+ke.Error())
 		}
 		if key == "" {
 			return pass()
