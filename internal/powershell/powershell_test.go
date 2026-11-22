@@ -387,6 +387,30 @@ var parseTests = []struct {
 		calls{{"git", "$", "c"}},
 	},
 	{
+		"a token starting with a quote ends at its closing quote",
+		`gh 'pr'merge "7"x 'a''b'c a'b' "a"$x`,
+		Unix,
+		calls{{"gh", "pr", "merge", "7", "x", "a'b", "c", "ab", "a", "$"}},
+	},
+	{
+		"a cmdlet argument starting with a quote ends at its closing quote",
+		`Write-Output 'a'b c'd'`,
+		Unix,
+		calls{{"Write-Output", "a", "b", "cd"}},
+	},
+	{
+		"a native array after a quoted token is dynamic",
+		`git 'a',b c`,
+		Windows,
+		calls{{"git", "$", "c"}},
+	},
+	{
+		"a quoted run with blanks in a verbatim tail is dynamic",
+		"git --% \"c d\" e; git `--% x\"c d\"y e",
+		Windows,
+		calls{{"git", "$", "e;", "git", "`--%", "$", "e"}},
+	},
+	{
 		"cmdlet keeps a quoted stop-parsing value",
 		`Write-Output a '--%' b`,
 		Unix,
