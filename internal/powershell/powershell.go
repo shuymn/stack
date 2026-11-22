@@ -18,6 +18,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/shuymn/stack/internal/paths"
 	"github.com/shuymn/stack/internal/shell"
 )
 
@@ -156,17 +157,66 @@ func (c Call) Is(name string) bool {
 
 // ShellCall adapts the call to a shell.Call with native-argv semantics: `$HOME`/`${HOME}` (and on
 // Windows `$env:USERPROFILE`/`${env:USERPROFILE}`) are replaced by the hook's home, every other
-// known variable is dynamic; an unquoted leading `~` is Tilde on non-Windows hosts and dynamic on
-// Windows; a script block is dynamic.
+// known variable is dynamic; a script block is dynamic. A home `~` word (see tildeOf) is Tilde on
+// non-Windows hosts and dynamic on Windows, where whether it is expanded depends on the engine
+// (PowerShell 7.6+ expands it, 5.1 and 7.0–7.5 pass it as written), so the file it names is
+// unknown. A mixed `~` word is dynamic; a quoted one, `~user` and `x~` are literal.
 func (c Call) ShellCall() shell.Call {
+	return c.shellCall(false)
+}
+
+// ShellCallRm is ShellCall for the native-`rm` rule only: on Windows a home `~` word is Tilde too,
+// since a miss there deletes home on the expanding engine and the only false deny is a directory
+// literally named `~` on an older one.
+func (c Call) ShellCallRm() shell.Call {
+	return c.shellCall(true)
+}
+
+func (c Call) shellCall(windowsTilde bool) shell.Call {
 	out := shell.Call{Args: make([]shell.Word, len(c.Args)), Stdin: c.Stdin, Cwd: c.Cwd}
+	quotedMarker := false
 	for i, w := range c.Args {
-		out.Args[i] = c.nativeWord(w)
+		switch {
+		case quotedMarker && c.tildeOf(w) == tildeHome:
+			// After a quoted `'--%'` pwsh (5.1 and 7.7) passes a later `~` as written.
+			out.Args[i] = shell.Word{Text: w.Text, Static: true}
+		default:
+			out.Args[i] = c.nativeWord(w, windowsTilde)
+		}
+		if i > 0 && w.Static && w.Quote != Bare && w.Text == "--%" {
+			quotedMarker = true
+		}
 	}
 	return out
 }
 
-func (c Call) nativeWord(w Word) shell.Word {
+// tildeKind is how PowerShell 7 treats a native word starting with `~`.
+type tildeKind int
+
+const (
+	tildeNone  tildeKind = iota // no leading unquoted `~`, or one that is not a home form
+	tildeHome                   // expanded as home (on Windows from 7.6)
+	tildeMixed                  // quotes after the `~`: unmeasured
+)
+
+// tildeOf classifies a native word: a home word is unquoted, outside a `--%` tail, written as a
+// plain bareword (or with only its leading `~` backtick-escaped), and exactly `~`, `~/…` or, on
+// Windows, `~\…` (paths.TildeForm). A word mixing quotes after the `~` (`~"\x"`, `~'\x'`) is
+// mixed; `~user` and `~foo/x` are none.
+func (c Call) tildeOf(w Word) tildeKind {
+	switch {
+	case w.Flag != "", w.Verbatim, w.Quote != Bare, !strings.HasPrefix(w.Text, "~"):
+		return tildeNone
+	case w.Raw != w.Text && w.Raw != "`"+w.Text:
+		return tildeMixed
+	case paths.TildeForm(w.Text, c.os == Windows):
+		return tildeHome
+	default:
+		return tildeNone
+	}
+}
+
+func (c Call) nativeWord(w Word, windowsTilde bool) shell.Word {
 	switch {
 	case w.Block:
 		return shell.Word{}
@@ -178,11 +228,15 @@ func (c Call) nativeWord(w Word) shell.Word {
 	case w.Known != NotKnown, !w.Static:
 		return shell.Word{}
 	}
-	if w.Flag == "" && !w.Verbatim && w.Quote == Bare && strings.HasPrefix(w.Text, "~") {
-		if c.os == Windows {
+	switch c.tildeOf(w) {
+	case tildeHome:
+		if c.os == Windows && !windowsTilde {
 			return shell.Word{}
 		}
 		return shell.Word{Text: w.Text, Static: true, Tilde: true}
+	case tildeMixed:
+		return shell.Word{}
+	case tildeNone:
 	}
 	return shell.Word{Text: w.Flag + w.Text, Static: true}
 }

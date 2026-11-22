@@ -905,6 +905,63 @@ func TestShellCall(t *testing.T) {
 			t.Errorf("os %d ShellCall args = %+v, want %+v", tt.os, sc.Args, tt.want)
 		}
 	}
+	// Native `~`: a home word (`~`, `~/…`, on Windows `~\…`, written plain or with only its `~`
+	// backtick-escaped) is Tilde, except in ShellCall on Windows, where it is dynamic; a word mixing
+	// quotes after the `~` is dynamic; a quoted one, `~user`, `~foo/.git`, `x~`, one in a `--%` tail
+	// and one after a quoted `'--%'` are literal.
+	native := "rm.exe -r ~ ~/x ~\\ ~\\b.md `~ '~' \"~\" x~ ~user ~foo/.git ~\"\\x\" ~'/x' '--%' ~"
+	lit := func(s string) shell.Word { return shell.Word{Text: s, Static: true} }
+	for _, tt := range []struct {
+		os      OS
+		rm      bool
+		expands bool
+	}{
+		{Unix, false, true},
+		{Unix, true, true},
+		{Windows, false, false},
+		{Windows, true, true},
+	} {
+		c := find(t, Parse(native, "", home, tt.os), "rm")
+		sc := c.ShellCall()
+		if tt.rm {
+			sc = c.ShellCallRm()
+		}
+		homeWord := func(s string) shell.Word {
+			if !tt.expands {
+				return shell.Word{}
+			}
+			return shell.Word{Text: s, Static: true, Tilde: true}
+		}
+		backslash := lit
+		if tt.os == Windows {
+			backslash = homeWord
+		}
+		want := []shell.Word{
+			lit("rm.exe"), lit("-r"),
+			homeWord("~"), homeWord("~/x"), backslash(`~\`), backslash(`~\b.md`), homeWord("~"),
+			lit("~"), lit("~"), lit("x~"), lit("~user"), lit("~foo/.git"),
+			{},
+			{},
+			lit("--%"), lit("~"),
+		}
+		if !slices.Equal(sc.Args, want) {
+			t.Errorf("os %d rm %v native ~ args = %+v, want %+v", tt.os, tt.rm, sc.Args, want)
+		}
+	}
+	for _, os := range []OS{Unix, Windows} {
+		sc := find(t, Parse("rm.exe -r --% ~ ~\\x", "", home, os), "rm").ShellCallRm()
+		if want := []shell.Word{
+			lit("rm.exe"),
+			lit("-r"),
+			lit("~"),
+			lit(`~\x`),
+		}; !slices.Equal(
+			sc.Args,
+			want,
+		) {
+			t.Errorf("os %d --%% tail = %+v, want %+v", os, sc.Args, want)
+		}
+	}
 	if sc := find(t, Parse(`gh "$HOME"`, "", "", Unix), "gh").ShellCall(); sc.Args[1].Static {
 		t.Error("$HOME with no known home is static")
 	}

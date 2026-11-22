@@ -985,7 +985,7 @@ func (p *parser) cdTarget(c Call) (string, bool) {
 	if !ok {
 		return "", true
 	}
-	dir, ok := paths.ResolvePowerShell(p.home, p.cwd, t, p.os == Windows)
+	dir, ok := paths.ResolvePowerShell(p.home, p.cwd, t, true, p.os == Windows)
 	if !ok {
 		return "", true
 	}

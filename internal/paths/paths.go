@@ -93,17 +93,19 @@ func resolve(home, cwd, p string, expand, windows bool) (string, bool) {
 }
 
 // ResolvePowerShell turns p, a path a PowerShell command opens, into an absolute path, with the rules
-// of the host PowerShell runs on (windows) and no Git Bash forms. A leading `~`, `~/` or `~\` is
-// expanded when home is not "" (pass "" for a word whose `~` is literal); `~\` only on Windows,
-// where `\` is a separator. On Windows `\x` and `/x`
+// of the host PowerShell runs on (windows) and no Git Bash forms. When expand is true a leading `~`,
+// `~/` or `~\` is home (`~\` only on Windows, where `\` is a separator), and unknown when home is "";
+// when expand is false it is a literal name. On Windows `\x` and `/x`
 // are rooted on the cwd's drive (unknown when the cwd has none) and `C:x` is unknown. A relative p is
 // joined to cwd with the separator of the OS this code runs on, turning `\` into it on Windows, so
 // the file opens on every OS a test runs on. ok is false when the result is unknown.
-func ResolvePowerShell(home, cwd, p string, windows bool) (string, bool) {
-	if home != "" && (windows || !strings.HasPrefix(p, `~\`)) {
-		if s, ok := tilde(home, hostSeps(p, windows), isWindows); ok {
-			return s, true
+func ResolvePowerShell(home, cwd, p string, expand, windows bool) (string, bool) {
+	if expand && TildeForm(p, windows) {
+		if home == "" {
+			return "", false
 		}
+		s, _ := tilde(home, hostSeps(p, windows), isWindows)
+		return s, true
 	}
 	switch {
 	case !windows:
@@ -124,6 +126,12 @@ func ResolvePowerShell(home, cwd, p string, windows bool) (string, bool) {
 		return "", false
 	}
 	return join(cwd, hostSeps(p, windows), isWindows), true
+}
+
+// TildeForm reports whether p is `~` or starts with `~/`, or on Windows with `~\`: the forms
+// PowerShell expands as home. `~user` and `~foo/x` are not.
+func TildeForm(p string, windows bool) bool {
+	return p == "~" || strings.HasPrefix(p, "~/") || (windows && strings.HasPrefix(p, `~\`))
 }
 
 // hostSeps turns the `\` separators of a Windows PowerShell path into the separator of the OS this

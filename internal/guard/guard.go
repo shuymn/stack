@@ -101,13 +101,10 @@ func decidePowerShell(command, cwd string, opts Options) (Decision, bool) {
 type resolver func(home, cwd, p string, expand bool) (string, bool)
 
 // powerShellResolver resolves with PowerShell's path rules on host os: no Git Bash forms, and a `~`
-// the adapter did not mark as home is a literal name.
+// the adapter did not mark as home is a literal name, and one it marked is unknown without a home.
 func powerShellResolver(os powershell.OS) resolver {
 	return func(home, cwd, p string, expand bool) (string, bool) {
-		if !expand {
-			home = ""
-		}
-		return paths.ResolvePowerShell(home, cwd, p, os == powershell.Windows)
+		return paths.ResolvePowerShell(home, cwd, p, expand, os == powershell.Windows)
 	}
 }
 

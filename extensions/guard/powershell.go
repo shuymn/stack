@@ -50,13 +50,10 @@ func decidePowerShell(command, cwd string, opts Options) (Decision, bool) {
 }
 
 // powerShellResolver resolves with PowerShell's path rules on host os: no Git Bash forms, and a `~`
-// the adapter did not mark as home is a literal name.
+// the adapter did not mark as home is a literal name, and one it marked is unknown without a home.
 func powerShellResolver(os powershell.OS) resolver {
 	return func(home, cwd, p string, expand bool) (string, bool) {
-		if !expand {
-			home = ""
-		}
-		return paths.ResolvePowerShell(home, cwd, p, os == windowsHost)
+		return paths.ResolvePowerShell(home, cwd, p, expand, os == windowsHost)
 	}
 }
 
@@ -253,10 +250,10 @@ func removeItemTarget(
 	p := w.Text
 	switch {
 	case !w.Static,
-		w.Param == "Path" && strings.ContainsAny(p, "*?["),    // a glob
-		w.Param == "LiteralPath" && strings.HasPrefix(p, "~"), // expansion unconfirmed (W3)
-		strings.Contains(p, "::"),                             // provider-qualified
-		len(p) > 1 && isSep(p[0]) && isSep(p[1]):              // UNC or `\\?\`
+		w.Param == "Path" && strings.ContainsAny(p, "*?["), // a glob
+		w.Param == "LiteralPath" && literalTildeOpaque(p, windows),
+		strings.Contains(p, "::"),                // provider-qualified
+		len(p) > 1 && isSep(p[0]) && isSep(p[1]): // UNC or `\\?\`
 		return "", false
 	}
 	if windows && p != "" && isSep(p[0]) && onlyCurrent(p) {
@@ -272,11 +269,22 @@ func removeItemTarget(
 	if !windows {
 		p = strings.ReplaceAll(p, `\`, "/")
 	}
-	full, ok := paths.ResolvePowerShell(home, cwd, p, windows)
+	full, ok := paths.ResolvePowerShell(home, cwd, p, true, windows)
 	if !ok || (windows && declared.opaque(full)) { // after resolving: a cwd on a declared drive too
 		return "", false
 	}
 	return rootKindFor(full, home, windows)
+}
+
+// literalTildeOpaque reports a `-LiteralPath` value whose `~` expansion is unmeasured, so it is not
+// judged. On Windows only `~` with at most trailing separators was measured to name home (W3), so
+// every other value starting with `~` is opaque; elsewhere nothing was measured, so the home forms
+// `~`, `~/…` and `~\…` are opaque and `~user` is a literal name.
+func literalTildeOpaque(p string, windows bool) bool {
+	if windows {
+		return strings.HasPrefix(p, "~") && strings.Trim(p[1:], `\/`) != ""
+	}
+	return paths.TildeForm(p, true)
 }
 
 // onlyCurrent reports whether p is only separators and `.` components.
@@ -290,20 +298,16 @@ func onlyCurrent(p string) bool {
 }
 
 // nativeRm judges a native `rm` call with the Bash rule's options and native argv: a quoted `~` is
-// literal, and an unquoted one is home on non-Windows hosts (the adapter leaves it dynamic on
-// Windows).
+// literal, and a plain unquoted leading one is home on every host (ShellCallRm); with no known home
+// such an operand is not judged.
 func nativeRm(c powershell.Call, opts Options, windows bool) (Decision, bool) {
-	sc := c.ShellCall()
+	sc := c.ShellCallRm()
 	recursive, operands := rmArgs(sc.Args[1:])
 	if !recursive {
 		return Decision{}, false
 	}
 	for _, op := range operands {
-		home := ""
-		if op.Tilde {
-			home = opts.Home
-		}
-		p, ok := paths.ResolvePowerShell(home, sc.Cwd, op.Text, windows)
+		p, ok := paths.ResolvePowerShell(opts.Home, sc.Cwd, op.Text, op.Tilde, windows)
 		if !ok {
 			continue
 		}

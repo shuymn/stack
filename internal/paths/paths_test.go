@@ -512,7 +512,7 @@ func TestResolvePowerShell(t *testing.T) {
 			in      string
 			windows bool
 		}{{"sub/b.md", false}, {`sub\b.md`, true}, {`.\sub\b.md`, true}, {"sub/b.md", true}} {
-			got, ok := ResolvePowerShell("", dir, tt.in, tt.windows)
+			got, ok := ResolvePowerShell("", dir, tt.in, false, tt.windows)
 			if !ok {
 				t.Errorf("ResolvePowerShell(%q, windows=%v) unknown", tt.in, tt.windows)
 				continue
@@ -535,25 +535,43 @@ func TestResolvePowerShell(t *testing.T) {
 			{"~/b.md", false, home + sep + "b.md"},
 			{`~\b.md`, true, home + sep + "b.md"},
 		} {
-			if got, ok := ResolvePowerShell(home, "", tt.in, tt.windows); got != tt.want || !ok {
+			if got, ok := ResolvePowerShell(
+				home,
+				"",
+				tt.in,
+				true,
+				tt.windows,
+			); got != tt.want ||
+				!ok {
 				t.Errorf("ResolvePowerShell(%q, windows=%v) = %q, %v; want %q",
 					tt.in, tt.windows, got, ok, tt.want)
 			}
 		}
-		// Without a home `~` is a literal name; on POSIX `~\b.md` is one file name.
+		// Not expanded, `~` is a literal name; on POSIX `~\b.md`, `~user` and `~foo/x` are literal
+		// names even when expanded.
 		cwd := t.TempDir()
-		if got, _ := ResolvePowerShell(
-			"",
-			cwd,
-			"~/b.md",
-			false,
-		); got != cwd+sep+filepath.FromSlash(
-			"~/b.md",
-		) {
-			t.Errorf("ResolvePowerShell(no home, ~/b.md) = %q", got)
+		for _, windows := range []bool{false, true} {
+			want := cwd + sep + filepath.FromSlash("~/b.md")
+			if got, ok := ResolvePowerShell(
+				home,
+				cwd,
+				"~/b.md",
+				false,
+				windows,
+			); got != want ||
+				!ok {
+				t.Errorf("ResolvePowerShell(literal ~/b.md, windows=%v) = %q, %v", windows, got, ok)
+			}
+			// Expanded with no known home: unknown, never the literal copy under cwd.
+			if got, ok := ResolvePowerShell("", cwd, "~/b.md", true, windows); ok {
+				t.Errorf("ResolvePowerShell(no home, ~/b.md, windows=%v) = %q", windows, got)
+			}
 		}
-		if got, _ := ResolvePowerShell(home, cwd, `~\b.md`, false); got != cwd+sep+`~\b.md` {
-			t.Errorf(`ResolvePowerShell(posix, ~\b.md) = %q`, got)
+		for _, in := range []string{`~\b.md`, "~user", "~foo/x"} {
+			want := cwd + sep + filepath.FromSlash(in)
+			if got, ok := ResolvePowerShell(home, cwd, in, true, false); got != want || !ok {
+				t.Errorf("ResolvePowerShell(posix, %s) = %q, %v; want %q", in, got, ok, want)
+			}
 		}
 	})
 
@@ -580,7 +598,7 @@ func TestResolvePowerShell(t *testing.T) {
 			{false, "/w", `C:\x`, "/w" + sep + `C:\x`, true},
 		}
 		for _, tt := range tests {
-			got, ok := ResolvePowerShell("", tt.cwd, tt.in, tt.windows)
+			got, ok := ResolvePowerShell("", tt.cwd, tt.in, false, tt.windows)
 			if got != tt.want || ok != tt.ok {
 				t.Errorf("ResolvePowerShell(windows=%v, %q, %q) = %q, %v; want %q, %v",
 					tt.windows, tt.cwd, tt.in, got, ok, tt.want, tt.ok)

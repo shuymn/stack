@@ -3,6 +3,7 @@ package guard
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -99,6 +100,35 @@ func TestRawMergePowerShell(t *testing.T) {
 	}
 	if _, ok := decideBash(r.Nested[1].Text, f.cwd, 0, f.opts); !ok {
 		t.Errorf("the inner Bash text at depth 0 does not deny")
+	}
+}
+
+// TestRawMergePowerShellTilde checks a native `~` `--input` body: home on non-Windows hosts, and on
+// Windows opaque, since the file gh opens depends on the engine (7.6+ expands `~`, 5.1 and 7.0–7.5
+// pass it as written). The merge mutation is only in the home copy; the cwd's literal `~` copy is a
+// query.
+func TestRawMergePowerShellTilde(t *testing.T) {
+	f := newFixture(t)
+	body := func(q string) string {
+		raw, err := json.Marshal(map[string]string{"query": q})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(raw)
+	}
+	merge := body(`mutation { mergePullRequest(input: {pullRequestId: "x"}) { clientMutationId } }`)
+	if err := os.WriteFile(filepath.Join(f.opts.Home, "q.json"), []byte(merge), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f.write("~/q.json", body(`query { viewer { login } }`))
+
+	d, ok := f.ps("gh api graphql --input ~/q.json", powershell.Unix)
+	wantDeny(t, "unix: --input ~/q.json", d, ok)
+	d, ok = f.ps("gh api graphql --input '~/q.json'", powershell.Unix)
+	wantAllow(t, "unix: --input '~/q.json'", d, ok)
+	for _, cmd := range []string{`gh api graphql --input ~\q.json`, "gh api graphql --input ~/q.json"} {
+		d, ok = f.ps(cmd, powershell.Windows)
+		wantAllow(t, "windows: "+cmd, d, ok)
 	}
 }
 

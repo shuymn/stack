@@ -196,7 +196,13 @@ func TestGhPublishPowerShell(t *testing.T) {
 				`gh pr comment 1 -F "$HOME/b.md"`,
 				`gh pr comment 1 -F "$env:USERPROFILE\b.md"`,
 			},
-			allow: []string{`gh pr comment 1 -F ~\b.md`, "gh pr comment 1 -F ~/b.md"},
+			// A native `~` on Windows names a file that depends on the engine: skipped.
+			allow: []string{
+				`gh pr comment 1 -F ~\b.md`,
+				"gh pr comment 1 -F ~/b.md",
+				`gh pr comment 1 -F '~\b.md'`,
+				`gh pr comment 1 -F "~/b.md"`,
+			},
 		})
 	} else {
 		f.check(psCases{
@@ -208,6 +214,22 @@ func TestGhPublishPowerShell(t *testing.T) {
 			},
 		})
 	}
+
+	// With no known home a native `~` body file is skipped, not read as the literal `~` copy.
+	f.write("~/hit.md", "see "+lp+"\n")
+	home := f.home
+	f.home = ""
+	f.check(psCases{
+		windows: false, rule: RuleGhPublish,
+		deny:  []string{"gh pr comment 1 -F '~/hit.md'"},
+		allow: []string{"gh pr comment 1 -F ~/hit.md"},
+	})
+	f.check(psCases{
+		windows: true, rule: RuleGhPublish,
+		deny:  []string{"gh pr comment 1 -F '~/hit.md'"},
+		allow: []string{"gh pr comment 1 -F ~/hit.md", `gh pr comment 1 -F ~\hit.md`},
+	})
+	f.home = home
 
 	// The body file's own local path as its argument is not published; the same path inside it is.
 	if !isWindows {
@@ -272,7 +294,6 @@ func TestRmRootPowerShell(t *testing.T) {
 			`$env:USERPROFILE = 'C:\work\x'; Remove-Item -Recurse $env:USERPROFILE`,
 			"$HOME = 'x'; Remove-Item -Recurse $HOME",
 			"Remove-Item -Recurse -Path 'a,~'",
-			"Remove-Item -Recurse -LiteralPath '~'",
 			`Remove-Item -Recurse .git\hooks`,
 			`Remove-Item -Recurse wt\.git`,
 			"Remove-Item -Recurse -LiteralPath wt/.git/.",
@@ -317,6 +338,18 @@ func TestRmRootPowerShell(t *testing.T) {
 			"rm -r ~",
 			"rmdir -r ~",
 			`& 'C:\x\rm.exe' -r C:\`,
+			`& 'C:\x\rm.exe' -r ~`,
+			`& 'C:\x\rm.exe' -r ~\`,
+			"rm.exe -rf ~/",
+			"& rm.exe -r `~",
+			`iex '& rm.exe -r ~'`,
+			// powershell.exe is 5.1, which passes `~` as written; the nested script is judged by the
+			// same rule (the engine is not modelled), so this is the old-engine false deny.
+			`powershell.exe -Command '& rm.exe -r ~'`,
+			"Remove-Item -Recurse -LiteralPath '~'",
+			`Remove-Item -Recurse -LP ~\`,
+			"Remove-Item -Recurse -PSPath '~/'",
+			"Remove-Item -Recurse -LiteralPath a, '~'",
 			// A declared drive leaves only its own root opaque.
 			`New-PSDrive -Name X -PSProvider FileSystem -Root C:\work\build; Remove-Item -Recurse C:\`,
 			`Remove-Item -Recurse X:\`,
@@ -330,7 +363,19 @@ func TestRmRootPowerShell(t *testing.T) {
 			`Remove-Item -Recurse -Path 'a,C:\'`,
 			"rm -rf ~",
 			`& 'C:\x\rm.exe' -r '~'`,
-			`& 'C:\x\rm.exe' -r ~`,
+			`& 'C:\x\rm.exe' -r "~"`,
+			`& 'C:\x\rm.exe' -r ~\src`,
+			`& 'C:\x\rm.exe' -r x~`,
+			`& 'C:\x\rm.exe' -r ~user`,
+			`& rm.exe -r ~"\"`,
+			`& rm.exe --% -r ~`,
+			`& rm.exe '--%' -r ~`,
+			"Remove-Item -Recurse -LiteralPath '~' -WhatIf",
+			"Remove-Item -LiteralPath '~'",
+			`Remove-Item -Recurse -LiteralPath '.\~'`,
+			`Remove-Item -Recurse -LiteralPath '~\child'`,
+			`Remove-Item -Recurse -LiteralPath '~user'`,
+			`Remove-Item -Recurse -LiteralPath '~\.'`,
 			`New-PSDrive -Name X -PSProvider FileSystem -Root C:\x; Remove-Item -Recurse \`,
 			`New-PSDrive -Name X -PSProvider FileSystem -Root C:\work\build; Remove-Item -Recurse X:\`,
 			`New-PSDrive x FileSystem C:\work\build; Remove-Item -Recurse X:/`,
@@ -354,6 +399,9 @@ func TestRmRootPowerShell(t *testing.T) {
 		allow: []string{
 			"rm -rf '~'",
 			"rm -rf ~/src",
+			"Remove-Item -Recurse -LiteralPath '~'",
+			"Remove-Item -Recurse -LP ~/",
+			`Remove-Item -Recurse -LiteralPath '~\'`,
 			`Remove-Item -Recurse $env:SystemDrive\`,
 			"rm -f .git",
 			"rm -rf wt/.git",
@@ -364,6 +412,20 @@ func TestRmRootPowerShell(t *testing.T) {
 		d, ok := f.psDecide("rm -rf $HOME", false)
 		wantDeny(t, "unix: rm -rf $HOME", d, ok, RuleRmRoot)
 	}
+
+	// With no known home a native `~` operand is not judged, never read as a literal `~` under the
+	// cwd, where a `.git` directory would deny.
+	if err := os.MkdirAll(filepath.Join(f.cwd, "~", ".git"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	home, f.home = f.home, ""
+	for _, windows := range bothOS {
+		d, ok := f.psDecide("& rm.exe -r ~/.git", windows)
+		wantAllow(t, "unknown home: & rm.exe -r ~/.git", d, ok)
+	}
+	d, ok = f.psDecide("& rm.exe -r '~/.git'", false)
+	wantDeny(t, "a quoted ~ is a literal name under the cwd", d, ok, RuleRmRoot)
+	f.home = home
 
 	f.cwd = ""
 	for _, cmd := range []string{`Remove-Item -Recurse \`, "Remove-Item -Recurse /"} {
