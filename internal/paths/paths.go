@@ -19,9 +19,6 @@ const ShellRoot = "\x00git-bash-root"
 
 const isWindows = runtime.GOOS == "windows"
 
-// foldCase reports whether the platform file system is case-insensitive by default.
-const foldCase = runtime.GOOS == "darwin" || isWindows
-
 var (
 	// ErrNoHome is returned when the home directory cannot be determined.
 	ErrNoHome = errors.New("home directory is not set")
@@ -219,7 +216,7 @@ func isASCIILetter(c byte) bool {
 // is case-insensitive by default (darwin, windows). On Windows backslash is a separator too, and the
 // volume (`C:` or `//host/share`) is kept whole so `..` never climbs out of it.
 func Norm(p string) string {
-	return norm(p, isWindows, foldCase)
+	return NormFor(p, isWindows)
 }
 
 func norm(p string, windows, fold bool) string {
