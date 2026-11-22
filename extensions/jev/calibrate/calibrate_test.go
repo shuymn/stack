@@ -583,7 +583,8 @@ func TestReport(t *testing.T) {
 		cases = append(cases, synthCase(fmt.Sprintf("%s-pos-%d", lang, i), lang, SplitFit, true,
 			0.9, 0.9, 0.9))
 	}
-	// Under the margin test 0.12 is a miss; at the runtime cutoff it flips the case's decision.
+	// At the fitted 0.50 cutoff 0.12 misses under both rules while the two 0.90 calls hit, so the
+	// case flips across calls.
 	cases = append(cases, synthCase("ja-flip", "ja", SplitFit, true, 0.9, 0.9, 0.12))
 	for i, lang := range []string{"en", "en", "en", "ja", "ja", "ja"} {
 		cases = append(cases, synthCase(fmt.Sprintf("%s-neg-%d", lang, i), lang, SplitFit, false,
