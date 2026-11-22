@@ -610,6 +610,18 @@
     ]
   },
   {
+    "cmd": "$p = { gh pr merge 7 }; iex 'gh pr merge 7'",
+    "calls": [
+      "iex"
+    ],
+    "skipped": [
+      "gh"
+    ],
+    "nested": [
+      "gh"
+    ]
+  },
+  {
     "cmd": "\u0026 { param($x=$(gh pr merge 7)) $x }",
     "calls": [],
     "skipped": [

@@ -228,8 +228,9 @@ function Get-NestedText($cmd) {
     $null
 }
 
-# Get-NestedCommands returns the plain commands with a static name of the nested scripts that the
-# plain commands of $ast run, down to depth 2 (as the recognizer's allowance), in source order.
+# Get-NestedCommands returns the commands of the nested scripts that the plain commands of $ast
+# run, down to depth 2 (as the recognizer's allowance), in source order: each plain one with a
+# static name, and each one whose position cannot be decided (ctx 'unknown:<why>').
 function Get-NestedCommands($ast, [int] $depth) {
     $out = New-Object System.Collections.ArrayList
     if ($depth -ge 2) { return , $out }
@@ -242,9 +243,11 @@ function Get-NestedCommands($ast, [int] $depth) {
         if (@($er).Count -gt 0) { continue }
         foreach ($c in (Find-Commands $inner)) {
             $n = $c.GetCommandName()
-            if ($null -ne $n -and (Get-Context $c) -eq 'plain') {
+            $ctx = Get-Context $c
+            if (($null -ne $n -and $ctx -eq 'plain') -or $ctx.StartsWith('unknown:')) {
                 [void]$out.Add([ordered]@{
                         name = $n
+                        ctx = $ctx
                         elements = @($c.CommandElements | ForEach-Object { Convert-Element $_ })
                     })
             }
@@ -285,15 +288,17 @@ foreach ($c in $req.cases) {
     for ($i = 0; $i -lt $all.Count; $i++) {
         $cmd = $all[$i]
         $name = $cmd.GetCommandName()
+        $ctx = Get-Context $cmd
         $text = $null
-        if ($null -ne $name -and -not $failed -and (Resolve-Name $name) -eq 'native') {
+        # Only a plain native call is evidence: the stub runs no other.
+        if ($null -ne $name -and -not $failed -and $ctx -eq 'plain' -and (Resolve-Name $name) -eq 'native') {
             $text = Get-StubText $cmd
         }
         if ($null -ne $text) { $stubTexts["$($c.id)/$i"] = $text }
         [void]$cmds.Add([ordered]@{
             name = $name
             end = $cmd.Extent.EndOffset
-            ctx = Get-Context $cmd
+            ctx = $ctx
             elements = @($cmd.CommandElements | ForEach-Object { Convert-Element $_ })
             eligible = $null -ne $text
         })

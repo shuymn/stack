@@ -482,6 +482,12 @@ var parseTests = []struct {
 		Unix,
 		calls{{"ForEach-Object", "--", "{}"}, {"gh", "pr", "merge", "7"}},
 	},
+	{
+		"opaque block and nested call of one name",
+		`$p = { gh pr merge 7 }; iex 'gh pr merge 7'`,
+		Unix,
+		calls{{"iex", "gh pr merge 7"}, {"gh", "pr", "merge", "7"}},
+	},
 	// A parameter default of an invoked block is opaque (phase2-core §6), though pwsh evaluates it.
 	{"parameter default", `& { param($x=$(gh pr merge 7)) $x }`, Unix, calls{}},
 	{

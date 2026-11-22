@@ -137,9 +137,11 @@ type (
 		Commands []oCmd    `json:"commands"`
 		Nested   []oNested `json:"nested"`
 	}
-	// oNested is a command of a nested script, at a §3 position.
+	// oNested is a command of a nested script: at a §3 position (ctx "plain"), or one whose
+	// position cannot be decided ("unknown:<why>").
 	oNested struct {
-		Name     string  `json:"name"`
+		Name     *string `json:"name"`
+		Ctx      string  `json:"ctx"`
 		Elements []oElem `json:"elements"`
 	}
 	oParam struct {
@@ -321,7 +323,12 @@ func observe(e evidence, st *stats) observation {
 		}
 	}
 	for _, n := range e.oc.Nested {
-		ob.nested = append(ob.nested, n.Name)
+		switch {
+		case n.Ctx != "plain":
+			ob.missing = append(ob.missing, "nested position not decided: "+n.Ctx)
+		case n.Name != nil:
+			ob.nested = append(ob.nested, *n.Name)
+		}
 	}
 	slices.Sort(ob.calls)
 	slices.Sort(ob.skipped)
@@ -375,50 +382,64 @@ func compareCalls(e evidence, st *stats, ob *observation, partial bool) {
 	slices.SortStableFunc(idx, func(a, b int) int { return cmds[a].End - cmds[b].End })
 	used := make([]bool, len(e.r.Calls))
 	dynamicEngine := 0
+	var opaque []int
+	// Supported top-level calls first.
 	for _, i := range idx {
 		oc := cmds[i]
-		if len(oc.Elements) == 0 {
+		switch {
+		case len(oc.Elements) == 0:
 			ob.missing = append(ob.missing, fmt.Sprintf("engine command %d without elements", i))
-			continue
-		}
-		if oc.Name == nil {
+		case oc.Ctx != "plain":
+			opaque = append(opaque, i)
+		case oc.Name == nil:
 			// A dynamic name; an invoked block `& {…}` is no call of its own.
-			if oc.Ctx == "plain" && oc.Elements[0].K != "block" {
+			if oc.Elements[0].K != "block" {
 				dynamicEngine++
 			}
-			continue
-		}
-		j := matchCall(e.r.Calls, used, *oc.Name, oc)
-		switch {
-		case j < 0 && oc.Ctx == "plain":
-			ob.fails = append(ob.fails, fmt.Sprintf("missed call %q", *oc.Name))
-		case j < 0:
-		case oc.Ctx != "plain":
-			used[j] = true
-			ob.fails = append(ob.fails,
-				fmt.Sprintf("call %q returned from an opaque position (%s)", *oc.Name, oc.Ctx))
 		default:
+			j := matchCall(e.r.Calls, used, *oc.Name, oc)
+			if j < 0 {
+				ob.fails = append(ob.fails, fmt.Sprintf("missed call %q", *oc.Name))
+				continue
+			}
 			used[j] = true
 			st.calls++
 			compareCall(e, e.r.Calls[j], oc, fmt.Sprintf("%d/%d", e.oc.ID, i), st, ob)
 		}
 	}
-	if partial {
-		return
+	// Then the calls of nested scripts: each engine record pairs with a call of its name, and
+	// their static words are compared.
+	if !partial {
+		for _, n := range e.oc.Nested {
+			if n.Ctx != "plain" || n.Name == nil {
+				continue
+			}
+			rec := oCmd{Name: n.Name, Ctx: n.Ctx, Elements: n.Elements}
+			j := matchCall(e.r.Calls, used, *n.Name, rec)
+			if j < 0 {
+				ob.fails = append(ob.fails, fmt.Sprintf("missed nested call %q", *n.Name))
+				continue
+			}
+			used[j] = true
+			f, notes := compareArgv(e.r.Calls[j], rec, dynamicWords(e))
+			ob.fails = append(ob.fails, prefixed("nested: ", f)...)
+			ob.notes = append(ob.notes, prefixed("nested: ", notes)...)
+		}
 	}
-	// The calls of nested scripts: each engine record pairs with a call of its name, and their
-	// static words are compared.
-	for _, n := range e.oc.Nested {
-		rec := oCmd{Name: &n.Name, Ctx: "plain", Elements: n.Elements}
-		j := matchCall(e.r.Calls, used, n.Name, rec)
-		if j < 0 {
-			ob.fails = append(ob.fails, fmt.Sprintf("missed nested call %q", n.Name))
+	// A call left over that an opaque command explains was returned from an opaque position.
+	for _, i := range opaque {
+		oc := cmds[i]
+		if oc.Name == nil {
 			continue
 		}
-		used[j] = true
-		f, notes := compareArgv(e.r.Calls[j], rec, dynamicWords(e))
-		ob.fails = append(ob.fails, prefixed("nested: ", f)...)
-		ob.notes = append(ob.notes, prefixed("nested: ", notes)...)
+		if j := matchCall(e.r.Calls, used, *oc.Name, oc); j >= 0 {
+			used[j] = true
+			ob.fails = append(ob.fails,
+				fmt.Sprintf("call %q returned from an opaque position (%s)", *oc.Name, oc.Ctx))
+		}
+	}
+	if partial {
+		return
 	}
 	dynamicParse := 0
 	for j, c := range e.r.Calls {
@@ -864,7 +885,8 @@ var controls = []control{
 		},
 	},
 	{"iex 'gh pr merge 7'", func(_ *oracleOut, oc *oCase, _ map[string][]string) string {
-		if len(oc.Errors) > 0 || len(oc.Nested) != 1 || oc.Nested[0].Name != "gh" ||
+		if len(oc.Errors) > 0 || len(oc.Nested) != 1 || oc.Nested[0].Name == nil ||
+			*oc.Nested[0].Name != "gh" ||
 			len(oc.Nested[0].Elements) != 4 {
 			return fmt.Sprintf("nested %+v, want gh pr merge 7", oc.Nested)
 		}
@@ -900,7 +922,7 @@ var schema = map[string]map[string]string{
 	},
 	"case":    {"id": "n", "errors": "a", "commands": "a", "nested": "a"},
 	"command": {"name": "s?", "ctx": "s", "end": "n", "elements": "a", "eligible": "b"},
-	"nested":  {"name": "s", "elements": "a"},
+	"nested":  {"name": "s?", "ctx": "s", "elements": "a"},
 	"element": {
 		"k":       "s",
 		"t":       "s",
@@ -970,6 +992,8 @@ func listOf(v any) []any {
 	return l
 }
 
+var astTypeRe = regexp.MustCompile(`^[A-Z][A-Za-z]*Ast$`)
+
 // checkElements checks command elements, nested ones included.
 func checkElements(v any, where string) error {
 	for _, el := range listOf(v) {
@@ -977,6 +1001,12 @@ func checkElements(v any, where string) error {
 			return err
 		}
 		m, _ := el.(map[string]any)
+		types := append([]any{m["ast"]}, listOf(m["nested"])...)
+		for _, t := range types {
+			if s, _ := t.(string); !astTypeRe.MatchString(s) {
+				return fmt.Errorf("%s: AST type %q", where, s)
+			}
+		}
 		if a, ok := m["arg"]; ok {
 			if err := checkElements([]any{a}, where); err != nil {
 				return err
@@ -992,8 +1022,9 @@ func checkElements(v any, where string) error {
 	return nil
 }
 
-// validateOutput checks that the raw oracle output carries every required field with its type.
-func validateOutput(b []byte) error {
+// validateOutput checks that the raw oracle output carries every required field with its type,
+// an alias list for every cmdlet and a nonempty parameter list for every table requested.
+func validateOutput(b []byte, cmdlets, tables []string) error {
 	var raw map[string]any
 	if err := json.Unmarshal(b, &raw); err != nil {
 		return fmt.Errorf("oracle output: %w", err)
@@ -1044,12 +1075,22 @@ func validateOutput(b []byte) error {
 		}
 	}
 	aliasesOf, _ := raw["aliasesOf"].(map[string]any)
+	for _, c := range cmdlets {
+		if typeOf(aliasesOf[c]) != "a" {
+			return fmt.Errorf("aliasesOf[%q] is %s, want a", c, typeOf(aliasesOf[c]))
+		}
+	}
 	for k, v := range aliasesOf {
 		if err := checkStrings(v, "aliasesOf "+k); err != nil {
 			return err
 		}
 	}
 	params, _ := raw["params"].(map[string]any)
+	for _, tb := range tables {
+		if len(listOf(params[tb])) == 0 {
+			return fmt.Errorf("params[%q] is %v, want a nonempty list", tb, params[tb])
+		}
+	}
 	for name, ps := range params {
 		for _, p := range listOf(ps) {
 			if err := checkKeys(p, "param", "params of "+name); err != nil {
@@ -1077,11 +1118,12 @@ func runOracle(t *testing.T, exe string, corpus []string) (*oracleOut, map[strin
 	for i, s := range corpus {
 		cases[i] = tcase{i, s}
 	}
+	cmdlets, tableNames := slices.Sorted(maps.Values(canonical)), slices.Sorted(maps.Keys(tables))
 	req := map[string]any{
 		"cases":   cases,
 		"names":   slices.Sorted(maps.Keys(aliases)),
-		"cmdlets": slices.Sorted(maps.Values(canonical)),
-		"tables":  slices.Sorted(maps.Keys(tables)),
+		"cmdlets": cmdlets,
+		"tables":  tableNames,
 		"stub":    stub,
 		"marker":  stubMarker,
 		"missing": filepath.Join(dir, "missing"),
@@ -1114,7 +1156,7 @@ func runOracle(t *testing.T, exe string, corpus []string) (*oracleOut, map[strin
 	if err != nil {
 		return nil, nil, fmt.Errorf("oracle run: %w", err)
 	}
-	if err := validateOutput(b); err != nil {
+	if err := validateOutput(b, cmdlets, tableNames); err != nil {
 		return nil, nil, err
 	}
 	var o oracleOut
@@ -1212,6 +1254,9 @@ func checkEngine(o *oracleOut, corpus []string, stubs map[string][]string) error
 			return fmt.Errorf("case %d reported as %d", i, c.ID)
 		}
 	}
+	if err := checkStubContract(o, stubs); err != nil {
+		return err
+	}
 	for _, c := range controls {
 		i := slices.Index(corpus, c.cmd)
 		if i < 0 {
@@ -1219,6 +1264,37 @@ func checkEngine(o *oracleOut, corpus []string, stubs map[string][]string) error
 		}
 		if why := c.check(o, &o.Cases[i], stubs); why != "" {
 			return fmt.Errorf("control %q: %s", c.cmd, why)
+		}
+	}
+	return nil
+}
+
+// checkStubContract checks that the stub ran exactly the plain native calls whose arguments it may
+// receive (decided here from the AST record), in every script the engine parses.
+func checkStubContract(o *oracleOut, stubs map[string][]string) error {
+	want := map[string]bool{}
+	for _, c := range o.Cases {
+		for i, cmd := range c.Commands {
+			id := fmt.Sprintf("%d/%d", c.ID, i)
+			eligible := len(c.Errors) == 0 && cmd.Ctx == "plain" && cmd.Name != nil &&
+				o.resolve(*cmd.Name) == "native" && stubShaped(cmd.Elements[1:])
+			if cmd.Eligible != eligible {
+				return fmt.Errorf(
+					"call %s: eligible = %v, its record says %v",
+					id,
+					cmd.Eligible,
+					eligible,
+				)
+			}
+			if _, ok := stubs[id]; ok != eligible {
+				return fmt.Errorf("call %s: stub record = %v, eligible = %v", id, ok, eligible)
+			}
+			want[id] = eligible
+		}
+	}
+	for id := range stubs {
+		if !want[id] {
+			return fmt.Errorf("stub record %s for no eligible call", id)
 		}
 	}
 	return nil
