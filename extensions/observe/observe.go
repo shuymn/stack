@@ -36,11 +36,13 @@ const (
 
 // Finding kinds.
 const (
-	kindGhAuth        = "gh-auth"
-	kindReplayChange  = "replay-change"
-	kindGhVersion     = "gh-version"
-	kindLatestMissing = "latest-not-written"
-	kindInternal      = "internal-error"
+	kindGhAuth       = "gh-auth"
+	kindReplayChange = "replay-change"
+	// kindReplayHookMissing: stack-guard is not on PATH, so the replay ran through stack only.
+	kindReplayHookMissing = "replay-hook-missing"
+	kindGhVersion         = "gh-version"
+	kindLatestMissing     = "latest-not-written"
+	kindInternal          = "internal-error"
 )
 
 const (
@@ -92,7 +94,7 @@ type Options struct {
 	// Env is the environment children start with (repository-location variables are dropped);
 	// nil means os.Environ().
 	Env []string
-	// LookPath finds gh, git, sqlite3 and stack; nil means exec.LookPath.
+	// LookPath finds gh, git, sqlite3, stack and stack-guard; nil means exec.LookPath.
 	LookPath func(string) (string, error)
 	// Now is the clock of the window; nil means time.Now.
 	Now func() time.Time
@@ -462,7 +464,7 @@ func (s *state) response(path string, written bool) Response {
 	}
 	if len(s.findings) > 0 {
 		// Every finding kind observe emits is owner-actionable (gh-auth, replay-change,
-		// gh-version, latest-not-written, internal-error).
+		// replay-hook-missing, gh-version, latest-not-written, internal-error).
 		status = StatusWarn
 	}
 	findings := s.findings

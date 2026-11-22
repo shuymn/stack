@@ -17,8 +17,13 @@ import (
 const (
 	denyJSONSecrets = `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny",` +
 		`"permissionDecisionReason":"stack guard (secrets): Read targets the secret \"x\"."}}` + "\n"
-	guardDenySecrets  = "PreToolUse:Bash hook error: stack guard (secrets): the command mentions the secret \"x\"."
-	guardDenyRawMerge = "PreToolUse:Bash hook error: stack guard (raw-merge): gh pr merge is not run directly."
+	denyJSONGuard = `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny",` +
+		`"permissionDecisionReason":"stack-guard (secrets): the command mentions the secret \"x\"."}}` + "\n"
+	denyJSONRawMerge = `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny",` +
+		`"permissionDecisionReason":"stack guard (raw-merge): gh pr merge is not run directly."}}` + "\n"
+	guardDenySecrets    = "PreToolUse:Bash hook error: stack guard (secrets): the command mentions the secret \"x\"."
+	guardDenySecretsV11 = "PreToolUse:Bash hook error: stack-guard (secrets): the command mentions the secret \"x\"."
+	guardDenyRawMerge   = "PreToolUse:Bash hook error: stack guard (raw-merge): gh pr merge is not run directly."
 )
 
 func TestRecordedDecision(t *testing.T) {
@@ -48,6 +53,11 @@ func TestRecordedDecision(t *testing.T) {
 
 	for _, tc := range []struct{ tool, text, want string }{
 		{"Bash", "PreToolUse:Bash hook error: [stack hook claude pre-tool-use]: stack guard (rmroot): rm", "deny:rmroot"},
+		// stack-guard's reasons (v11) name the same rules as the core hook's did (v10).
+		{"Bash", "PreToolUse:Bash hook error: stack-guard (secrets): x", "deny:secrets"},
+		{"Read", "PreToolUse:Read hook error: [stack-guard hook claude pre-tool-use]: stack-guard (secrets): x", "deny:secrets"},
+		{"Bash", "PreToolUse:Bash hook error: stack-guard (Secrets): x", decOtherDeny},
+		{"Bash", "PreToolUse:Bash hook error: stack-guard secrets", decOtherDeny},
 		// Not a rule id: never copied into a finding.
 		{"Bash", "PreToolUse:Bash hook error: stack guard (" + probePath + "): x", decOtherDeny},
 		{"Bash", "PreToolUse:Bash hook error: stack guard (Secrets): x", decOtherDeny},
@@ -272,6 +282,80 @@ func TestReplay(t *testing.T) {
 	})
 }
 
+// TestReplayHooks covers the replay through both installed hooks (core-stages.md §4.5, §4.10).
+func TestReplayHooks(t *testing.T) {
+	t.Parallel()
+	t.Run("both hooks: v10 and v11 reasons name the same rule", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t)
+		f.calls(
+			"r",
+			// v10: the core hook made the secrets deny; v11 stack-guard makes it.
+			bashCall(hourAgo, f.cwd, cmd("b"), guardDenySecrets),
+			bashCall(hourAgo, f.cwd, cmd("g"), guardDenySecretsV11),
+		)
+		f.fake("stack-guard", proctest.Response{Args: hookArgs, Stdout: denyJSONGuard})
+		f.fake("stack", stackModel, proctest.Response{Args: hookArgs})
+		resp, l := f.run()
+		if l.Replay != (ReplayTotals{Compared: 2}) || len(findings(resp, kindReplayChange)) != 0 {
+			t.Errorf("replay = %+v, findings %+v", l.Replay, resp.Findings)
+		}
+	})
+	t.Run("both hooks: the core deny decides first", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t)
+		f.calls("r", bashCall(hourAgo, f.cwd, cmd("m"), guardDenyRawMerge))
+		guard := f.fake("stack-guard", proctest.Response{Args: hookArgs, Stdout: denyJSONGuard})
+		f.fake("stack", stackModel, proctest.Response{Args: hookArgs, Stdout: denyJSONRawMerge})
+		resp, l := f.run()
+		if l.Replay != (ReplayTotals{Compared: 1}) || len(findings(resp, kindReplayChange)) != 0 {
+			t.Errorf("replay = %+v, findings %+v", l.Replay, resp.Findings)
+		}
+		if calls := proctest.Calls(t, guard); len(calls) != 0 {
+			t.Errorf("stack-guard ran %d times after the core deny", len(calls))
+		}
+	})
+	t.Run("stack-guard not comparable", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t)
+		f.calls("r", bashCall(hourAgo, f.cwd, cmd("n"), "ok"))
+		f.fake("stack-guard", proctest.Response{Args: hookArgs, Exit: 1})
+		f.fake("stack", stackModel, proctest.Response{Args: hookArgs})
+		_, l := f.run()
+		if l.Replay != (ReplayTotals{NotComparable: 1}) {
+			t.Errorf("replay = %+v", l.Replay)
+		}
+	})
+	t.Run(
+		"stack-guard missing: warn, a deny stack no longer makes not comparable",
+		func(t *testing.T) {
+			t.Parallel()
+			f := newFixture(t)
+			f.calls(
+				"r",
+				bashCall(hourAgo, f.cwd, cmd("b"), guardDenySecrets),
+				bashCall(hourAgo, f.cwd, cmd("n"), "ok"),
+			)
+			f.fake("stack", stackModel, proctest.Response{Args: hookArgs})
+			delete(f.tools, "stack-guard")
+			resp, l := f.run()
+			if l.Replay != (ReplayTotals{Compared: 1, NotComparable: 1}) ||
+				l.Sources["replay"].Status != srcOK || len(findings(resp, kindReplayChange)) != 0 {
+				t.Errorf(
+					"replay = %+v %+v, findings %+v",
+					l.Replay,
+					l.Sources["replay"],
+					resp.Findings,
+				)
+			}
+			if got := findings(resp, kindReplayHookMissing); len(got) != 1 ||
+				got[0].Where != "stack-guard" || resp.Status != StatusWarn {
+				t.Errorf("status %q, hook-missing findings %+v", resp.Status, got)
+			}
+		},
+	)
+}
+
 // TestReplayInputs covers what decides whether a record is replayed and in which order.
 func TestReplayInputs(t *testing.T) {
 	t.Parallel()
@@ -374,51 +458,75 @@ func TestReplayInputs(t *testing.T) {
 	})
 }
 
-// TestReplayRealHook replays real-format records through the stack built in TestMain.
+// TestReplayRealHook replays real-format records through the stack and stack-guard built in
+// TestMain (phase3-cycle.md P3 (a)).
 func TestReplayRealHook(t *testing.T) {
 	t.Parallel()
 	needBuilt(t)
-	f := newFixture(t)
-	f.tools["stack"] = built.stack
-	f.fromTestdata("decisions.jsonl", ".claude/projects/-p/d.jsonl", f.cwd)
 	// A recorded no-deny the current rules deny, with a local path in its input.
 	local := "/home/" + "someone" + "/run.log"
-	f.calls(
-		"new",
-		bashCall(
-			hourAgo,
-			f.cwd,
-			cmd(`gh pr merge 1 --body "log at `+local+`"`),
-			"merged",
-		),
-	)
-	resp, l := f.run()
-	// Compared: the two recorded secrets denies, which the core hook no longer makes (the rule
-	// moved to stack-guard, docs/design/core-stages.md §4.5), the no-deny ls (unchanged) and the gh
-	// call.
-	want := ReplayTotals{
-		Compared: 4, Changed: 3, ChangedByKind: ChangeKinds{NewDeny: 1, LostDeny: 2},
+	setup := func(t *testing.T) *fixture {
+		t.Helper()
+		f := newFixture(t)
+		f.tools["stack"] = built.stack
+		f.tools["stack-guard"] = built.guard
+		f.fromTestdata("decisions.jsonl", ".claude/projects/-p/d.jsonl", f.cwd)
+		f.calls(
+			"new",
+			bashCall(hourAgo, f.cwd, cmd(`gh pr merge 1 --body "log at `+local+`"`), "merged"),
+		)
+		return f
 	}
-	if l.Replay != want {
-		t.Errorf("replay = %+v, findings %+v", l.Replay, resp.Findings)
+	check := func(t *testing.T, f *fixture, resp Response, want ReplayTotals, l Latest) {
+		t.Helper()
+		if l.Replay != want {
+			t.Errorf("replay = %+v, findings %+v", l.Replay, resp.Findings)
+		}
+		if got := replayFindings(
+			resp,
+		); !slices.Equal(
+			got,
+			[]string{"Bash: no-deny -> deny:raw-merge"},
+		) {
+			t.Fatalf("findings = %q", got)
+		}
+		data := mustJSON(t, resp)
+		if strings.Contains(string(data), "someone") {
+			t.Errorf("the response quotes the input path: %s", data)
+		}
+		latest, err := os.ReadFile(latestPath(f.home))
+		if err != nil || strings.Contains(string(latest), "someone") {
+			t.Errorf("latest.json quotes the input path (err %v)", err)
+		}
 	}
-	details := make([]string, 0, 3)
-	for _, f := range findings(resp, kindReplayChange) {
-		details = append(details, f.Detail)
-	}
-	slices.Sort(details)
-	if !slices.Equal(details, []string{
-		"Bash: deny:secrets -> no-deny", "Bash: no-deny -> deny:raw-merge",
-		"Read: deny:secrets -> no-deny",
-	}) {
-		t.Fatalf("findings = %q", details)
-	}
-	data := mustJSON(t, resp)
-	if strings.Contains(string(data), "someone") {
-		t.Errorf("the response quotes the input path: %s", data)
-	}
-	latest, err := os.ReadFile(latestPath(f.home))
-	if err != nil || strings.Contains(string(latest), "someone") {
-		t.Errorf("latest.json quotes the input path (err %v)", err)
-	}
+	t.Run("both hooks", func(t *testing.T) {
+		t.Parallel()
+		f := setup(t)
+		resp, l := f.run()
+		// Compared: the two recorded v10 `stack guard (secrets)` denies, which stack-guard makes
+		// now (unchanged), the no-deny ls (unchanged) and the gh call (raw-merge, new).
+		check(
+			t,
+			f,
+			resp,
+			ReplayTotals{Compared: 4, Changed: 1, ChangedByKind: ChangeKinds{NewDeny: 1}},
+			l,
+		)
+		if got := findings(resp, kindReplayHookMissing); len(got) != 0 {
+			t.Errorf("hook-missing findings %+v", got)
+		}
+	})
+	t.Run("stack-guard missing", func(t *testing.T) {
+		t.Parallel()
+		f := setup(t)
+		delete(f.tools, "stack-guard")
+		resp, l := f.run()
+		// The recorded secrets denies are not comparable, not lost.
+		check(t, f, resp, ReplayTotals{
+			Compared: 2, Changed: 1, NotComparable: 2, ChangedByKind: ChangeKinds{NewDeny: 1},
+		}, l)
+		if got := findings(resp, kindReplayHookMissing); len(got) != 1 {
+			t.Errorf("hook-missing findings %+v", resp.Findings)
+		}
+	})
 }
