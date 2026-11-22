@@ -422,6 +422,18 @@ var parseTests = []struct {
 		calls{{"git", "status"}, {"git", "diff"}},
 	},
 	{
+		"foreach object other parameter set",
+		`1 | ForEach-Object -Parallel { 'x' } -Process { git status }; $a | % { git a } -ArgumentList 1`,
+		Unix,
+		calls{{"ForEach-Object", "-Parallel", "{}", "-Process", "{}"}, {"%", "{}", "-ArgumentList", "1"}},
+	},
+	{
+		"where object other parameter set",
+		`$a | ? -Property x { git status }; $a | Where-Object -FilterScript { gh x } -InputObject $b`,
+		Unix,
+		calls{{"?", "-Property", "x", "{}"}, {"Where-Object", "-FilterScript", "{}", "-InputObject", "$"}, {"gh", "x"}},
+	},
+	{
 		"keyword prefix is a command",
 		`foreach-thing x; iffy y`,
 		Unix,

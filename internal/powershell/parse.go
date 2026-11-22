@@ -933,9 +933,7 @@ func (p *parser) after(c Call, dot bool) elem {
 	case "Where-Object":
 		p.walkParams(c, true, "FilterScript")
 	case "Invoke-Command":
-		if localInvoke(c) {
-			p.walkParams(c, false, "ScriptBlock")
-		}
+		p.walkParams(c, false, "ScriptBlock")
 	case "Invoke-Expression":
 		p.moved = true
 		p.invokeExpression(c)
@@ -1002,9 +1000,10 @@ func fileSystemPath(t string, os OS) (string, bool) {
 	return strings.ReplaceAll(t, `\`, "/"), !strings.Contains(t, ":")
 }
 
-// walkParams walks the script blocks bound to names.
+// walkParams walks the script blocks bound to names, when every bound parameter belongs to the
+// parameter set that runs them.
 func (p *parser) walkParams(c Call, loop bool, names ...string) {
-	if !c.Bound || c.Refused {
+	if !fitsBlockSet(c) {
 		return
 	}
 	for _, w := range c.Args[1:] {
@@ -1019,28 +1018,40 @@ func (p *parser) walkParams(c Call, loop bool, names ...string) {
 	}
 }
 
-var localInvokeParams = func() map[string]bool {
-	m := map[string]bool{"ScriptBlock": true, "ArgumentList": true, "NoNewScope": true}
+// blockSets are, per executing cmdlet, the parameters of the parameter set that runs its blocks
+// (common parameters included). A local Invoke-Command takes only -ArgumentList and -NoNewScope
+// beside its block.
+var blockSets = map[string]map[string]bool{
+	"ForEach-Object": paramSet(
+		"Process", "Begin", "End", "RemainingScripts", "InputObject", "WhatIf", "Confirm",
+	),
+	"Where-Object":   paramSet("FilterScript", "InputObject"),
+	"Invoke-Command": paramSet("ScriptBlock", "ArgumentList", "NoNewScope"),
+}
+
+func paramSet(names ...string) map[string]bool {
+	m := map[string]bool{}
+	for _, n := range names {
+		m[n] = true
+	}
 	for _, c := range commonParams {
 		m[c.name] = true
 	}
 	return m
-}()
+}
 
-// localInvoke reports whether an Invoke-Command runs its block locally: a block bound to
-// -ScriptBlock and no parameters but -ArgumentList, -NoNewScope and common ones.
-func localInvoke(c Call) bool {
-	if !c.Bound || c.Refused {
+// fitsBlockSet reports whether every word of c binds to the parameter set that runs its blocks.
+func fitsBlockSet(c Call) bool {
+	set := blockSets[c.Name]
+	if !c.Bound || c.Refused || set == nil {
 		return false
 	}
-	block := false
 	for _, w := range c.Args[1:] {
-		if !localInvokeParams[w.Param] {
+		if !set[w.Param] {
 			return false
 		}
-		block = block || (w.Param == "ScriptBlock" && w.Block)
 	}
-	return block
+	return true
 }
 
 // invokeExpression parses the one static string of an Invoke-Expression as a nested script.
