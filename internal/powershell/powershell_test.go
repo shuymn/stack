@@ -425,13 +425,20 @@ var parseTests = []struct {
 		"foreach object other parameter set",
 		`1 | ForEach-Object -Parallel { 'x' } -Process { git status }; $a | % { git a } -ArgumentList 1`,
 		Unix,
-		calls{{"ForEach-Object", "-Parallel", "{}", "-Process", "{}"}, {"%", "{}", "-ArgumentList", "1"}},
+		calls{
+			{"ForEach-Object", "-Parallel", "{}", "-Process", "{}"},
+			{"%", "{}", "-ArgumentList", "1"},
+		},
 	},
 	{
 		"where object other parameter set",
 		`$a | ? -Property x { git status }; $a | Where-Object -FilterScript { gh x } -InputObject $b`,
 		Unix,
-		calls{{"?", "-Property", "x", "{}"}, {"Where-Object", "-FilterScript", "{}", "-InputObject", "$"}, {"gh", "x"}},
+		calls{
+			{"?", "-Property", "x", "{}"},
+			{"Where-Object", "-FilterScript", "{}", "-InputObject", "$"},
+			{"gh", "x"},
+		},
 	},
 	{
 		"native wildcard dynamic on unix",
@@ -444,6 +451,18 @@ var parseTests = []struct {
 		`git add *.txt a?b`,
 		Windows,
 		calls{{"git", "add", "*.txt", "a?b"}},
+	},
+	{
+		"trap bodies",
+		`trap { gh a }; trap [System.Exception] { gh b }`,
+		Unix,
+		calls{{"gh", "a"}, {"gh", "b"}},
+	},
+	{
+		"throw and exit pipelines",
+		"throw gh a\nexit gh b | git c",
+		Unix,
+		calls{{"gh", "a"}, {"gh", "b"}, {"git", "c"}},
 	},
 	{
 		"keyword prefix is a command",
@@ -646,6 +665,15 @@ func TestParseNested(t *testing.T) {
 	if len(r.Calls) != 2 || !r.Calls[0].Is("gh") || len(r.Nested) != 1 || r.Nested[0].Err == nil {
 		t.Errorf("failed nested script: calls %q nested %+v", argvs(r), r.Nested)
 	}
+	// The valid prefix of a nested script that fails to lex is dropped with it: pwsh runs none of it.
+	r = parse(t, `iex 'git status; Write-Output "'; git diff`, Unix)
+	if want := (calls{{"iex", `git status; Write-Output "`}, {"git", "diff"}}); !slices.EqualFunc(
+		argvs(r),
+		want,
+		slices.Equal,
+	) {
+		t.Errorf("failed nested script calls = %q, want %q", argvs(r), want)
+	}
 }
 
 func TestParseFailure(t *testing.T) {
@@ -713,7 +741,10 @@ func TestParseCwd(t *testing.T) {
 		{`foreach ($d in $l) { gh x; cd sub }`, ""},
 		{`& ./script.ps1; gh x`, ""},
 		// FileSystem-provider separators on every host; history, wildcards and providers unknown.
-		{`Set-Location '.\sub' && gh x`, cwd + string(filepath.Separator) + filepath.FromSlash("./sub")},
+		{
+			`Set-Location '.\sub' && gh x`,
+			cwd + string(filepath.Separator) + filepath.FromSlash("./sub"),
+		},
 		{`cd sub\a && gh x`, filepath.Join(sub, "a")},
 		{`cd - && gh x`, ""},
 		{`cd + && gh x`, ""},

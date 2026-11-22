@@ -44,7 +44,12 @@ func TestParseDeepNesting(t *testing.T) {
 		"invoked blocks":     strings.Repeat("& { ", n) + "gh x" + strings.Repeat(" }", n),
 	} {
 		if r := Parse(cmd, "", "", Unix); r.Err == nil || len(r.Calls) != 0 {
-			t.Errorf("%s: err %v, %d calls; want the nesting cap and no calls", name, r.Err, len(r.Calls))
+			t.Errorf(
+				"%s: err %v, %d calls; want the nesting cap and no calls",
+				name,
+				r.Err,
+				len(r.Calls),
+			)
 		}
 	}
 }
