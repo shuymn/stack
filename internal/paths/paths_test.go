@@ -542,7 +542,14 @@ func TestResolvePowerShell(t *testing.T) {
 		}
 		// Without a home `~` is a literal name; on POSIX `~\b.md` is one file name.
 		cwd := t.TempDir()
-		if got, _ := ResolvePowerShell("", cwd, "~/b.md", false); got != cwd+sep+filepath.FromSlash("~/b.md") {
+		if got, _ := ResolvePowerShell(
+			"",
+			cwd,
+			"~/b.md",
+			false,
+		); got != cwd+sep+filepath.FromSlash(
+			"~/b.md",
+		) {
 			t.Errorf("ResolvePowerShell(no home, ~/b.md) = %q", got)
 		}
 		if got, _ := ResolvePowerShell(home, cwd, `~\b.md`, false); got != cwd+sep+`~\b.md` {
