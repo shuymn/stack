@@ -66,8 +66,8 @@ sizes alone, by one function in `extensions/internal/jev` (also used by §3.6 an
 the fixed fields its questions need (semantic: the texts) and units in a fixed order (diff files, kits, items),
 packed greedily up to a unit budget of 48 KiB less the encoded fixed fields; a larger unit is split by lines (a
 longer line at UTF-8 boundaries) into parts marked `part k of n`, each measured in its complete encoded state.
-When the budget is under 1 KiB or the smallest non-empty part cannot fit, the questions that need it are
-unassessed. Questions stay ≤ 16 KiB per request; more go to another request on the same state. Every body is thus
+Input that fits one request whole is sent whole, whatever the budget. Only when splitting is needed: a budget
+under 1 KiB, or a smallest non-empty part that cannot fit, makes the questions that need it unassessed. Questions stay ≤ 16 KiB per request; more go to another request on the same state. Every body is thus
 determined by the input alone. Up to 4 requests are in flight; results are assembled in unit order.
 
 **Budgets.** Each extension's budget runs from process start: router 4 s, semantic 10 s, classify 5 min. The work
@@ -259,7 +259,8 @@ Ground truth is bound to the scored unit, derived from per-unit labels with the 
 
 `jev-calibrate` (owner, with the key) builds each case's synthetic repository and requests with the extension's own
 builders, sends them through the live transport 3 times, writes the first answer (or status) to `records` and all
-three scores to `samples`, then refits. Fitting uses the `fit` cases, each single-call score one sample (live
+three scores to `samples` (`null` for an attempt with no score), then refits; when the first attempt has no
+replayable outcome (e.g. a timeout before headers), the fixture is left unchanged and reported. Fitting uses the `fit` cases, each single-call score one sample (live
 decides on one call; a planned call with no score, e.g. a size rejection, is a negative prediction, never
 dropped): the cutoff is the lowest of 0.50–0.99 (step 0.01) with precision ≥ the target (semantic 0.8, classify
 0.8, router 0.7), true positives > 0 and recall ≥ 0.5; samples within ±0.05 are listed as unstable. Each decision
@@ -268,7 +269,8 @@ and recall ≥ 0.5 on `heldout`; otherwise it ships disabled and its context say
 and `want` of the `cal` fixtures (matched exactly). The `fixed` semantic fixtures (meta-duty hit, unsupported-claim
 hit, clean, diverged base, split file, one batch hit with another rejected for size) keep hand-written `want`,
 matched on status, finding `kind` and `where`, non-empty context with hits, and no `jev-unrecorded`/`jev-error`
-(not probability, cutoff or pin text), so lost detection fails them. Replay uses the recorded transport. **Model
+(not probability, cutoff or pin text), so lost detection fails them; they run with test cutoffs set in the test,
+so a decision that ships disabled does not break them (shipped eligibility is C10/C11's). Replay uses the recorded transport. **Model
 bump:** one PR changes the pin, re-records, refits, and reports old vs new on `heldout` (precision, recall, support,
 router top-3 hits). The corpus measures regressions on itself; the ledger does not measure live precision.
 
@@ -333,8 +335,8 @@ About 100 pushes, 300 kit opens and 30 cycles a month ≈ $0.4, uncapped; O6 rep
 |---|---|---|---|
 | C1 | While the key is empty and no `jev` object is present, `Main` shall write one valid `pass` after reading stdin to EOF, touch no file and open no connection. | P1 | `jev.TestOptOut` per binary |
 | C2 | The client shall treat network errors, timeout, 429, 529, 5xx, 400 `max_tokens_exceeded` and 413 as unassessed without retry, and every other non-200, a body over 1 MiB, missing or null fields, model mismatch and non-finite or out-of-range probabilities as persistent, never echoing the body (a sentinel in it is absent from output). | P9 | `jev.TestClientErrors` (`httptest`, slow body) |
-| C3 | Packing shall use the budget 48 KiB less the fixed fields, split an oversize unit into ordered parts measured in their complete encoded state, keep questions ≤ 16 KiB, mark questions unassessed when the budget is under 1 KiB or the smallest part cannot fit, and lose no unit. | §3.1 | `jev.TestPack` (25 KiB texts with a small diff; a file over the budget; budgets just above and below 1 KiB; escaped runes and `part k of n` framing at the boundary; captured bodies reassemble every unit) |
-| C4 | Each extension shall stop at its work deadline, report the rest unassessed (classify: `complete: false`), answer within its reserve, and keep the response under 512 KiB with `jev-omitted`; core's synthetic `warn` under a shorter parent deadline is a separate outcome. | §3.1 | `<ext>.TestBudget`: slow git → no request, questions unassessed (`preparation deadline`), answer by 10 s; slow HTTP → answered batches kept, rest unassessed; many-batch result accepted by core; shortened core deadline |
+| C3 | Packing shall use the budget 48 KiB less the fixed fields, split an oversize unit into ordered parts measured in their complete encoded state, keep questions ≤ 16 KiB, send input that fits whole even under a 1 KiB budget, mark questions unassessed only when splitting is needed and the budget is under 1 KiB or the smallest part cannot fit, and lose no unit. | §3.1 | `jev.TestPack` (25 KiB texts with a small diff; a file over the budget; budgets just above and below 1 KiB, with a small diff that fits whole below it; escaped runes and `part k of n` framing at the boundary; captured bodies reassemble every unit) |
+| C4 | Each extension shall stop at its work deadline, report the rest unassessed (classify: `complete: false`), answer within its reserve, and keep the response under 512 KiB with `jev-omitted`; core's synthetic `warn` under a shorter parent deadline is a separate outcome. | §3.1 | `<ext>.TestBudget`: slow git → no request, questions unassessed (`preparation deadline`, classified by the deadline before the exit code), answer by 10 s, with a child holding its pipe open so a longer pipe wait fails; slow HTTP → answered batches kept, rest unassessed; many-batch result accepted by core; shortened core deadline |
 | C5 | Invalid stdin → `warn`; another stage, nothing to ask (empty range, a range whose diff has no files, no kits and prompt, no items) → `pass` with no request; results assemble in unit order under out-of-order completion. | §3.1 | `<ext>.TestNothingToAsk`, `jev.TestOrder` |
 | C6 | `jev-semantic` shall build identical bodies under config variants (system, global, `GIT_CONFIG_PARAMETERS`, repository-local `diff.suppressBlankEmpty`, `diff.noprefix`, `diff.relative`, `diff.indentHeuristic` on a patch whose hunks move, `core.abbrev`, `diff.orderFile`), ask `unsupported_claim` only when the whole PR fits, and answer `warn` before any request on a git failure. | P2, P3 | `semantic.TestState` (synthetic repository) |
 | C7 | A probability just below, at and above the cutoff shall decide pass, hit, hit; a disabled decision never flags; never `block`. | P2–P4 | `semantic.TestDecision` |
