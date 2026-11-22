@@ -73,6 +73,29 @@ func TestCutoff(t *testing.T) {
 		if c, ok := FitCutoff(high, 0.8); ok {
 			t.Fatalf("cutoff %v past the scan", c)
 		}
+		// Negatives at 0.89 count up to 0.94: only the last cutoff of the scan qualifies.
+		last := slices.Concat(cases("pos", true, 1, 1, 1, 1, 1, 1),
+			cases("neg", false, 0.89, 0.89, 0.89, 0.89, 0.89, 0.89))
+		if c, ok := FitCutoff(last, 0.8); !ok || c != 0.95 {
+			t.Fatalf("cutoff %v ok %v, want 0.95", c, ok)
+		}
+	})
+
+	t.Run("the margin boundaries are exact", func(t *testing.T) {
+		for _, c := range []struct {
+			score float64
+			truth bool
+			hit   bool
+		}{
+			{0.55, true, true}, {0.5499999995, true, false},
+			{0.45, false, true}, {0.4499999995, false, false},
+		} {
+			s := MarginEvaluate([]Sample{{Case: "c", Score: new(c.score), Truth: c.truth}}, 0.5)
+			if got := s.TP+s.FP == 1; got != c.hit {
+				t.Errorf("score %v (truth %v) at 0.50: counted %v, want %v", c.score, c.truth, got,
+					c.hit)
+			}
+		}
 	})
 
 	t.Run("decision function at, below and above the cutoff", func(t *testing.T) {

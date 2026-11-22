@@ -27,8 +27,6 @@ const (
 	unstableBand = 0.05
 	minFitCases  = 6
 	minHeldCases = 3
-	// scoreEpsilon absorbs float error when a score is compared with a cutoff in hundredths.
-	scoreEpsilon = 1e-9
 )
 
 // errTable reports a cutoff table that cannot be used.
@@ -66,12 +64,16 @@ func Evaluate(samples []Sample, cutoff float64) Stats {
 
 // MarginEvaluate scores samples at cutoff under the margin test: a positive is a hit only at
 // cutoff+δ or above, a negative a false positive already at cutoff−δ. A missing score is a miss.
+//
+// The bounds are computed in whole hundredths, so a boundary score counts exactly.
 func MarginEvaluate(samples []Sample, cutoff float64) Stats {
+	k := int(math.Round(cutoff * percent))
+	pos, neg := float64(k+Margin)/percent, float64(k-Margin)/percent
 	return count(samples, func(x Sample) bool {
 		if x.Truth {
-			return *x.Score >= cutoff+Delta-scoreEpsilon
+			return *x.Score >= pos
 		}
-		return *x.Score >= cutoff-Delta-scoreEpsilon
+		return *x.Score >= neg
 	})
 }
 
