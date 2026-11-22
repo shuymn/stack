@@ -363,19 +363,23 @@ func statsText(s jev.Stats) string {
 // the calls of one body at cutoff.
 func flips(cases []Case, question string, cutoff float64) map[string][]string {
 	out := map[string][]string{}
+	hit := func(p *float64) bool { return p != nil && jev.Hit(*p, cutoff) }
+cases:
 	for _, c := range cases {
 		if c.Fixed() || c.Fixture.Samples == nil || splits(c.Plan) {
 			continue
 		}
 		for _, b := range c.Plan.Batches {
 			scores := c.Fixture.Samples[b.Hash][question]
-			hits := make([]bool, 0, len(scores))
-			for _, p := range scores {
-				hits = append(hits, p != nil && jev.Hit(*p, cutoff))
+			if len(scores) == 0 {
+				continue
 			}
-			if slices.Contains(hits, true) && slices.Contains(hits, false) {
-				out[c.Label.Lang] = append(out[c.Label.Lang], c.Name())
-				break
+			first := hit(scores[0])
+			for _, p := range scores[1:] {
+				if hit(p) != first {
+					out[c.Label.Lang] = append(out[c.Label.Lang], c.Name())
+					continue cases
+				}
 			}
 		}
 	}

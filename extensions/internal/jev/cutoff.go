@@ -18,7 +18,6 @@ const (
 	// maxCutoff ends the margin rule's scan; maxBaseline the old rule's.
 	maxCutoff   = 95
 	maxBaseline = 99
-	cutoffStep  = 1
 	// Margin is the predeclared margin δ of the margin test, in hundredths (0.05).
 	Margin = 5
 	// Delta is Margin as a score.
@@ -113,22 +112,24 @@ func count(samples []Sample, hit func(Sample) bool) Stats {
 // precision ≥ target, TP > 0 and recall ≥ 0.5 under MarginEvaluate; ok is false when none does.
 // The runtime decision at the cutoff stays Hit.
 func FitCutoff(fit []Sample, target float64) (float64, bool) {
-	return scan(fit, target, minCutoff, maxCutoff, MarginEvaluate)
+	return scan(fit, target, maxCutoff, MarginEvaluate)
 }
 
 // BaselineCutoff is the old rule, reported for comparison: the lowest cutoff of 0.50–0.99 whose
 // plain Evaluate on fit meets the same targets.
 func BaselineCutoff(fit []Sample, target float64) (float64, bool) {
-	return scan(fit, target, minCutoff, maxBaseline, Evaluate)
+	return scan(fit, target, maxBaseline, Evaluate)
 }
 
+// scan returns the lowest cutoff from 0.50 to hi hundredths, step 0.01, whose eval on fit meets
+// the targets.
 func scan(
 	fit []Sample,
 	target float64,
-	lo, hi int,
+	hi int,
 	eval func([]Sample, float64) Stats,
 ) (float64, bool) {
-	for k := lo; k <= hi; k += cutoffStep {
+	for k := minCutoff; k <= hi; k++ {
 		c := float64(k) / percent
 		if s := eval(fit, c); s.TP > 0 && s.Precision >= target && s.Recall >= minRecall {
 			return c, true

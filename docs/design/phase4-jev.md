@@ -341,10 +341,12 @@ listed as unstable. Each decision needs ≥ 6 + 6 positive and negative `fit` ca
 must meet its precision target and recall ≥ 0.5 on `heldout`; otherwise, or when no cutoff passes the margin test,
 it ships disabled, its context says so and the calibrate report flags it for review. Each run reports, per decision,
 the cutoff and the old rule's baseline (the lowest of 0.50–0.99 with plain score ≥ t) with their `fit` and
-`heldout` counts, the margin-test result, and the cases whose decision flips across the 3 calls, by language.
-The semantic corpus holds, per decision, at least 12 + 12 positive and negative `fit` cases and 8 + 8 `heldout`
-cases (a case carries both labels and counts for each), every class balanced between Japanese and English (`fit` to
-within one, as a near-duplicate found in `heldout` joins its partner in `fit`) and at least 40% hard, labels written
+`heldout` counts, the margin-test result (`REVIEW` when no cutoff passes it), and the cases whose decision flips
+across the 3 calls, by language, at the fitted cutoff or, when none passes, at the baseline if there is one.
+The semantic corpus holds, per decision, at least 12 + 12 positive and negative `fit` cases and exactly 8 + 8
+`heldout` cases (a case carries both labels and counts for each), every class balanced between Japanese and English
+(`heldout` exactly 4 + 4, `fit` to within one, as a near-duplicate found in `heldout` joins its partner in `fit`) and
+at least 40% hard, labels written
 before scoring, translations and near-duplicates (a `group`) in one split, no file changed from the same starting
 content in both splits outside a group, and a `heldout` case once inspected moved to `fit`, so new `heldout` cases
 are fresh. Hard meta-duty positives weaken an assertion, suppress
