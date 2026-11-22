@@ -2,8 +2,10 @@ package jev_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"maps"
 	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -71,8 +73,6 @@ func TestFixturesPinned(t *testing.T) {
 		}
 	}
 
-	checkRefit(t, cases, table, pending)
-
 	t.Run("keys follow the state, the questions and the pin only", func(t *testing.T) {
 		again, err := calibrate.Load(t.Context(), semanticFixtures, proc.Exec{}, env)
 		if err != nil {
@@ -83,6 +83,39 @@ func TestFixturesPinned(t *testing.T) {
 				if again[i].Plan.Batches[j].Hash != b.Hash {
 					t.Fatalf("%s: another root changed body %d", c.Path, j)
 				}
+			}
+		}
+		// The clock alone: the same spec committed at another date gives the same bodies.
+		for _, date := range []string{"2026-01-01T00:00:00Z", "2033-03-03T03:03:03Z"} {
+			var spec semantic.RepoSpec
+			if err := json.Unmarshal(cases[0].Fixture.Repo, &spec); err != nil {
+				t.Fatal(err)
+			}
+			r := gittest.New(t)
+			r.Env = append(r.Env, "GIT_AUTHOR_DATE="+date, "GIT_COMMITTER_DATE="+date)
+			if err := spec.Build(gitOps{r}); err != nil {
+				t.Fatal(err)
+			}
+			st, err := semantic.Prepare(t.Context(), semantic.Git{
+				Runner: proc.Exec{}, Dir: r.Dir,
+				Env: r.Env,
+			}, semantic.FixtureRange)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var req jev.Request
+			if err := json.Unmarshal(cases[0].Fixture.Request, &req); err != nil {
+				t.Fatal(err)
+			}
+			plan, err := jev.Pack(semantic.Input(semantic.Texts{
+				Title: req.Title, Body: req.Body,
+				Branch: req.Branch,
+			}, st))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if plan.Batches[0].Hash != cases[0].Plan.Batches[0].Hash {
+				t.Fatalf("the commit date %s changed the body", date)
 			}
 		}
 		units := cases[0].Units
@@ -113,27 +146,27 @@ func TestFixturesPinned(t *testing.T) {
 			}
 		}
 	})
+
+	// Last, so every check above has run: the merge gate on the first calibration run.
+	checkRefit(t, cases, table, pending)
 }
 
-// checkRefit asserts the committed table: a placeholder before the first calibration run, with
-// every decision disabled and no samples anywhere; afterwards exactly the refit of the samples.
+// calibrateCommand is what records the cal cases and writes the cutoff table, from the
+// repository root.
+const calibrateCommand = "TYPESAFE_API_KEY=<key> mise exec -- go run ./extensions/jev/cmd/jev-calibrate"
+
+// checkRefit is the gate on the first calibration run: it fails while the cutoff table is a
+// placeholder or any cal case is pending, and afterwards while the committed table differs from
+// the refit of the recorded samples.
 func checkRefit(t *testing.T, cases []calibrate.Case, table jev.Table, pending int) {
 	t.Helper()
-	if table.Placeholder != "" {
-		for _, c := range cases {
-			if c.Fixture.Samples != nil {
-				t.Fatalf("%s has samples but the table is a placeholder", c.Path)
-			}
-		}
-		for name, d := range table.Decisions {
-			if d.Enabled {
-				t.Fatalf("placeholder table enables %s", name)
-			}
-		}
+	if table.Placeholder != "" || pending != 0 {
+		t.Errorf("not calibrated: the cutoff table is a placeholder (%v) and %d cal cases are "+
+			"pending; from the repository root run\n\t%s\nwhich records "+
+			"fixtures/jev/semantic/cal/*.json (records, samples, expect, want) and rewrites "+
+			"extensions/jev/semantic/cutoffs.json", table.Placeholder != "", pending,
+			calibrateCommand)
 		return
-	}
-	if pending != 0 {
-		t.Fatalf("%d cal fixtures still pending under a calibrated table", pending)
 	}
 	refit, err := json.Marshal(calibrate.Refit(cases))
 	if err != nil {
@@ -146,4 +179,24 @@ func checkRefit(t *testing.T, cases []calibrate.Case, table jev.Table, pending i
 	if string(refit) != string(committed) {
 		t.Fatalf("refit %s\ncommitted %s", refit, committed)
 	}
+}
+
+// gitOps builds a RepoSpec with gittest.
+type gitOps struct{ r *gittest.Repo }
+
+func (o gitOps) Write(name, content string) error {
+	o.r.Write(name, content)
+	return nil
+}
+
+func (o gitOps) Remove(name string) error {
+	if err := os.Remove(filepath.Join(o.r.Dir, filepath.FromSlash(name))); err != nil {
+		return fmt.Errorf("remove %s: %w", name, err)
+	}
+	return nil
+}
+
+func (o gitOps) Git(args ...string) error {
+	o.r.Git(args...)
+	return nil
 }
