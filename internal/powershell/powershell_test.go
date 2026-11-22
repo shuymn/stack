@@ -434,6 +434,18 @@ var parseTests = []struct {
 		calls{{"?", "-Property", "x", "{}"}, {"Where-Object", "-FilterScript", "{}", "-InputObject", "$"}, {"gh", "x"}},
 	},
 	{
+		"native wildcard dynamic on unix",
+		"git add *.txt a?b [x]y '*.q' \"*.d\" a`*b; Remove-Item *.txt",
+		Unix,
+		calls{{"git", "add", "$", "$", "$", "*.q", "*.d", "a*b"}, {"Remove-Item", "*.txt"}},
+	},
+	{
+		"native wildcard static on windows",
+		`git add *.txt a?b`,
+		Windows,
+		calls{{"git", "add", "*.txt", "a?b"}},
+	},
+	{
 		"keyword prefix is a command",
 		`foreach-thing x; iffy y`,
 		Unix,

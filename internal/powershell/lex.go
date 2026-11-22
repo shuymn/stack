@@ -42,6 +42,8 @@ type wordBuilder struct {
 	quoteSet bool
 	known    Known
 	dynamic  bool
+	// glob reports an unquoted, unescaped wildcard character.
+	glob bool
 }
 
 // part records the quoting of the part that starts now; the first one is the word's.
@@ -511,13 +513,16 @@ func (p *parser) argWord(kind Kind) Word {
 			p.paren()
 			b.dyn()
 		default:
+			b.glob = b.glob || strings.IndexByte("*?[", c) >= 0
 			p.char(&b)
 		}
 	}
 	if p.pos == start {
 		p.fail("unexpected character")
 	}
-	return b.word(p.src[start:p.pos])
+	w := b.word(p.src[start:p.pos])
+	w.glob = b.glob
+	return w
 }
 
 // verbatim lexes a `--%` tail: up to a CR or LF, or an unquoted `|`, `&&` or `||`, split at blanks

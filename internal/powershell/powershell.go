@@ -114,6 +114,7 @@ type Word struct {
 
 	blockStart, blockEnd int
 	blockMoved           bool // the block holds a location change
+	glob                 bool // an unquoted wildcard (`*`, `?`, `[`)
 }
 
 // Call is one command call.

@@ -884,6 +884,14 @@ func (p *parser) command(name Word, stdin shell.Stdin, dot bool) elem {
 	for _, it := range items {
 		c.Args = append(c.Args, it.words...)
 	}
+	if kind == Native && p.os != Windows {
+		for i := 1; i < len(c.Args); i++ {
+			if w := c.Args[i]; w.glob {
+				// PowerShell expands it against the file system for a native command.
+				c.Args[i] = Word{Raw: w.Raw, Quote: w.Quote, Group: w.Group}
+			}
+		}
+	}
 	if p.quiet == 0 {
 		p.res.Calls = append(p.res.Calls, c)
 	}
