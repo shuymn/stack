@@ -71,6 +71,7 @@ func TestLoadJevKeyKept(t *testing.T) {
 		`secrets = []`:                       {JevKey},
 		`secrets = ["/s"]`:                   {"/s", JevKey},
 		`secrets = ["` + JevKey + `", "/s"]`: {JevKey, "/s"},
+		`secrets = ["` + JevKey + `", "/s", "` + JevKey + `"]`: {JevKey, "/s"},
 	} {
 		cfg, _, err := Load(write(t, body))
 		if err != nil || !slices.Equal(cfg.Secrets, want) {

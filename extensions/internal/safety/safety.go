@@ -87,7 +87,14 @@ func Load(path string) (Config, []string, error) {
 			return Defaults(), nil, fmt.Errorf("%w: %s: %w", ErrInvalid, path, err)
 		}
 	}
-	if !slices.Contains(cfg.Secrets, JevKey) {
+	// The Jev key file is kept once: its first entry stays, a missing one is appended.
+	seen := false
+	cfg.Secrets = slices.DeleteFunc(cfg.Secrets, func(s string) bool {
+		dup := s == JevKey && seen
+		seen = seen || s == JevKey
+		return dup
+	})
+	if !seen {
 		cfg.Secrets = append(cfg.Secrets, JevKey)
 	}
 	var warnings []string
