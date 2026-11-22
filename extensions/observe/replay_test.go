@@ -360,13 +360,23 @@ func TestReplayHooks(t *testing.T) {
 	t.Run("stack-guard times out: not comparable", func(t *testing.T) {
 		t.Parallel()
 		f := newFixture(t)
-		f.opts.replayTimeout = 500 * time.Millisecond
+		// Long enough for a fake that answers at once, even with -race's exit wait (dropped too).
+		f.opts.replayTimeout = 3 * time.Second
+		f.opts.Env = append(f.opts.Env, "GORACE=atexit_sleep_ms=0")
 		f.calls("r", bashCall(hourAgo, f.cwd, cmd("n"), "ok"))
-		f.fake("stack-guard", proctest.Response{Args: hookArgs, Sleep: 10 * time.Second})
+		f.fake("stack-guard", proctest.Response{Args: hookArgs, Sleep: 30 * time.Second})
 		f.fake("stack", stackModel, proctest.Response{Args: hookArgs})
 		_, l := f.run()
 		if l.Replay != (ReplayTotals{NotComparable: 1}) {
 			t.Errorf("replay = %+v", l.Replay)
+		}
+		// The timeout is stack-guard's: stack answered normally.
+		env := append(slices.Clone(f.opts.Env), "STACK_DEBUG=1")
+		core, guard, late := f.state(t.Context()).replayHooks(
+			f.tools["stack"], f.tools["stack-guard"], env, []byte("{}"),
+		)
+		if core != decNoDeny || guard != decNotComparable || late {
+			t.Errorf("core %q, stack-guard %q, late %v", core, guard, late)
 		}
 	})
 	t.Run("stack-guard not comparable", func(t *testing.T) {
