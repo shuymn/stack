@@ -437,8 +437,9 @@ func compact(raw json.RawMessage) []byte {
 
 // guardInput reports whether input holds what the guard reads for tool. The guard decodes the
 // same fields the same way and returns no decision, without a diagnostic, when it cannot or when
-// the field it judges is empty (internal/guard guard.go Decide, secrets.go secretsFileTool,
-// pencil.go pencil): such a replay says nothing about the recorded decision.
+// the field it judges is empty (extensions/guard guard.go Decide, secrets.go secretsFileTool,
+// pencil.go pencil; internal/guard guard.go Decide for raw merge): such a replay says nothing
+// about the recorded decision.
 func guardInput(tool string, raw json.RawMessage) bool {
 	if !opens(raw, '{') {
 		return false
@@ -634,11 +635,10 @@ func recordedDecision(tool, text string, isError bool, r record) string {
 	if strings.Contains(rest, hookErrorMark) {
 		return decOtherDeny
 	}
-	rule, ok := guardRule(rest)
-	if !ok {
-		return decOtherDeny
+	if d, ok := guardDeny(rest); ok {
+		return d
 	}
-	return denyPrefix + rule
+	return decOtherDeny
 }
 
 // guardPrefixes start the deny reasons of the core hook (`stack guard (<rule>): `, every rule until
@@ -647,12 +647,12 @@ func recordedDecision(tool, text string, isError bool, r record) string {
 // `stack-guard (secrets)` is unchanged.
 var guardPrefixes = []string{"stack guard (", "stack-guard ("}
 
-// guardRule reads the rule id of a guard deny reason.
-func guardRule(reason string) (string, bool) {
+// guardDeny reads a guard deny reason as the decision deny:<rule>.
+func guardDeny(reason string) (string, bool) {
 	for _, p := range guardPrefixes {
 		if rest, ok := strings.CutPrefix(reason, p); ok {
 			rule, _, ok := strings.Cut(rest, ")")
-			return rule, ok && reRuleID.MatchString(rule)
+			return denyPrefix + rule, ok && reRuleID.MatchString(rule)
 		}
 	}
 	return "", false

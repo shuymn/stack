@@ -323,9 +323,8 @@ func replayedDecision(out outcome) string {
 	if json.Unmarshal(out.stdout, &resp) != nil || resp.Hook.Decision != "deny" {
 		return decNotComparable
 	}
-	rule, ok := guardRule(resp.Hook.Reason)
-	if !ok {
-		return decNotComparable
+	if d, ok := guardDeny(resp.Hook.Reason); ok {
+		return d
 	}
-	return denyPrefix + rule
+	return decNotComparable
 }
