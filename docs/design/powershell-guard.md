@@ -125,6 +125,7 @@ instead would leave `bash -c 'gh pr merge 1'` from PowerShell unguarded.
 |---|---|
 | payload `tool_input` undecodable, `command` not a string or empty | allow, no output (both hooks) |
 | top-level lexing fails (unclosed quote or here-string, unbalanced brackets) | no calls: raw-merge, gh-publish and rmroot judge nothing (pwsh runs nothing of a script it cannot parse); secrets still scans the whole text, so a mention denies even though the engine would reject the script (bash parity) |
+| a script nests deeper than the syntax recursion cap (200 levels of brackets, blocks, hash values and assignments; distinct from the nested-script depth 2) | no calls, as for a lexing failure (fail open) |
 | a nested PowerShell script fails to lex | only that nested script is skipped; the outer calls stand, so `gh pr merge 7; iex 'Write-Output "'` denies |
 | a nested Bash script has a syntax error | Bash's own rule: the complete lines before the error line are judged, so `bash -c 'gh pr merge 7`⏎`if ('` denies |
 
@@ -175,7 +176,8 @@ Any other pipe, including `Get-Content F | gh …` (encoding and provider semant
 
 Body files resolve against the call's known cwd: payload `cwd`, changed only by `Set-Location`/`cd`/`sl`/`chdir X
 &&` with a static `X`; `cd` with no argument, any other location change, `Push-Location`/`pushd` and
-`Pop-Location`/`popd` make it unknown. A native `~` follows §4.4's native rule: on non-Windows hosts an unquoted
+`Pop-Location`/`popd` make it unknown. Cwd updates are tracked for at most 32 steps and 4096 bytes; beyond that the
+cwd is unknown and call collection continues. A native `~` follows §4.4's native rule: on non-Windows hosts an unquoted
 leading `~` is home (PowerShell 7 expands it for native commands); on Windows a native `~` input is skipped as
 unknown (W3), with no home substituted.
 
