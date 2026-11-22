@@ -1,0 +1,18 @@
+{
+  "model": "jev-1.14.0",
+  "placeholder": "not yet calibrated: a jev-calibrate run with the key (design §7 O1) replaces this table; until then every decision ships disabled",
+  "decisions": {
+    "meta_duty_regression": {
+      "enabled": false,
+      "cutoff": null,
+      "target": 0.8,
+      "reason": "not calibrated"
+    },
+    "unsupported_claim": {
+      "enabled": false,
+      "cutoff": null,
+      "target": 0.8,
+      "reason": "not calibrated"
+    }
+  }
+}

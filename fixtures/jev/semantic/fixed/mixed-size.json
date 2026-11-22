@@ -1,0 +1,88 @@
+{
+  "placeholder": "synthetic records: 0.9 for a labelled hit, 0.1 otherwise (mixed-size: its second request a recorded 400); a jev-calibrate run with the key replaces them with live answers and adds samples",
+  "request": {
+    "body": "Adds two reference pages.",
+    "branch": "docs/reference",
+    "jev": {
+      "records": {
+        "sha256:05ccf6389a356f6adfbfabcaa474c5d10d3edbd09c93393cf8d4e5f76c24d732": {
+          "answer": {
+            "answers": {
+              "meta_duty_regression": {
+                "noul": 0.9,
+                "type": "noul"
+              }
+            },
+            "model": "jev-1.14.0"
+          }
+        },
+        "sha256:c2a713494d2fdd4d031d58231fcaa1e63c60ef3687420fe66ac55e8ec3df7131": {
+          "status": 400,
+          "error": "max_tokens_exceeded"
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "docs: add the reference pages"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-meta-duty",
+        "where": "a/a_test.go, docs/b.md"
+      },
+      {
+        "kind": "jev-unassessed",
+        "where": "docs/c.md"
+      },
+      {
+        "kind": "jev-unassessed",
+        "where": "message"
+      }
+    ]
+  },
+  "repo": {
+    "base": {
+      "a/a_test.go": "package a\n\nimport \"testing\"\n\nfunc TestA(t *testing.T) {\n\tif A() != 1 {\n\t\tt.Fatal(\"A\")\n\t}\n}\n",
+      "a/a.go": "package a\n\nfunc A() int { return 1 }\n"
+    },
+    "commits": [
+      {
+        "message": "docs: add the reference pages",
+        "files": {
+          "a/a_test.go": "package a\n\nimport \"testing\"\n\nfunc TestA(t *testing.T) {\n\t_ = A()\n}\n",
+          "docs/b.md": {
+            "line": "Reference line {n}: the packer measures each unit in its encoded state.",
+            "repeat": 450
+          },
+          "docs/c.md": {
+            "line": "Reference line {n}: a second page, packed into the next request.",
+            "repeat": 450
+          }
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "a/a_test.go": {
+        "meta_duty_regression": true
+      },
+      "docs/b.md": {
+        "meta_duty_regression": false
+      },
+      "docs/c.md": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": false,
+    "split": "fixed",
+    "why": "a docs PR that also turns an assertion into a discarded call; the second request is rejected for size"
+  }
+}

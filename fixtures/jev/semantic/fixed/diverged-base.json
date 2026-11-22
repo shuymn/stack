@@ -1,0 +1,68 @@
+{
+  "placeholder": "synthetic records: 0.9 for a labelled hit, 0.1 otherwise (mixed-size: its second request a recorded 400); a jev-calibrate run with the key replaces them with live answers and adds samples",
+  "request": {
+    "body": "Adds Sub next to Add.",
+    "branch": "feat/sub",
+    "jev": {
+      "records": {
+        "sha256:c3a34f26433245fa7f14f739322e0df4bc729e32f08631ac13b47d39d4d86b07": {
+          "answer": {
+            "answers": {
+              "meta_duty_regression": {
+                "noul": 0.1,
+                "type": "noul"
+              },
+              "unsupported_claim": {
+                "noul": 0.1,
+                "type": "noul"
+              }
+            },
+            "model": "jev-1.14.0"
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "feat: add Sub"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": []
+  },
+  "repo": {
+    "base": {
+      "calc/calc.go": "package calc\n\n// Add returns a + b.\nfunc Add(a, b int) int { return a + b }\n"
+    },
+    "commits": [
+      {
+        "message": "feat: add Sub",
+        "files": {
+          "calc/calc.go": "package calc\n\n// Add returns a + b.\nfunc Add(a, b int) int { return a + b }\n\n// Sub returns a - b.\nfunc Sub(a, b int) int { return a - b }\n"
+        }
+      }
+    ],
+    "upstream": [
+      {
+        "message": "test: cover Add",
+        "files": {
+          "calc/calc_test.go": "package calc\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T) {\n\tif Add(2, 3) != 5 {\n\t\tt.Fatal(\"Add\")\n\t}\n}\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "calc/calc.go": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": false,
+    "split": "fixed",
+    "why": "the base added a test after the merge base; the merge-base range must not show it deleted"
+  }
+}

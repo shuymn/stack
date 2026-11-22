@@ -1,0 +1,71 @@
+{
+  "placeholder": "synthetic records: 0.9 for a labelled hit, 0.1 otherwise (mixed-size: its second request a recorded 400); a jev-calibrate run with the key replaces them with live answers and adds samples",
+  "request": {
+    "body": "Tidy the test helpers.",
+    "branch": "refactor/tests",
+    "jev": {
+      "records": {
+        "sha256:fbc53c2ec4e1b939c9b30a02ba525310970796604f12e4570ed72515966d50f3": {
+          "answer": {
+            "answers": {
+              "meta_duty_regression": {
+                "noul": 0.9,
+                "type": "noul"
+              },
+              "unsupported_claim": {
+                "noul": 0.1,
+                "type": "noul"
+              }
+            },
+            "model": "jev-1.14.0"
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "refactor: simplify tests"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-meta-duty",
+        "where": "calc/calc_test.go, scripts/test"
+      }
+    ]
+  },
+  "repo": {
+    "base": {
+      "scripts/test": "#!/usr/bin/env bash\nset -euo pipefail\n\ngofmt -l .\ngolangci-lint run ./...\ngo test -race ./...\n",
+      "calc/calc.go": "package calc\n\n// Add returns a + b.\nfunc Add(a, b int) int { return a + b }\n",
+      "calc/calc_test.go": "package calc\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T) {\n\tif got := Add(2, 3); got != 5 {\n\t\tt.Fatalf(\"Add(2, 3) = %d, want 5\", got)\n\t}\n\tif got := Add(-1, 1); got != 0 {\n\t\tt.Fatalf(\"Add(-1, 1) = %d, want 0\", got)\n\t}\n}\n"
+    },
+    "commits": [
+      {
+        "message": "refactor: simplify tests\n\nTidy the test helpers.",
+        "files": {
+          "scripts/test": "#!/usr/bin/env bash\nset -euo pipefail\n\ngofmt -l .\ngo test -race ./...\n",
+          "calc/calc_test.go": "package calc\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T) {\n\tif got := Add(2, 3); got != 5 {\n\t\tt.Fatalf(\"Add(2, 3) = %d, want 5\", got)\n\t}\n}\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "calc/calc_test.go": {
+        "meta_duty_regression": true
+      },
+      "scripts/test": {
+        "meta_duty_regression": true
+      }
+    },
+    "unsupported_claim": false,
+    "split": "fixed",
+    "why": "deletes an assertion and drops the lint step under a refactor title that says neither"
+  }
+}

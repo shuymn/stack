@@ -1,0 +1,65 @@
+{
+  "placeholder": "synthetic records: 0.9 for a labelled hit, 0.1 otherwise (mixed-size: its second request a recorded 400); a jev-calibrate run with the key replaces them with live answers and adds samples",
+  "request": {
+    "body": "Adds table tests for Parse covering empty and quoted input. All tests pass.",
+    "branch": "feat/parse-tests",
+    "jev": {
+      "records": {
+        "sha256:2583f4040f4d9111d63e04e64bc38638b43b1c98440bea728fffdaa5dd980d29": {
+          "answer": {
+            "answers": {
+              "meta_duty_regression": {
+                "noul": 0.1,
+                "type": "noul"
+              },
+              "unsupported_claim": {
+                "noul": 0.9,
+                "type": "noul"
+              }
+            },
+            "model": "jev-1.14.0"
+          }
+        }
+      }
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "feat: add tests for Parse"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-unsupported-claim",
+        "where": "message"
+      }
+    ]
+  },
+  "repo": {
+    "base": {
+      "parse/parse.go": "package parse\n\nimport \"strings\"\n\n// Parse splits s on commas.\nfunc Parse(s string) []string {\n\treturn strings.Split(s, \",\")\n}\n"
+    },
+    "commits": [
+      {
+        "message": "feat: add tests for Parse",
+        "files": {
+          "parse/parse.go": "package parse\n\nimport \"strings\"\n\n// Parse splits s on commas; an empty s gives nil.\nfunc Parse(s string) []string {\n\tif s == \"\" {\n\t\treturn nil\n\t}\n\treturn strings.Split(s, \",\")\n}\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "parse/parse.go": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": true,
+    "split": "fixed",
+    "why": "claims table tests and a passing run, but the diff changes only parse.go"
+  }
+}
