@@ -69,12 +69,17 @@ func (p *parser) fail(msg string) {
 	panic(&syntaxError{pos: p.pos, msg: msg})
 }
 
-// statements parses statements up to end (`)` or `}`, left unconsumed) or EOF when end is 0.
-func (p *parser) statements(end byte) {
+// enter spends one level of the nesting budget; at the cap the whole command fails open.
+func (p *parser) enter() {
 	if p.nest++; p.nest > maxNest {
 		p.fail("nesting too deep")
 	}
-	defer func() { p.nest-- }()
+}
+
+func (p *parser) leave() { p.nest-- }
+
+// statements parses statements up to end (`)` or `}`, left unconsumed) or EOF when end is 0.
+func (p *parser) statements(end byte) {
 	for {
 		p.skipLines()
 		if p.peek() == ';' {
@@ -101,7 +106,11 @@ func (p *parser) statements(end byte) {
 }
 
 // statement parses one statement. A location change in it makes the cwd unknown afterwards.
+// Every recursion (brackets, blocks, hash values, assignment right sides) passes through here or
+// bracket, so the nesting budget bounds the stack.
 func (p *parser) statement() {
+	p.enter()
+	defer p.leave()
 	saved, start := p.moved, p.cwd
 	p.moved = false
 	if !p.keyword() {
@@ -386,10 +395,8 @@ func (p *parser) walk(start, end int, cwd string) {
 
 // bracket skips a `[…]` type literal, attribute or index, walking the subexpressions inside.
 func (p *parser) bracket() {
-	if p.nest++; p.nest > maxNest {
-		p.fail("nesting too deep")
-	}
-	defer func() { p.nest-- }()
+	p.enter()
+	defer p.leave()
 	p.pos++
 	var b wordBuilder
 	for {
