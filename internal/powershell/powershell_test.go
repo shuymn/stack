@@ -350,6 +350,48 @@ var parseTests = []struct {
 		Windows,
 		calls{{"cmd", "/c", "echo", "$"}},
 	},
+	{
+		"backtick-escaped stop-parsing token",
+		"git `--% a; b && gh pr merge 7",
+		Windows,
+		calls{{"git", "a;", "b"}, {"gh", "pr", "merge", "7"}},
+	},
+	{
+		"backtick inside a word is no stop-parsing token",
+		"git a`--% b",
+		Windows,
+		calls{{"git", "a--%", "b"}},
+	},
+	{
+		"quoted stop-parsing value dropped, later arguments joined",
+		`gh pr '--%' "merge 7" '' x`,
+		Windows,
+		calls{{"gh", "pr", "merge", "7", "x"}},
+	},
+	{
+		"double-quoted and here-string stop-parsing values",
+		"& gh.exe \"--%\" pr; git @'\n--%\n'@ a; git -'-%' b; git a '--%'",
+		Unix,
+		calls{{"gh.exe", "pr"}, {"git", "a"}, {"git", "b"}, {"git", "a"}},
+	},
+	{
+		"quoted stop-parsing value keeps later calls and variables",
+		`gh '--%' pr $x; gh pr merge 7`,
+		Unix,
+		calls{{"gh", "pr", "$"}, {"gh", "pr", "merge", "7"}},
+	},
+	{
+		"joined value with a quote is dynamic",
+		`git '--%' 'a"b' c`,
+		Unix,
+		calls{{"git", "$", "c"}},
+	},
+	{
+		"cmdlet keeps a quoted stop-parsing value",
+		`Write-Output a '--%' b`,
+		Unix,
+		calls{{"Write-Output", "a", "--%", "b"}},
+	},
 
 	{
 		"string literal",
@@ -512,6 +554,26 @@ func TestParse(t *testing.T) {
 				t.Errorf("%q calls = %q, want %q", tt.cmd, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestQuotedMark checks that only a word that is one token valued `--%` counts: pwsh reads `'--'%`
+// as two tokens, so it is no stop-parsing value.
+func TestQuotedMark(t *testing.T) {
+	for _, tt := range []struct {
+		w    Word
+		want bool
+	}{
+		{Word{Raw: "'--%'", Text: "--%", Static: true, Quote: Single}, true},
+		{Word{Raw: `"--%"`, Text: "--%", Static: true, Quote: Double}, true},
+		{Word{Raw: "-'-%'", Text: "--%", Static: true, Quote: Bare}, true},
+		{Word{Raw: "'--'%", Text: "--%", Static: true, Quote: Single}, false},
+		{Word{Raw: "'--%x'", Text: "--%x", Static: true, Quote: Single}, false},
+		{Word{Raw: `"--$(x)"`, Quote: Double}, false},
+	} {
+		if got := quotedMark(tt.w); got != tt.want {
+			t.Errorf("quotedMark(%q) = %v, want %v", tt.w.Raw, got, tt.want)
+		}
 	}
 }
 
@@ -942,7 +1004,8 @@ func TestShellCall(t *testing.T) {
 			lit("~"), lit("~"), lit("x~"), lit("~user"), lit("~foo/.git"),
 			{},
 			{},
-			lit("--%"), lit("~"),
+			lit("~"), // `'--%'` is dropped
+
 		}
 		if !slices.Equal(sc.Args, want) {
 			t.Errorf("os %d rm %v native ~ args = %+v, want %+v", tt.os, tt.rm, sc.Args, want)

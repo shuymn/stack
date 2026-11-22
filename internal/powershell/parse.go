@@ -766,6 +766,7 @@ func (p *parser) redirection() bool {
 // args lexes a command's arguments up to the end of its pipeline element.
 func (p *parser) args(kind Kind) []item {
 	var items []item
+	joined := false
 	for {
 		p.skipBlank()
 		if p.atEnd() {
@@ -774,8 +775,8 @@ func (p *parser) args(kind Kind) []item {
 		if p.redirection() {
 			continue
 		}
-		if p.has(verbatimMark) && p.boundary(p.pos+len(verbatimMark)) {
-			p.pos += len(verbatimMark)
+		if n := p.verbatimMarkAt(); n > 0 {
+			p.pos += n
 			for _, w := range p.verbatim() {
 				items = append(items, item{words: []Word{w}})
 			}
@@ -787,8 +788,67 @@ func (p *parser) args(kind Kind) []item {
 				continue
 			}
 		}
-		items = append(items, p.valueItem(kind))
+		it := p.valueItem(kind)
+		switch {
+		case kind != Native:
+		case quotedMark(it.words[0]):
+			joined = true // dropped from argv; the later arguments are joined verbatim
+			continue
+		case joined:
+			if it.words = joinedWords(it.words[0]); len(it.words) == 0 {
+				continue
+			}
+		}
+		items = append(items, it)
 	}
+}
+
+// verbatimMarkAt returns the length of the stop-parsing token at pos, `--%` or the backtick-escaped
+// “ `--% “, followed by a boundary; 0 when there is none.
+func (p *parser) verbatimMarkAt() int {
+	for _, m := range []string{verbatimMark, "`" + verbatimMark} {
+		if p.has(m) && p.boundary(p.pos+len(m)) {
+			return len(m)
+		}
+	}
+	return 0
+}
+
+// quotedMark reports a native argument whose value is `--%` written in another form (`'--%'`,
+// `"--%"`, a here-string, `-'-%'`): pwsh 5.1 and 7 drop it from argv without stopping parsing, and
+// pass every later argument joined into the command line as written (a value with blanks becomes
+// several arguments; a `~` is not expanded). A quoted word must be one token: `'--'%` is two.
+func quotedMark(w Word) bool {
+	if !w.Static || w.Known != NotKnown || w.Block || w.Text != verbatimMark {
+		return false
+	}
+	switch w.Quote {
+	case Single, Double:
+		r := []rune(w.Raw)
+		return len(r) > 2 && string(r[1:len(r)-1]) == verbatimMark
+	case Bare, HereSingle, HereDouble:
+	}
+	return true
+}
+
+// joinedWords is the argv a native argument after a quoted `--%` becomes: its value split at blanks,
+// each part literal; a value holding a `"` or a line break is dynamic (the command-line parser
+// reads it), and an empty one disappears. A word that is not static stays as it is, marked joined.
+func joinedWords(w Word) []Word {
+	w.joined = true
+	if !w.Static || w.Known != NotKnown {
+		return []Word{w}
+	}
+	if strings.ContainsAny(w.Text, "\"\r\n") {
+		return []Word{{Raw: w.Raw, joined: true}}
+	}
+	var out []Word
+	for _, f := range strings.FieldsFunc(w.Text, func(r rune) bool { return r == ' ' || r == '\t' }) {
+		part := w
+		part.Text = f
+		out = append(out, part)
+	}
+	return out
 }
 
 // paramItem lexes a cmdlet parameter token at pos: a dash and a name, with an optional `:`-bound

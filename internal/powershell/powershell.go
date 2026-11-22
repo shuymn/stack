@@ -117,6 +117,7 @@ type Word struct {
 	Verbatim bool
 
 	blockStart, blockEnd int
+	joined               bool // a native argument after a quoted `--%`, passed as written
 	blockMoved           bool // the block holds a location change
 	glob                 bool // an unquoted wildcard (`*`, `?`, `[`)
 }
@@ -174,18 +175,8 @@ func (c Call) ShellCallRm() shell.Call {
 
 func (c Call) shellCall(windowsTilde bool) shell.Call {
 	out := shell.Call{Args: make([]shell.Word, len(c.Args)), Stdin: c.Stdin, Cwd: c.Cwd}
-	quotedMarker := false
 	for i, w := range c.Args {
-		switch {
-		case quotedMarker && c.tildeOf(w) == tildeHome:
-			// After a quoted `'--%'` pwsh (5.1 and 7.7) passes a later `~` as written.
-			out.Args[i] = shell.Word{Text: w.Text, Static: true}
-		default:
-			out.Args[i] = c.nativeWord(w, windowsTilde)
-		}
-		if i > 0 && w.Static && w.Quote != Bare && w.Text == "--%" {
-			quotedMarker = true
-		}
+		out.Args[i] = c.nativeWord(w, windowsTilde)
 	}
 	return out
 }
@@ -199,13 +190,14 @@ const (
 	tildeMixed                  // quotes after the `~`: unmeasured
 )
 
-// tildeOf classifies a native word: a home word is unquoted, outside a `--%` tail, written as a
+// tildeOf classifies a native word: a home word is unquoted, outside a `--%` tail and not after a
+// quoted `--%` (both pass it as written), written as a
 // plain bareword (or with only its leading `~` backtick-escaped), and exactly `~`, `~/…` or, on
 // Windows, `~\…` (paths.TildeForm). A word mixing quotes after the `~` (`~"\x"`, `~'\x'`) is
 // mixed; `~user` and `~foo/x` are none.
 func (c Call) tildeOf(w Word) tildeKind {
 	switch {
-	case w.Flag != "", w.Verbatim, w.Quote != Bare, !strings.HasPrefix(w.Text, "~"):
+	case w.Flag != "", w.Verbatim, w.joined, w.Quote != Bare, !strings.HasPrefix(w.Text, "~"):
 		return tildeNone
 	case w.Raw != w.Text && w.Raw != "`"+w.Text:
 		return tildeMixed
@@ -221,10 +213,11 @@ func (c Call) nativeWord(w Word, windowsTilde bool) shell.Word {
 	case w.Block:
 		return shell.Word{}
 	case w.Known == KnownHome || (w.Known == KnownUserProfile && c.os == Windows):
-		if c.home == "" {
-			return shell.Word{}
+		v := c.home + w.Text
+		if c.home == "" || (w.joined && strings.ContainsAny(v, " \t\"\r\n")) {
+			return shell.Word{} // a joined value with blanks splits where the hook cannot see
 		}
-		return shell.Word{Text: w.Flag + c.home + w.Text, Static: true}
+		return shell.Word{Text: w.Flag + v, Static: true}
 	case w.Known != NotKnown, !w.Static:
 		return shell.Word{}
 	}

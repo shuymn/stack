@@ -62,6 +62,12 @@ func TestRawMergePowerShell(t *testing.T) {
 		"gh pr merge 7\n@'\ntext\n'@ | Write-Output",
 		`iex "bash -c 'gh pr merge 7'"`,
 		`gh pr merge 7; iex 'Write-Output "'`,
+		// A quoted `--%` is dropped from argv and the later arguments are joined as written.
+		"gh '--%' pr merge 7",
+		`& gh.exe "--%" pr merge 7`,
+		`gh pr '--%' "merge 7"`,
+		`& gh.exe '--%' pr "merge 7 --squash"`,
+		"git `--% x && gh pr merge 7",
 	}
 	allow := []string{
 		"gh pr merge 7 2>&1 --help",
@@ -72,6 +78,10 @@ func TestRawMergePowerShell(t *testing.T) {
 		"# gh pr merge 1",
 		"cd sub; gh api graphql -F query=@q.graphql",
 		`iex 'bash -c ''bash -c "gh pr merge 7"'''`,
+		"gh '--%' pr view 7",
+		"gh pr merge 7 '--%' --help",
+		// The backtick-escaped `--%` is the stop-parsing token: `;` stays in its tail.
+		"Write-Output `--% ; gh pr merge 7",
 	}
 	for _, os := range bothOS {
 		for _, cmd := range deny {
