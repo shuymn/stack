@@ -13,6 +13,25 @@
     ]
   },
   {
+    "cmd": "1..3 | ForEach-Object { gh a } { gh b }",
+    "calls": [
+      "ForEach-Object",
+      "gh"
+    ],
+    "skipped": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "iex 'gh pr merge 7'",
+    "calls": [
+      "iex"
+    ],
+    "nested": [
+      "gh"
+    ]
+  },
+  {
     "cmd": "git status \u0026\u0026 gh pr merge 1 || gh x",
     "calls": [
       "gh",
@@ -489,7 +508,9 @@
   },
   {
     "cmd": "$x.M($(gh pr merge 1)); Write-Output $x.Invoke(gh pr view 7)",
-    "calls": [],
+    "calls": [
+      "gh"
+    ],
     "rejects": [
       "5.1",
       "7"
@@ -535,12 +556,22 @@
     "calls": [
       "Remove-Item",
       "git"
+    ],
+    "dynamicUnix": [
+      "*.txt",
+      "a?b",
+      "[x]y",
+      "a*b"
     ]
   },
   {
     "cmd": "git add *.txt a?b",
     "calls": [
       "git"
+    ],
+    "dynamicUnix": [
+      "*.txt",
+      "a?b"
     ]
   },
   {
@@ -744,15 +775,6 @@
     "cmd": "ndr X FileSystem C:\\w",
     "calls": [
       "ndr"
-    ]
-  },
-  {
-    "cmd": "iex 'gh pr merge 7'",
-    "calls": [
-      "iex"
-    ],
-    "nested": [
-      "gh"
     ]
   },
   {
@@ -1858,6 +1880,55 @@
     ]
   },
   {
+    "cmd": "mount C FileSystem C:\\w; Remove-Item -Recurse C:\\",
+    "calls": [
+      "Remove-Item",
+      "mount"
+    ]
+  },
+  {
+    "cmd": "New-PSDrive -Name C -PSProvider FileSystem -Root C:\\w; Remove-Item -Recurse C:\\",
+    "calls": [
+      "New-PSDrive",
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "ndr d FileSystem C:\\w; Remove-Item -Recurse D:\\",
+    "calls": [
+      "Remove-Item",
+      "ndr"
+    ]
+  },
+  {
+    "cmd": "mount C FileSystem C:\\w; Remove-Item -Recurse \\",
+    "calls": [
+      "Remove-Item",
+      "mount"
+    ]
+  },
+  {
+    "cmd": "mount X FileSystem C:\\w; Remove-Item -Recurse X:\\",
+    "calls": [
+      "Remove-Item",
+      "mount"
+    ]
+  },
+  {
+    "cmd": "New-PSDrive -Name X -PSProvider FileSystem -Root C:\\w; Remove-Item -Recurse X:\\",
+    "calls": [
+      "New-PSDrive",
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "mount X FileSystem C:\\w; Remove-Item -Recurse \\",
+    "calls": [
+      "Remove-Item",
+      "mount"
+    ]
+  },
+  {
     "cmd": "Remove-Item -Recurse .git/./",
     "calls": [
       "Remove-Item"
@@ -1881,42 +1952,6 @@
     "cmd": "bash -c 'rm -rf ~\nif ('",
     "calls": [
       "bash"
-    ]
-  },
-  {
-    "cmd": "gh pr merge 7",
-    "calls": [
-      "gh"
-    ]
-  },
-  {
-    "cmd": "bash -c 'gh pr merge 7'",
-    "calls": [
-      "bash"
-    ]
-  },
-  {
-    "cmd": "bash -c 'bash -c \"gh pr merge 7\"'",
-    "calls": [
-      "bash"
-    ]
-  },
-  {
-    "cmd": "iex 'iex ''gh pr merge 7'''",
-    "calls": [
-      "iex"
-    ],
-    "nested": [
-      "gh",
-      "iex"
-    ]
-  },
-  {
-    "cmd": "Write-Output \"",
-    "calls": [],
-    "rejects": [
-      "5.1",
-      "7"
     ]
   }
 ]

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"go/ast"
@@ -13,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -26,35 +28,44 @@ import (
 
 // The oracle of powershell-guard §3 and §9 W2: the installed PowerShell engines (5.1 and 7 on
 // Windows, 7 elsewhere) parse the declared corpus (testdata/oracle_cases.json) with their own
-// parser (testdata/oracle.ps1). Every case declares, independently of Parse, the command names
-// at supported positions, the names the engine finds in opaque positions, the calls that come
-// from nested scripts and the engines that reject the script. The engine's observation and the
-// recognizer's result must both match the declaration, and agree on command kind and argv. Native
-// calls also run against an argv-printing stub (this test binary), and the argv it receives is
-// compared with ShellCall. Nothing else runs: cmdlets are parse-only.
+// parser (testdata/oracle.ps1), which classifies each command's position by §3 from the engine's
+// AST and static parameter binding and parses the static scripts of Invoke-Expression and
+// pwsh -Command. Each case declares what the engine finds: the command names at supported
+// positions, the names in opaque positions, the names from nested scripts and the engines that
+// reject the script. The engine must match the declaration, and Parse must return exactly those
+// calls, with the engine's command kind and argv. Native calls also run against an argv-printing
+// stub (this test binary), and the argv it receives is compared with ShellCall. Nothing else runs:
+// cmdlets are parse-only.
 //
-// It runs only with STACK_PS_ORACLE=1 (the powershell-oracle CI job). -update-oracle rewrites the
-// declarations from a Windows run with both engines; review the diff before committing it.
+// It runs only with STACK_PS_ORACLE=1 (the powershell-oracle CI job). -update-oracle writes the
+// declarations of new commands from a Windows run of both engines, never from Parse; a change to
+// an existing declaration or a removed command also needs -update-oracle-changes, and the test
+// prints the difference.
 
 const (
-	oracleEnv = "STACK_PS_ORACLE"      // set to 1 to run the oracle
-	stubEnv   = "STACK_PS_ORACLE_STUB" // the file the stub appends its argv to
-	stubIDEnv = "STACK_PS_ORACLE_ID"   // the call the stub runs for
-	casesFile = "oracle_cases.json"
+	oracleEnv  = "STACK_PS_ORACLE"      // set to 1 to run the oracle
+	stubEnv    = "STACK_PS_ORACLE_STUB" // the file the stub appends its argv to
+	stubIDEnv  = "STACK_PS_ORACLE_ID"   // the call the stub runs for
+	stubMarker = "--stack-ps-oracle-stub"
+	casesFile  = "oracle_cases.json"
 )
 
-var updateOracle = flag.Bool("update-oracle", false, "rewrite testdata/"+casesFile)
+var (
+	updateOracle  = flag.Bool("update-oracle", false, "declare new commands in testdata/"+casesFile)
+	updateChanges = flag.Bool("update-oracle-changes", false,
+		"with -update-oracle, also rewrite changed declarations and drop removed commands")
+)
 
 func TestMain(m *testing.M) {
-	if out := os.Getenv(stubEnv); out != "" {
-		os.Exit(runStub(out))
+	if out := os.Getenv(stubEnv); out != "" && len(os.Args) > 1 && os.Args[1] == stubMarker {
+		os.Exit(runStub(out, os.Args[2:]))
 	}
 	os.Exit(m.Run())
 }
 
 // runStub appends {"id", "argv"} to out: the argv a native call received.
-func runStub(out string) int {
-	line, err := json.Marshal(stubRecord{ID: os.Getenv(stubIDEnv), Argv: os.Args[1:]})
+func runStub(out string, argv []string) int {
+	line, err := json.Marshal(stubRecord{ID: os.Getenv(stubIDEnv), Argv: argv})
 	if err != nil {
 		return 1
 	}
@@ -78,19 +89,21 @@ type stubRecord struct {
 // oracleTimeout bounds one PowerShell process: parse the corpus, resolve names, run the stubs.
 const oracleTimeout = 2 * time.Minute
 
-// declared is one corpus case and what it must yield. Names are multisets in sorted order.
+// declared is one corpus case and what the engines yield for it. Names are sorted multisets.
 type declared struct {
 	Cmd string `json:"cmd"`
-	// Calls are the static command names at supported positions: the engine finds them and Parse
-	// returns them.
+	// Calls are the static command names the engine finds at §3 positions.
 	Calls []string `json:"calls"`
-	// Skipped are the names the engine finds in positions Parse leaves opaque.
+	// Skipped are the static names the engine finds in opaque positions.
 	Skipped []string `json:"skipped,omitempty"`
-	// Nested are the names Parse returns from nested PowerShell scripts (string arguments to the
-	// engine).
+	// Nested are the static names at §3 positions of the nested PowerShell scripts.
 	Nested []string `json:"nested,omitempty"`
 	// Rejects are the engines ("5.1", "7") that fail to parse the script.
 	Rejects []string `json:"rejects,omitempty"`
+	// DynamicUnix lists argument values the engine parses as static that Parse treats as dynamic
+	// on non-Windows hosts by design: an unquoted wildcard, which pwsh globs there (§3 Words).
+	// Written by hand; the writer keeps it.
+	DynamicUnix []string `json:"dynamicUnix,omitempty"`
 }
 
 // Oracle output (testdata/oracle.ps1).
@@ -109,16 +122,18 @@ type (
 		Ctx      string  `json:"ctx"`
 		End      int     `json:"end"`
 		Elements []oElem `json:"elements"`
-		Inert    bool    `json:"inert"`
+		Eligible bool    `json:"eligible"`
 	}
 	oErr struct {
-		ID   string `json:"id"`
-		Text string `json:"text"`
+		ID     string `json:"id"`
+		Offset int    `json:"offset"`
+		Text   string `json:"text"`
 	}
 	oCase struct {
-		ID       int    `json:"id"`
-		Errors   []oErr `json:"errors"`
-		Commands []oCmd `json:"commands"`
+		ID       int      `json:"id"`
+		Errors   []oErr   `json:"errors"`
+		Commands []oCmd   `json:"commands"`
+		Nested   []string `json:"nested"`
 	}
 	oParam struct {
 		Name    string   `json:"name"`
@@ -131,6 +146,7 @@ type (
 		LanguageMode          string              `json:"languageMode"`
 		NativeArgumentPassing string              `json:"nativeArgumentPassing"`
 		Home                  string              `json:"home"`
+		Modules               []string            `json:"modules"`
 		Cases                 []oCase             `json:"cases"`
 		Resolved              map[string]string   `json:"resolved"`
 		AliasesOf             map[string][]string `json:"aliasesOf"`
@@ -155,12 +171,17 @@ func (o *oracleOut) resolve(name string) string {
 	return ""
 }
 
-// key names the engine in declarations: "5.1" or "7", "" for any other version.
+var versionRe = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)(\.\d+)?(-[0-9A-Za-z.-]+)?$`)
+
+// key names the engine in declarations: "5.1" or "7", "" for any other or malformed version.
 func (o *oracleOut) key() string {
+	m := versionRe.FindStringSubmatch(o.Version)
 	switch {
-	case strings.HasPrefix(o.Version, "5.1."):
+	case m == nil:
+		return ""
+	case m[1] == "5" && m[2] == "1":
 		return "5.1"
-	case strings.HasPrefix(o.Version, "7."):
+	case m[1] == "7":
 		return "7"
 	}
 	return ""
@@ -182,7 +203,8 @@ func (v Verdict) String() string {
 
 // documentedParseErrors are corpus commands the engine rejects while the recognizer returns calls:
 // the recognizer does not detect every syntax error (§3), so it may judge a script that pwsh
-// refuses to run, which only over-judges a command that runs nothing.
+// refuses to run, which only over-judges a command that runs nothing. The engine's error-recovered
+// AST is still compared.
 var documentedParseErrors = map[string]string{
 	`$x.Invoke(gh pr view 7); [IO.File]::ReadAllText((gh pr view 1)); (Get-Item a).Delete(gh x); git status`: "method arguments are expressions: a bare command there is a syntax error",
 	`$x.M($(gh pr merge 1)); Write-Output $x.Invoke(gh pr view 7)`:                                           "method arguments are expressions: a bare command there is a syntax error",
@@ -203,16 +225,25 @@ type stats struct {
 	calls, argvWords, stubCalls, stubWords, notes int
 }
 
-// observation is what one engine and the recognizer yield for one case.
+// observation is what one engine yields for one case, and how Parse compares with it.
 type observation struct {
-	rejects                bool
-	calls, skipped, nested []string
+	rejects, compared      bool
+	calls, skipped, nested []string // the engine's, sorted
 	fails, notes, missing  []string
 }
 
-// verdict judges one case: Pass only when the engine's observation and the recognizer's result
-// match the declaration and agree on every supported position, Fail on a disagreement,
-// Inconclusive when the engine's evidence is missing or incomplete.
+// declaredBy returns the declaration the engine's observation implies.
+func (ob observation) declaredBy(text string) declared {
+	d := declared{Cmd: text, Calls: ob.calls, Skipped: ob.skipped, Nested: ob.nested}
+	if d.Calls == nil {
+		d.Calls = []string{}
+	}
+	return d
+}
+
+// verdict judges one case: Pass only when the engine's observation matches the declaration and
+// Parse agrees with it on every supported position, Fail on a disagreement, Inconclusive when the
+// engine's evidence is missing or incomplete.
 func verdict(e evidence, st *stats) (Verdict, []string) {
 	if e.engine == nil || e.engine.LanguageMode != "FullLanguage" || e.oc == nil {
 		return Inconclusive, []string{"no engine evidence"}
@@ -228,7 +259,7 @@ func verdict(e evidence, st *stats) (Verdict, []string) {
 	if want := slices.Contains(e.decl.Rejects, e.engine.key()); ob.rejects != want {
 		fails = append(fails, fmt.Sprintf("engine rejects = %v, declared %v", ob.rejects, want))
 	}
-	if !ob.rejects {
+	if ob.compared {
 		for _, d := range []struct {
 			what      string
 			got, want []string
@@ -238,7 +269,10 @@ func verdict(e evidence, st *stats) (Verdict, []string) {
 			{"nested", ob.nested, e.decl.Nested},
 		} {
 			if !slices.Equal(d.got, d.want) && (len(d.got) > 0 || len(d.want) > 0) {
-				fails = append(fails, fmt.Sprintf("%s %q, declared %q", d.what, d.got, d.want))
+				fails = append(
+					fails,
+					fmt.Sprintf("engine %s %q, declared %q", d.what, d.got, d.want),
+				)
 			}
 		}
 	}
@@ -249,10 +283,38 @@ func verdict(e evidence, st *stats) (Verdict, []string) {
 	return Pass, notes
 }
 
-// observe compares the engine's commands with the recognizer's calls and collects the names on
-// each side.
+// observe collects the engine's names for one case and compares Parse with the engine's commands.
 func observe(e evidence, st *stats) observation {
 	var ob observation
+	oc := *e.oc
+	partial := len(oc.Errors) > 0 && documentedParseErrors[e.text] != ""
+	if partial {
+		// Only the commands that end before the first syntax error parse as written; the
+		// engine's error recovery reads the rest differently.
+		first := oc.Errors[0].Offset
+		for _, er := range oc.Errors {
+			first = min(first, er.Offset)
+		}
+		oc.Commands = slices.DeleteFunc(slices.Clone(oc.Commands),
+			func(c oCmd) bool { return c.End > first })
+		oc.Nested = nil
+	}
+	e.oc = &oc
+	for _, oc := range e.oc.Commands {
+		if oc.Name == nil {
+			continue
+		}
+		if oc.Ctx == "plain" {
+			ob.calls = append(ob.calls, *oc.Name)
+		} else {
+			ob.skipped = append(ob.skipped, *oc.Name)
+		}
+	}
+	ob.nested = slices.Clone(e.oc.Nested)
+	slices.Sort(ob.calls)
+	slices.Sort(ob.skipped)
+	slices.Sort(ob.nested)
+
 	if len(e.oc.Errors) > 0 {
 		ob.rejects = true
 		ids := make([]string, len(e.oc.Errors))
@@ -264,25 +326,35 @@ func observe(e evidence, st *stats) observation {
 		switch {
 		case e.r.Err != nil:
 			ob.notes = []string{"both reject: " + strings.Join(ids, ", ")}
+			return ob
 		case chain && e.engine.key() == "5.1":
 			ob.notes = []string{
 				"documented: 5.1 rejects &&, || and a trailing & (" + strings.Join(ids, ", ") + ")",
 			}
-		case documentedParseErrors[e.text] != "":
-			ob.notes = []string{"documented: " + documentedParseErrors[e.text]}
+			return ob
+		case partial:
+			ob.notes = []string{"documented: " + documentedParseErrors[e.text] +
+				"; the commands before the first error are compared"}
 		default:
 			ob.fails = []string{
 				"engine rejects (" + strings.Join(ids, ", ") + ") but the recognizer returns calls",
 			}
+			return ob
 		}
-		return ob
-	}
-	if e.r.Err != nil {
+	} else if e.r.Err != nil {
 		ob.fails = []string{"the recognizer rejects what the engine parses: " + e.r.Err.Error()}
 		return ob
 	}
+	ob.compared = true
+	compareCalls(e, st, &ob, partial)
+	return ob
+}
 
-	nested := nestedKeys(e.r)
+// compareCalls pairs the engine's commands with Parse's calls: every plain engine command must be
+// returned, no opaque one may be, and every other call must be a dynamic call of the engine's or
+// come from a nested script.
+// A partial comparison (a script the engine rejects) checks only the engine's commands.
+func compareCalls(e evidence, st *stats, ob *observation, partial bool) {
 	cmds := e.oc.Commands
 	idx := make([]int, len(cmds))
 	for i := range idx {
@@ -290,16 +362,18 @@ func observe(e evidence, st *stats) observation {
 	}
 	slices.SortStableFunc(idx, func(a, b int) int { return cmds[a].End - cmds[b].End })
 	used := make([]bool, len(e.r.Calls))
+	dynamicEngine := 0
 	for _, i := range idx {
 		oc := cmds[i]
-		if oc.Name == nil {
-			continue // a dynamic name or an invoked block: no name to compare
-		}
 		if len(oc.Elements) == 0 {
-			ob.missing = append(
-				ob.missing,
-				fmt.Sprintf("engine command %q without elements", *oc.Name),
-			)
+			ob.missing = append(ob.missing, fmt.Sprintf("engine command %d without elements", i))
+			continue
+		}
+		if oc.Name == nil {
+			// A dynamic name; an invoked block `& {…}` is no call of its own.
+			if oc.Ctx == "plain" && oc.Elements[0].K != "block" {
+				dynamicEngine++
+			}
 			continue
 		}
 		j := matchCall(e.r.Calls, used, *oc.Name, oc)
@@ -307,32 +381,39 @@ func observe(e evidence, st *stats) observation {
 		case j < 0 && oc.Ctx == "plain":
 			ob.fails = append(ob.fails, fmt.Sprintf("missed call %q", *oc.Name))
 		case j < 0:
-			ob.skipped = append(ob.skipped, *oc.Name)
-		case strings.HasPrefix(oc.Ctx, "opaque:"):
+		case oc.Ctx != "plain":
 			used[j] = true
 			ob.fails = append(ob.fails,
 				fmt.Sprintf("call %q returned from an opaque position (%s)", *oc.Name, oc.Ctx))
 		default:
 			used[j] = true
 			st.calls++
-			ob.calls = append(ob.calls, *oc.Name)
-			compareCall(e, e.r.Calls[j], oc, fmt.Sprintf("%d/%d", e.oc.ID, i), st, &ob)
+			compareCall(e, e.r.Calls[j], oc, fmt.Sprintf("%d/%d", e.oc.ID, i), st, ob)
 		}
 	}
+	if partial {
+		return
+	}
+	var nested []string
+	dynamicParse := 0
 	for j, c := range e.r.Calls {
-		if used[j] || !c.Args[0].Static {
-			continue
+		switch {
+		case used[j]:
+		case !c.Args[0].Static:
+			dynamicParse++
+		default:
+			nested = append(nested, c.Args[0].Text)
 		}
-		if nested[callKey(c)] {
-			ob.nested = append(ob.nested, c.Args[0].Text)
-			continue
-		}
-		ob.fails = append(ob.fails, fmt.Sprintf("call %q the engine does not find", argv(c)))
 	}
-	slices.Sort(ob.calls)
-	slices.Sort(ob.skipped)
-	slices.Sort(ob.nested)
-	return ob
+	if dynamicParse != dynamicEngine {
+		ob.fails = append(ob.fails, fmt.Sprintf("%d calls with a dynamic name, engine %d",
+			dynamicParse, dynamicEngine))
+	}
+	slices.Sort(nested)
+	if !slices.Equal(nested, ob.nested) && (len(nested) > 0 || len(ob.nested) > 0) {
+		ob.fails = append(ob.fails, fmt.Sprintf("calls %q beyond the engine's commands; "+
+			"the engine's nested scripts hold %q", nested, ob.nested))
+	}
 }
 
 // matchCall returns the first unused call named name, preferring one whose static words agree with
@@ -346,36 +427,15 @@ func matchCall(calls []Call, used []bool, name string, oc oCmd) int {
 		if first < 0 {
 			first = j
 		}
-		if f, _ := compareArgv(c, oc); len(f) == 0 {
+		if f, _ := compareArgv(c, oc, nil); len(f) == 0 {
 			return j
 		}
 	}
 	return first
 }
 
-// nestedKeys returns the calls that come from nested PowerShell scripts: the engine sees those as
-// string arguments, and the nested texts are corpus cases of their own.
-func nestedKeys(r Result) map[string]bool {
-	keys := map[string]bool{}
-	for _, s := range r.Nested {
-		if s.Dialect != PowerShell || s.Err != nil {
-			continue
-		}
-		p := newParser(s.Text, "", "", HostOS(), s.Depth, knownSet{})
-		if p.run() != nil {
-			continue
-		}
-		for _, c := range p.res.Calls {
-			keys[callKey(c)] = true
-		}
-	}
-	return keys
-}
-
-func callKey(c Call) string { return strings.Join(argv(c), "\x00") }
-
-// compareCall compares the command kind, the argv and, for a native call the engine may run, the
-// argv the stub received.
+// compareCall compares the command kind, the argv and, for a native call the stub ran, the argv
+// the stub received.
 func compareCall(e evidence, c Call, oc oCmd, id string, st *stats, ob *observation) {
 	name := *oc.Name
 	res := e.engine.resolve(name)
@@ -411,23 +471,47 @@ func compareCall(e evidence, c Call, oc oCmd, id string, st *stats, ob *observat
 	default:
 		ob.notes = append(ob.notes, fmt.Sprintf("%q resolves to %s", name, res))
 	}
-	f, n := compareArgv(c, oc)
+	var dynamic []string
+	if e.decl != nil && HostOS() != Windows {
+		dynamic = e.decl.DynamicUnix
+	}
+	f, n := compareArgv(c, oc, dynamic)
 	ob.fails = append(ob.fails, f...)
 	ob.notes = append(ob.notes, n...)
 	st.argvWords += len(c.Args) - 1
 
-	got, ok := e.stub[id]
-	switch {
-	case ok:
-		st.stubCalls++
-		legacy := e.engine.NativeArgumentPassing == "" ||
-			e.engine.NativeArgumentPassing == "Legacy"
-		f, n := compareStub(c, got, legacy, st)
-		ob.fails = append(ob.fails, f...)
-		ob.notes = append(ob.notes, n...)
-	case res == "native" && oc.Inert:
-		ob.missing = append(ob.missing, fmt.Sprintf("%q: no stub argv for a native call", name))
+	if res != "native" || len(e.oc.Errors) > 0 {
+		return
 	}
+	if !oc.Eligible {
+		if literalArgs(oc) {
+			ob.missing = append(ob.missing, fmt.Sprintf("%q: literal native call not run", name))
+		}
+		return
+	}
+	got, ok := e.stub[id]
+	if !ok {
+		ob.missing = append(ob.missing, fmt.Sprintf("%q: no stub argv for call %s", name, id))
+		return
+	}
+	st.stubCalls++
+	legacy := e.engine.NativeArgumentPassing == "" || e.engine.NativeArgumentPassing == "Legacy"
+	f, n = compareStub(c, got, legacy, st)
+	ob.fails = append(ob.fails, f...)
+	ob.notes = append(ob.notes, n...)
+}
+
+// literalArgs reports whether every argument of oc is a literal, so the stub must have run it.
+func literalArgs(oc oCmd) bool {
+	for _, e := range oc.Elements[1:] {
+		switch {
+		case e.K == "str":
+		case e.K == "param" && (e.Arg == nil || e.Arg.K == "str"):
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // want is one argv word as the engine parses it.
@@ -484,8 +568,9 @@ func expected(els []oElem, k Kind) []want {
 }
 
 // compareArgv compares the recognizer's words after the name with the engine's elements: a static
-// word must equal the engine's static value, and no word the engine computes may be static.
-func compareArgv(c Call, oc oCmd) ([]string, []string) {
+// word must equal the engine's static value, no word the engine computes may be static, and a word
+// the engine reads as static may be dynamic only when the case declares its text in dynamic.
+func compareArgv(c Call, oc oCmd, dynamic []string) ([]string, []string) {
 	var fails, notes []string
 	ws := expected(oc.Elements[1:], c.Kind)
 	got := c.Args[1:]
@@ -515,8 +600,12 @@ func compareArgv(c Call, oc oCmd) ([]string, []string) {
 					fmt.Sprintf("word %d %q static, engine computes it", i+1, g.Raw))
 			}
 		case !g.Static || g.Known != NotKnown:
-			notes = append(notes,
-				fmt.Sprintf("word %d %q dynamic, engine static %q", i+1, g.Raw, w.text))
+			msg := fmt.Sprintf("word %d %q dynamic, engine static %q", i+1, g.Raw, w.text)
+			if slices.Contains(dynamic, w.text) {
+				notes = append(notes, "declared: "+msg)
+			} else {
+				fails = append(fails, msg)
+			}
 		case g.Flag+g.Text != w.text:
 			fails = append(fails,
 				fmt.Sprintf("word %d = %q, engine %q", i+1, g.Flag+g.Text, w.text))
@@ -579,11 +668,27 @@ func shellTexts(ws []shell.Word) []string {
 	return out
 }
 
-// sourceCorpus returns the §7.2 commands: C1 from this package's tables, C2–C5 from the command
-// lists of the guard tests, the controls, and every nested PowerShell script Parse finds in them.
+// sourceCorpus returns the §7.2 commands: the controls, C1 from this package's tables and C2–C5
+// from the command lists of the guard tests.
 func sourceCorpus(t *testing.T) []string {
 	t.Helper()
-	var texts []string
+	texts := make(
+		[]string,
+		0,
+		len(
+			controls,
+		)+len(
+			parseTests,
+		)+len(
+			kindTests,
+		)+len(
+			bindingTests,
+		)+len(
+			nestedTests,
+		)+len(
+			parseFailures,
+		),
+	)
 	for _, c := range controls {
 		texts = append(texts, c.cmd)
 	}
@@ -609,18 +714,12 @@ func sourceCorpus(t *testing.T) []string {
 	}
 	seen := map[string]bool{}
 	var out []string
-	for i := 0; i < len(texts); i++ {
-		s := texts[i]
+	for i, s := range texts {
 		if seen[s] || strings.TrimSpace(s) == "" || (i >= local && json.Valid([]byte(s))) {
 			continue
 		}
 		seen[s] = true
 		out = append(out, s)
-		for _, n := range Parse(s, "", "", Windows).Nested {
-			if n.Dialect == PowerShell {
-				texts = append(texts, n.Text)
-			}
-		}
 	}
 	return out
 }
@@ -701,6 +800,27 @@ var controls = []control{
 		return ""
 	}},
 	{
+		"1..3 | ForEach-Object { gh a } { gh b }",
+		func(_ *oracleOut, oc *oCase, _ map[string][]string) string {
+			ctx := make([]string, 0, len(oc.Commands))
+			for _, c := range oc.Commands {
+				ctx = append(ctx, c.Ctx)
+			}
+			// ForEach-Object, the first positional block (Process) and the RemainingScripts block.
+			want := []string{"plain", "plain", "opaque:block-argument:ForEach-Object"}
+			if len(oc.Errors) > 0 || !slices.Equal(ctx, want) {
+				return fmt.Sprintf("positions %q, want %q", ctx, want)
+			}
+			return ""
+		},
+	},
+	{"iex 'gh pr merge 7'", func(_ *oracleOut, oc *oCase, _ map[string][]string) string {
+		if len(oc.Errors) > 0 || !slices.Equal(oc.Nested, []string{"gh"}) {
+			return fmt.Sprintf("nested %q, want gh", oc.Nested)
+		}
+		return ""
+	}},
+	{
 		"git status && gh pr merge 1 || gh x",
 		func(o *oracleOut, oc *oCase, _ map[string][]string) string {
 			if rejects := len(oc.Errors) > 0; rejects != (o.key() == "5.1") {
@@ -718,6 +838,93 @@ var controls = []control{
 		}
 		return ""
 	}},
+}
+
+// requiredKeys are the fields every object of the oracle output must carry, by path.
+var requiredKeys = map[string][]string{
+	"": {
+		"version",
+		"edition",
+		"languageMode",
+		"nativeArgumentPassing",
+		"home",
+		"modules",
+		"cases",
+		"resolved",
+		"aliasesOf",
+		"params",
+		"pBinding",
+		"stubRuns",
+		"stubSame",
+	},
+	"case":     {"id", "errors", "commands", "nested"},
+	"command":  {"name", "ctx", "end", "elements", "eligible"},
+	"element":  {"k", "t"},
+	"error":    {"id", "offset", "text"},
+	"param":    {"name", "aliases", "switch"},
+	"stubLine": {"id", "argv"},
+}
+
+// checkKeys returns an error when obj lacks a required field of kind.
+func checkKeys(obj any, kind, where string) error {
+	m, ok := obj.(map[string]any)
+	if !ok {
+		return fmt.Errorf("%s: not an object", where)
+	}
+	for _, k := range requiredKeys[kind] {
+		if _, ok := m[k]; !ok {
+			return fmt.Errorf("%s: no %q", where, k)
+		}
+	}
+	return nil
+}
+
+func listOf(v any) []any {
+	l, _ := v.([]any)
+	return l
+}
+
+// validateOutput checks that the raw oracle output carries every required field.
+func validateOutput(b []byte) error {
+	var raw map[string]any
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return fmt.Errorf("oracle output: %w", err)
+	}
+	if err := checkKeys(raw, "", "output"); err != nil {
+		return err
+	}
+	for i, c := range listOf(raw["cases"]) {
+		if err := checkKeys(c, "case", fmt.Sprintf("case %d", i)); err != nil {
+			return err
+		}
+		cm, _ := c.(map[string]any)
+		for _, e := range listOf(cm["errors"]) {
+			if err := checkKeys(e, "error", fmt.Sprintf("case %d error", i)); err != nil {
+				return err
+			}
+		}
+		for j, cmd := range listOf(cm["commands"]) {
+			where := fmt.Sprintf("case %d command %d", i, j)
+			if err := checkKeys(cmd, "command", where); err != nil {
+				return err
+			}
+			m, _ := cmd.(map[string]any)
+			for _, el := range listOf(m["elements"]) {
+				if err := checkKeys(el, "element", where); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	params, _ := raw["params"].(map[string]any)
+	for name, ps := range params {
+		for _, p := range listOf(ps) {
+			if err := checkKeys(p, "param", "params of "+name); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // runOracle runs testdata/oracle.ps1 on exe over the corpus and returns its output and the stub
@@ -743,6 +950,7 @@ func runOracle(t *testing.T, exe string, corpus []string) (*oracleOut, map[strin
 		"cmdlets": slices.Sorted(maps.Values(canonical)),
 		"tables":  slices.Sorted(maps.Keys(tables)),
 		"stub":    stub,
+		"marker":  stubMarker,
 		"missing": filepath.Join(dir, "missing"),
 	}
 	in := filepath.Join(dir, "in.json")
@@ -773,48 +981,80 @@ func runOracle(t *testing.T, exe string, corpus []string) (*oracleOut, map[strin
 	if err != nil {
 		return nil, nil, fmt.Errorf("oracle run: %w", err)
 	}
+	if err := validateOutput(b); err != nil {
+		return nil, nil, err
+	}
 	var o oracleOut
 	if err := json.Unmarshal(b, &o); err != nil {
 		return nil, nil, fmt.Errorf("oracle output: %w", err)
 	}
-	stubs := map[string][]string{}
-	if f, err := os.Open(argvFile); err == nil {
-		sc := bufio.NewScanner(f)
-		sc.Buffer(nil, 1<<20)
-		for sc.Scan() {
-			var r stubRecord
-			if err := json.Unmarshal(sc.Bytes(), &r); err != nil {
-				_ = f.Close()
-				return nil, nil, fmt.Errorf("stub record: %w", err)
-			}
-			stubs[r.ID] = r.Argv
-		}
-		_ = f.Close()
-		if err := sc.Err(); err != nil {
-			return nil, nil, fmt.Errorf("oracle run: %w", err)
-		}
-	}
-	if len(stubs) != o.StubRuns {
-		return nil, nil, fmt.Errorf("%d stub records for %d runs", len(stubs), o.StubRuns)
-	}
-	for id, ran := range o.StubSame {
-		argv, ok := stubs[ran]
-		if !ok {
-			return nil, nil, fmt.Errorf("stub call %s refers to %s, which has no record", id, ran)
-		}
-		stubs[id] = argv
+	stubs, err := readStubs(argvFile, &o)
+	if err != nil {
+		return nil, nil, err
 	}
 	return &o, stubs, checkEngine(&o, corpus, stubs)
 }
 
+// readStubs reads the stub's records and maps every deduplicated call to the record of the run.
+func readStubs(file string, o *oracleOut) (map[string][]string, error) {
+	stubs := map[string][]string{}
+	f, err := os.Open(file)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("stub records: %w", err)
+	}
+	if err == nil {
+		defer func() { _ = f.Close() }()
+		sc := bufio.NewScanner(f)
+		sc.Buffer(nil, 1<<20)
+		for sc.Scan() {
+			var raw map[string]any
+			if err := json.Unmarshal(sc.Bytes(), &raw); err != nil {
+				return nil, fmt.Errorf("stub record: %w", err)
+			}
+			if err := checkKeys(raw, "stubLine", "stub record"); err != nil {
+				return nil, err
+			}
+			var r stubRecord
+			if err := json.Unmarshal(sc.Bytes(), &r); err != nil {
+				return nil, fmt.Errorf("stub record: %w", err)
+			}
+			stubs[r.ID] = r.Argv
+		}
+		if err := sc.Err(); err != nil {
+			return nil, fmt.Errorf("stub records: %w", err)
+		}
+	}
+	if len(stubs) != o.StubRuns {
+		return nil, fmt.Errorf("%d stub records for %d runs", len(stubs), o.StubRuns)
+	}
+	for id, ran := range o.StubSame {
+		argv, ok := stubs[ran]
+		if !ok {
+			return nil, fmt.Errorf("stub call %s refers to %s, which has no record", id, ran)
+		}
+		stubs[id] = argv
+	}
+	return stubs, nil
+}
+
+// oracleModules are the modules the oracle imports; autoloading is off, so no other module may
+// be loaded after it ran.
+var oracleModules = []string{"Microsoft.PowerShell.Management", "Microsoft.PowerShell.Utility"}
+
 // checkEngine returns why the engine's output is not complete evidence: a language mode other
-// than FullLanguage, an unknown version, a missing or repeated case, or a failed control.
+// than FullLanguage, an unknown version, a module loaded by a lookup, a missing or repeated case,
+// no stub run, or a failed control.
 func checkEngine(o *oracleOut, corpus []string, stubs map[string][]string) error {
 	if o.LanguageMode != "FullLanguage" {
 		return fmt.Errorf("LanguageMode %q", o.LanguageMode)
 	}
 	if o.key() == "" {
 		return fmt.Errorf("engine version %q", o.Version)
+	}
+	for _, m := range o.Modules {
+		if !slices.Contains(oracleModules, m) {
+			return fmt.Errorf("module %s was loaded", m)
+		}
 	}
 	if len(corpus) == 0 || o.StubRuns == 0 {
 		return fmt.Errorf("%d cases, %d stub runs", len(corpus), o.StubRuns)
@@ -850,7 +1090,7 @@ func engines() []struct{ key, exe string } {
 func readDeclared(t *testing.T) []declared {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join("testdata", casesFile))
-	if *updateOracle && os.IsNotExist(err) {
+	if *updateOracle && errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 	if err != nil {
@@ -872,17 +1112,24 @@ func TestOracle(t *testing.T) {
 	}
 	decls := readDeclared(t)
 	byCmd := map[string]*declared{}
-	corpus := make([]string, len(decls))
 	for i := range decls {
-		corpus[i] = decls[i].Cmd
 		byCmd[decls[i].Cmd] = &decls[i]
 	}
-	if *updateOracle {
-		corpus = sourceCorpus(t)
-	} else {
-		for _, s := range sourceCorpus(t) {
+	source := sourceCorpus(t)
+	corpus := source
+	if !*updateOracle {
+		corpus = make([]string, len(decls))
+		for i := range decls {
+			corpus[i] = decls[i].Cmd
+		}
+		for _, s := range source {
 			if byCmd[s] == nil {
 				t.Errorf("command %q is not declared: rerun with -update-oracle on Windows", s)
+			}
+		}
+		for _, d := range decls {
+			if !slices.Contains(source, d.Cmd) {
+				t.Errorf("declared command %q is no longer in the sources", d.Cmd)
 			}
 		}
 	}
@@ -918,81 +1165,121 @@ func TestOracle(t *testing.T) {
 			if res.err != nil {
 				t.Fatalf("inconclusive: all %d cases: %v", len(corpus), res.err)
 			}
-			o := res.o
-			t.Logf("engine %s %s on %s, LanguageMode %s, PSNativeCommandArgumentPassing %q, "+
-				"corpus %d, stub runs %d", o.Version, o.Edition, runtime.GOOS, o.LanguageMode,
-				o.NativeArgumentPassing, len(corpus), o.StubRuns)
-			var st stats
-			counts := map[Verdict]int{}
-			obs[i] = make([]observation, len(corpus))
-			for id, text := range corpus {
-				e := evidence{
-					text: text, decl: byCmd[text], engine: o, oc: &o.Cases[id],
-					r:    Parse(text, "", o.Home, HostOS()),
-					stub: res.stubs,
-				}
-				obs[i][id] = observe(e, &stats{})
-				if *updateOracle {
-					continue
-				}
-				v, notes := verdict(e, &st)
-				counts[v]++
-				switch v {
-				case Pass:
-					for _, n := range notes {
-						if strings.HasPrefix(n, "documented") {
-							t.Logf("case %d %q: %s", id, text, n)
-						}
-					}
-				case Fail, Inconclusive:
-					t.Errorf("case %d %q: %s: %s", id, text, v, strings.Join(notes, "; "))
-				}
-			}
-			t.Logf("verdicts on %s: %d pass, %d fail, %d inconclusive; compared %d calls, "+
-				"%d argv words, %d stub calls with %d static words; %d notes",
-				en.key, counts[Pass], counts[Fail], counts[Inconclusive], st.calls,
-				st.argvWords, st.stubCalls, st.stubWords, st.notes)
-			checkHost(t, o)
+			obs[i] = judge(t, en.key, res.o, res.stubs, corpus, byCmd)
 		})
 	}
 	if *updateOracle {
-		writeDeclared(t, ens, corpus, obs)
+		writeDeclared(t, ens, corpus, decls, obs)
 	}
 }
 
-// writeDeclared rewrites the declarations from the observations of every engine of a Windows host.
+// judge logs the engine, judges every case and checks the host's aliases and binding tables.
+func judge(t *testing.T, key string, o *oracleOut, stubs map[string][]string, corpus []string,
+	byCmd map[string]*declared,
+) []observation {
+	t.Helper()
+	t.Logf("engine %s %s on %s, LanguageMode %s, PSNativeCommandArgumentPassing %q, "+
+		"corpus %d, stub runs %d", o.Version, o.Edition, runtime.GOOS, o.LanguageMode,
+		o.NativeArgumentPassing, len(corpus), o.StubRuns)
+	var st stats
+	counts := map[Verdict]int{}
+	obs := make([]observation, len(corpus))
+	for id, text := range corpus {
+		e := evidence{
+			text: text, decl: byCmd[text], engine: o, oc: &o.Cases[id],
+			r:    Parse(text, "", o.Home, HostOS()),
+			stub: stubs,
+		}
+		obs[id] = observe(e, &stats{})
+		if *updateOracle && byCmd[text] == nil {
+			continue
+		}
+		v, notes := verdict(e, &st)
+		counts[v]++
+		switch v {
+		case Pass:
+			for _, n := range notes {
+				if strings.HasPrefix(n, "documented") || strings.HasPrefix(n, "declared") {
+					t.Logf("case %d %q: %s", id, text, n)
+				}
+			}
+		case Fail, Inconclusive:
+			if *updateOracle {
+				t.Logf("case %d %q: %s: %s", id, text, v, strings.Join(notes, "; "))
+			} else {
+				t.Errorf("case %d %q: %s: %s", id, text, v, strings.Join(notes, "; "))
+			}
+		}
+	}
+	t.Logf("verdicts on %s: %d pass, %d fail, %d inconclusive; compared %d calls, "+
+		"%d argv words, %d stub calls with %d static words; %d notes",
+		key, counts[Pass], counts[Fail], counts[Inconclusive], st.calls,
+		st.argvWords, st.stubCalls, st.stubWords, st.notes)
+	if counts[Pass] == 0 && !*updateOracle {
+		t.Errorf("no case passed on %s", key)
+	}
+	checkHost(t, o)
+	return obs
+}
+
+// writeDeclared writes the declarations from the engines' observations of a Windows host: the
+// names come from the engines' ASTs, never from Parse. A changed declaration or a removed command
+// is written only with -update-oracle-changes; the differences are printed either way.
 func writeDeclared(t *testing.T, ens []struct{ key, exe string }, corpus []string,
-	obs [][]observation,
+	old []declared, obs [][]observation,
 ) {
 	t.Helper()
-	if len(ens) != 2 || t.Failed() {
-		t.Fatal("-update-oracle needs a clean run of both engines on Windows")
+	if len(ens) != 2 || slices.ContainsFunc(obs, func(o []observation) bool { return o == nil }) {
+		t.Fatal("-update-oracle needs a run of both engines on Windows")
+	}
+	prev := map[string]declared{}
+	for _, d := range old {
+		prev[d.Cmd] = d
 	}
 	out := make([]declared, len(corpus))
+	var changes []string
 	for id, text := range corpus {
-		d := declared{Cmd: text}
+		var d declared
 		for i, en := range ens {
 			ob := obs[i][id]
-			if len(ob.fails) > 0 || len(ob.missing) > 0 {
-				t.Fatalf("case %q on %s: %q %q", text, en.key, ob.fails, ob.missing)
+			if len(ob.missing) > 0 {
+				t.Fatalf("case %q on %s: %q", text, en.key, ob.missing)
 			}
 			if ob.rejects {
 				d.Rejects = append(d.Rejects, en.key)
-				continue
 			}
-			if d.Calls != nil && (!slices.Equal(d.Calls, ob.calls) ||
-				!slices.Equal(d.Skipped, ob.skipped) || !slices.Equal(d.Nested, ob.nested)) {
-				t.Fatalf("case %q: the engines disagree", text)
-			}
-			d.Calls, d.Skipped, d.Nested = ob.calls, ob.skipped, ob.nested
-			if d.Calls == nil {
-				d.Calls = []string{}
+			// The names of 7's AST; of a script it rejects, only a documented one's recovered AST
+			// is compared.
+			if en.key == "7" {
+				r := d.Rejects
+				d = declared{Cmd: text, Calls: []string{}}
+				if !ob.rejects || documentedParseErrors[text] != "" {
+					d = ob.declaredBy(text)
+				}
+				d.Rejects = r
 			}
 		}
-		if d.Calls == nil {
-			d.Calls = []string{}
+		p, had := prev[text]
+		d.DynamicUnix = p.DynamicUnix
+		if had && !sameDeclared(p, d) {
+			changes = append(
+				changes,
+				fmt.Sprintf("changed %s\n   to %s", mustJSON(t, p), mustJSON(t, d)),
+			)
 		}
 		out[id] = d
+	}
+	for _, p := range old {
+		if !slices.Contains(corpus, p.Cmd) {
+			changes = append(changes, "removed "+mustJSON(t, p))
+		}
+	}
+	for _, c := range changes {
+		t.Log(c)
+	}
+	if len(changes) > 0 && !*updateChanges {
+		t.Fatalf("%d declarations would change or go: review them and rerun with "+
+			"-update-oracle-changes", len(changes))
 	}
 	b, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
@@ -1005,6 +1292,20 @@ func writeDeclared(t *testing.T, ens []struct{ key, exe string }, corpus []strin
 	); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func sameDeclared(a, b declared) bool {
+	return a.Cmd == b.Cmd && slices.Equal(a.Calls, b.Calls) && slices.Equal(a.Skipped, b.Skipped) &&
+		slices.Equal(a.Nested, b.Nested) && slices.Equal(a.Rejects, b.Rejects)
+}
+
+func mustJSON(t *testing.T, v any) string {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }
 
 // checkHost checks the alias table of §4 and the binding tables against the engine's metadata,
