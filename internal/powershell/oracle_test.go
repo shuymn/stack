@@ -571,29 +571,42 @@ func stubShaped(els []oElem) bool {
 
 // want is one argv word as the engine parses it.
 type want struct {
-	text            string
-	static, block   bool
-	skip            bool // not comparable (a native list)
-	verbatimSkipped bool // the rest of argv is a `--%` tail not compared
+	text          string
+	static, block bool
+	skip          bool   // not comparable (a native list)
+	skipNote      string // when set, the rest of argv is not compared, for this reason
 }
 
-// expected turns the engine's command elements into argv words for a call of kind k.
+// expected turns the engine's command elements into argv words for a call of kind k, applying the
+// argument-passing rules \u00a73 measured on both engines with the argv stub: the stop-parsing token's
+// tail (split at whitespace for a native command, one literal argument after the kept token for a
+// cmdlet), and a native quoted `--%`, which is dropped while later values are joined as written.
 func expected(els []oElem, k Kind) []want {
 	var out []want
+	joined := false
 	for i, e := range els {
+		if joined {
+			ws, ok := joinedWants(e)
+			if !ok {
+				return append(out, want{
+					skipNote: "ambiguous region after a quoted --% not compared",
+				})
+			}
+			out = append(out, ws...)
+			continue
+		}
 		switch e.K {
 		case "str":
 			if e.Q == "BareWord" && e.V == "--%" {
+				tail := ""
 				if i+1 < len(els) {
-					tail := els[i+1].V
-					if strings.ContainsAny(tail, "\"\u201c\u201d\u201e%") {
-						return append(out, want{verbatimSkipped: true})
-					}
-					for f := range strings.FieldsSeq(tail) {
-						out = append(out, want{text: f, static: true})
-					}
+					tail = els[i+1].V
 				}
-				return out
+				return append(out, tailWants(tail, k)...)
+			}
+			if k == Native && e.V == "--%" {
+				joined = true
+				continue
 			}
 			out = append(out, want{text: e.V, static: true})
 		case "param":
@@ -622,6 +635,47 @@ func expected(els []oElem, k Kind) []want {
 	return out
 }
 
+// tailWants is the argv after a stop-parsing token with this tail: for a cmdlet the kept token and
+// the trimmed tail as one argument, for a native command the tail split at whitespace (not compared
+// when it holds a quote or `%`).
+func tailWants(tail string, k Kind) []want {
+	if k == Cmdlet {
+		out := []want{{text: "--%", static: true}}
+		if t := strings.TrimSpace(tail); t != "" {
+			out = append(out, want{text: t, static: true})
+		}
+		return out
+	}
+	if strings.ContainsAny(tail, "\"“”„%") {
+		return []want{
+			{skipNote: "--% tail with quotes or %NAME% not compared"},
+		}
+	}
+	var out []want
+	for f := range strings.FieldsSeq(tail) {
+		out = append(out, want{text: f, static: true})
+	}
+	return out
+}
+
+// joinedWants is the argv of an element after a quoted `--%`: a static value split at spaces, or
+// false for one the engines pass differently (§3: a value holding `"`, `,`, a tab or a line
+// break, a `%NAME%`, an empty value, a parameter token, an array, any computed element, and another
+// `--%`), from which on nothing is compared.
+func joinedWants(e oElem) ([]want, bool) {
+	if e.K != "str" || e.V == "" || e.V == "--%" ||
+		strings.ContainsAny(e.V, "\",\t\r\n") || percentVar.MatchString(e.V) {
+		return nil, false
+	}
+	var out []want
+	for f := range strings.SplitSeq(e.V, " ") {
+		if f != "" {
+			out = append(out, want{text: f, static: true})
+		}
+	}
+	return out, true
+}
+
 // compareArgv compares the recognizer's words after the name with the engine's elements: a static
 // word must equal the engine's static value, no word the engine computes may be static, and a word
 // the engine reads as static may be dynamic only when the case declares its text in dynamic.
@@ -629,12 +683,20 @@ func compareArgv(c Call, els []oElem, dynamic []string) ([]string, []string) {
 	var fails, notes []string
 	ws := expected(els[1:], c.Kind)
 	got := c.Args[1:]
-	if n := len(ws); n > 0 && ws[n-1].verbatimSkipped {
+	if n := len(ws); n > 0 && ws[n-1].skipNote != "" {
+		notes = append(notes, ws[n-1].skipNote)
 		ws = ws[:n-1]
-		notes = append(notes, "--% tail with quotes or %NAME% not compared")
 		if len(got) > len(ws) {
 			got = got[:len(ws)]
 		}
+	}
+	// The recognizer's ambiguous region keeps the static text of what the engines may pass
+	// differently (both parsers even drop a parameter token after a quoted `--%`), so it ends the
+	// comparison; TestAmbiguousRegion checks where it starts.
+	if k := slices.IndexFunc(got, func(w Word) bool { return w.ambiguous }); k >= 0 {
+		notes = append(notes, "ambiguous region after a quoted --% not compared")
+		got = got[:k]
+		ws = ws[:min(k, len(ws))]
 	}
 	if len(ws) != len(got) {
 		return []string{
@@ -669,11 +731,13 @@ func compareArgv(c Call, els []oElem, dynamic []string) ([]string, []string) {
 	return fails, notes
 }
 
-// compareStub compares ShellCall's static words with the argv the stub received. A word starting
-// with an unquoted `~` is not compared (W3 owns the native `~` rule). Under legacy argument
+// compareStub compares ShellCall's static words with the argv the stub received. A word ShellCall
+// marks as a home `~` (Tilde) is not compared, since the host's expansion depends on the engine
+// version (W3); a literal `~user` or `~foo/.git` is. Under legacy argument
 // passing (Windows PowerShell 5.1, or `$PSNativeCommandArgumentPassing = 'Legacy'`) a word holding
 // `"` reaches the program split or unquoted: documented in phase2-core §6, so such a call is
-// noted, not compared.
+// noted, not compared. An ambiguous word (§3, after a quoted `--%`) is engine-dependent by design
+// and compared like a dynamic one: not at all.
 func compareStub(c Call, got []string, legacy bool, st *stats) ([]string, []string) {
 	var fails, notes []string
 	words := c.ShellCall().Args[1:]
@@ -681,9 +745,10 @@ func compareStub(c Call, got []string, legacy bool, st *stats) ([]string, []stri
 		func(w shell.Word) bool { return strings.Contains(w.Text, `"`) }) {
 		return nil, []string{fmt.Sprintf("documented: legacy argument passing, stub argv %q", got)}
 	}
+	compared := func(w shell.Word) bool { return w.Static && !w.Ambiguous }
 	allStatic := true
 	for _, w := range words {
-		allStatic = allStatic && w.Static
+		allStatic = allStatic && compared(w)
 	}
 	n := len(words)
 	if n != len(got) {
@@ -693,13 +758,13 @@ func compareStub(c Call, got []string, legacy bool, st *stats) ([]string, []stri
 		notes = append(notes,
 			fmt.Sprintf("stub argv has %d words, ShellCall %d with dynamic words", len(got), n))
 		n = 0
-		for n < len(words) && n < len(got) && words[n].Static {
+		for n < len(words) && n < len(got) && compared(words[n]) {
 			n++
 		}
 	}
 	for i := range n {
-		w, a := words[i], c.Args[i+1]
-		if !w.Static || (a.Quote == Bare && a.Flag == "" && strings.HasPrefix(a.Text, "~")) {
+		w := words[i]
+		if !compared(w) || w.Tilde {
 			continue
 		}
 		st.stubWords++

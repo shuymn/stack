@@ -6,8 +6,7 @@
   "hook_event_name": "PreToolUse",
   "tool_name": "PowerShell",
   "tool_input": {
-    "command": "Set-Location docs && gh pr create --title \"feat: add guard\" --body-file pr.md",
-    "description": "Open the pull request"
+    "command": "gh pr create -t t --body-file b.md"
   },
   "tool_use_id": "toolu_010000000000000000000032"
 }

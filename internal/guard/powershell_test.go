@@ -3,6 +3,7 @@ package guard
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -61,6 +62,21 @@ func TestRawMergePowerShell(t *testing.T) {
 		"gh pr merge 7\n@'\ntext\n'@ | Write-Output",
 		`iex "bash -c 'gh pr merge 7'"`,
 		`gh pr merge 7; iex 'Write-Output "'`,
+		// A quoted `--%` is dropped from argv and the later arguments are joined as written.
+		"gh '--%' pr merge 7",
+		`& gh.exe "--%" pr merge 7`,
+		`gh pr '--%' "merge 7"`,
+		`& gh.exe '--%' pr "merge 7 --squash"`,
+		"gh pr \"--`%\" \"merge 7\"",
+		"git `--% x && gh pr merge 7",
+		// A token that starts with a quote ends at its closing quote.
+		"gh pr 'merge'7",
+		`gh pr "merge"7`,
+		"gh 'pr'merge 7",
+		// After a quoted `--%` an unknown boundary leaves `--help` unproven: 5.1 joins
+		// `--body=ab --help` into one argument, and `%X%` expands to an unknown value.
+		`gh pr merge 7 --squash '--%' '--body=a"b' --help`,
+		"gh pr merge 7 '--%' %X% --help",
 	}
 	allow := []string{
 		"gh pr merge 7 2>&1 --help",
@@ -71,6 +87,17 @@ func TestRawMergePowerShell(t *testing.T) {
 		"# gh pr merge 1",
 		"cd sub; gh api graphql -F query=@q.graphql",
 		`iex 'bash -c ''bash -c "gh pr merge 7"'''`,
+		"gh '--%' pr view 7",
+		"gh pr merge 7 '--%' --help",
+		// The backtick-escaped `--%` is the stop-parsing token: `;` stays in its tail.
+		"Write-Output `--% ; gh pr merge 7",
+		"Write-Output `--%; gh pr merge 7",
+		"gh pr 'view'7",
+		"gh pr merge 7 'a'--help",
+		"gh pr merge 'x'--help",
+		"gh pr merge 7 '--%' x --help",
+		// Each quote-started array element ends at its quote: `--help` is its own argument.
+		"gh pr merge 7 'a','b'--help",
 	}
 	for _, os := range bothOS {
 		for _, cmd := range deny {
@@ -99,6 +126,94 @@ func TestRawMergePowerShell(t *testing.T) {
 	}
 	if _, ok := decideBash(r.Nested[1].Text, f.cwd, 0, f.opts); !ok {
 		t.Errorf("the inner Bash text at depth 0 does not deny")
+	}
+}
+
+// TestRawMergePowerShellTilde checks a native `~` `--input` body: home on non-Windows hosts, and on
+// Windows opaque, since the file gh opens depends on the engine (7.6+ expands `~`, 5.1 and 7.0–7.5
+// pass it as written). The merge mutation is only in the home copy; the cwd's literal `~` copy is a
+// query.
+func TestRawMergePowerShellTilde(t *testing.T) {
+	f := newFixture(t)
+	body := func(q string) string {
+		raw, err := json.Marshal(map[string]string{"query": q})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(raw)
+	}
+	merge := body(`mutation { mergePullRequest(input: {pullRequestId: "x"}) { clientMutationId } }`)
+	if err := os.WriteFile(filepath.Join(f.opts.Home, "q.json"), []byte(merge), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f.write("~/q.json", body(`query { viewer { login } }`))
+
+	d, ok := f.ps("gh api graphql --input ~/q.json", powershell.Unix)
+	wantDeny(t, "unix: --input ~/q.json", d, ok)
+	d, ok = f.ps("gh api graphql --input '~/q.json'", powershell.Unix)
+	wantAllow(t, "unix: --input '~/q.json'", d, ok)
+	for _, cmd := range []string{`gh api graphql --input ~\q.json`, "gh api graphql --input ~/q.json"} {
+		d, ok = f.ps(cmd, powershell.Windows)
+		wantAllow(t, "windows: "+cmd, d, ok)
+	}
+}
+
+// TestRawMergePowerShellNoNewAllow replays the review probes of the quoted `--%` and quote-token
+// changes: each one the base recognizer (before them) denied still denies, on both hosts, unless it
+// is a measured flip where 5.1 and 7.7 agree on argv that shows a harmless call (flip).
+func TestRawMergePowerShellNoNewAllow(t *testing.T) {
+	f := newFixture(t)
+	for _, tt := range []struct {
+		cmd      string
+		baseDeny bool
+		flip     string // why an allow is correct although the base denied
+	}{
+		{`gh pr merge 7 --squash '--%' '--body=a"b' --help`, true, ""},
+		{`gh pr merge 7 --squash '--%' '--body=a','--subject=b"'--help`, true, ""},
+		{`$title = 'a"b'; gh pr merge 7 --squash '--%' "--body=$title" --help`, true, ""},
+		{`gh pr merge 7 --squash '--%' '--body=a"b' --% --help`, true, ""},
+		{"gh pr merge 7 --squash '--%' '--body=a\"b' `--% --help", true, ""},
+		{"gh pr \"--`%\" \"merge 7\"", false, ""},
+		{"gh pr merge 7 '--%' %X% --help", true, ""},
+		{"gh pr merge 7 '--%' '--%' --help", true, ""},
+		{"gh pr merge 7 '--%' '' --help", true, ""},
+		{"gh pr merge 7 a,'b'c --help", false, ""},
+		{"gh pr merge 7 'a',b,'c'd --help", false, ""},
+		{`gh pr '--%' "merge 7"`, false, ""},
+		{`& gh.exe '--%' pr "merge 7 --squash"`, false, ""},
+		{"gh pr 'merge'7", false, ""},
+		{"gh 'pr'merge 7", false, ""},
+		{"gh '--%' pr merge 7", true, ""},
+		{`& gh.exe "--%" pr merge 7`, true, ""},
+		{`powershell.exe -Command "gh pr merge 7 --squash '--%' '--body=a""b' --help"`, true, ""},
+		{"gh pr merge 7 '--%' \"a`t--help\"", true, ""},
+		{"gh pr merge 7 '--%' 'a\t--help'", true, ""},
+		{"gh pr merge 7 '--%' -h", true, ""},
+		{"gh pr merge 7 '--%' -h x", true, ""},
+		{"gh pr merge 7 '--%' -h=true", true, ""},
+		{"gh pr merge 7 '--%' -s '--help'", true, ""},
+		{"gh pr merge 7 '--help'.foo", true, ""},
+		{"gh pr merge 7 '--help'[0]", true, ""},
+		{`gh pr merge 7 "--help".foo`, true, ""},
+		{"gh pr merge 7 --squash '--disable-auto'.foo", true, ""},
+		{"gh pr merge 7 'a','b'--help", true, "both engines pass the array, then --help"},
+		{
+			"git -'-%' x; gh pr merge 7", true,
+			"both engines read -'-%' as the stop-parsing token: the rest is git's argv",
+		},
+		{"gh pr merge 7 '--%' --help", true, "both engines drop '--%' and pass --help"},
+		{"gh pr merge 7 '--%' x --help", true, "both engines drop '--%' and pass x, --help"},
+		{"gh pr merge 7 'a'--help", true, "both engines pass a, --help"},
+	} {
+		for _, os := range bothOS {
+			d, ok := f.ps(tt.cmd, os)
+			switch {
+			case tt.flip != "":
+				wantAllow(t, osName(os)+" (flip: "+tt.flip+"): "+tt.cmd, d, ok)
+			case tt.baseDeny:
+				wantDeny(t, osName(os)+" (base denied): "+tt.cmd, d, ok)
+			}
+		}
 	}
 }
 

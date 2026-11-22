@@ -149,6 +149,39 @@ func TestDryRun(t *testing.T) {
 	}
 }
 
+// TestAmbiguousFlags checks that --dry-run, --help and --disable-auto count only when set before the
+// first ambiguous argument.
+func TestAmbiguousFlags(t *testing.T) {
+	for _, tt := range []struct {
+		line string
+		amb  int // index of the first ambiguous argument, -1 for none
+		want bool
+	}{
+		{"pr create -b x --dry-run", -1, true},
+		{"pr create -b x --dry-run", 4, false},
+		{"pr create -b x --dry-run", 3, false},
+		{"pr create --dry-run -b x", 3, true},
+		{"pr merge 7 --help", 3, false},
+		{"pr merge 7 --help x", 4, true},
+		{"pr merge 7 --disable-auto", 3, false},
+		{"pr merge 7 --disable-auto x", 4, true},
+	} {
+		a := args(tt.line)
+		if tt.amb >= 0 {
+			for i := tt.amb; i < len(a); i++ {
+				a[i].Ambiguous = true
+			}
+		}
+		c, ok := Parse(a)
+		if !ok {
+			t.Fatalf("%q: not parsed", tt.line)
+		}
+		if got := c.DryRun || c.Help || c.DisableAuto; got != tt.want {
+			t.Errorf("%q ambiguous from %d: flag = %v, want %v", tt.line, tt.amb, got, tt.want)
+		}
+	}
+}
+
 func TestQuotedTildeIsNotExpanded(t *testing.T) {
 	c, _ := Parse([]Arg{
 		{Text: "pr", Static: true},

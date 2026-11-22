@@ -5,8 +5,7 @@
   "hook_event_name": "PreToolUse",
   "tool_name": "PowerShell",
   "tool_input": {
-    "command": "& gh.exe pr merge 7 --squash",
-    "description": "Merge the pull request"
+    "command": "& gh.exe pr merge 7 --squash"
   },
   "tool_use_id": "toolu_010000000000000000000020"
 }

@@ -41,6 +41,10 @@ type Word struct {
 	Static bool
 	// Tilde reports that the word is static and starts with an unquoted `~`, which bash expands.
 	Tilde bool
+	// Ambiguous marks a word whose argument boundaries differ between the engines that may run the
+	// command (set only by the PowerShell adapter): a check may match its text but never rely on it
+	// to allow.
+	Ambiguous bool
 }
 
 // StdinKind classifies a call's stdin.

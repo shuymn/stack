@@ -142,6 +142,10 @@ type table struct {
 	positional []string
 	// remaining takes the positional arguments past positional ("" when there is none).
 	remaining string
+	// rejectMixedPaths: `-Path` and `-LiteralPath` are in different parameter sets, so pwsh
+	// refuses a call that binds both, also when one of them would only take a positional argument
+	// (`Remove-Item -LiteralPath '.git'build` is PositionalParameterNotFound, 5.1 and 7.7).
+	rejectMixedPaths bool
 }
 
 var commonParams = []param{
@@ -183,13 +187,15 @@ var (
 				param{"Exclude", nil, false}, param{"Recurse", nil, true},
 				param{"Force", nil, true}, param{"Credential", nil, false},
 				param{"Stream", nil, false}),
-			positional: []string{"Path"},
+			positional:       []string{"Path"},
+			rejectMixedPaths: true,
 		},
 		"Set-Location": {
 			params: withCommon(false,
 				param{"Path", nil, false}, literalPath,
 				param{"PassThru", nil, true}, param{"StackName", nil, false}),
-			positional: []string{"Path"},
+			positional:       []string{"Path"},
+			rejectMixedPaths: true,
 		},
 		"New-PSDrive": {
 			params: withCommon(true,
@@ -358,7 +364,7 @@ func (t *table) bind(items []item) bool {
 			return false
 		}
 	}
-	return true
+	return !t.rejectMixedPaths || !bound["Path"] || !bound["LiteralPath"]
 }
 
 func setParam(ws []Word, name string) {

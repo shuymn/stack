@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -166,6 +167,10 @@ func TestGhPublishPowerShell(t *testing.T) {
 			"cd sub && gh pr create -t t --body-file b.md",
 			"@'\nsee " + lp + "\n'@ | gh pr comment 1 -F -",
 			"gh pr create --bogus -b '" + lp + "'",
+			"gh pr comment 1 '--%' --body-file=b.md",
+			// In the ambiguous region after a quoted `--%` a body file is still read (5.1 may make it
+			// part of an inline body: an accepted over-deny).
+			`gh pr comment 1 '--%' '--body=a"b' --body-file=b.md`,
 		},
 		allow: []string{
 			"cd sub; gh pr create -t t --body-file b.md",
@@ -196,7 +201,13 @@ func TestGhPublishPowerShell(t *testing.T) {
 				`gh pr comment 1 -F "$HOME/b.md"`,
 				`gh pr comment 1 -F "$env:USERPROFILE\b.md"`,
 			},
-			allow: []string{`gh pr comment 1 -F ~\b.md`, "gh pr comment 1 -F ~/b.md"},
+			// A native `~` on Windows names a file that depends on the engine: skipped.
+			allow: []string{
+				`gh pr comment 1 -F ~\b.md`,
+				"gh pr comment 1 -F ~/b.md",
+				`gh pr comment 1 -F '~\b.md'`,
+				`gh pr comment 1 -F "~/b.md"`,
+			},
 		})
 	} else {
 		f.check(psCases{
@@ -208,6 +219,22 @@ func TestGhPublishPowerShell(t *testing.T) {
 			},
 		})
 	}
+
+	// With no known home a native `~` body file is skipped, not read as the literal `~` copy.
+	f.write("~/hit.md", "see "+lp+"\n")
+	home := f.home
+	f.home = ""
+	f.check(psCases{
+		windows: false, rule: RuleGhPublish,
+		deny:  []string{"gh pr comment 1 -F '~/hit.md'"},
+		allow: []string{"gh pr comment 1 -F ~/hit.md"},
+	})
+	f.check(psCases{
+		windows: true, rule: RuleGhPublish,
+		deny:  []string{"gh pr comment 1 -F '~/hit.md'"},
+		allow: []string{"gh pr comment 1 -F ~/hit.md", `gh pr comment 1 -F ~\hit.md`},
+	})
+	f.home = home
 
 	// The body file's own local path as its argument is not published; the same path inside it is.
 	if !isWindows {
@@ -228,6 +255,10 @@ func TestRmRootPowerShell(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.write("wt/.git", "gitdir: ../.git/worktrees/wt\n")
+	// A literal `~foo` directory: `~'foo'/.git` names it on both engines (not a home form).
+	if err := os.MkdirAll(filepath.Join(f.cwd, "~foo", ".git"), 0o700); err != nil {
+		t.Fatal(err)
+	}
 
 	both := psCases{
 		rule: RuleRmRoot,
@@ -261,6 +292,7 @@ func TestRmRootPowerShell(t *testing.T) {
 			`Remove-Item -Recurse .git\.\`,
 			"Remove-Item -Recurse .git/././",
 			"Remove-Item -Recurse $HOME; Write-Output ok",
+			"& rm.exe -r ~'foo'/.git",
 		},
 		allow: []string{
 			"Remove-Item -Recurse:$false ~",
@@ -272,7 +304,6 @@ func TestRmRootPowerShell(t *testing.T) {
 			`$env:USERPROFILE = 'C:\work\x'; Remove-Item -Recurse $env:USERPROFILE`,
 			"$HOME = 'x'; Remove-Item -Recurse $HOME",
 			"Remove-Item -Recurse -Path 'a,~'",
-			"Remove-Item -Recurse -LiteralPath '~'",
 			`Remove-Item -Recurse .git\hooks`,
 			`Remove-Item -Recurse wt\.git`,
 			"Remove-Item -Recurse -LiteralPath wt/.git/.",
@@ -288,6 +319,12 @@ func TestRmRootPowerShell(t *testing.T) {
 			"Remove-Item -Recurse $x",
 			"Remove-Item -Recurse:$y ~",
 			"Remove-Item -Recurse $HOME; Write-Output \"",
+			// `-LiteralPath` with a positional `Path` mixes parameter sets: pwsh refuses it.
+			"Remove-Item -Recurse -LiteralPath '.git'build",
+			// A cmdlet keeps `--%` as a value and its tail as one more positional: refused.
+			"Remove-Item -Recurse -Path `--% ~",
+			"Remove-Item -Recurse -Path --% ~",
+			"Remove-Item -Recurse `--% ~",
 		},
 	}
 	for _, windows := range bothOS {
@@ -317,6 +354,23 @@ func TestRmRootPowerShell(t *testing.T) {
 			"rm -r ~",
 			"rmdir -r ~",
 			`& 'C:\x\rm.exe' -r C:\`,
+			`& 'C:\x\rm.exe' -r ~`,
+			`& 'C:\x\rm.exe' -r ~\`,
+			"rm.exe -rf ~/",
+			"& rm.exe -r `~",
+			`iex '& rm.exe -r ~'`,
+			// powershell.exe is 5.1, which passes `~` as written; the nested script is judged by the
+			// same rule (the engine is not modelled), so this is the old-engine false deny.
+			`powershell.exe -Command '& rm.exe -r ~'`,
+			"Remove-Item -Recurse -LiteralPath '~'",
+			`Remove-Item -Recurse -LP ~\`,
+			"Remove-Item -Recurse -PSPath '~/'",
+			"Remove-Item -Recurse -LiteralPath a, '~'",
+			`Remove-Item -Recurse -LiteralPath '~\.'`,
+			"Remove-Item -Recurse -LiteralPath '~/./'",
+			`& rm.exe -r ~"\"`,
+			"& rm.exe -r ~\\`.",
+			"& rm.exe -r ~`\\",
 			// A declared drive leaves only its own root opaque.
 			`New-PSDrive -Name X -PSProvider FileSystem -Root C:\work\build; Remove-Item -Recurse C:\`,
 			`Remove-Item -Recurse X:\`,
@@ -330,7 +384,18 @@ func TestRmRootPowerShell(t *testing.T) {
 			`Remove-Item -Recurse -Path 'a,C:\'`,
 			"rm -rf ~",
 			`& 'C:\x\rm.exe' -r '~'`,
-			`& 'C:\x\rm.exe' -r ~`,
+			`& 'C:\x\rm.exe' -r "~"`,
+			`& 'C:\x\rm.exe' -r ~\src`,
+			`& 'C:\x\rm.exe' -r x~`,
+			`& 'C:\x\rm.exe' -r ~user`,
+			`& rm.exe --% -r ~`,
+			`& rm.exe '--%' -r ~`,
+			"Remove-Item -Recurse -LiteralPath '~' -WhatIf",
+			"Remove-Item -LiteralPath '~'",
+			`Remove-Item -Recurse -LiteralPath '.\~'`,
+			`Remove-Item -Recurse -LiteralPath '~\child'`,
+			`Remove-Item -Recurse -LiteralPath '~user'`,
+			"Remove-Item -Recurse -LiteralPath '~.'",
 			`New-PSDrive -Name X -PSProvider FileSystem -Root C:\x; Remove-Item -Recurse \`,
 			`New-PSDrive -Name X -PSProvider FileSystem -Root C:\work\build; Remove-Item -Recurse X:\`,
 			`New-PSDrive x FileSystem C:\work\build; Remove-Item -Recurse X:/`,
@@ -354,6 +419,9 @@ func TestRmRootPowerShell(t *testing.T) {
 		allow: []string{
 			"rm -rf '~'",
 			"rm -rf ~/src",
+			"Remove-Item -Recurse -LiteralPath '~'",
+			"Remove-Item -Recurse -LP ~/",
+			`Remove-Item -Recurse -LiteralPath '~\'`,
 			`Remove-Item -Recurse $env:SystemDrive\`,
 			"rm -f .git",
 			"rm -rf wt/.git",
@@ -364,6 +432,20 @@ func TestRmRootPowerShell(t *testing.T) {
 		d, ok := f.psDecide("rm -rf $HOME", false)
 		wantDeny(t, "unix: rm -rf $HOME", d, ok, RuleRmRoot)
 	}
+
+	// With no known home a native `~` operand is not judged, never read as a literal `~` under the
+	// cwd, where a `.git` directory would deny.
+	if err := os.MkdirAll(filepath.Join(f.cwd, "~", ".git"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	home, f.home = f.home, ""
+	for _, windows := range bothOS {
+		d, ok := f.psDecide("& rm.exe -r ~/.git", windows)
+		wantAllow(t, "unknown home: & rm.exe -r ~/.git", d, ok)
+	}
+	d, ok = f.psDecide("& rm.exe -r '~/.git'", false)
+	wantDeny(t, "a quoted ~ is a literal name under the cwd", d, ok, RuleRmRoot)
+	f.home = home
 
 	f.cwd = ""
 	for _, cmd := range []string{`Remove-Item -Recurse \`, "Remove-Item -Recurse /"} {
@@ -415,6 +497,78 @@ func TestRmRootPowerShellHostDrive(t *testing.T) {
 		} else {
 			wantAllow(t, tt.cmd, d, ok)
 		}
+	}
+}
+
+// TestPowerShellNoNewAllow replays the review probes of the quoted `--%`, quote-token and native
+// `~` changes: each one the base recognizer (before them) denied still denies on that host, unless
+// it is a measured flip where 5.1 and 7.7 agree on argv that shows a harmless call (flip).
+func TestPowerShellNoNewAllow(t *testing.T) {
+	f := newFixture(t)
+	for _, d := range [][]string{{".git", "hooks"}, {"~foo", ".git"}} {
+		if err := os.MkdirAll(filepath.Join(append([]string{f.cwd}, d...)...), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.write("b.md", "see "+localPath()+"\n")
+	for _, tt := range []struct {
+		cmd               string
+		baseUnix, baseWin bool
+		flip              string
+	}{
+		{"& rm.exe -r '--%' '' .git", true, true, ""},
+		{"& rm.exe -r '--%' '--%' .git", true, true, ""},
+		{"& rm.exe -r '--%' 'a\"b' .git", true, true, ""},
+		{"& rm.exe -r '--%' %X% .git", true, true, ""},
+		{"& rm.exe -r '--%' 'a','b' .git", true, true, ""},
+		{"& rm.exe '--%' '' -r .git", true, true, ""},
+		{"& rm.exe -r '--%' x --% .git", true, true, ""},
+		{"& rm.exe -r ~'foo'/.git", true, false, ""},
+		{"& rm.exe -r ~", true, false, ""},
+		{`gh pr comment 1 '--%' '--body=a"b' --body-file=b.md`, false, false, ""},
+		{`gh pr comment 1 '--%' '--body=a"b' --% --body-file=b.md`, false, false, ""},
+		{"gh pr comment 1 '--%' '--body=a\"b' `--% --body-file=b.md", false, false, ""},
+		{"gh pr comment 1 '--%' '' --body-file=b.md", false, false, ""},
+		{`$t = 'a"b'; gh pr comment 1 '--%' "--body=$t" --body-file=b.md`, false, false, ""},
+		{"gh pr create -t t '--%' 'a','b' --body-file b.md", false, false, ""},
+		{"& rm.exe -r '--%' -h .git", true, true, ""},
+		{"& rm.exe -r '.git'.foo", false, false, ""},
+		{
+			"gh pr comment 1 -F 'b'.md", true, true,
+			"both engines evaluate 'b'.md to $null and pass only -F, which reads no file",
+		},
+	} {
+		for _, windows := range bothOS {
+			d, ok := f.psDecide(tt.cmd, windows)
+			name := "windows=" + strconv.FormatBool(windows) + ": " + tt.cmd
+			switch {
+			case tt.flip != "":
+				wantAllow(t, name+" (flip: "+tt.flip+")", d, ok)
+			case (windows && tt.baseWin || !windows && tt.baseUnix) && !ok:
+				t.Errorf("%s: allowed, but the base denied it", name)
+			}
+		}
+	}
+}
+
+// TestRmRootPowerShellUnicodeSpace checks that a native `~` value holding Unicode whitespace is a
+// literal name, as PowerShell 7.7 passes it: a no-break space with only a home copy allows, an em
+// space with only a cwd copy denies.
+func TestRmRootPowerShellUnicodeSpace(t *testing.T) {
+	f := newFixture(t)
+	nbsp, em := "a b", "a b"
+	if err := os.MkdirAll(filepath.Join(f.home, nbsp, ".git"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(f.cwd, "~", em, ".git"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, windows := range bothOS {
+		host := "windows=" + strconv.FormatBool(windows)
+		d, ok := f.psDecide("& rm.exe -r ~'/"+nbsp+"'/.git", windows)
+		wantAllow(t, host+": no-break space, home copy only", d, ok)
+		d, ok = f.psDecide("& rm.exe -r ~'/"+em+"'/.git", windows)
+		wantDeny(t, host+": em space, cwd copy only", d, ok, RuleRmRoot)
 	}
 }
 

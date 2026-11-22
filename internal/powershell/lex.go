@@ -459,6 +459,25 @@ func (p *parser) paren() {
 	p.pos++
 }
 
+// quoteStarted continues a word whose current element started with a quote that just closed, and
+// reports whether a next array element follows. A token that starts with a quote ends at its
+// closing quote: `'a'b` is two arguments (5.1 and 7.7, cmdlets and native commands). A member
+// access or index on it is an expression (`'--help'.foo` is $null, so no argument, and
+// `'--help'[0]` is `-`): the word is dynamic. A native `,` after it makes an array, which 5.1 and
+// 7.7 pass differently (`a,b` vs `'a',b`): the word is dynamic, and each quote-started element
+// ends at its quote too (`'a','b'c` is the array, then `c`).
+func (p *parser) quoteStarted(b *wordBuilder, kind Kind) bool {
+	if p.members() {
+		b.dyn()
+	}
+	if kind == Cmdlet || p.peek() != ',' {
+		return false
+	}
+	b.dyn()
+	p.pos++ // the `,`; the dynamic word drops its text
+	return true
+}
+
 // argWord lexes one argument-mode word at pos. In a cmdlet's arguments an unquoted `,` ends it.
 func (p *parser) argWord(kind Kind) Word {
 	start := p.pos
@@ -488,17 +507,27 @@ func (p *parser) argWord(kind Kind) Word {
 		b.part(Bare)
 		b.dyn() // splatting
 	}
+	elem := start // where the current element of a native array starts
 	for !p.eof() {
 		c := p.peek()
 		if isBlank(c) || strings.IndexByte("\n;|&)}{>", c) >= 0 || (kind == Cmdlet && c == ',') {
 			break
 		}
-		if n := p.quoteAt(singleQuotes); n > 0 {
-			p.single(&b, n)
-			continue
-		}
-		if n := p.quoteAt(doubleQuotes); n > 0 {
-			p.double(&b, n)
+		sq, dq := p.quoteAt(singleQuotes), p.quoteAt(doubleQuotes)
+		if sq > 0 || dq > 0 {
+			startsElement := p.pos == elem
+			if sq > 0 {
+				p.single(&b, sq)
+			} else {
+				p.double(&b, dq)
+			}
+			if !startsElement {
+				continue
+			}
+			if !p.quoteStarted(&b, kind) {
+				break
+			}
+			elem = p.pos
 			continue
 		}
 		b.part(Bare)
@@ -534,12 +563,12 @@ func (p *parser) argWord(kind Kind) Word {
 
 // verbatim lexes a `--%` tail: up to a CR or LF, or an unquoted `|`, `&&` or `||`, split at blanks
 // outside `"`. A word holding `"` is dynamic (its argv depends on the native-argument mode), and so
-// is one holding `%NAME%`.
-func (p *parser) verbatim() []Word {
+// is one holding `%NAME%`. Without split (a cmdlet's tail, taken whole) it only finds the end.
+func (p *parser) verbatim(split bool) []Word {
 	var words []Word
 	start, quoted, hadQuote := p.pos, false, false
 	flush := func() {
-		if start < p.pos {
+		if split && start < p.pos {
 			// Without quotes a word's text is its source span.
 			w := Word{Raw: p.src[start:p.pos], Verbatim: true}
 			if !hadQuote && !percentRe.MatchString(w.Raw) {

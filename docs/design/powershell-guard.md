@@ -21,10 +21,11 @@ Linux, macOS and WSL where Claude Code enables it, per Claude Code's tools refer
 Out of scope: a full PowerShell parser (issue #44); `CLAUDE_ENV_FILE`/`STACK_SESSION_ID` in PowerShell-only
 sessions (issue #44); the pencil rule (not a shell rule); every construct that phase2-core §6 "Out of static scope" lists.
 
-**Tool input.** No recorded PowerShell call exists in this repository's testdata. Claude Code's hooks reference
-documents `tool_input.command` for `PowerShell`; the schema in the installed Claude Code 2.1.x also has `timeout`,
-`description`, `run_in_background` and `dangerouslyDisableSandbox`, the `Bash` tool's fields. The deciders read only
-`command`. W1 (§9) confirms it from a recorded transcript and a live hook run.
+**Tool input.** Claude Code (2.1.330, recorded on Windows, W1 in §9) sends `tool_name: "PowerShell"` with a
+`tool_input` of `command` and an optional `description` (one recorded call has none); the tool schema also has
+`timeout`, `run_in_background` and `dangerouslyDisableSandbox`, the `Bash` tool's fields. The deciders read only
+`command`. Exec-form hooks (`command` plus `args`) are started directly by `claude.exe`, with no shell between. One
+golden per rule carries a recorded `tool_input` unchanged (§9).
 
 ## 3. Decision 1: how PowerShell text is judged
 
@@ -86,7 +87,14 @@ Statements starting with a variable, number, string, `[type]` or `(` are express
 In argument mode `=` and `:` are argument text: `--disable-auto=false`, `-f key=val` and `-Name:value` stay one word
 (a colon-bound value keeps its quoting and known-variable mark). Commas differ by command kind: for cmdlet binding an
 unquoted `,`, with or without spaces, splits a list (`-Path a,C:\` is two elements), a quoted `'a,C:\'` is one
-literal; native argv keeps `a,b` as one word. Command names compare case-insensitively after the `.exe` and
+literal; native argv keeps `a,b` as one word. A token that starts with a quote ends at its closing quote, for
+cmdlets and native commands alike (5.1 and 7.7): `'a'b`, `"a"b` and `"a"$x` are two arguments and `gh pr 'merge'7`
+runs `gh pr merge 7`, while `a'b'` is one word `ab` and `'a''b'` one word `a'b`. A member access or index right
+after such a token is part of it, an expression, so the word is dynamic (`'--help'.foo` is `$null` and passes no
+argument, `'--help'[0]` passes `-`; `'a'. x` has no member and stays three words). A native `,` right after such a
+token makes an array the engines pass differently (`'a',b`: 5.1 `a,b`, 7.7 `'a',b`), so that word is dynamic, and
+each quote-started element of it also ends at its quote (`'a','b'c d` is the array, `c`, `d` on both engines, so a
+trailing `'a','b'--help` stays its own argument). Command names compare case-insensitively after the `.exe` and
 module-qualifier strip (`Microsoft.PowerShell.Management\Remove-Item`). Parameters starting with `–` `—` `―` count as
 dashes for cmdlet parameters only, never rewritten in native argv.
 
@@ -94,11 +102,47 @@ dashes for cmdlet parameters only, never rewritten in native argv.
 not, or a built-in alias of one on that host) or *native* (any other name, and always an explicit path or a name
 ending in `.exe`). `& 'C:\Program Files\Git\usr\bin\rm.exe' -r '~'` is native, never `Remove-Item`.
 
-**`--%`.** Stripped from argv. The verbatim tail ends at a CR or LF, quoted or not, or at an unquoted `|`, `&&` or
-`||` (the 7.x tokenizer's boundaries; `;` and a quoted `"a|b"` stay in the tail), split at whitespace outside double
-quotes (`"`, `“`, `”`, `„`); a word holding one is dynamic (its argv depends on the native-argument mode), and so is
-one holding `%NAME%`; what
-follows the boundary is parsed normally, so `git --% status && gh pr merge 7` denies.
+**`--%`.** The stop-parsing token is a token that does not start with a quote and whose decoded value is `--%`: `--%`,
+the backtick-escaped `` `--% `` and quotes inside such as `-'-%'`, `--'%'` or `-"-%"` (both engines, argv stub), as a
+whole token followed by a blank; `a`--%` is an ordinary word. A cmdlet keeps the token as a value and gets the rest of the tail as one
+literal argument (`Write-Output a --% $x b` writes `a`, `--%`, `$x b`), so `` Remove-Item -Recurse -Path `--% ~ `` is
+refused (PositionalParameterNotFound) and not judged. A native command has it stripped from argv. The verbatim tail
+ends at a CR or LF, quoted or not, or at an unquoted
+`|`, `&&` or `||` (the 7.x tokenizer's boundaries; `;` and a quoted `"a|b"` stay in the tail), split at whitespace
+outside double quotes (`"`, `“`, `”`, `„`); a word holding one is dynamic, since the engines differ (5.1 passes
+`"c d"` as one argument `c d` and `x"c d"y` as `xc dy`, 7.7 as `"c`, `d"` and `x"c`, `d"y`, for `--%` and `` `--% ``
+alike), and so is one holding `%NAME%`; what follows the boundary is parsed normally, so `git --% status && gh pr
+merge 7` denies and ``Write-Output `--% ; gh pr merge 7`` passes. A token directly followed by `;`
+(``Write-Output `--%; gh pr merge 7``) is the stop-parsing token too, for both engines and the recognizer, so the `gh`
+text is part of the tail and that passes as well.
+
+A native argument that starts with a quote and whose decoded value is `--%` (`'--%'`, `"--%"`, `` "--`%" ``, a
+here-string) is not the stop-parsing token: parsing goes on (variables still expand), but pwsh 5.1 and 7.7 drop that
+argument from argv and pass every later argument joined into the command line as written (measured with an argv
+stub). So the recognizer drops it, splits each later static value at blanks (`"merge 7"` becomes `merge`, `7`), and
+leaves a later `~` as written: `gh pr '--%' "merge 7"` denies and `gh pr merge 7 '--%' --help` passes.
+
+One rule covers what the engines pass differently after it. From the first later argument whose boundaries or
+value can differ between 5.1 and 7.7 to the end of the call, every word is **ambiguous**: a value holding `"`, `,`,
+a tab (5.1 splits there, 7.7 does not; neither splits at other Unicode spaces) or a line break (5.1 joins
+`'--body=a"b' --help` into one argument, 7.7 passes two), a `%NAME%` (expanded to an unknown value), an empty value
+(an argument on 7.7, none on 5.1), a bare parameter token such as `-h` or `-h=true` (5.1 drops it, 7.7 passes an
+empty value, and both keep the quotes of the argument after it), a word that is not static (a variable or
+interpolation, whose value may hold any of these), an array, another quoted `--%` (dropped too) and a later
+`--%` or `` `--% `` (its tail joins the region). An ambiguous word keeps its static text, so checks still match
+it, but nothing in the region can prove a call harmless: raw-merge never counts a `--help`, `--disable-auto` or
+`--dry-run` found there (`gh pr merge 7 --squash '--%' '--body=a"b' --help` denies); rmroot still matches its
+operands (`& rm.exe -r '--%' '' .git` denies); gh-publish still reads its body files (`gh pr comment 1 '--%'
+'--body=a"b' --body-file=b.md` denies). The over-denies this accepts stay inside the region:
+`gh pr merge 7 '--%' '' --help` and `gh pr merge 7 '--%' '--%' --help` deny although both engines pass a separate
+`--help`. A cmdlet keeps such a value as an ordinary argument (`Write-Output a '--%' b`); a dynamic word whose value
+may be `--%` is not modelled, nor is the engine an explicit `powershell.exe`/`pwsh` wrapper names.
+
+Known differences kept: a cmdlet's `--%` tail is trimmed and an empty one dropped, where both engines pass it
+untrimmed and `Write-Output --%` passes an empty value (no rule judges that text); and in a native array whose
+closing quoted element follows a bare one (`a,'b'c d`, `'a',b,'c'd e`), the text glued to that closing quote stays
+in the dynamic array word, where both engines pass it as the next argument (a separate `--help` there is not
+counted, an over-deny).
 
 **Words.** `powershell.Word` keeps `Text`, `Static`, its quoting (bare, single, double, here-string), the parameter
 it binds to after cmdlet binding, its `,`-list group, and a known-variable mark. A word is static when it holds no
@@ -112,6 +156,26 @@ substituted, with the hook's home as their one known binding: `$HOME`/`${HOME}` 
 `$env:USERPROFILE`/`${env:USERPROFILE}` on Windows only (on other hosts it is an ordinary environment variable, so
 dynamic). `$env:SystemDrive` is never substituted into native argv (the hook does not know the process's system
 drive), so such a `gh` input is dynamic and skipped.
+
+A native **home `~` word** is one whose first part is unquoted, outside a `--%` tail and not after a quoted `--%`,
+and whose decoded value (after quotes and backtick escapes) is exactly `~`, `~/…`, or on Windows `~\…`, holding no
+whitespace (Unicode spaces such as U+00A0 and line breaks included): `~`, `` `~ ``, `` ~\`. ``, `` ~`\ ``, `~'\x'` and `~"\x"` all are. PowerShell 7 expands it for native commands
+on Linux and macOS, and on Windows from 7.6, where the feature is on by default; Windows PowerShell 5.1 and
+PowerShell 7.0–7.5 on Windows pass it as written (W3, §9). Everything else stays as written: a quote-started `'~'` or
+`"~"`, `~user`, `~foo/x` (also spelt `~'foo'/x`), `x~`, a value holding whitespace (`~'\a b'`), a `~` in a `--%` tail,
+and a `~` after a quoted `'--%'` (joined as written, see `--%`). A home form whose value holds a `"` is dynamic
+(unmeasured). Because the Windows result depends on the engine version, the native rules use the home word
+differently:
+
+- the native-`rm` path of rmroot (§4.4) takes it as home on every host. A miss would be an irreversible deletion of
+  home (`& rm.exe -r ~`) on the default engine, and the only false deny is a directory literally named `~` on 5.1 or
+  7.0–7.5, which `.\~` names instead;
+- gh inputs (gh-publish body files, §4.3, and raw-merge's `gh api graphql --input`, §4.1) take it as home on
+  non-Windows hosts and as dynamic on Windows: there the file gh opens is `<home>\…` or `.\~\…` depending on the
+  engine, so judging either copy could deny a clean call or pass a published one.
+
+When the hook knows no home, a home `~` word names an unknown file and is not judged; it is never read as a literal
+`~` under the cwd.
 
 **Nested scripts.** Each nested script carries its dialect. `Invoke-Expression`/`iex` and `pwsh`/`powershell`
 `-Command`/`-c` with one static string are parsed by `powershell.Parse`; `bash`/`sh`/`zsh -c` with one static string
@@ -151,7 +215,8 @@ A call whose name is `gh` (`gh`, `gh.exe`, `GH.EXE` on Windows, `& gh`, `& 'C:\P
 is turned into a `shell.Call` (§6) and goes through `ghargs.Parse` and `rawMerge` exactly as for Bash: `gh pr merge`
 without effective help or `--disable-auto` (so `--help=false` and `--disable-auto=false` deny), `gh api` PUT
 `…/pulls/<n>/merge`, `gh api graphql` merge mutations inline or from `-F query=@q.graphql`/`--input`, read through
-the PowerShell resolver. `gh pr view`, `gh pr merge --help` and a string mentioning `gh pr merge` pass.
+the PowerShell resolver; a home `~` word in such a file argument follows §3 Words (home on non-Windows hosts,
+skipped on Windows). `gh pr view`, `gh pr merge --help` and a string mentioning `gh pr merge` pass.
 
 ### 4.2 secrets (`stack-guard`)
 
@@ -181,9 +246,11 @@ Body files resolve against the call's known cwd: payload `cwd`, changed only by 
 &&` with a static `X`; `cd` with no argument, any other location change, `Push-Location`/`pushd` and
 `Pop-Location`/`popd` make it unknown. Cwd updates are tracked for at most 32 steps and 4096 bytes; beyond that the
 cwd is unknown and call collection continues. The byte check is a conservative estimate made before building the path
-(from the current cwd, home and target lengths), so a very long home or cwd can leave a short result unknown. A native `~` follows §4.4's native rule: on non-Windows hosts an unquoted
-leading `~` is home (PowerShell 7 expands it for native commands); on Windows a native `~` input is skipped as
-unknown (W3), with no home substituted.
+(from the current cwd, home and target lengths), so a very long home or cwd can leave a short result unknown. A native home `~` word
+follows §3 Words: on non-Windows hosts `-F ~/b.md` reads the home copy, on Windows `-F ~\b.md` and `-F ~/b.md` are
+skipped (the file depends on the engine), and a quoted `'~\b.md'` names a file under the cwd on every host. A `~`
+in inline text (`-b ~\notes.md`) is published text, not a path: `publictext` does not recognize `~` forms, so it
+passes.
 
 ### 4.4 rmroot (`stack-guard`)
 
@@ -194,14 +261,19 @@ trailing separators and terminal `.` components are trimmed, must end in a `.git
 a directory; `..` is not collapsed (through a symlink a lexical collapse can name another directory), so forms such
 as `.git/hooks/..` are not judged, and `.git/.` checks a `.git` symlink itself, not its target. A native `rm` (`rm` on
 non-Windows hosts, `/bin/rm`, `rm.exe`, any explicit path) goes through the Bash `rmArgs`/`rootKind` matcher with
-native argv semantics, since it is the binary the Bash rule guards: home-form known variables reach it substituted;
-on non-Windows an unquoted leading `~` is home and a quoted `'~'` is literal; on Windows a quoted `'~'` is literal
-(`& 'C:\…\rm.exe' -r '~'` passes) and an unquoted native `~` is opaque until W3 establishes whether the installed
-PowerShell expands it.
+native argv semantics, since it is the binary the Bash rule guards: home-form known variables reach it substituted,
+and a home `~` word (§3 Words) is home on every host, so `& 'C:\…\rm.exe' -r ~`, `-r ~\`, `` -r `~ ``,
+`` -r ~\`. `` and `-r ~"\"` deny while `-r '~'`, `-r ~\src` and `& rm.exe --% -r ~` pass, and `-r ~'foo'/.git` is
+the literal `~foo/.git` under the cwd. A nested script is judged by the same rule
+whatever engine runs it, so `powershell.exe -Command '& rm.exe -r ~'` (5.1, which passes `~` as written) denies:
+the old-engine false deny above.
 
 - **Binding** follows PowerShell over a table of `Remove-Item`'s parameters, their aliases (`LiteralPath`: `PSPath`,
   `LP`) and the common parameters: an exact name or alias wins, else a unique prefix (`-r`, `-Rec`, `-RECURSE`); an
-  ambiguous or unknown parameter makes pwsh refuse the call, which is then not judged. `--` ends parameters.
+  ambiguous or unknown parameter makes pwsh refuse the call, which is then not judged. `-Path` and `-LiteralPath`
+  are in different parameter sets, so a call binding both, also through a positional `Path` next to a named
+  `-LiteralPath` (`Remove-Item -Recurse -LiteralPath '.git'build`), is refused (PositionalParameterNotFound on 5.1
+  and 7.7). `--` ends parameters.
   `-Recurse:$false` is not recursive; `-WhatIf` (and `-WhatIf:$true`) skips the call, `-WhatIf:$false` does not.
   `-rf` is no parameter, so on Windows `rm -rf ~` passes (pwsh refuses it).
 - **Operands:** the values of `-Path`/`-LiteralPath`, each element of their `,` list; when neither is named, only the
@@ -209,7 +281,13 @@ PowerShell expands it.
   `Remove-Item` parameter is positional), so it is not judged. Values of `-Filter`, `-Include` and `-Exclude` are
   never operands, so `Remove-Item -Recurse -Exclude a, .git .\build` and `Remove-Item -Recurse .\build -Filter
   '.git'` pass.
-- **Home:** `~`, `~\`, `~/` (quoted or not: the FileSystem provider expands `~`), the known variables `$HOME`,
+- **Home:** `~`, `~\`, `~/` (quoted or not: the FileSystem provider expands `~`, confirmed on Windows PowerShell 5.1
+  and 7.7 even with a directory named `~` in the cwd, W3) through `-Path` and positional 0. Through `-LiteralPath`
+  (`-LP`, `-PSPath`, and each element of its list) only the measured forms count: on Windows `~` followed by nothing
+  but separators and `.` components (`'~'`, `~\`, `'~/'`, `'~\.'`, `'~/./'`, all reaching home on 5.1 and 7.7) is
+  home, and any other value starting with `~` (`'~\x'`, `'~user'`, `'~.'`) is not judged. `-LP` binds on 7.7, while
+  5.1 refuses it (NamedParameterNotFound); judging it denies only a call 5.1 would not run; on other hosts nothing was measured, so `~`, `~/…` and `~\…` are not judged and `'~user'` is a
+  literal name. As for bare roots, a non-FileSystem current location is out of scope. Also the known variables `$HOME`,
   `${HOME}`, `$env:USERPROFILE`, `${env:USERPROFILE}` with at most trailing separators or `.`, and any static path
   equal to the payload home under the host comparison. `'$HOME'` is a directory named `$HOME` and passes.
 - **Drive roots (Windows):** `C:\`, `C:/`, `c:\.`, and bare `\`, `/`, `\.`, `/.` (the root of the current drive,
@@ -249,9 +327,9 @@ exists, or ask the user."
 
 | Item | Change |
 |---|---|
-| `internal/powershell` (new, core) | `Parse(cmd, cwd, home string, os OS) Result` with `Calls []Call` (`Word`s of §3, binding info), `Nested []Script` (dialect, text, cwd, consumed depth), `Err`. `Call.ShellCall()` adapts a call to `shell.Call` for `ghargs`, raw-merge, gh-publish and the native-`rm` path. The adapter applies §3's native-argv rules and nothing else: home-form known variables substituted per host (§3 Words), `$env:SystemDrive` left dynamic; an unquoted leading `~` gets `Tilde: true` on non-Windows hosts and a quoted one `Tilde: false`; on Windows an unquoted native `~` word is dynamic. `shell.Word` and every Bash consumer stay unchanged. In core because raw-merge needs it and core never imports `extensions/`. |
+| `internal/powershell` (new, core) | `Parse(cmd, cwd, home string, os OS) Result` with `Calls []Call` (`Word`s of §3, binding info), `Nested []Script` (dialect, text, cwd, consumed depth), `Err`. `Call.ShellCall()` adapts a call to `shell.Call` for `ghargs`, raw-merge and gh-publish, and `Call.ShellCallRm()` for the native-`rm` path only. The adapter applies §3's native-argv rules and nothing else: home-form known variables substituted per host (§3 Words), `$env:SystemDrive` left dynamic; a home `~` word gets `Tilde: true`, except in `ShellCall` on Windows, where it is dynamic; a home form holding `"` is dynamic; a quote-started `~`, `~user`, a value holding a blank and a `~` after a quoted `'--%'` get `Tilde: false` (§3 Words). `shell.Word` and every Bash consumer stay unchanged. In core because raw-merge needs it and core never imports `extensions/`. |
 | `internal/shell` | `ParseDepth(cmd, cwd, home, depth)`: `Parse` continuing from the depth already consumed, for nested Bash scripts (§3); `Parse` is `ParseDepth(…, 0)`. |
-| `internal/paths` | `ResolvePowerShell(home, cwd, p string, windows bool)`: no Git Bash mapping; relative joins with the host separator (real file reads work on every CI OS); on Windows `\x`/`/x` rooted on the cwd's drive (unknown without one), `C:x` unknown; plus `Norm`/`Same` with an explicit `windows` flag for the rmroot and home comparisons. |
+| `internal/paths` | `ResolvePowerShell(home, cwd, p string, expand, windows bool)`: with `expand`, `~`, `~/…` and on Windows `~\…` are home, and unknown when home is ""; without it they are literal names; no Git Bash mapping; relative joins with the host separator (real file reads work on every CI OS); on Windows `\x`/`/x` rooted on the cwd's drive (unknown without one), `C:x` unknown; plus `Norm`/`Same` with an explicit `windows` flag for the rmroot and home comparisons. |
 | `internal/guard` `Decide` | `Bash` → `shell.Parse` as now; `PowerShell` → same `command` decode, `powershell.Parse`, `rawMerge` over the adapted gh calls, then each nested Bash script through the Bash path; `readInput`/`readFile` take the resolver of the call's dialect. |
 | `extensions/guard` `Decide` | `case "PowerShell"`: decode as `Bash`; `secretsPowerShell` (§4.2), `ghPublish` (§4.3), `rmRootPowerShell` (§4.4) in that order, first deny wins, then nested Bash scripts through `decideBash`. Reasons keep `stack-guard (<rule>): `. |
 | `.golangci.yaml` depguard | the `extension-guard` allow list gains `internal/powershell$`; core-stages §4.5's import sentence names it. |
@@ -288,17 +366,17 @@ Every allow case is paired with a deny fixture that differs only in the behaviou
 
 | ID | EARS claim | Source | Test and required assertions |
 |---|---|---|---|
-| C1 | `powershell.Parse` shall return the command calls of the supported positions of §3, with exact argv, and none for literal quoted text outside `$(…)`. | §3 | `powershell.TestParse`, exact argv per case: `;`, `\|`, `&&`, `\|\|`, newline, continuation; `& 'x y\gh.exe'`, `. gh`, `` g`h ``; `return gh pr merge 7` (call) vs `Write-Output note=gh pr merge 7` (one call, `Write-Output`); `& { gh pr merge 7 }`, `if ($ok) { gh pr merge 7 }`, `try { gh pr merge 7 } catch {}` and `ForEach-Object { gh … }` (calls) vs `$p = { gh … }` and `Write-Output { gh pr merge 7 } \| Get-Member` (only the outer `Write-Output` and `Get-Member` calls); `icm -ScriptBlock { gh pr merge 7 }` (call) vs `icm -ScriptBlock { 'x' } -ArgumentList { gh pr merge 7 }`, `icm -ComputerName h { gh … }`, `icm -HostName h -ScriptBlock { gh … }`, positional `icm h -ScriptBlock { gh … }` and `Start-Job { gh … }` (none); `gh pr merge 7 2>&1 --help` argv keeps `--help`; `@{ Result = gh pr merge 7 }` (call) vs `@{ Result = 'gh pr merge 7' }` (none); `$x = gh …` (call) vs `echo result = gh …`; `--disable-auto=false`, `-f k=v`, native `a,b` one word; `-Path a,C:\` two elements vs `'a,C:\'` one; redirections absent from argv, `> $(gh pr merge 7; 'out.txt')` (call) vs `> out.txt` (none); here-string closer only at column 0 (indented `'@` inside the body does not close), opener with trailing spaces accepted; `--%` stripped, tail ends at `\|`, `&&`, `\|\|` or newline but not `;` or a quoted `"a\|b"`, `%USERPROFILE%` dynamic, the statement after the boundary parsed; command kind: `Remove-Item` vs `& 'C:\x\rm.exe'` vs Linux `rm`; known-variable words vs `'$HOME'` vs a prior `$HOME =`, `-LiteralPath:"$HOME"` vs ``-LiteralPath:"`$HOME"``, `${env:SystemDrive}`; nested `iex` and `bash -c` with their dialect and consumed depth; `$x`, `@a`, `(…)` words dynamic |
-| C2 | When a PowerShell gh call merges, the core decider shall deny with the raw-merge reason. | U1 | `guard.TestRawMergePowerShell`: `gh pr merge 1`, `GH.EXE pr merge 1` (Windows), `& gh pr merge`, `gh -R o/r pr merge 1`, `--help=false`, `--disable-auto=false`, `gh api -X PUT repos/o/r/pulls/1/merge`, inline graphql mutation, `cd sub && gh api graphql -F query=@q.graphql`, and on Windows CI a current-drive-rooted `-F query=@\…\q.graphql` that plain `paths.Resolve` rejects (fails if it is used), `"$(gh pr merge 1)"`, `bash -c 'gh pr merge 1'`, `bash -c 'gh pr merge 7`⏎`if ('` (valid prefix), `git --% status && gh pr merge 7`, a valid here-string after `gh pr merge 7`; depth boundary pair: `iex "bash -c 'gh pr merge 7'"` (depth 2, deny) vs the extra wrapper inside Bash, `iex 'bash -c ''bash -c "gh pr merge 7"'''` (asserting the inner Bash text reaches the depth check) (beyond depth, allow; fails if the depth resets at the dialect boundary); `gh pr merge 7 2>&1 --help` (allow); allow `gh pr view 1`, `--help`, `--disable-auto`, `echo "gh pr merge"`, `# gh pr merge` |
+| C1 | `powershell.Parse` shall return the command calls of the supported positions of §3, with exact argv, and none for literal quoted text outside `$(…)`. | §3 | `powershell.TestParse`, exact argv per case: `;`, `\|`, `&&`, `\|\|`, newline, continuation; `& 'x y\gh.exe'`, `. gh`, `` g`h ``; `return gh pr merge 7` (call) vs `Write-Output note=gh pr merge 7` (one call, `Write-Output`); `& { gh pr merge 7 }`, `if ($ok) { gh pr merge 7 }`, `try { gh pr merge 7 } catch {}` and `ForEach-Object { gh … }` (calls) vs `$p = { gh … }` and `Write-Output { gh pr merge 7 } \| Get-Member` (only the outer `Write-Output` and `Get-Member` calls); `icm -ScriptBlock { gh pr merge 7 }` (call) vs `icm -ScriptBlock { 'x' } -ArgumentList { gh pr merge 7 }`, `icm -ComputerName h { gh … }`, `icm -HostName h -ScriptBlock { gh … }`, positional `icm h -ScriptBlock { gh … }` and `Start-Job { gh … }` (none); `gh pr merge 7 2>&1 --help` argv keeps `--help`; `@{ Result = gh pr merge 7 }` (call) vs `@{ Result = 'gh pr merge 7' }` (none); `$x = gh …` (call) vs `echo result = gh …`; `--disable-auto=false`, `-f k=v`, native `a,b` one word; a token starting with a quote ends at its closing quote (`'pr'merge "7"x 'a''b'c a'b' "a"$x`, cmdlet `'a'b c'd'`), native `'a',b` dynamic and `'a','b'c d` the array, `c`, `d`, a quoted run with blanks in a `--%` tail dynamic; a cmdlet's `--%`/`` `--% `` kept with its tail as one argument; after a quoted `--%` (also `` "--`%" ``) the region keeps static text (`git '--%' a '' b` is `a`, `b`) and `powershell.TestAmbiguousRegion` marks it from an empty value, `"`, `%X%`, `$x`, an array, a second quoted `--%` or a later `--%`/`` `--% `` to the end of the call, and nothing before it; `-Path a,C:\` two elements vs `'a,C:\'` one; redirections absent from argv, `> $(gh pr merge 7; 'out.txt')` (call) vs `> out.txt` (none); here-string closer only at column 0 (indented `'@` inside the body does not close), opener with trailing spaces accepted; `--%` stripped, tail ends at `\|`, `&&`, `\|\|` or newline but not `;` or a quoted `"a\|b"`, `%USERPROFILE%` dynamic, the statement after the boundary parsed; `` `--% `` a stop-parsing token vs `a`--%` a word; a quoted `--%` value (`'--%'`, `"--%"`, here-string) dropped, while `-'-%'` is the stop-parsing token, from native argv with later values split at blanks, an empty one dropped and one holding `"` kept as text in the ambiguous region, vs a cmdlet's `'--%'` kept; one token only (`'--'%` is two words, `--` and `%`); `` Write-Output `--%; gh pr merge 7 `` and the native form stop parsing at `;`; command kind: `Remove-Item` vs `& 'C:\x\rm.exe'` vs Linux `rm`; `powershell.TestShellCall`: `~`, `~/x`, `` `~ `` and on Windows `~\`, `~\b.md` are Tilde on both hosts through `ShellCallRm` and dynamic through `ShellCall` on Windows, vs `'~'`, `"~"`, `x~`, `~user`, `~foo/.git`, a `--%` tail and a `~` after `'--%'` (literal) and `~"\x"`, `~'/x'` (dynamic); known-variable words vs `'$HOME'` vs a prior `$HOME =`, `-LiteralPath:"$HOME"` vs ``-LiteralPath:"`$HOME"``, `${env:SystemDrive}`; nested `iex` and `bash -c` with their dialect and consumed depth; `$x`, `@a`, `(…)` words dynamic |
+| C2 | When a PowerShell gh call merges, the core decider shall deny with the raw-merge reason. | U1 | `guard.TestRawMergePowerShell`: `gh pr merge 1`, `GH.EXE pr merge 1` (Windows), `& gh pr merge`, `gh -R o/r pr merge 1`, `--help=false`, `--disable-auto=false`, `gh api -X PUT repos/o/r/pulls/1/merge`, inline graphql mutation, `cd sub && gh api graphql -F query=@q.graphql`, and `guard.TestRawMergePowerShellTilde`: Linux `--input ~/q.json` with the mutation only in the home copy (deny) vs `'~/q.json'` (allow), Windows `--input ~\q.json` and `~/q.json` (allow, skipped); on Windows CI a current-drive-rooted `-F query=@\…\q.graphql` that plain `paths.Resolve` rejects (fails if it is used), `"$(gh pr merge 1)"`, `bash -c 'gh pr merge 1'`, `bash -c 'gh pr merge 7`⏎`if ('` (valid prefix), `git --% status && gh pr merge 7`, ``git `--% x && gh pr merge 7``, a valid here-string after `gh pr merge 7`; quoted `--%`: `gh '--%' pr merge 7`, `& gh.exe "--%" pr merge 7`, `gh pr '--%' "merge 7"`, `& gh.exe '--%' pr "merge 7 --squash"` (deny) vs `gh '--%' pr view 7`, `gh pr merge 7 '--%' --help` (help, allow); quote-started tokens: `gh pr 'merge'7`, `gh pr "merge"7`, `gh 'pr'merge 7` (deny) vs `gh pr 'view'7`, `gh pr merge 7 'a'--help`, `gh pr merge 'x'--help` (help, allow) and ``Write-Output `--% ; gh pr merge 7`` (`;` in the tail, allow); `` gh pr "--`%" "merge 7" ``, `gh pr merge 7 --squash '--%' '--body=a"b' --help`, `gh pr merge 7 '--%' %X% --help` (deny: help unproven); `guard.TestRawMergePowerShellNoNewAllow`: every review probe the base recognizer denied still denies on both hosts (quoted arrays, `"--body=$title"`, a later `--%`/`` `--% ``, `'' --help`, `'--%' '--%' --help`, a tab, `-h`, `-h=true`, `-s '--help'`, `'--help'.foo`, `'--help'[0]`, the explicit `powershell.exe -Command` wrapper), except the measured flips where both engines pass a harmless argv (`'a','b'--help`, `'--%' --help`, `'--%' x --help`, `'a'--help`) vs `gh pr merge 7 '--%' x --help`, `gh pr merge 7 'a','b'--help` (help, allow); depth boundary pair: `iex "bash -c 'gh pr merge 7'"` (depth 2, deny) vs the extra wrapper inside Bash, `iex 'bash -c ''bash -c "gh pr merge 7"'''` (asserting the inner Bash text reaches the depth check) (beyond depth, allow; fails if the depth resets at the dialect boundary); `gh pr merge 7 2>&1 --help` (allow); allow `gh pr view 1`, `--help`, `--disable-auto`, `echo "gh pr merge"`, `# gh pr merge` |
 | C3 | When a PowerShell command mentions a secret in a form the host treats as the same path, `stack-guard` shall deny with the secrets reason and the PowerShell advice. | U2, §4.2 | `guard.TestSecretsPowerShell`, case and separator independently, OS injected: Windows `.DEV.VARS` deny, Linux `.DEV.VARS` allow; `~\.config\app\token`, `.config\\app//token`, an absolute configured entry in `/` and `\` forms; mention in a comment and in a string; `.dev.vars.example` allow; no handoff form passes |
-| C4 | When a PowerShell gh call publishes a path `publictext` recognizes, `stack-guard` shall deny with the gh-publish reason. | U4, §4.3 | `guard.TestGhPublishPowerShell`, every hit a path `publictext` recognizes, built at run time (the repo's public check rejects home-shaped literals in source) and used in both halves of each pair: `-b`, `--body-file` after `cd sub &&` vs after `cd sub;` (allow, cwd unknown), here-string with real newlines → `-F -` vs inert here-string (allow) vs expandable here-string with `$()` (dynamic, allow), `Get-Date \| gh … -F -` (allow), `Get-Content b.md \| gh … -F -` with a hit in `b.md` (allow, deferred); `-F ~\b.md` with a hit in the home copy: Windows skipped (allow), Linux `-F ~/b.md` deny vs `-F '~/b.md'` (allow); `-F "$env:SystemDrive\b.md"` (dynamic, allow); Linux `-F "$HOME/b.md"` with a hit in the home copy (deny) vs `-F "$env:USERPROFILE/b.md"` with `USERPROFILE` naming a clean copy (allow, dynamic on Linux); `cd '<built path>'; gh pr create -t x -b y` allow vs the same path in `-b` deny; the body file's own absolute path as argument allow vs the file holding that path deny; `--bogus` unknown-flag fallback deny |
-| C5 | When a PowerShell `Remove-Item` with effective `-Recurse` targets home, a drive root or an existing `.git` directory by one of the §4.4 forms, `stack-guard` shall deny with the rmroot reason. | U3, §4.4 | `guard.TestRmRootPowerShell`, OS injected: canonical `Remove-Item` and an explicit native executable independently, each alias incl. module-qualified; `-r`, `-Rec`, `-Recurse:$true` vs `:$false`; `-WhatIf` (allow) vs `-WhatIf:$false` (deny); no `-Recurse` (allow); `-Path`, `-LiteralPath`, `-LP`, `-PSPath`, positional 0, `-Path a, C:\`, `-Path a,C:\` (deny) vs `-Path 'a,C:\'` (allow), `--`; `~`, `'~'`, `$HOME`, `${HOME}`, `"$env:USERPROFILE\"` vs `'$HOME'` (allow) vs `$env:USERPROFILE = 'C:\work\x'; Remove-Item -Recurse $env:USERPROFILE` (allow); `C:\`, `c:/`, `\`, `/` with unknown cwd, `$env:SystemDrive\`, `${env:SystemDrive}\`, `C:` (allow); `.git` directory vs worktree `.git` file vs `.git\hooks` on every OS via temp dirs; `-Exclude a, .git .\build`, `.\build -Filter '.git'` and `.\build ~` (allow); Linux `Remove-Item -Recurse '.\.git'` deny; `-p` (ambiguous, allow); Linux: native `rm -rf $HOME` and `rm -rf ~` deny, `rm -rf '~'` allow, `ri -r /` deny; Windows: `& 'C:\x\rm.exe' -r '~'` and `-r ~` allow (opaque until W3); `New-PSDrive …; Remove-Item -Recurse \` allow vs `Remove-Item -Recurse \` deny |
+| C4 | When a PowerShell gh call publishes a path `publictext` recognizes, `stack-guard` shall deny with the gh-publish reason. | U4, §4.3 | `guard.TestGhPublishPowerShell`, every hit a path `publictext` recognizes, built at run time (the repo's public check rejects home-shaped literals in source) and used in both halves of each pair: `-b`, `--body-file` after `cd sub &&` vs after `cd sub;` (allow, cwd unknown), here-string with real newlines → `-F -` vs inert here-string (allow) vs expandable here-string with `$()` (dynamic, allow), `Get-Date \| gh … -F -` (allow), `Get-Content b.md \| gh … -F -` with a hit in `b.md` (allow, deferred); with a hit in the home copy and a clean literal `~` copy under the cwd: Windows `-F ~\b.md`, `-F ~/b.md` (skipped, allow) and `-F '~\b.md'`, `-F "~/b.md"` (allow) vs `-F "$HOME/b.md"` (deny), Linux `-F ~/b.md` deny vs `-F '~/b.md'` (allow); with no known home and a hit in the literal `~` copy, `-F ~/hit.md` (allow, unknown) vs `-F '~/hit.md'` (deny) on both hosts; `gh pr comment 1 '--%' --body-file=b.md` and, in the ambiguous region, `gh pr comment 1 '--%' '--body=a"b' --body-file=b.md` (deny, an accepted over-deny); `guard.TestPowerShellNoNewAllow` (also C5): every review probe the base recognizer denied still denies on that host, except `gh pr comment 1 -F 'b'.md` (both engines evaluate `'b'.md` to `$null` and pass only `-F`); `-F "$env:SystemDrive\b.md"` (dynamic, allow); Linux `-F "$HOME/b.md"` with a hit in the home copy (deny) vs `-F "$env:USERPROFILE/b.md"` with `USERPROFILE` naming a clean copy (allow, dynamic on Linux); `cd '<built path>'; gh pr create -t x -b y` allow vs the same path in `-b` deny; the body file's own absolute path as argument allow vs the file holding that path deny; `--bogus` unknown-flag fallback deny |
+| C5 | When a PowerShell `Remove-Item` with effective `-Recurse` targets home, a drive root or an existing `.git` directory by one of the §4.4 forms, `stack-guard` shall deny with the rmroot reason. | U3, §4.4 | `guard.TestRmRootPowerShell`, OS injected: canonical `Remove-Item` and an explicit native executable independently, each alias incl. module-qualified; `-r`, `-Rec`, `-Recurse:$true` vs `:$false`; `-WhatIf` (allow) vs `-WhatIf:$false` (deny); no `-Recurse` (allow); `-Path`, `-LiteralPath`, `-LP`, `-PSPath`, positional 0, `-Path a, C:\`, `-Path a,C:\` (deny) vs `-Path 'a,C:\'` (allow), `--`; `~`, `'~'`, `$HOME`, `${HOME}`, `"$env:USERPROFILE\"` vs `'$HOME'` (allow) vs `$env:USERPROFILE = 'C:\work\x'; Remove-Item -Recurse $env:USERPROFILE` (allow); `C:\`, `c:/`, `\`, `/` with unknown cwd, `$env:SystemDrive\`, `${env:SystemDrive}\`, `C:` (allow); `.git` directory vs worktree `.git` file vs `.git\hooks` on every OS via temp dirs; `-Exclude a, .git .\build`, `.\build -Filter '.git'` and `.\build ~` (allow); Linux `Remove-Item -Recurse '.\.git'` deny; `-p` (ambiguous, allow); Linux: native `rm -rf $HOME` and `rm -rf ~` deny, `rm -rf '~'` allow, `ri -r /` deny; Windows `-LiteralPath '~'`, `-LP ~\`, `-PSPath '~/'`, `-LiteralPath a, '~'` deny vs the same with `-WhatIf` or without `-Recurse`, `'.\~'`, `'~\child'`, `'~\.'`, `'~user'` (allow), Linux `-LiteralPath '~'`, `-LP ~/`, `'~\'` (allow); Windows native: `& 'C:\x\rm.exe' -r ~`, `-r ~\`, `rm.exe -rf ~/`, `` & rm.exe -r `~ ``, `iex '& rm.exe -r ~'`, `powershell.exe -Command '& rm.exe -r ~'` (deny, the 5.1 false deny), `-r ~"\"`, `` -r ~\`. ``, `` -r ~`\ `` (deny) vs `-r '~'`, `-r "~"`, `-r ~\src`, `-r x~`, `-r ~user`, `--% -r ~`, `'--%' -r ~` (allow); both hosts: `& rm.exe -r ~'foo'/.git` with a `~foo/.git` directory under the cwd (deny), `-LiteralPath '.git'build` (refused, allow), `` -Path `--% ~ ``, `-Path --% ~`, `` `--% ~ `` (refused, allow); Windows `-LiteralPath '~\.'`, `'~/./'` (deny) vs `'~.'` (allow); with no known home and a `~\.git` directory under the cwd, `& rm.exe -r ~/.git` (allow, unknown) on both hosts vs Linux `'~/.git'` (deny); `New-PSDrive …; Remove-Item -Recurse \` allow vs `Remove-Item -Recurse \` deny |
 | C6 | If the input is undecodable, the top level fails to lex, or a nested script fails, then the deciders shall apply the §3 failure boundaries. | U6, §3 | hook-stdout tests in both packages: string `tool_input`, numeric `command`, `{}` → empty; `gh pr merge 7; Write-Output "` → empty (core); `Get-Content .dev.vars; Write-Output "` → secrets deny; `Remove-Item -Recurse $HOME; Write-Output "` → empty `stack-guard` stdout; `gh pr merge 7; iex 'Write-Output "'` → raw-merge deny |
 | C7 | The core decider shall deny no PowerShell input that only a `stack-guard` rule covers. | core-stages §4.5 | the existing cross-golden check over the new `extensions/guard` PowerShell goldens |
 | C8 | When a PowerShell command matches no rule, both hooks shall print nothing. | U5 | goldens `allow-powershell-*` in both packages, each next to its deny pair: `Get-Content README.md`, `Remove-Item -Recurse .\build`, `gh pr view 5`, `echo "gh pr merge"`, `git status; git diff --stat` |
 | C9 | When observe scans `PowerShell` tool calls, it shall replay each through both hooks like a `Bash` call. | §6 observe | `observe.TestReplayRealHook`: a transcript with a core-only PowerShell deny (raw-merge) and an extension-only one (rmroot), both matched; exact `Compared` and `Unrecoverable` totals; a `{}` input counted as not replayable with no hook invocation |
-| C10 | `paths.ResolvePowerShell` and the `windows`-flagged `Norm`/`Same` shall resolve PowerShell paths without Git Bash forms. | §6 | `paths.TestResolvePowerShell`: relative join opens the real file on every OS; Windows `\x` on the cwd's drive, unknown without one; `C:x` unknown; `/c` with cwd `D:\work` resolves to `D:\c` on Windows (not drive C); `C:\Users\<Name>` ≡ `c:/users/<name>` only with `windows` |
-| C11 | Where a PowerShell engine is installed, `powershell.Parse` shall return, for each §7.2 command, exactly the calls the engine's own parser finds at the §3 positions and in the nested scripts §3 parses, with the engine's static argv (and command kind outside nested scripts), and `ShellCall()` the argv a native program receives. | §3, §4, W2 | `powershell.TestOracle`, run only with `STACK_PS_ORACLE=1` (the non-required `powershell-oracle` CI job on `windows-latest` and `ubuntu-latest`). Corpus: C1's tables, the command lists of C2–C5 and positive controls. `testdata/oracle.ps1` (one engine process per version, module autoloading off) classifies each command's position by §3 from the engine's AST and static parameter binding (an invoked block, control-flow bodies, the walked blocks of `ForEach-Object`, `Where-Object` and a local `Invoke-Command` bound within the parameter set that runs them; everything else opaque) and parses the static script of `Invoke-Expression` and `pwsh -Command` down to depth 2. `testdata/oracle_cases.json` declares those names per command and the engines that reject it; `-update-oracle` writes only new commands from a Windows run of both engines, never from `Parse`, and a changed or removed declaration needs `-update-oracle-changes` and prints the difference. Each case's verdict is pass, fail or inconclusive (engine missing or failing, timeout, not `FullLanguage`, malformed version, a required output field missing, null or of the wrong type, a case missing, a position the binding cannot decide, nested scripts included, a module loaded by a lookup, an AST type that names no AST class, a requested alias list or parameter table missing or empty, a stub record missing for a plain native call whose arguments are literals or variable reads or present for any other call, a positive control failing); the test fails on any fail or inconclusive. A missed call, a call from an opaque position, an extra call (static or dynamic name), a static word that differs and a word the engine reads as static that `Parse` makes dynamic all fail; the only declared exception is the unquoted wildcard on non-Windows hosts (`dynamicUnix`). Native calls run only against the test binary as stub, behind a marker argument; words starting with an unquoted `~` are not compared. Documented differences, asserted by name: 5.1 rejects `&&`, `\|\|` and a trailing `&`; the engine rejects a bare command inside method arguments (only the commands before the first error are compared); 5.1 legacy argument passing of a word holding `"`; `-UseTransaction` (5.1) and Where-Object's comparison parameters absent from the binding tables. Also the alias set of §4 per host and `Remove-Item -p` ambiguous by binding and by parameter metadata |
+| C10 | `paths.ResolvePowerShell` and the `windows`-flagged `Norm`/`Same` shall resolve PowerShell paths without Git Bash forms. | §6 | `paths.TestResolvePowerShell`: relative join opens the real file on every OS; Windows `\x` on the cwd's drive, unknown without one; `C:x` unknown; `/c` with cwd `D:\work` resolves to `D:\c` on Windows (not drive C); `C:\Users\<Name>` ≡ `c:/users/<name>` only with `windows`; with `expand` `~/b.md` is home and unknown with no home, without it a name under the cwd; on POSIX `~\b.md`, `~user`, `~foo/x` are names |
+| C11 | Where a PowerShell engine is installed, `powershell.Parse` shall return, for each §7.2 command, exactly the calls the engine's own parser finds at the §3 positions and in the nested scripts §3 parses, with the engine's static argv (and command kind outside nested scripts), and `ShellCall()` the argv a native program receives. | §3, §4, W2 | `powershell.TestOracle`, run only with `STACK_PS_ORACLE=1` (the non-required `powershell-oracle` CI job on `windows-latest` and `ubuntu-latest`). Corpus: C1's tables, the command lists of C2–C5 and positive controls. `testdata/oracle.ps1` (one engine process per version, module autoloading off) classifies each command's position by §3 from the engine's AST and static parameter binding (an invoked block, control-flow bodies, the walked blocks of `ForEach-Object`, `Where-Object` and a local `Invoke-Command` bound within the parameter set that runs them; everything else opaque) and parses the static script of `Invoke-Expression` and `pwsh -Command` down to depth 2. `testdata/oracle_cases.json` declares those names per command and the engines that reject it; `-update-oracle` writes only new commands from a Windows run of both engines, never from `Parse`, and a changed or removed declaration needs `-update-oracle-changes` and prints the difference. Each case's verdict is pass, fail or inconclusive (engine missing or failing, timeout, not `FullLanguage`, malformed version, a required output field missing, null or of the wrong type, a case missing, a position the binding cannot decide, nested scripts included, a module loaded by a lookup, an AST type that names no AST class, a requested alias list or parameter table missing or empty, a stub record missing for a plain native call whose arguments are literals or variable reads or present for any other call, a positive control failing); the test fails on any fail or inconclusive. A missed call, a call from an opaque position, an extra call (static or dynamic name), a static word that differs and a word the engine reads as static that `Parse` makes dynamic all fail; the only declared exception is the unquoted wildcard on non-Windows hosts (`dynamicUnix`). Native calls run only against the test binary as stub, behind a marker argument; words starting with an unquoted `~` are not compared. The engine's elements map to argv by the measured rules of §3 (a `--%` tail, a cmdlet's kept `--%` and one tail argument, a native quoted `--%` dropped with later values split at spaces), and the ambiguous region after a quoted `--%` is compared with neither the AST nor the stub (both parsers drop a parameter token there). Documented differences, asserted by name: 5.1 rejects `&&`, `\|\|` and a trailing `&`; the engine rejects a bare command inside method arguments (only the commands before the first error are compared); 5.1 legacy argument passing of a word holding `"`; `-UseTransaction` (5.1) and Where-Object's comparison parameters absent from the binding tables. Also the alias set of §4 per host and `Remove-Item -p` ambiguous by binding and by parameter metadata |
 
 ## 8. Where the contracts are stated
 
@@ -317,25 +395,46 @@ Goldens (payload `tool_name: "PowerShell"`, `@@CWD@@` cwd): `internal/guard/test
 `deny-raw-merge-powershell-graphql-file` (`.files`), `allow-powershell-string`;
 `extensions/guard/testdata/deny-secrets-powershell`, `deny-gh-publish-powershell-body-file` (`.files`),
 `deny-gh-publish-powershell-herestring`, `deny-rmroot-powershell-home`, `allow-rmroot-powershell-build`,
-`allow-powershell-get-content-readme`. Table tests of §7.2 carry the per-form cases with the OS injected. No real
-recorded PowerShell input exists yet; the first Windows transcript lines replace the synthetic `tool_input` in one
-golden per rule. `mise exec -- scripts/test` on all three CI OSes.
+`allow-powershell-get-content-readme`. Table tests of §7.2 carry the per-form cases with the OS injected. One golden
+per rule carries a `tool_input` recorded on Windows (W1), unchanged: `deny-raw-merge-powershell`
+(`& gh.exe pr merge 7 --squash`), `deny-secrets-powershell` (`type C:/work/repo/.dev.vars`; the recorded
+`Get-Content .\.DEV.VARS` denies only where case folds, so the C3 table test covers it), `deny-rmroot-powershell-home`
+(`Remove-Item -Recurse -Force $HOME`) and `deny-gh-publish-powershell-body-file` (`gh pr create -t t --body-file
+b.md`, its `b.md` built from `.files`). `mise exec -- scripts/test` on all three CI OSes.
 
 Risks: the subset diverges from pwsh on a construct (miss or false deny; the oracle comparison and flip of §3);
 5.1 vs 7 differences (`&&`, `||` and a trailing `&` are 5.1 parse errors, so judging them only denies what would not run; 5.1 passes a native word holding `"` split or unquoted; on 5.1 the
 `cd X &&` cwd form does not exist, so a `cd sub; gh … --body-file b.md` stays a miss); `Remove-Item` parameter table
 drift (a new parameter starting with `r` makes `-r` ambiguous, so the rule over-judges only a call pwsh refuses).
 
-Windows hardware checks (not chased from macOS):
+Windows hardware checks (issue #54):
 
-- W1: record a real `PowerShell` tool call and a live hook run; confirm `tool_name`, `tool_input` fields and launch.
+- W1 (confirmed): Claude Code 2.1.330 sends `tool_name: "PowerShell"` and a `tool_input` of `command` with an
+  optional `description` (one recorded call omitted it); exec-form hooks are started by `claude.exe` with no shell.
+  The recorded inputs back the goldens above.
 - W2 (done, C11): the oracle passes every declared case on Windows PowerShell 5.1.26100 and PowerShell 7.7.0
   (Windows) and 7.6.5 (Linux): command names, kinds and argv, and native argv through the stub (`--%` tails; a
   tail holding quotes or `%NAME%` is dynamic in the recognizer and not compared). It found `mount` missing from the
   `New-PSDrive` aliases on Windows (added). On Linux `rm` and `rmdir` resolve to native commands and `ri`, `del`,
   `erase`, `rd` to `Remove-Item`; `Remove-Item -p` is refused as ambiguous on all three engines. The
   `powershell-oracle` CI job keeps it running.
-- W3: `~` expansion by `Remove-Item -LiteralPath '~'` and by native arguments on 5.1 and 7; adopt a form only once
-  confirmed.
-- W4: U1–U6 against `stack.exe`/`stack-guard.exe` with the dotfiles matchers in a live dual-tool session, and both
-  hooks' p95 on a PowerShell payload.
+- W3 (confirmed): `Remove-Item` with `~`, quoted or bare, through `-Path` or `-LiteralPath`, removes home on Windows
+  PowerShell 5.1 and PowerShell 7.7, even with a directory named `~` in the cwd. Native argv, through an argv stub:
+  PowerShell 7.7 passes an unquoted leading `~`, `~/x`, `~\x` and the backtick-escaped `` `~ ``, `` `~\x `` as the
+  home path (`<home>/x`, `<home>\x`), and leaves `'~'`, `"~"`, `x~`, `~user`, a `--%` tail and a `~` after a quoted
+  `'--%'` as written. It decides by the decoded value: `~'\x'`, `~"\x"`, `~"\x"y`, `~"/x"`, `` ~\`. ``, `` ~`\ `` are
+  expanded, `~'foo'/.git` stays `~foo/.git`, and a value holding a blank (`~'\a b'`, `~"\draft notes.md"`) is not
+  expanded. On both engines an argument valued `--%` that starts with a quote (`'--%'`, `"--%"`, `` "--`%" ``, a
+  here-string, also an expandable `"--$('%')"`) is dropped from argv without stopping parsing (`$HOME` after it
+  expands), and the later arguments are joined as written (`"c d"` arrives as `c`, `d`; `%NAME%` is expanded); they
+  differ on a later `"` (`'--body=a"b' --help` is one argument on 5.1, two on 7.7) and on `''` (an empty argument
+  on 7.7, none on 5.1). The backtick-escaped `` `--% `` and quotes inside an unquoted start (`-'-%'`, `--'%'`, `-"-%"`)
+  make the stop-parsing token (`;` stays in its tail), `a`--%` does not, and `'--'%` is two arguments, `--` and `%`. A cmdlet keeps `--%` or `` `--% `` as a value and gets the tail as
+  one argument. 5.1 never expands `~`. Microsoft's documentation lists the
+  Windows native expansion (`PSNativeWindowsTildeExpansion`) as experimental from 7.5-preview.2 and mainstream from
+  7.6-preview.6, so 5.1 and 7.0–7.5 pass `~` as written. Adopted in §3 Words: as home for the native-`rm` path,
+  skipped for gh inputs on Windows, where the file gh opens depends on that engine version.
+- W4 (confirmed): U1–U6 against `stack.exe`/`stack-guard.exe` with the dotfiles matchers in a live dual-tool
+  session all matched this design. Both hooks' p95 on a PowerShell payload equals the `Bash` one under the same load
+  (interleaved, 300 runs each, CPU about 70% busy on an 8-core desktop: p50 about 117 ms, p95 280–300 ms); idle p50
+  32–46 ms, live hook runs 50–60 ms. All far under the 5 s hook timeout.

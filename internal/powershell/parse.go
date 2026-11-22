@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/shuymn/stack/internal/paths"
 	"github.com/shuymn/stack/internal/shell"
@@ -766,6 +768,7 @@ func (p *parser) redirection() bool {
 // args lexes a command's arguments up to the end of its pipeline element.
 func (p *parser) args(kind Kind) []item {
 	var items []item
+	var j joining
 	for {
 		p.skipBlank()
 		if p.atEnd() {
@@ -774,12 +777,10 @@ func (p *parser) args(kind Kind) []item {
 		if p.redirection() {
 			continue
 		}
-		if p.has(verbatimMark) && p.boundary(p.pos+len(verbatimMark)) {
-			p.pos += len(verbatimMark)
-			for _, w := range p.verbatim() {
-				items = append(items, item{words: []Word{w}})
-			}
-			return items
+		if n := p.verbatimMarkAt(); n > 0 {
+			mark := Word{Raw: p.src[p.pos : p.pos+n], Text: verbatimMark, Static: true}
+			p.pos += n
+			return append(items, p.stopParsing(kind, mark, j.on)...)
 		}
 		if kind == Cmdlet {
 			if it, ok := p.paramItem(); ok {
@@ -787,8 +788,118 @@ func (p *parser) args(kind Kind) []item {
 				continue
 			}
 		}
-		items = append(items, p.valueItem(kind))
+		it := p.valueItem(kind)
+		w := it.words[0]
+		// A word decoded to `--%` (known-variable and block words are never static).
+		isMarker := w.Static && w.Text == verbatimMark
+		switch {
+		case isMarker && w.Quote == Bare && len(it.words) == 1:
+			// The tokenizer reads a token that does not start with a quote as one generic token,
+			// so `-'-%'`, `--'%'` and “ `--%; “ are the stop-parsing token too (5.1 and 7.7, argv
+			// stub).
+			return append(items, p.stopParsing(kind, w, j.on)...)
+		case kind == Native && isMarker:
+			// A quote-started one (`'--%'`, `"--%"`, "\"--`%\"", a here-string) is no stop-parsing
+			// token: pwsh 5.1 and 7 drop it from argv without stopping parsing, and pass every later
+			// argument joined into the command line as written. A second one is dropped too, and
+			// starts the ambiguous region.
+			j.amb = j.amb || j.on
+			j.on = true
+			continue
+		case kind == Native && j.on:
+			if it.words = j.words(it.words[0]); len(it.words) == 0 {
+				continue
+			}
+		}
+		items = append(items, it)
 	}
+}
+
+// stopParsing lexes the tail after a stop-parsing token, which ends the call's arguments. After a
+// quoted `--%` (joined), the tail is one more ambiguity.
+func (p *parser) stopParsing(kind Kind, mark Word, joined bool) []item {
+	start := p.pos
+	tail := p.verbatim(kind != Cmdlet)
+	if kind == Cmdlet {
+		// A cmdlet keeps the token as a value and gets the rest as one literal argument
+		// (5.1 and 7.7: `Write-Output a --% $x b` writes `a`, `--%`, `$x b`).
+		items := []item{{words: []Word{mark}}}
+		if t := strings.TrimSpace(p.src[start:p.pos]); t != "" {
+			items = append(
+				items,
+				item{words: []Word{{Raw: t, Text: t, Static: true, Verbatim: true}}},
+			)
+		}
+		return items
+	}
+	items := make([]item, len(tail))
+	for i, w := range tail {
+		w.ambiguous = joined
+		items[i] = item{words: []Word{w}}
+	}
+	return items
+}
+
+// verbatimMarkAt returns the length of the stop-parsing token at pos, `--%` or the backtick-escaped
+// “ `--% “, followed by a boundary; 0 when there is none.
+func (p *parser) verbatimMarkAt() int {
+	for _, m := range []string{verbatimMark, "`" + verbatimMark} {
+		if p.has(m) && p.boundary(p.pos+len(m)) {
+			return len(m)
+		}
+	}
+	return 0
+}
+
+// paramToken reports a bare word PowerShell lexes as a parameter token: a dash, then a letter, `_`
+// or `?` (`-h`, `-_a`, `-h=true`; not `--x`, `-1` or `-`).
+func paramToken(w Word) bool {
+	for _, d := range dashes {
+		if rest, ok := strings.CutPrefix(w.Raw, d); ok {
+			r, _ := utf8.DecodeRuneInString(rest)
+			return unicode.IsLetter(r) || r == '_' || r == '?'
+		}
+	}
+	return false
+}
+
+// percentVar matches a `%NAME%` reference, which both engines expand in a joined argument.
+var percentVar = regexp.MustCompile(`%[^%]+%`)
+
+// joining is the state of the native arguments after a quoted `--%`.
+type joining struct {
+	on bool
+	// amb is set from the first argument whose boundaries or value can differ between engines:
+	// that argument and every later one of the call are ambiguous.
+	amb bool
+}
+
+// words is the argv a native argument after a quoted `--%` becomes: its static value split at
+// blanks, each part never a home `~` (5.1 and 7.7 agree on this, argv stub). An argument the
+// engines can pass differently starts the ambiguous region: a value holding `"`, `,`, a tab (5.1
+// splits there, 7.7 does not) or a line break (`'--body=a"b' --help` is one argument on 5.1, two
+// on 7.7), a `%NAME%` (expanded to an unknown value), an empty value (an argument on 7.7 only), a
+// bare parameter token (`-h` and `-h=true` vanish on 5.1 and pass an empty value on 7.7, and the
+// argument after one keeps its quotes), and one that is not static (a variable or interpolation,
+// whose value may hold any of these). A word in the region keeps its static text,
+// so checks still match it, but is marked ambiguous: it never proves a call harmless.
+func (j *joining) words(w Word) []Word {
+	// A known-variable word is not static.
+	if !w.Static || w.Text == "" || paramToken(w) ||
+		strings.ContainsAny(w.Text, "\",\t\r\n") || percentVar.MatchString(w.Text) {
+		j.amb = true
+	}
+	w.joined, w.ambiguous = true, j.amb
+	if !w.Static {
+		return []Word{w}
+	}
+	var out []Word
+	for f := range strings.FieldsFuncSeq(w.Text, func(r rune) bool { return r == ' ' || r == '\t' }) {
+		part := w
+		part.Text = f
+		out = append(out, part)
+	}
+	return out
 }
 
 // paramItem lexes a cmdlet parameter token at pos: a dash and a name, with an optional `:`-bound
@@ -985,7 +1096,7 @@ func (p *parser) cdTarget(c Call) (string, bool) {
 	if !ok {
 		return "", true
 	}
-	dir, ok := paths.ResolvePowerShell(p.home, p.cwd, t, p.os == Windows)
+	dir, ok := paths.ResolvePowerShell(p.home, p.cwd, t, true, p.os == Windows)
 	if !ok {
 		return "", true
 	}

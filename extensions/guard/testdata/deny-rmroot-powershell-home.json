@@ -6,8 +6,7 @@
   "hook_event_name": "PreToolUse",
   "tool_name": "PowerShell",
   "tool_input": {
-    "command": "Remove-Item -Recurse -Force $HOME",
-    "description": "Remove the build output"
+    "command": "Remove-Item -Recurse -Force $HOME"
   },
   "tool_use_id": "toolu_010000000000000000000034"
 }

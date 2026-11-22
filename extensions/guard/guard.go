@@ -165,7 +165,7 @@ type ghCall struct {
 func appendGh(out []ghCall, c shell.Call, resolve resolver) []ghCall {
 	args := make([]ghargs.Arg, len(c.Args)-1)
 	for i, a := range c.Args[1:] {
-		args[i] = ghargs.Arg{Text: a.Text, Static: a.Static, Tilde: a.Tilde}
+		args[i] = ghargs.Arg{Text: a.Text, Static: a.Static, Tilde: a.Tilde, Ambiguous: a.Ambiguous}
 	}
 	if g, ok := ghargs.Parse(args); ok {
 		out = append(out, ghCall{call: c, gh: g, resolve: resolve})

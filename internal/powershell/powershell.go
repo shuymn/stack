@@ -17,7 +17,9 @@ package powershell
 import (
 	"runtime"
 	"strings"
+	"unicode"
 
+	"github.com/shuymn/stack/internal/paths"
 	"github.com/shuymn/stack/internal/shell"
 )
 
@@ -116,6 +118,8 @@ type Word struct {
 	Verbatim bool
 
 	blockStart, blockEnd int
+	joined               bool // a native argument after a quoted `--%`, passed as written
+	ambiguous            bool // in the region where the engines may split arguments differently
 	blockMoved           bool // the block holds a location change
 	glob                 bool // an unquoted wildcard (`*`, `?`, `[`)
 }
@@ -156,17 +160,60 @@ func (c Call) Is(name string) bool {
 
 // ShellCall adapts the call to a shell.Call with native-argv semantics: `$HOME`/`${HOME}` (and on
 // Windows `$env:USERPROFILE`/`${env:USERPROFILE}`) are replaced by the hook's home, every other
-// known variable is dynamic; an unquoted leading `~` is Tilde on non-Windows hosts and dynamic on
-// Windows; a script block is dynamic.
+// known variable is dynamic; a script block is dynamic. A home `~` word (see tildeOf) is Tilde on
+// non-Windows hosts and dynamic on Windows, where whether it is expanded depends on the engine
+// (PowerShell 7.6+ expands it, 5.1 and 7.0–7.5 pass it as written), so the file it names is
+// unknown. A quoted `~`, `~user`, `x~` and a home form holding a blank are literal.
 func (c Call) ShellCall() shell.Call {
+	return c.shellCall(false)
+}
+
+// ShellCallRm is ShellCall for the native-`rm` rule only: on Windows a home `~` word is Tilde too,
+// since a miss there deletes home on the expanding engine and the only false deny is a directory
+// literally named `~` on an older one.
+func (c Call) ShellCallRm() shell.Call {
+	return c.shellCall(true)
+}
+
+func (c Call) shellCall(windowsTilde bool) shell.Call {
 	out := shell.Call{Args: make([]shell.Word, len(c.Args)), Stdin: c.Stdin, Cwd: c.Cwd}
 	for i, w := range c.Args {
-		out.Args[i] = c.nativeWord(w)
+		out.Args[i] = c.nativeWord(w, windowsTilde)
+		out.Args[i].Ambiguous = w.ambiguous
 	}
 	return out
 }
 
-func (c Call) nativeWord(w Word) shell.Word {
+// tildeKind is how PowerShell 7 treats a native word starting with `~`.
+type tildeKind int
+
+const (
+	tildeNone    tildeKind = iota // passed as written
+	tildeHome                     // expanded as home (on Windows from 7.6)
+	tildeUnknown                  // a home form holding `"`: unmeasured
+)
+
+// tildeOf classifies a native word by its decoded value, as PowerShell 7.7 does (argv stub): a
+// word whose first part is unquoted, outside a `--%` tail and not after a quoted `--%`, and whose
+// value is exactly `~`, `~/…` or, on Windows, `~\…` (paths.TildeForm) is home, whatever quotes or
+// backtick escapes spell it (“ `~ “, “ ~\`. “, `~'\x'`, `~"\x"`), unless the value holds
+// whitespace as PowerShell defines it, Unicode spaces and line breaks included (`~'\a b'` and
+// `~'\a b'` with a no-break space are passed as written). `~'foo'/.git` is the literal `~foo/.git`.
+func (c Call) tildeOf(w Word) tildeKind {
+	switch {
+	case w.Flag != "", w.Verbatim, w.joined, w.Quote != Bare,
+		!paths.TildeForm(w.Text, c.os == Windows):
+		return tildeNone
+	case strings.Contains(w.Text, `"`):
+		return tildeUnknown
+	case strings.IndexFunc(w.Text, unicode.IsSpace) >= 0:
+		return tildeNone
+	default:
+		return tildeHome
+	}
+}
+
+func (c Call) nativeWord(w Word, windowsTilde bool) shell.Word {
 	switch {
 	case w.Block:
 		return shell.Word{}
@@ -178,11 +225,15 @@ func (c Call) nativeWord(w Word) shell.Word {
 	case w.Known != NotKnown, !w.Static:
 		return shell.Word{}
 	}
-	if w.Flag == "" && !w.Verbatim && w.Quote == Bare && strings.HasPrefix(w.Text, "~") {
-		if c.os == Windows {
+	switch c.tildeOf(w) {
+	case tildeHome:
+		if c.os == Windows && !windowsTilde {
 			return shell.Word{}
 		}
 		return shell.Word{Text: w.Text, Static: true, Tilde: true}
+	case tildeUnknown:
+		return shell.Word{}
+	case tildeNone:
 	}
 	return shell.Word{Text: w.Flag + w.Text, Static: true}
 }

@@ -431,6 +431,120 @@
     ]
   },
   {
+    "cmd": "git `--% a; b \u0026\u0026 gh pr merge 7",
+    "calls": [
+      "gh",
+      "git"
+    ],
+    "rejects": [
+      "5.1"
+    ]
+  },
+  {
+    "cmd": "git a`--% b",
+    "calls": [
+      "git"
+    ]
+  },
+  {
+    "cmd": "gh pr '--%' \"merge 7\" x; gh pr \"--`%\" \"merge 7\"",
+    "calls": [
+      "gh",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "git '--%' a '' b; git '--%' %X% b; git '--%' 'a\"b' --help",
+    "calls": [
+      "git",
+      "git",
+      "git"
+    ]
+  },
+  {
+    "cmd": "git '--'% a",
+    "calls": [
+      "git"
+    ]
+  },
+  {
+    "cmd": "git 'a','b'c d; gh pr merge 7 'a','b'--help",
+    "calls": [
+      "gh",
+      "git"
+    ]
+  },
+  {
+    "cmd": "Write-Output `--%; gh pr merge 7\ngit `--%; gh pr merge 7",
+    "calls": [
+      "Write-Output",
+      "git"
+    ]
+  },
+  {
+    "cmd": "git '--help'.foo \"x\".y 'a'[0]z 'a'. b",
+    "calls": [
+      "git"
+    ]
+  },
+  {
+    "cmd": "Write-Output a --% $x b; Write-Output a `--% $x b",
+    "calls": [
+      "Write-Output"
+    ]
+  },
+  {
+    "cmd": "\u0026 gh.exe \"--%\" pr; git @'\n--%\n'@ a; git -'-%' b; git a '--%'",
+    "calls": [
+      "gh.exe",
+      "git",
+      "git"
+    ]
+  },
+  {
+    "cmd": "gh '--%' pr $x; gh pr merge 7",
+    "calls": [
+      "gh",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "git '--%' 'a\"b' c",
+    "calls": [
+      "git"
+    ]
+  },
+  {
+    "cmd": "gh 'pr'merge \"7\"x 'a''b'c a'b' \"a\"$x",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "Write-Output 'a'b c'd'",
+    "calls": [
+      "Write-Output"
+    ]
+  },
+  {
+    "cmd": "git 'a',b c",
+    "calls": [
+      "git"
+    ]
+  },
+  {
+    "cmd": "git --% \"c d\" e; git `--% x\"c d\"y e",
+    "calls": [
+      "git"
+    ]
+  },
+  {
+    "cmd": "Write-Output a '--%' b",
+    "calls": [
+      "Write-Output"
+    ]
+  },
+  {
     "cmd": "echo \"gh pr merge 1\"; Write-Output 'gh pr merge 1'",
     "calls": [
       "Write-Output",
@@ -1031,6 +1145,76 @@
     ]
   },
   {
+    "cmd": "gh '--%' pr merge 7",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "\u0026 gh.exe \"--%\" pr merge 7",
+    "calls": [
+      "gh.exe"
+    ]
+  },
+  {
+    "cmd": "gh pr '--%' \"merge 7\"",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "\u0026 gh.exe '--%' pr \"merge 7 --squash\"",
+    "calls": [
+      "gh.exe"
+    ]
+  },
+  {
+    "cmd": "gh pr \"--`%\" \"merge 7\"",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "git `--% x \u0026\u0026 gh pr merge 7",
+    "calls": [
+      "gh",
+      "git"
+    ],
+    "rejects": [
+      "5.1"
+    ]
+  },
+  {
+    "cmd": "gh pr 'merge'7",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr \"merge\"7",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh 'pr'merge 7",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 7 --squash '--%' '--body=a\"b' --help",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 7 '--%' %X% --help",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
     "cmd": "gh pr view 1",
     "calls": [
       "gh"
@@ -1056,6 +1240,72 @@
     "cmd": "cd sub; gh api graphql -F query=@q.graphql",
     "calls": [
       "cd",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh '--%' pr view 7",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 7 '--%' --help",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "Write-Output `--% ; gh pr merge 7",
+    "calls": [
+      "Write-Output"
+    ]
+  },
+  {
+    "cmd": "Write-Output `--%; gh pr merge 7",
+    "calls": [
+      "Write-Output"
+    ]
+  },
+  {
+    "cmd": "gh pr 'view'7",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 7 'a'--help",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 'x'--help",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 7 '--%' x --help",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 7 'a','b'--help",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh api graphql --input ~\\q.json",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh api graphql --input ~/q.json",
+    "calls": [
       "gh"
     ]
   },
@@ -1237,6 +1487,18 @@
     ]
   },
   {
+    "cmd": "gh pr comment 1 '--%' --body-file=b.md",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr comment 1 '--%' '--body=a\"b' --body-file=b.md",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
     "cmd": "cd sub; gh pr create -t t --body-file b.md",
     "calls": [
       "cd",
@@ -1314,6 +1576,18 @@
     ]
   },
   {
+    "cmd": "gh pr comment 1 -F '~\\b.md'",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr comment 1 -F \"~/b.md\"",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
     "cmd": "gh pr comment 1 -F '~/b.md'",
     "calls": [
       "gh"
@@ -1321,6 +1595,24 @@
   },
   {
     "cmd": "gh pr comment 1 -F \"$env:USERPROFILE/b.md\"",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr comment 1 -F '~/hit.md'",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr comment 1 -F ~/hit.md",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr comment 1 -F ~\\hit.md",
     "calls": [
       "gh"
     ]
@@ -1507,6 +1799,12 @@
     ]
   },
   {
+    "cmd": "\u0026 rm.exe -r ~'foo'/.git",
+    "calls": [
+      "rm.exe"
+    ]
+  },
+  {
     "cmd": "Remove-Item -Recurse:$false ~",
     "calls": [
       "Remove-Item"
@@ -1556,12 +1854,6 @@
   },
   {
     "cmd": "Remove-Item -Recurse -Path 'a,~'",
-    "calls": [
-      "Remove-Item"
-    ]
-  },
-  {
-    "cmd": "Remove-Item -Recurse -LiteralPath '~'",
     "calls": [
       "Remove-Item"
     ]
@@ -1659,6 +1951,30 @@
     ]
   },
   {
+    "cmd": "Remove-Item -Recurse -LiteralPath '.git'build",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -Path `--% ~",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -Path --% ~",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse `--% ~",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
     "cmd": "ri -r C:\\",
     "calls": [
       "ri"
@@ -1743,6 +2059,102 @@
     ]
   },
   {
+    "cmd": "\u0026 'C:\\x\\rm.exe' -r ~",
+    "calls": [
+      "C:\\x\\rm.exe"
+    ]
+  },
+  {
+    "cmd": "\u0026 'C:\\x\\rm.exe' -r ~\\",
+    "calls": [
+      "C:\\x\\rm.exe"
+    ]
+  },
+  {
+    "cmd": "rm.exe -rf ~/",
+    "calls": [
+      "rm.exe"
+    ]
+  },
+  {
+    "cmd": "\u0026 rm.exe -r `~",
+    "calls": [
+      "rm.exe"
+    ]
+  },
+  {
+    "cmd": "iex '\u0026 rm.exe -r ~'",
+    "calls": [
+      "iex"
+    ],
+    "nested": [
+      "rm.exe"
+    ]
+  },
+  {
+    "cmd": "powershell.exe -Command '\u0026 rm.exe -r ~'",
+    "calls": [
+      "powershell.exe"
+    ],
+    "nested": [
+      "rm.exe"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -LiteralPath '~'",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -LP ~\\",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -PSPath '~/'",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -LiteralPath a, '~'",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -LiteralPath '~\\.'",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -LiteralPath '~/./'",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "\u0026 rm.exe -r ~\"\\\"",
+    "calls": [
+      "rm.exe"
+    ]
+  },
+  {
+    "cmd": "\u0026 rm.exe -r ~\\`.",
+    "calls": [
+      "rm.exe"
+    ]
+  },
+  {
+    "cmd": "\u0026 rm.exe -r ~`\\",
+    "calls": [
+      "rm.exe"
+    ]
+  },
+  {
     "cmd": "New-PSDrive -Name X -PSProvider FileSystem -Root C:\\work\\build; Remove-Item -Recurse C:\\",
     "calls": [
       "New-PSDrive",
@@ -1794,9 +2206,75 @@
     ]
   },
   {
-    "cmd": "\u0026 'C:\\x\\rm.exe' -r ~",
+    "cmd": "\u0026 'C:\\x\\rm.exe' -r \"~\"",
     "calls": [
       "C:\\x\\rm.exe"
+    ]
+  },
+  {
+    "cmd": "\u0026 'C:\\x\\rm.exe' -r ~\\src",
+    "calls": [
+      "C:\\x\\rm.exe"
+    ]
+  },
+  {
+    "cmd": "\u0026 'C:\\x\\rm.exe' -r x~",
+    "calls": [
+      "C:\\x\\rm.exe"
+    ]
+  },
+  {
+    "cmd": "\u0026 'C:\\x\\rm.exe' -r ~user",
+    "calls": [
+      "C:\\x\\rm.exe"
+    ]
+  },
+  {
+    "cmd": "\u0026 rm.exe --% -r ~",
+    "calls": [
+      "rm.exe"
+    ]
+  },
+  {
+    "cmd": "\u0026 rm.exe '--%' -r ~",
+    "calls": [
+      "rm.exe"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -LiteralPath '~' -WhatIf",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -LiteralPath '~'",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -LiteralPath '.\\~'",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -LiteralPath '~\\child'",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -LiteralPath '~user'",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -LiteralPath '~.'",
+    "calls": [
+      "Remove-Item"
     ]
   },
   {
@@ -1891,6 +2369,18 @@
     "cmd": "rm -rf ~/src",
     "calls": [
       "rm"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -LP ~/",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -LiteralPath '~\\'",
+    "calls": [
+      "Remove-Item"
     ]
   },
   {

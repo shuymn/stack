@@ -350,6 +350,113 @@ var parseTests = []struct {
 		Windows,
 		calls{{"cmd", "/c", "echo", "$"}},
 	},
+	{
+		"backtick-escaped stop-parsing token",
+		"git `--% a; b && gh pr merge 7",
+		Windows,
+		calls{{"git", "a;", "b"}, {"gh", "pr", "merge", "7"}},
+	},
+	{
+		"backtick inside a word is no stop-parsing token",
+		"git a`--% b",
+		Windows,
+		calls{{"git", "a--%", "b"}},
+	},
+	{
+		"quoted stop-parsing value dropped, later arguments joined",
+		"gh pr '--%' \"merge 7\" x; gh pr \"--`%\" \"merge 7\"",
+		Windows,
+		calls{{"gh", "pr", "merge", "7", "x"}, {"gh", "pr", "merge", "7"}},
+	},
+	{
+		// An empty value, a `%NAME%` or a `"` starts the ambiguous region: its words keep their
+		// static text (TestAmbiguousRegion checks the mark).
+		"the ambiguous region keeps static text",
+		"git '--%' a '' b; git '--%' %X% b; git '--%' 'a\"b' --help",
+		Windows,
+		calls{{"git", "a", "b"}, {"git", "%X%", "b"}, {"git", "a\"b", "--help"}},
+	},
+	{
+		"a quote-started token ends at its quote, also before %",
+		`git '--'% a`,
+		Unix,
+		calls{{"git", "--", "%", "a"}},
+	},
+	{
+		"each quote-started element of a native array ends at its quote",
+		`git 'a','b'c d; gh pr merge 7 'a','b'--help`,
+		Windows,
+		calls{{"git", "$", "c", "d"}, {"gh", "pr", "merge", "7", "$", "--help"}},
+	},
+	{
+		// The word ends at `;` and decodes to `--%`: the stop-parsing token, so `;` starts its tail.
+		"a backtick stop-parsing token directly followed by a semicolon",
+		"Write-Output `--%; gh pr merge 7\ngit `--%; gh pr merge 7",
+		Windows,
+		calls{{"Write-Output", "--%", "; gh pr merge 7"}, {"git", ";", "gh", "pr", "merge", "7"}},
+	},
+	{
+		"a member access or index on a quote-started token is part of it",
+		`git '--help'.foo "x".y 'a'[0]z 'a'. b`,
+		Windows,
+		calls{{"git", "$", "$", "$", "z", "a", ".", "b"}},
+	},
+	{
+		"a cmdlet keeps the stop-parsing token and gets its tail as one argument",
+		"Write-Output a --% $x b; Write-Output a `--% $x b",
+		Unix,
+		calls{{"Write-Output", "a", "--%", "$x b; Write-Output a `--% $x b"}},
+	},
+	{
+		// A token that starts unquoted is a generic token: `-'-%'` is the stop-parsing token, so the
+		// rest of the line is its tail (5.1 and 7.7, argv stub).
+		"double-quoted and here-string values are dropped, a generic token stops parsing",
+		"& gh.exe \"--%\" pr; git @'\n--%\n'@ a; git -'-%' b; git a '--%'",
+		Unix,
+		calls{{"gh.exe", "pr"}, {"git", "a"}, {"git", "b;", "git", "a", "'--%'"}},
+	},
+	{
+		"quoted stop-parsing value keeps later calls and variables",
+		`gh '--%' pr $x; gh pr merge 7`,
+		Unix,
+		calls{{"gh", "pr", "$"}, {"gh", "pr", "merge", "7"}},
+	},
+	{
+		"a joined value with a quote keeps its text",
+		`git '--%' 'a"b' c`,
+		Unix,
+		calls{{"git", `a"b`, "c"}},
+	},
+	{
+		"a token starting with a quote ends at its closing quote",
+		`gh 'pr'merge "7"x 'a''b'c a'b' "a"$x`,
+		Unix,
+		calls{{"gh", "pr", "merge", "7", "x", "a'b", "c", "ab", "a", "$"}},
+	},
+	{
+		"a cmdlet argument starting with a quote ends at its closing quote",
+		`Write-Output 'a'b c'd'`,
+		Unix,
+		calls{{"Write-Output", "a", "b", "cd"}},
+	},
+	{
+		"a native array after a quoted token is dynamic",
+		`git 'a',b c`,
+		Windows,
+		calls{{"git", "$", "c"}},
+	},
+	{
+		"a quoted run with blanks in a verbatim tail is dynamic",
+		"git --% \"c d\" e; git `--% x\"c d\"y e",
+		Windows,
+		calls{{"git", "$", "e;", "git", "`--%", "$", "e"}},
+	},
+	{
+		"cmdlet keeps a quoted stop-parsing value",
+		`Write-Output a '--%' b`,
+		Unix,
+		calls{{"Write-Output", "a", "--%", "b"}},
+	},
 
 	{
 		"string literal",
@@ -512,6 +619,41 @@ func TestParse(t *testing.T) {
 				t.Errorf("%q calls = %q, want %q", tt.cmd, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestAmbiguousRegion checks which native words after a quoted `--%` are marked ambiguous: from the
+// first one the engines may pass differently to the end of the call, and none before it.
+func TestAmbiguousRegion(t *testing.T) {
+	for _, tt := range []struct {
+		cmd  string
+		want []bool // per argv word after the name
+	}{
+		{"git a '--%' b c", []bool{false, false, false}},
+		{"git '--%' a '' b c", []bool{false, true, true}},
+		{"git '--%' a 'x\"y' b", []bool{false, true, true}},
+		{"git '--%' a %X% b", []bool{false, true, true}},
+		{"git '--%' a $x b", []bool{false, true, true}},
+		{"git '--%' a 'b','c' d", []bool{false, true, true}},
+		{"git '--%' a '--%' b", []bool{false, true}},
+		{"git '--%' a --% b c", []bool{false, true, true}},
+		{"git '--%' a `--% b", []bool{false, true}},
+		{"git a '' --% b", []bool{false, false, false}},
+		{"git '--%' a \"b`tc\" d", []bool{false, true, true, true}},
+		{"git '--%' a -h b", []bool{false, true, true}},
+		{"git '--%' a -_x=1 b", []bool{false, true, true}},
+		{"git '--%' a --x -1 - b", []bool{false, false, false, false, false}},
+		{"git '--%' a 'b c' d", []bool{false, false, false}},
+	} {
+		c := find(t, parse(t, tt.cmd, Windows), "git")
+		sc := c.ShellCall()
+		var got []bool
+		for _, w := range sc.Args[1:] {
+			got = append(got, w.Ambiguous)
+		}
+		if !slices.Equal(got, tt.want) {
+			t.Errorf("%q ambiguous = %v, want %v", tt.cmd, got, tt.want)
+		}
 	}
 }
 
@@ -903,6 +1045,67 @@ func TestShellCall(t *testing.T) {
 		sc := find(t, r, "gh").ShellCall()
 		if !slices.Equal(sc.Args, tt.want) {
 			t.Errorf("os %d ShellCall args = %+v, want %+v", tt.os, sc.Args, tt.want)
+		}
+	}
+	// Native `~`: a word whose first part is unquoted and whose decoded value is `~`, `~/…` or on
+	// Windows `~\…` is Tilde however quotes and backticks spell it, except in ShellCall on Windows,
+	// where it is dynamic; a value holding a blank and a quote-started `~`, `~user`, `~foo/.git`
+	// (also as `~'foo'/.git`), `x~`, one in a `--%` tail and one after a quoted `'--%'` are literal;
+	// one holding a `"` is dynamic.
+	native := "rm.exe -r ~ ~/x ~\\ ~\\b.md `~ '~' \"~\" x~ ~user ~foo/.git ~\"\\x\" ~'/x' " +
+		"~\\`. ~`\\ ~'foo'/.git ~'\\a b' ~\\`\"x '--%' ~"
+	lit := func(s string) shell.Word { return shell.Word{Text: s, Static: true} }
+	for _, tt := range []struct {
+		os      OS
+		rm      bool
+		expands bool
+	}{
+		{Unix, false, true},
+		{Unix, true, true},
+		{Windows, false, false},
+		{Windows, true, true},
+	} {
+		c := find(t, Parse(native, "", home, tt.os), "rm")
+		sc := c.ShellCall()
+		if tt.rm {
+			sc = c.ShellCallRm()
+		}
+		homeWord := func(s string) shell.Word {
+			if !tt.expands {
+				return shell.Word{}
+			}
+			return shell.Word{Text: s, Static: true, Tilde: true}
+		}
+		backslash := lit
+		dynamicOnWindows := lit // `~\"x` is a home form only on Windows, where its `"` is unmeasured
+		if tt.os == Windows {
+			backslash = homeWord
+			dynamicOnWindows = func(string) shell.Word { return shell.Word{} }
+		}
+		want := []shell.Word{
+			lit("rm.exe"), lit("-r"),
+			homeWord("~"), homeWord("~/x"), backslash(`~\`), backslash(`~\b.md`), homeWord("~"),
+			lit("~"), lit("~"), lit("x~"), lit("~user"), lit("~foo/.git"),
+			backslash(`~\x`), homeWord("~/x"), backslash(`~\.`), backslash(`~\`), lit("~foo/.git"),
+			lit(`~\a b`), dynamicOnWindows(`~\"x`),
+			lit("~"), // `'--%'` is dropped
+		}
+		if !slices.Equal(sc.Args, want) {
+			t.Errorf("os %d rm %v native ~ args = %+v, want %+v", tt.os, tt.rm, sc.Args, want)
+		}
+	}
+	for _, os := range []OS{Unix, Windows} {
+		sc := find(t, Parse("rm.exe -r --% ~ ~\\x", "", home, os), "rm").ShellCallRm()
+		if want := []shell.Word{
+			lit("rm.exe"),
+			lit("-r"),
+			lit("~"),
+			lit(`~\x`),
+		}; !slices.Equal(
+			sc.Args,
+			want,
+		) {
+			t.Errorf("os %d --%% tail = %+v, want %+v", os, sc.Args, want)
 		}
 	}
 	if sc := find(t, Parse(`gh "$HOME"`, "", "", Unix), "gh").ShellCall(); sc.Args[1].Static {
