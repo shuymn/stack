@@ -35,17 +35,31 @@ placeholder cutoffs disable both decisions, so nothing is sent until `jev-calibr
 (`extensions/jev/semantic/cutoffs.json`); reinstall after `jev-calibrate` changes them.
 
 The Jev extensions and `jev-calibrate` read the key from `TYPESAFE_API_KEY`, else from `~/.config/stack/jev/key`.
-Put it in that file, owned by you and readable only by you; run this as yourself (not with `sudo`). It reads the key
-from stdin, so the key stays out of the shell history:
+Put it in that file, owned by you and readable only by you. As yourself (not with `sudo`), create the file empty with
+mode `600` first; `install` replaces any existing file, so an older `644` one does not keep its mode:
 
 ```sh
-(umask 077 && mkdir -p ~/.config/stack/jev && cat > ~/.config/stack/jev/key)
+(umask 077 && mkdir -p ~/.config/stack/jev)
+install -m 600 /dev/null ~/.config/stack/jev/key
+ls -le ~/.config/stack/jev/key   # macOS; ls -l and getfacl elsewhere
 ```
 
-On Unix a key file that group or others can access is refused with a `warn` naming the fix
-(`chmod 600 ~/.config/stack/jev/key`), and one another user owns with a `warn` to recreate it as yourself; on Windows
-the profile's permissions guard it and no mode is checked.
-Removing the file (and leaving the variable unset) opts out. `stack-guard` denies reading the file as a secret.
+Check that the listing shows `-rw-------`, you as the owner and no ACL entries: on macOS a new file can inherit a
+read ACL from its directory. Then write the key from stdin, so it stays out of the shell history (end with Ctrl-D):
+
+```sh
+cat > ~/.config/stack/jev/key
+```
+
+The extensions validate only the file's mode and ownership, not ACLs: on Unix a key file that group or others can
+access is refused with a `warn` naming the fix (`chmod 600 ~/.config/stack/jev/key`), and one another user owns with
+a `warn` to recreate it as yourself; on Windows the profile's permissions guard it and no mode is checked. Removing
+the file (and leaving the variable unset) opts out.
+
+`stack-guard` treats the file as a secret. File tools resolve their paths against the working directory, and `Read`
+and `NotebookRead` also follow symlinks, so they are denied on the file however it is named. A Bash command is
+matched only by the path text it contains: naming the file by a relative path from its directory (`cat key`), or
+through a symlink elsewhere, is not denied.
 
 `stack-guard` is a Claude Code hook of its own, not a stage extension: wire it as a separate `PreToolUse` entry
 (matcher `Bash|PowerShell|Read|NotebookRead|Grep|Glob|mcp__pencil__execute`, exec form `stack-guard hook claude pre-tool-use`,
