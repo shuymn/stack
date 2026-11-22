@@ -980,11 +980,13 @@ func (p *parser) cdTarget(c Call) (string, bool) {
 		return "", true // bounds the cwd strings a long `cd x &&` chain builds
 	}
 	t, ok := fileSystemPath(target[0].Text, p.os)
-	if !ok {
+	// The result is at most the target joined to the longer of home and cwd: past the cap the
+	// candidate is never built.
+	if !ok || max(len(p.home), len(p.cwd))+len(`\`)+len(t) > maxCwdLen {
 		return "", true
 	}
 	dir, ok := paths.ResolvePowerShell(p.home, p.cwd, t, p.os == Windows)
-	if !ok || len(dir) > maxCwdLen {
+	if !ok {
 		return "", true
 	}
 	p.cdSteps++

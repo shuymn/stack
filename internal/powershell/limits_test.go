@@ -10,26 +10,58 @@ import (
 // TestParseCwdGrowth checks that a long `cd x &&` chain allocates in proportion to its length:
 // past the cap on cd steps the cwd is unknown, and recognition goes on.
 func TestParseCwdGrowth(t *testing.T) {
-	const n = 50000
-	cmd := strings.Repeat("cd x && ", n) + "git status"
-	var before, after runtime.MemStats
-	runtime.GC()
-	runtime.ReadMemStats(&before)
-	r := Parse(cmd, "/w", "", Unix)
-	runtime.ReadMemStats(&after)
-	if r.Err != nil || len(r.Calls) != n+1 {
-		t.Fatalf("err %v, %d calls; want %d", r.Err, len(r.Calls), n+1)
+	sep := string(filepath.Separator)
+	// parse parses cmd and checks that it allocated a few KB per call at most: quadratic cwd
+	// copies are gigabytes.
+	parse := func(cmd, cwd, home string, calls int) Result {
+		t.Helper()
+		var before, after runtime.MemStats
+		runtime.GC()
+		runtime.ReadMemStats(&before)
+		r := Parse(cmd, cwd, home, Unix)
+		runtime.ReadMemStats(&after)
+		if r.Err != nil || len(r.Calls) != calls {
+			t.Fatalf("err %v, %d calls; want %d", r.Err, len(r.Calls), calls)
+		}
+		if alloc := after.TotalAlloc - before.TotalAlloc; alloc > 4096*uint64(calls)+64<<10 {
+			t.Errorf("Parse allocated %d bytes for %d bytes of input", alloc, len(cmd))
+		}
+		return r
 	}
-	if last := r.Calls[n]; last.Cwd != "" {
-		t.Errorf("cwd after %d cd steps = %.40q…; want unknown", n, last.Cwd)
-	}
-	if want := "/w" + string(filepath.Separator) + "x"; r.Calls[1].Cwd != want {
-		t.Errorf("cwd after one cd = %q, want %q", r.Calls[1].Cwd, want)
-	}
-	// A few KB per call covers the calls and their slice growth; quadratic cwd copies are gigabytes.
-	if alloc := after.TotalAlloc - before.TotalAlloc; alloc > 4096*uint64(n) {
-		t.Errorf("Parse allocated %d bytes for %d bytes of input", alloc, len(cmd))
-	}
+
+	t.Run("step cap", func(t *testing.T) {
+		const n = 50000
+		r := parse(strings.Repeat("cd x && ", n)+"git status", "/w", "", n+1)
+		if want := "/w" + strings.Repeat(sep+"x", maxCdSteps); r.Calls[maxCdSteps].Cwd != want {
+			t.Errorf("cwd after %d steps = %q, want %q", maxCdSteps, r.Calls[maxCdSteps].Cwd, want)
+		}
+		if got := r.Calls[maxCdSteps+1].Cwd; got != "" {
+			t.Errorf("cwd after %d steps = %q, want unknown", maxCdSteps+1, got)
+		}
+		if last := r.Calls[n]; last.Cwd != "" {
+			t.Errorf("cwd after %d steps = %.40q…; want unknown", n, last.Cwd)
+		}
+	})
+
+	t.Run("length cap", func(t *testing.T) {
+		short, long := strings.Repeat("a", 100), strings.Repeat("b", maxCwdLen)
+		r := parse("cd "+short+" && git a; cd "+long+" && git b", "/w", "", 4)
+		if want := "/w" + sep + short; r.Calls[1].Cwd != want {
+			t.Errorf("cwd after a short cd = %q, want %q", r.Calls[1].Cwd, want)
+		}
+		if got := r.Calls[3].Cwd; got != "" {
+			t.Errorf("cwd past %d bytes = %.40q…; want unknown", maxCwdLen, got)
+		}
+	})
+
+	t.Run("long home", func(t *testing.T) {
+		const n = 20000
+		home := "/" + strings.Repeat("x/", n) + "root"
+		r := parse(strings.Repeat("cd ~/x && ", n)+"git status", "/w", home, n+1)
+		if last := r.Calls[n]; last.Cwd != "" {
+			t.Errorf("cwd under a %d-byte home = %.40q…; want unknown", len(home), last.Cwd)
+		}
+	})
 }
 
 // TestParseCwdBudgetInBlocks checks that the lookahead over a block spends no cd steps of its own:
