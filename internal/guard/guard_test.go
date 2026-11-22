@@ -48,10 +48,10 @@ func (f *fixture) bash(cmd string) (Decision, bool) {
 	}, f.opts)
 }
 
-func wantDeny(t *testing.T, name string, d Decision, ok bool, rule string) {
+func wantDeny(t *testing.T, name string, d Decision, ok bool) {
 	t.Helper()
-	if !ok || d.Rule != rule || !strings.Contains(d.Reason, "("+rule+")") {
-		t.Errorf("%s: got deny=%v %+v, want a %s deny", name, ok, d, rule)
+	if !ok || d.Rule != RuleRawMerge || !strings.Contains(d.Reason, "("+RuleRawMerge+")") {
+		t.Errorf("%s: got deny=%v %+v, want a raw-merge deny", name, ok, d)
 	}
 }
 
@@ -100,7 +100,7 @@ func TestRawMerge(t *testing.T) {
 	}
 	for _, cmd := range deny {
 		d, ok := f.bash(cmd)
-		wantDeny(t, cmd, d, ok, RuleRawMerge)
+		wantDeny(t, cmd, d, ok)
 	}
 	allow := []string{
 		"gh pr merge --help",

@@ -546,6 +546,9 @@ func (p *parser) pipeline() elem {
 		}
 		p.pos++
 		p.skipLines()
+		if p.moved {
+			p.cwd = "" // a location change in the pipeline: later elements run where it left them
+		}
 		stdin = shell.Stdin{Kind: shell.StdinDynamic}
 		if e.text != nil {
 			stdin = shell.Stdin{Kind: shell.StdinText, Text: *e.text + "\n"}

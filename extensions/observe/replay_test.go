@@ -439,6 +439,8 @@ func TestReplayInputs(t *testing.T) {
 			{"Grep", map[string]any{"pattern": "x", "path": 7}},
 			{"Glob", map[string]any{"path": "."}},
 			{"mcp__pencil__execute", map[string]any{"input": 7}},
+			{"PowerShell", map[string]any{}},
+			{"PowerShell", map[string]any{"command": 7}},
 		}
 		recs := make([][]map[string]any, 0, len(tools))
 		for _, tl := range tools {
@@ -450,7 +452,7 @@ func TestReplayInputs(t *testing.T) {
 			Args: []string{"hook", "claude", "pre-tool-use"},
 		})
 		resp, l := f.run()
-		if l.Replay != (ReplayTotals{Unrecoverable: 6}) ||
+		if l.Replay != (ReplayTotals{Unrecoverable: 8}) ||
 			len(findings(resp, kindReplayChange)) != 0 {
 			t.Errorf("replay = %+v, findings %+v", l.Replay, resp.Findings)
 		}
@@ -614,4 +616,107 @@ func TestReplayRealHook(t *testing.T) {
 			t.Errorf("hook-missing findings %+v", resp.Findings)
 		}
 	})
+}
+
+// psReplayCommands are the replayable commands of psReplayTranscript, in transcript order.
+var psReplayCommands = []string{
+	"& gh.exe pr merge 1 --squash",
+	"Remove-Item -Recurse -Force $HOME",
+	"gh pr view 1",
+	"ri -r ~",
+}
+
+// psReplayTranscript records psReplayCommands and a PowerShell call with no command.
+func psReplayTranscript(f *fixture) {
+	f.t.Helper()
+	call := func(input map[string]any, resultText string) []map[string]any {
+		a := assistant(hourAgo, f.cwd, tool{"PowerShell", input})
+		if strings.HasPrefix(resultText, "PreToolUse:") {
+			return []map[string]any{a, errorResult(a, resultText)}
+		}
+		return []map[string]any{a, result(a, resultText)}
+	}
+	f.calls(
+		"ps",
+		// A core-only deny and a stack-guard-only deny, each made again.
+		call(cmd(psReplayCommands[0]), "PreToolUse:PowerShell hook error: "+
+			"[stack hook claude pre-tool-use]: stack guard (raw-merge): gh pr merge is not run "+
+			"directly."),
+		call(cmd(psReplayCommands[1]), "PreToolUse:PowerShell hook error: "+
+			"[stack-guard hook claude pre-tool-use]: stack-guard (rmroot): Remove-Item would "+
+			"recursively delete the home directory ($HOME)."),
+		call(cmd(psReplayCommands[2]), "ok"),
+		// A recorded no-deny the current rules deny.
+		call(cmd(psReplayCommands[3]), "ok"),
+		// No command: not replayable.
+		call(map[string]any{}, "PreToolUse:PowerShell hook error: stack-guard (rmroot): x"),
+	)
+}
+
+// TestReplayRealHookPowerShell replays PowerShell tool calls through both built hooks, as Bash
+// calls are (powershell-guard C9).
+func TestReplayRealHookPowerShell(t *testing.T) {
+	t.Parallel()
+	needBuilt(t)
+	f := newFixture(t)
+	f.tools["stack"] = built.stack
+	f.tools["stack-guard"] = built.guard
+	psReplayTranscript(f)
+	resp, l := f.run()
+	want := ReplayTotals{
+		Compared: 4, Changed: 1, Unrecoverable: 1, ChangedByKind: ChangeKinds{NewDeny: 1},
+	}
+	if l.Replay != want {
+		t.Errorf("replay = %+v, want %+v, findings %+v", l.Replay, want, resp.Findings)
+	}
+	if got := replayFindings(resp); !slices.Equal(
+		got,
+		[]string{"PowerShell: no-deny -> deny:rmroot"},
+	) {
+		t.Errorf("findings = %q", got)
+	}
+}
+
+// TestReplayPowerShellPayloads checks that each replayable PowerShell payload reaches both hooks
+// once, as a PowerShell call, and that the call with no command reaches neither.
+func TestReplayPowerShellPayloads(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	guard := f.fake("stack-guard", proctest.Response{Args: hookArgs})
+	stack := f.fake("stack", stackModel, proctest.Response{Args: hookArgs})
+	psReplayTranscript(f)
+	f.run()
+	for name, bin := range map[string]string{"stack": stack, "stack-guard": guard} {
+		var got []string
+		for _, c := range proctest.Calls(t, bin) {
+			if !slices.Equal(c.Args, hookArgs) {
+				continue
+			}
+			var in struct {
+				ToolName  string          `json:"tool_name"`  //nolint:tagliatelle // hook payload keys
+				ToolInput json.RawMessage `json:"tool_input"` //nolint:tagliatelle // hook payload keys
+			}
+			if err := json.Unmarshal(
+				[]byte(c.Stdin),
+				&in,
+			); err != nil ||
+				in.ToolName != "PowerShell" {
+				t.Errorf("%s got payload %q (%v)", name, c.Stdin, err)
+				continue
+			}
+			var tin struct {
+				Command string `json:"command"`
+			}
+			if err := json.Unmarshal(in.ToolInput, &tin); err != nil || tin.Command == "" {
+				t.Errorf("%s got the input %s", name, in.ToolInput)
+				continue
+			}
+			got = append(got, tin.Command)
+		}
+		slices.Sort(got)
+		want := slices.Sorted(slices.Values(psReplayCommands))
+		if !slices.Equal(got, want) {
+			t.Errorf("%s got commands %q, want %q", name, got, want)
+		}
+	}
 }

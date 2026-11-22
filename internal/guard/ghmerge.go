@@ -33,7 +33,7 @@ func rawMerge(calls []ghCall, opts Options) (Decision, bool) {
 					c.gh.Endpoint, mergeAdvice)
 			}
 			for _, q := range c.gh.Queries {
-				text, ok := readInput(q, c.call, opts.Home)
+				text, ok := readInput(q, c, opts.Home)
 				if ok && q.JSON {
 					text, ok = ghargs.QueryFromJSON([]byte(text))
 				}

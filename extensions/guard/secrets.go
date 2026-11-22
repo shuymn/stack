@@ -43,10 +43,9 @@ func secrets(opts Options) []secret {
 		if e == "" {
 			continue
 		}
-		s := secret{entry: e, text: e}
+		s := secret{entry: e, text: mentionText(e)}
 		switch {
-		case e == "~" || strings.HasPrefix(e, "~/") || strings.HasPrefix(e, `~\`):
-			s.text = strings.TrimLeft(e[1:], `/\`)
+		case isTildeEntry(e):
 			if opts.Home != "" {
 				s.root = paths.Expand(opts.Home, e)
 			} else {
@@ -66,6 +65,19 @@ func secrets(opts Options) []secret {
 		out = append(out, s)
 	}
 	return out
+}
+
+func isTildeEntry(e string) bool {
+	return e == "~" || strings.HasPrefix(e, "~/") || strings.HasPrefix(e, `~\`)
+}
+
+// mentionText is what a command mentions of an entry: the home-relative part of a `~` entry, else
+// the entry.
+func mentionText(e string) string {
+	if isTildeEntry(e) {
+		return strings.TrimLeft(e[1:], `/\`)
+	}
+	return e
 }
 
 func components(norm string) []string {
@@ -280,10 +292,15 @@ func secretsBash(command string, handoffs []shell.Range, opts Options) (Decision
 // by a name rune (letter, digit, `.`, `-`, `_`). A `/` in needle also matches `\`; case is folded
 // where paths folds it.
 func mentions(text, needle string) bool {
+	return mentionsFor(text, needle, foldCase)
+}
+
+// mentionsFor is mentions with an explicit case rule.
+func mentionsFor(text, needle string, fold bool) bool {
 	if needle == "" {
 		return false
 	}
-	if foldCase {
+	if fold {
 		text, needle = strings.ToLower(text), strings.ToLower(needle)
 	}
 	for i := 0; i+len(needle) <= len(text); i++ {
@@ -308,12 +325,44 @@ func mentions(text, needle string) bool {
 func matchAt(text string, i int, needle string) bool {
 	for k := range len(needle) {
 		c, n := text[i+k], needle[k]
-		if c == n || ((n == '/' || n == '\\') && (c == '/' || c == '\\')) {
+		if c == n || (isSep(n) && isSep(c)) {
 			continue
 		}
 		return false
 	}
 	return true
+}
+
+// collapseSeps turns each run of `/` and `\` in s into one `/`, as Windows paths read it.
+func collapseSeps(s string) string {
+	// Up to the first `\` or repeated separator, s is already collapsed.
+	start := 0
+	for ; start < len(s); start++ {
+		if s[start] == '\\' || (s[start] == '/' && start+1 < len(s) && isSep(s[start+1])) {
+			break
+		}
+	}
+	if start == len(s) {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	b.WriteString(s[:start])
+	for i := start; i < len(s); i++ {
+		if !isSep(s[i]) {
+			b.WriteByte(s[i])
+			continue
+		}
+		b.WriteByte('/')
+		for i+1 < len(s) && isSep(s[i+1]) {
+			i++
+		}
+	}
+	return b.String()
+}
+
+func isSep(c byte) bool {
+	return c == '/' || c == '\\'
 }
 
 func isNameRune(r rune) bool {
