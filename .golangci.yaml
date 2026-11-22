@@ -40,12 +40,13 @@ linters:
             - "!$test"
           allow:
             - github.com/shuymn/stack/internal/shell$
+            - github.com/shuymn/stack/internal/powershell$
             - github.com/shuymn/stack/internal/ghargs$
             - github.com/shuymn/stack/internal/paths$
             - github.com/shuymn/stack/internal/hookio$
           deny:
             - pkg: github.com/shuymn/stack/internal
-              desc: stack-guard shares only the shell, gh, path and hook packages with core
+              desc: stack-guard shares only the shell, PowerShell, gh, path and hook packages with core
         extension-tests:
           list-mode: lax
           files:
