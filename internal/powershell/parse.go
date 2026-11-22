@@ -793,6 +793,8 @@ func (p *parser) args(kind Kind) []item {
 				return items
 			}
 			for _, w := range tail {
+				// After a quoted `--%`, a later stop-parsing token is one more ambiguity.
+				w.ambiguous = j.on
 				items = append(items, item{words: []Word{w}})
 			}
 			return items
@@ -806,8 +808,11 @@ func (p *parser) args(kind Kind) []item {
 		it := p.valueItem(kind)
 		switch {
 		case kind != Native:
-		case !j.on && quotedMark(it.words[0]):
-			j.on = true // dropped from argv; the later arguments are joined verbatim
+		case quotedMark(it.words[0]):
+			// Dropped from argv; the later arguments are joined verbatim. A second one is dropped
+			// too, and starts the ambiguous region.
+			j.amb = j.amb || j.on
+			j.on = true
 			continue
 		case j.on:
 			if it.words = j.words(it.words[0]); len(it.words) == 0 {
@@ -843,25 +848,24 @@ var percentVar = regexp.MustCompile(`%[^%]+%`)
 // joining is the state of the native arguments after a quoted `--%`.
 type joining struct {
 	on bool
-	// lost is set once the argument boundaries are unknown: from there every word is dynamic.
-	lost bool
+	// amb is set from the first argument whose boundaries or value can differ between engines:
+	// that argument and every later one of the call are ambiguous.
+	amb bool
 }
 
-// words is the argv a native argument after a quoted `--%` becomes (5.1 and 7.7, argv stub): its
-// value split at blanks, each part literal and never a home `~`. A value holding a `"` or a line
-// break splits differently on 5.1 and 7.7 (`'--body=a"b' --help` is one argument on 5.1, two on
-// 7.7), a `%NAME%` is expanded to an unknown value, and an empty value is an argument on 7.7 but
-// none on 5.1: each makes that word and every later one dynamic, since the boundaries are unknown.
-// A dynamic word stays one dynamic word.
+// words is the argv a native argument after a quoted `--%` becomes: its static value split at
+// blanks, each part never a home `~` (5.1 and 7.7 agree on this, argv stub). An argument the
+// engines can pass differently starts the ambiguous region: a value holding `"`, `,` or a line
+// break (`'--body=a"b' --help` is one argument on 5.1, two on 7.7), a `%NAME%` (expanded to an
+// unknown value), an empty value (an argument on 7.7 only), and one that is not static (a variable
+// or interpolation, whose value may hold any of these). A word in the region keeps its static text,
+// so checks still match it, but is marked ambiguous: it never proves a call harmless.
 func (j *joining) words(w Word) []Word {
-	if !j.lost && w.Static && w.Known == NotKnown &&
-		(w.Text == "" || strings.ContainsAny(w.Text, "\"\r\n") || percentVar.MatchString(w.Text)) {
-		j.lost = true
+	if !w.Static || w.Known != NotKnown || w.Text == "" ||
+		strings.ContainsAny(w.Text, "\",\r\n") || percentVar.MatchString(w.Text) {
+		j.amb = true
 	}
-	if j.lost {
-		return []Word{{Raw: w.Raw, joined: true}}
-	}
-	w.joined = true
+	w.joined, w.ambiguous = true, j.amb
 	if !w.Static || w.Known != NotKnown {
 		return []Word{w}
 	}

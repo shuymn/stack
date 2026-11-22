@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -167,6 +168,9 @@ func TestGhPublishPowerShell(t *testing.T) {
 			"@'\nsee " + lp + "\n'@ | gh pr comment 1 -F -",
 			"gh pr create --bogus -b '" + lp + "'",
 			"gh pr comment 1 '--%' --body-file=b.md",
+			// In the ambiguous region after a quoted `--%` a body file is still read (5.1 may make it
+			// part of an inline body: an accepted over-deny).
+			`gh pr comment 1 '--%' '--body=a"b' --body-file=b.md`,
 		},
 		allow: []string{
 			"cd sub; gh pr create -t t --body-file b.md",
@@ -181,9 +185,6 @@ func TestGhPublishPowerShell(t *testing.T) {
 			`gh pr comment 1 -F "$env:SystemDrive\b.md"`,
 			"cd '" + dir + "'; gh pr create -t x -b y",
 			"gh pr create -t t --body-file clean.md",
-			// After a quoted `--%`, a `"` moves the later boundaries on 5.1 (`--body=ab --body-file=b.md`
-			// is one inline body there): the rest is dynamic and skipped.
-			`gh pr comment 1 '--%' '--body=a"b' --body-file=b.md`,
 		},
 	}
 	for _, windows := range bothOS {
@@ -496,6 +497,73 @@ func TestRmRootPowerShellHostDrive(t *testing.T) {
 		} else {
 			wantAllow(t, tt.cmd, d, ok)
 		}
+	}
+}
+
+// TestPowerShellNoNewAllow replays the review probes of the quoted `--%`, quote-token and native
+// `~` changes: each one the base recognizer (before them) denied still denies on that host, unless
+// it is a measured flip where 5.1 and 7.7 agree on argv that shows a harmless call (flip).
+func TestPowerShellNoNewAllow(t *testing.T) {
+	f := newFixture(t)
+	for _, d := range [][]string{{".git", "hooks"}, {"~foo", ".git"}} {
+		if err := os.MkdirAll(filepath.Join(append([]string{f.cwd}, d...)...), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.write("b.md", "see "+localPath()+"\n")
+	for _, tt := range []struct {
+		cmd               string
+		baseUnix, baseWin bool
+		flip              string
+	}{
+		{"& rm.exe -r '--%' '' .git", true, true, ""},
+		{"& rm.exe -r '--%' '--%' .git", true, true, ""},
+		{"& rm.exe -r '--%' 'a\"b' .git", true, true, ""},
+		{"& rm.exe -r '--%' %X% .git", true, true, ""},
+		{"& rm.exe -r '--%' 'a','b' .git", true, true, ""},
+		{"& rm.exe '--%' '' -r .git", true, true, ""},
+		{"& rm.exe -r '--%' x --% .git", true, true, ""},
+		{"& rm.exe -r ~'foo'/.git", true, false, ""},
+		{"& rm.exe -r ~", true, false, ""},
+		{`gh pr comment 1 '--%' '--body=a"b' --body-file=b.md`, false, false, ""},
+		{`gh pr comment 1 '--%' '--body=a"b' --% --body-file=b.md`, false, false, ""},
+		{"gh pr comment 1 '--%' '--body=a\"b' `--% --body-file=b.md", false, false, ""},
+		{"gh pr comment 1 '--%' '' --body-file=b.md", false, false, ""},
+		{`$t = 'a"b'; gh pr comment 1 '--%' "--body=$t" --body-file=b.md`, false, false, ""},
+		{"gh pr create -t t '--%' 'a','b' --body-file b.md", false, false, ""},
+		{"gh pr comment 1 -F 'b'.md", true, true, "both engines pass the file b, then .md"},
+	} {
+		for _, windows := range bothOS {
+			d, ok := f.psDecide(tt.cmd, windows)
+			name := "windows=" + strconv.FormatBool(windows) + ": " + tt.cmd
+			switch {
+			case tt.flip != "":
+				wantAllow(t, name+" (flip: "+tt.flip+")", d, ok)
+			case (windows && tt.baseWin || !windows && tt.baseUnix) && !ok:
+				t.Errorf("%s: allowed, but the base denied it", name)
+			}
+		}
+	}
+}
+
+// TestRmRootPowerShellUnicodeSpace checks that a native `~` value holding Unicode whitespace is a
+// literal name, as PowerShell 7.7 passes it: a no-break space with only a home copy allows, an em
+// space with only a cwd copy denies.
+func TestRmRootPowerShellUnicodeSpace(t *testing.T) {
+	f := newFixture(t)
+	nbsp, em := "a b", "a b"
+	if err := os.MkdirAll(filepath.Join(f.home, nbsp, ".git"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(f.cwd, "~", em, ".git"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, windows := range bothOS {
+		host := "windows=" + strconv.FormatBool(windows)
+		d, ok := f.psDecide("& rm.exe -r ~'/"+nbsp+"'/.git", windows)
+		wantAllow(t, host+": no-break space, home copy only", d, ok)
+		d, ok = f.psDecide("& rm.exe -r ~'/"+em+"'/.git", windows)
+		wantDeny(t, host+": em space, cwd copy only", d, ok, RuleRmRoot)
 	}
 }
 

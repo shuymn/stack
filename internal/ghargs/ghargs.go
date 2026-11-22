@@ -21,6 +21,9 @@ type Arg struct {
 	Static bool
 	// Tilde reports that a leading `~` is unquoted, so the shell expands it.
 	Tilde bool
+	// Ambiguous marks an argument whose boundaries depend on the engine (shell.Word.Ambiguous):
+	// it counts for what gh publishes or runs, but a flag it sets never makes the call harmless.
+	Ambiguous bool
 }
 
 // Kind is where a published input comes from.
@@ -127,7 +130,23 @@ func Parse(args []Arg) (Call, bool) {
 	default:
 		c.Published = commandPublished(command, fs)
 	}
+	if k := slices.IndexFunc(args, func(a Arg) bool { return a.Ambiguous }); k >= 0 {
+		c.untrust(command, tokens[:k])
+	}
 	return c, true
+}
+
+// untrust keeps -h/--help, --disable-auto and --dry-run only when the arguments before the first
+// ambiguous one (pre) already set them: an ambiguous argument can show a merge or a publish, but
+// never prove it harmless.
+func (c *Call) untrust(command string, pre []string) {
+	fs := flagSet(command, false)
+	if cmd, rest, ok := commandPath(pre); ok && cmd == command {
+		_ = fs.Parse(rest)
+	}
+	c.Help = c.Help && boolValue(fs, "help")
+	c.DisableAuto = c.DisableAuto && boolValue(fs, "disable-auto")
+	c.DryRun = c.DryRun && boolValue(fs, "dry-run")
 }
 
 // mark turns an argv word into the token passed to pflag, keeping the shell's tilde decision: a

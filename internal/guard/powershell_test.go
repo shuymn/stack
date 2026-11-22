@@ -157,6 +157,51 @@ func TestRawMergePowerShellTilde(t *testing.T) {
 	}
 }
 
+// TestRawMergePowerShellNoNewAllow replays the review probes of the quoted `--%` and quote-token
+// changes: each one the base recognizer (before them) denied still denies, on both hosts, unless it
+// is a measured flip where 5.1 and 7.7 agree on argv that shows a harmless call (flip).
+func TestRawMergePowerShellNoNewAllow(t *testing.T) {
+	f := newFixture(t)
+	for _, tt := range []struct {
+		cmd      string
+		baseDeny bool
+		flip     string // why an allow is correct although the base denied
+	}{
+		{`gh pr merge 7 --squash '--%' '--body=a"b' --help`, true, ""},
+		{`gh pr merge 7 --squash '--%' '--body=a','--subject=b"'--help`, true, ""},
+		{`$title = 'a"b'; gh pr merge 7 --squash '--%' "--body=$title" --help`, true, ""},
+		{`gh pr merge 7 --squash '--%' '--body=a"b' --% --help`, true, ""},
+		{"gh pr merge 7 --squash '--%' '--body=a\"b' `--% --help", true, ""},
+		{"gh pr \"--`%\" \"merge 7\"", false, ""},
+		{"gh pr merge 7 '--%' %X% --help", true, ""},
+		{"gh pr merge 7 '--%' '--%' --help", true, ""},
+		{"gh pr merge 7 '--%' '' --help", true, ""},
+		{"gh pr merge 7 a,'b'c --help", false, ""},
+		{"gh pr merge 7 'a',b,'c'd --help", false, ""},
+		{`gh pr '--%' "merge 7"`, false, ""},
+		{`& gh.exe '--%' pr "merge 7 --squash"`, false, ""},
+		{"gh pr 'merge'7", false, ""},
+		{"gh 'pr'merge 7", false, ""},
+		{"gh '--%' pr merge 7", true, ""},
+		{`& gh.exe "--%" pr merge 7`, true, ""},
+		{`powershell.exe -Command "gh pr merge 7 --squash '--%' '--body=a""b' --help"`, true, ""},
+		{"gh pr merge 7 'a','b'--help", true, "both engines pass the array, then --help"},
+		{"gh pr merge 7 '--%' --help", true, "both engines drop '--%' and pass --help"},
+		{"gh pr merge 7 '--%' x --help", true, "both engines drop '--%' and pass x, --help"},
+		{"gh pr merge 7 'a'--help", true, "both engines pass a, --help"},
+	} {
+		for _, os := range bothOS {
+			d, ok := f.ps(tt.cmd, os)
+			switch {
+			case tt.flip != "":
+				wantAllow(t, osName(os)+" (flip: "+tt.flip+"): "+tt.cmd, d, ok)
+			case tt.baseDeny:
+				wantDeny(t, osName(os)+" (base denied): "+tt.cmd, d, ok)
+			}
+		}
+	}
+}
+
 // TestRawMergePowerShellCurrentDrive checks that a gh call's file is read through the PowerShell
 // resolver: a current-drive-rooted `\…` path that the Git Bash resolver rejects.
 func TestRawMergePowerShellCurrentDrive(t *testing.T) {

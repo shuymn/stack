@@ -17,6 +17,7 @@ package powershell
 import (
 	"runtime"
 	"strings"
+	"unicode"
 
 	"github.com/shuymn/stack/internal/paths"
 	"github.com/shuymn/stack/internal/shell"
@@ -118,6 +119,7 @@ type Word struct {
 
 	blockStart, blockEnd int
 	joined               bool // a native argument after a quoted `--%`, passed as written
+	ambiguous            bool // in the region where the engines may split arguments differently
 	blockMoved           bool // the block holds a location change
 	glob                 bool // an unquoted wildcard (`*`, `?`, `[`)
 }
@@ -177,6 +179,7 @@ func (c Call) shellCall(windowsTilde bool) shell.Call {
 	out := shell.Call{Args: make([]shell.Word, len(c.Args)), Stdin: c.Stdin, Cwd: c.Cwd}
 	for i, w := range c.Args {
 		out.Args[i] = c.nativeWord(w, windowsTilde)
+		out.Args[i].Ambiguous = w.ambiguous
 	}
 	return out
 }
@@ -193,8 +196,9 @@ const (
 // tildeOf classifies a native word by its decoded value, as PowerShell 7.7 does (argv stub): a
 // word whose first part is unquoted, outside a `--%` tail and not after a quoted `--%`, and whose
 // value is exactly `~`, `~/…` or, on Windows, `~\…` (paths.TildeForm) is home, whatever quotes or
-// backtick escapes spell it (“ `~ “, “ ~\`. “, `~'\x'`, `~"\x"`), unless the value holds a blank
-// (`~'\a b'` is passed as written). `~'foo'/.git` is the literal `~foo/.git`.
+// backtick escapes spell it (“ `~ “, “ ~\`. “, `~'\x'`, `~"\x"`), unless the value holds
+// whitespace as PowerShell defines it, Unicode spaces and line breaks included (`~'\a b'` and
+// `~'\a b'` with a no-break space are passed as written). `~'foo'/.git` is the literal `~foo/.git`.
 func (c Call) tildeOf(w Word) tildeKind {
 	switch {
 	case w.Flag != "", w.Verbatim, w.joined, w.Quote != Bare,
@@ -202,7 +206,7 @@ func (c Call) tildeOf(w Word) tildeKind {
 		return tildeNone
 	case strings.Contains(w.Text, `"`):
 		return tildeUnknown
-	case strings.ContainsAny(w.Text, " \t"):
+	case strings.IndexFunc(w.Text, unicode.IsSpace) >= 0:
 		return tildeNone
 	default:
 		return tildeHome
@@ -214,11 +218,10 @@ func (c Call) nativeWord(w Word, windowsTilde bool) shell.Word {
 	case w.Block:
 		return shell.Word{}
 	case w.Known == KnownHome || (w.Known == KnownUserProfile && c.os == Windows):
-		v := c.home + w.Text
-		if c.home == "" || (w.joined && strings.ContainsAny(v, " \t\"\r\n")) {
-			return shell.Word{} // a joined value with blanks splits where the hook cannot see
+		if c.home == "" {
+			return shell.Word{}
 		}
-		return shell.Word{Text: w.Flag + v, Static: true}
+		return shell.Word{Text: w.Flag + c.home + w.Text, Static: true}
 	case w.Known != NotKnown, !w.Static:
 		return shell.Word{}
 	}

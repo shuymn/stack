@@ -369,12 +369,12 @@ var parseTests = []struct {
 		calls{{"gh", "pr", "merge", "7", "x"}, {"gh", "pr", "merge", "7"}},
 	},
 	{
-		// An empty value, a `%NAME%` or a `"` splits differently or unknowably on 5.1 and 7.7: the
-		// rest of the call is dynamic.
-		"joined arguments past an unknown boundary are dynamic",
+		// An empty value, a `%NAME%` or a `"` starts the ambiguous region: its words keep their
+		// static text (TestAmbiguousRegion checks the mark).
+		"the ambiguous region keeps static text",
 		"git '--%' a '' b; git '--%' %X% b; git '--%' 'a\"b' --help",
 		Windows,
-		calls{{"git", "a", "$", "$"}, {"git", "$", "$"}, {"git", "$", "$"}},
+		calls{{"git", "a", "b"}, {"git", "%X%", "b"}, {"git", "a\"b", "--help"}},
 	},
 	{
 		"a quote-started token ends at its quote, also before %",
@@ -407,10 +407,10 @@ var parseTests = []struct {
 		calls{{"gh", "pr", "$"}, {"gh", "pr", "merge", "7"}},
 	},
 	{
-		"joined value with a quote is dynamic",
+		"a joined value with a quote keeps its text",
 		`git '--%' 'a"b' c`,
 		Unix,
-		calls{{"git", "$", "$"}},
+		calls{{"git", `a"b`, "c"}},
 	},
 	{
 		"a token starting with a quote ends at its closing quote",
@@ -604,6 +604,36 @@ func TestParse(t *testing.T) {
 				t.Errorf("%q calls = %q, want %q", tt.cmd, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestAmbiguousRegion checks which native words after a quoted `--%` are marked ambiguous: from the
+// first one the engines may pass differently to the end of the call, and none before it.
+func TestAmbiguousRegion(t *testing.T) {
+	for _, tt := range []struct {
+		cmd  string
+		want []bool // per argv word after the name
+	}{
+		{"git a '--%' b c", []bool{false, false, false}},
+		{"git '--%' a '' b c", []bool{false, true, true}},
+		{"git '--%' a 'x\"y' b", []bool{false, true, true}},
+		{"git '--%' a %X% b", []bool{false, true, true}},
+		{"git '--%' a $x b", []bool{false, true, true}},
+		{"git '--%' a 'b','c' d", []bool{false, true, true}},
+		{"git '--%' a '--%' b", []bool{false, true}},
+		{"git '--%' a --% b c", []bool{false, true, true}},
+		{"git '--%' a `--% b", []bool{false, true}},
+		{"git a '' --% b", []bool{false, false, false}},
+	} {
+		c := find(t, parse(t, tt.cmd, Windows), "git")
+		sc := c.ShellCall()
+		var got []bool
+		for _, w := range sc.Args[1:] {
+			got = append(got, w.Ambiguous)
+		}
+		if !slices.Equal(got, tt.want) {
+			t.Errorf("%q ambiguous = %v, want %v", tt.cmd, got, tt.want)
+		}
 	}
 }
 
