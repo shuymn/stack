@@ -234,13 +234,14 @@ func TestCalibrationGate(t *testing.T) {
 }
 
 // start is a cal case changing a file from some starting content.
-type start struct{ split, group, path string }
+type start struct{ split, path string }
 
 // starts maps a changed file's path and starting content to a case that changes it.
 type starts map[string]start
 
 // add records the files the case at path changes, failing when another case changes one from the
-// same starting content in the other split without a shared group.
+// same starting content in the other split. TestCorpus checks groups first, so cases sharing a
+// group are never in different splits here.
 func (m starts) add(t *testing.T, path string, repo json.RawMessage, l semantic.Label) {
 	t.Helper()
 	var spec semantic.RepoSpec
@@ -254,11 +255,11 @@ func (m starts) add(t *testing.T, path string, repo json.RawMessage, l semantic.
 				continue
 			}
 			key := name + "\x00" + base.String()
-			if s, ok := m[key]; ok && s.split != l.Split && (s.group == "" || s.group != l.Group) {
-				t.Fatalf("%s and %s change %s from the same content across splits without a "+
-					"shared group", s.path, path, name)
+			if s, ok := m[key]; ok && s.split != l.Split {
+				t.Fatalf("%s and %s change %s from the same content across splits",
+					s.path, path, name)
 			}
-			m[key] = start{l.Split, l.Group, path}
+			m[key] = start{l.Split, path}
 		}
 	}
 }
@@ -267,9 +268,9 @@ func (m starts) add(t *testing.T, path string, repo json.RawMessage, l semantic.
 type corpusCount struct{ en, ja, hard int }
 
 // TestCorpus is §3.5's corpus: per decision at least 12 positive and 12 negative fit cases and
-// 8 + 8 heldout ones, each class balanced between Japanese and English (fit to within one) and at
-// least 40% hard; every group of translations or near-duplicates in one split, and no file edited
-// from the same starting content in both splits outside a shared group.
+// exactly 8 + 8 heldout ones, each class balanced between Japanese and English (heldout exactly
+// 4 + 4, fit to within one) and at least 40% hard; every group of translations or near-duplicates
+// in one split, and no file edited from the same starting content in both splits.
 func TestCorpus(t *testing.T) {
 	paths, err := filepath.Glob(filepath.Join(semanticFixtures, "cal", "*.json"))
 	if err != nil {
@@ -290,10 +291,12 @@ func TestCorpus(t *testing.T) {
 		if l.Why == "" || (l.Split != calibrate.SplitFit && l.Split != calibrate.SplitHeldout) {
 			t.Fatalf("%s: label %+v", p, l)
 		}
-		if g, ok := groups[l.Group]; l.Group != "" && ok && g != l.Split {
-			t.Fatalf("%s: group %s spans %s and %s", p, l.Group, g, l.Split)
+		if l.Group != "" {
+			if g, ok := groups[l.Group]; ok && g != l.Split {
+				t.Fatalf("%s: group %s spans %s and %s", p, l.Group, g, l.Split)
+			}
+			groups[l.Group] = l.Split
 		}
-		groups[l.Group] = l.Split
 		starts.add(t, p, f.Repo, l)
 		for _, q := range semantic.Questions {
 			truth := l.Unsupported
