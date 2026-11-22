@@ -465,6 +465,12 @@ var parseTests = []struct {
 		calls{{"gh", "a"}, {"gh", "b"}, {"git", "c"}},
 	},
 	{
+		"postfix access after a leading subexpression",
+		`gh pr view ('abc').Length $(1)[0] @(2)::X (7)--help`,
+		Unix,
+		calls{{"gh", "pr", "view", "$", "$", "$", "$", "--help"}},
+	},
+	{
 		"keyword prefix is a command",
 		`foreach-thing x; iffy y`,
 		Unix,

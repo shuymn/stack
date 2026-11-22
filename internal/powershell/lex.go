@@ -473,11 +473,13 @@ func (p *parser) argWord(kind Kind) Word {
 		p.hash()
 		return Word{Raw: p.src[start:p.pos]}
 	case p.has("@("), p.has("$("), p.peek() == '(':
-		// A subexpression at the token start is a whole argument: `(7)--help` is two.
+		// A subexpression at the token start, with its member accesses and indexes
+		// (`('abc').Length`), is a whole argument: `(7)--help` is two.
 		if p.peek() != '(' {
 			p.pos++
 		}
 		p.paren()
+		p.members()
 		return Word{Raw: p.src[start:p.pos]}
 	case p.has("@'"), p.has(`@"`):
 		p.hereString(&b)
