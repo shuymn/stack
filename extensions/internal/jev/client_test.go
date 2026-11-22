@@ -75,27 +75,27 @@ func TestClientErrors(t *testing.T) {
 		},
 		{"other model", 200, noulBody("jev-latest", "0.5"), noulQ, Persistent, CauseModel, 0, 0},
 		{
-			"missing answer", 200, `{"model":"jev-1.14.0","answers":{}}`, noulQ, Persistent,
+			"missing answer", 200, `{"model":"jev-1.14.0","answers":{}}`, noulQ, OK,
 			CauseMissing, 0, 0,
 		},
-		{"null noul", 200, noulBody(Pin, "null"), noulQ, Persistent, CauseMissing, 0, 0},
+		{"null noul", 200, noulBody(Pin, "null"), noulQ, OK, CauseMissing, 0, 0},
 		{
 			"wrong type", 200, `{"model":"jev-1.14.0","answers":{"q":{"type":"choice"}}}`, noulQ,
-			Persistent, CauseMissing, 0, 0,
+			OK, CauseMissing, 0, 0,
 		},
 		{"string noul", 200, noulBody(Pin, `"0.5"`), noulQ, Persistent, CauseMalformed, 0, 0},
-		{"above 1", 200, noulBody(Pin, "1.5"), noulQ, Persistent, CauseProbability, 0, 0},
-		{"below 0", 200, noulBody(Pin, "-0.1"), noulQ, Persistent, CauseProbability, 0, 0},
+		{"above 1", 200, noulBody(Pin, "1.5"), noulQ, OK, CauseProbability, 0, 0},
+		{"below 0", 200, noulBody(Pin, "-0.1"), noulQ, OK, CauseProbability, 0, 0},
 		{"overflow", 200, noulBody(Pin, "1e999"), noulQ, Persistent, CauseMalformed, 0, 0},
 		{
 			"choice label unknown", 200, `{"model":"jev-1.14.0","answers":{"q":{"type":"choice",` +
 				`"choice":"z","confidence":0.7,"probabilities":{"a":0.7,"b":0.3}}}}`, choiceQ,
-			Persistent, CauseMissing, 0, 0,
+			OK, CauseMissing, 0, 0,
 		},
 		{
 			"choice probability missing", 200, `{"model":"jev-1.14.0","answers":{"q":{"type":` +
 				`"choice","choice":"a","confidence":0.7,"probabilities":{"a":0.7}}}}`, choiceQ,
-			Persistent, CauseMissing, 0, 0,
+			OK, CauseMissing, 0, 0,
 		},
 		{
 			"slow headers", 200, noulBody(Pin, "0.5"), noulQ, Deadline, CauseDeadline,
@@ -140,7 +140,12 @@ func TestClientErrors(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
 			defer cancel()
 			o := Live{Endpoint: srv.URL, Key: "k"}.Send(ctx, testBatch(c.qs))
-			if o.Class != c.class || o.Cause != c.cause {
+			cause := o.Cause
+			if o.Class == OK && cause == "" {
+				// A per-answer failure keeps the batch and names the question.
+				cause = o.Invalid["q"]
+			}
+			if o.Class != c.class || cause != c.cause {
 				t.Fatalf("outcome = class %d cause %q, want %d %q", o.Class, o.Cause, c.class,
 					c.cause)
 			}
@@ -256,5 +261,99 @@ func TestDoDeadline(t *testing.T) {
 	}
 	if len(g.started) > InFlight+1 {
 		t.Fatalf("%d batches started", len(g.started))
+	}
+}
+
+func TestClientStatusAtHeaders(t *testing.T) {
+	t.Run("a redirect is not followed", func(t *testing.T) {
+		var hits atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hits.Add(1)
+			if r.URL.Path == "/ok" {
+				_, _ = w.Write([]byte(noulBody(Pin, "0.9")))
+				return
+			}
+			w.Header().Set("Location", "/ok")
+			w.WriteHeader(http.StatusTemporaryRedirect)
+		}))
+		defer srv.Close()
+		o := Live{Endpoint: srv.URL, Key: "k"}.Send(t.Context(), testBatch(noulQ))
+		if o.Class != Persistent || o.Cause != "HTTP 307" || hits.Load() != 1 {
+			t.Fatalf("outcome %+v after %d requests", o, hits.Load())
+		}
+	})
+
+	t.Run("a 401 with a stalled body is classified at its headers", func(t *testing.T) {
+		done := make(chan struct{})
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(sentinel))
+			if fl, ok := w.(http.Flusher); ok {
+				fl.Flush()
+			}
+			select {
+			case <-r.Context().Done():
+			case <-done:
+			}
+		}))
+		defer srv.Close()
+		defer close(done)
+		ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+		defer cancel()
+		start := time.Now()
+		o := Live{Endpoint: srv.URL, Key: "k"}.Send(ctx, testBatch(noulQ))
+		if o.Class != Persistent || o.Cause != "HTTP 401" || time.Since(start) > time.Second {
+			t.Fatalf("outcome %+v after %v", o, time.Since(start))
+		}
+	})
+}
+
+func TestValidatePerAnswer(t *testing.T) {
+	qs := []Question{{Name: "a", Type: TypeNoul}, {Name: "b", Type: TypeNoul}}
+	o := Validate([]byte(`{"model":"jev-1.14.0","answers":{"a":{"type":"noul","noul":0.9},`+
+		`"b":{"type":"noul","noul":null}},"usage":{"input_tokens":7,"output_tokens":1}}`), qs)
+	if o.Class != OK || o.Answers["a"].Noul != 0.9 || o.Invalid["b"] != CauseMissing {
+		t.Fatalf("outcome %+v", o)
+	}
+	if _, ok := o.Answers["b"]; ok {
+		t.Fatal("the null answer was kept")
+	}
+	if o.Usage == nil || o.Usage.InputTokens == nil || *o.Usage.InputTokens != 7 {
+		t.Fatalf("usage %+v", o.Usage)
+	}
+	bad := Validate([]byte(`{"model":"jev-latest","answers":{},"usage":{"input_tokens":5}}`), qs)
+	if bad.Class != Persistent || bad.Usage == nil || *bad.Usage.InputTokens != 5 {
+		t.Fatalf("parsed usage dropped on a failed answer: %+v", bad)
+	}
+	empty := Validate([]byte(`{"model":"jev-1.14.0","answers":{"a":{"type":"noul","noul":0.1},`+
+		`"b":{"type":"noul","noul":0.1}},"usage":{}}`), qs)
+	if empty.Usage != nil && empty.Usage.InputTokens != nil {
+		t.Fatalf("usage {} counted as known: %+v", empty.Usage)
+	}
+}
+
+// peak is a transport that records how many sends run at once.
+type peak struct {
+	mu       sync.Mutex
+	cur, max int
+}
+
+func (p *peak) Send(context.Context, Batch) Outcome {
+	p.mu.Lock()
+	p.cur++
+	p.max = max(p.max, p.cur)
+	p.mu.Unlock()
+	time.Sleep(20 * time.Millisecond)
+	p.mu.Lock()
+	p.cur--
+	p.mu.Unlock()
+	return Outcome{Class: OK}
+}
+
+func TestInFlightCap(t *testing.T) {
+	p := &peak{}
+	Do(t.Context(), p, make([]Batch, 12))
+	if p.max != 4 {
+		t.Fatalf("%d requests in flight at most, want 4", p.max)
 	}
 }

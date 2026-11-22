@@ -35,6 +35,13 @@ const (
 	PipeWait = 200 * time.Millisecond
 	// ChildMargin ends a child's timeout this long before the work deadline.
 	ChildMargin = 200 * time.Millisecond
+	// LedgerMargin ends a request this long before the work deadline, so its ledger line is
+	// written within it.
+	LedgerMargin = 100 * time.Millisecond
+	// LedgerWait bounds the wait for one ledger append.
+	LedgerWait = 100 * time.Millisecond
+	// maxErrorBody bounds the 400 body read for max_tokens_exceeded.
+	maxErrorBody = 64 << 10
 )
 
 // endpoint is the API URL. Only test builds change it (`-ldflags -X`); it is never configuration.

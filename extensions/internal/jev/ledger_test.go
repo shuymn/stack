@@ -143,3 +143,27 @@ func TestLedger(t *testing.T) {
 		}
 	})
 }
+
+func TestLedgerDeadline(t *testing.T) {
+	home := t.TempDir()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"model":`))
+		if fl, ok := w.(http.Flusher); ok {
+			fl.Flush()
+		}
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
+	l := &Ledger{Path: LedgerPath(home), Run: "r", Extension: "x"}
+	ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
+	defer cancel()
+	o := Live{Endpoint: srv.URL, Key: "k", Ledger: l}.Send(ctx, testBatch(noulQ))
+	if !o.Class.Unassessed() {
+		t.Fatalf("outcome %+v", o)
+	}
+	lines := readLedger(t, LedgerPath(home))
+	if len(lines) != 1 || lines[0]["outcome"] != "transient" || lines[0]["input_tokens"] != nil {
+		t.Fatalf("ledger %v", lines)
+	}
+}

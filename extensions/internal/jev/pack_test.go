@@ -348,3 +348,33 @@ func TestEncodedTextLen(t *testing.T) {
 		}
 	}
 }
+
+func TestPackOversizeQuestion(t *testing.T) {
+	qs := []Question{
+		{Name: "small", Type: TypeNoul, Instructions: "small?"},
+		{Name: "huge", Type: TypeNoul, Instructions: strings.Repeat("x", QuestionBudget)},
+	}
+	plan, err := Pack(Input{
+		Layout: withTitle("x"), Units: []Unit{{"a.go", "+a\n"}},
+		Questions: qs,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, b := range plan.Batches {
+		var body sentBody
+		if err := json.Unmarshal(b.Body, &body); err != nil {
+			t.Fatal(err)
+		}
+		raw, err := json.Marshal(body.Questions)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(raw) > QuestionBudget {
+			t.Fatalf("questions of %d bytes sent", len(raw))
+		}
+	}
+	if !slices.Equal(plan.Unasked, []Unasked{{"huge", ReasonQuestionTooBig}}) {
+		t.Fatalf("unasked %v", plan.Unasked)
+	}
+}

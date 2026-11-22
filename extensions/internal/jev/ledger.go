@@ -1,7 +1,6 @@
 package jev
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -10,11 +9,12 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
-// errLedgerLate reports an append skipped past the work deadline.
-var errLedgerLate = errors.New("skipped past the work deadline")
+// errLedgerSlow reports an append that did not finish within its wait.
+var errLedgerSlow = errors.New("append abandoned after its wait")
 
 // LedgerPath is the usage ledger under home: .local/state/stack/jev/usage.jsonl.
 func LedgerPath(home string) string {
@@ -38,8 +38,11 @@ type Ledger struct {
 	Stderr io.Writer
 	// Now is the clock; nil means time.Now.
 	Now func() time.Time
+	// Wait bounds each append; zero means LedgerWait.
+	Wait time.Duration
 
-	mu sync.Mutex
+	mu    sync.Mutex
+	outMu sync.Mutex
 }
 
 // ledgerLine is one line of usage.jsonl (design §3.3).
@@ -55,14 +58,9 @@ type ledgerLine struct {
 	InputTokens *int64 `json:"input_tokens"`
 }
 
-// Append writes the attempt's line. Past ctx's end it writes nothing and says so on stderr.
-func (l *Ledger) Append(ctx context.Context, o Outcome, elapsed time.Duration) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if ctx.Err() != nil {
-		l.fail(errLedgerLate)
-		return
-	}
+// Append writes the attempt's line. It waits at most Wait (LedgerWait when zero): a ledger
+// that does not answer cannot hold the response, and is reported in one stderr line.
+func (l *Ledger) Append(o Outcome, elapsed time.Duration) {
 	now := time.Now
 	if l.Now != nil {
 		now = l.Now
@@ -72,19 +70,40 @@ func (l *Ledger) Append(ctx context.Context, o Outcome, elapsed time.Duration) {
 		Model: Pin, Outcome: o.String(), ElapsedMS: elapsed.Milliseconds(),
 	}
 	if o.Usage != nil {
-		line.InputTokens = &o.Usage.InputTokens
+		line.InputTokens = o.Usage.InputTokens
 	}
 	data, err := Marshal(line)
 	if err != nil {
 		l.fail(err)
 		return
 	}
-	if err := appendLine(l.Path, append(data, '\n')); err != nil {
-		l.fail(err)
+	var abandoned atomic.Bool
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		l.mu.Lock()
+		defer l.mu.Unlock()
+		if err := appendLine(l.Path, append(data, '\n')); err != nil && !abandoned.Load() {
+			l.fail(err)
+		}
+	}()
+	wait := l.Wait
+	if wait <= 0 {
+		wait = LedgerWait
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-done:
+	case <-timer.C:
+		abandoned.Store(true)
+		l.fail(fmt.Errorf("%w (%v)", errLedgerSlow, wait))
 	}
 }
 
 func (l *Ledger) fail(err error) {
+	l.outMu.Lock()
+	defer l.outMu.Unlock()
 	if l.Stderr != nil {
 		_, _ = fmt.Fprintf(l.Stderr, "jev: usage ledger: %v\n", err)
 	}

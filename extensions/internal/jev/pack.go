@@ -102,9 +102,10 @@ type Plan struct {
 
 // Reasons for unasked questions and unpacked units.
 const (
-	ReasonNotWhole    = "the input does not fit one request"
-	ReasonSmallBudget = "the fixed fields leave under 1 KiB for the input"
-	ReasonPartTooBig  = "a smallest part does not fit one request"
+	ReasonNotWhole       = "the input does not fit one request"
+	ReasonSmallBudget    = "the fixed fields leave under 1 KiB for the input"
+	ReasonPartTooBig     = "a smallest part does not fit one request"
+	ReasonQuestionTooBig = "the question alone is over 16 KiB"
 )
 
 // Pack packs in's units into states of at most StateLimit encoded bytes and in's questions into
@@ -167,9 +168,12 @@ func Pack(in Input) (Plan, error) {
 		}
 		asked = append(asked, q)
 	}
-	groups, err := groupQuestions(asked, orDefault(in.QuestionLimit, QuestionBudget))
+	groups, oversize, err := groupQuestions(asked, orDefault(in.QuestionLimit, QuestionBudget))
 	if err != nil {
 		return Plan{}, err
+	}
+	for _, name := range oversize {
+		plan.Unasked = append(plan.Unasked, Unasked{name, ReasonQuestionTooBig})
 	}
 	for _, pieces := range states {
 		state, err := in.state(prefix, pieces)
@@ -436,10 +440,11 @@ type questionSpec struct {
 	Criteria     any    `json:"criteria,omitempty"`
 }
 
-// groupQuestions packs the questions, in order, into objects of at most limit encoded bytes; a
-// question larger than limit goes alone.
-func groupQuestions(qs []Question, limit int) ([]questionGroup, error) {
+// groupQuestions packs the questions, in order, into objects of at most limit encoded bytes. A
+// question that alone exceeds limit is never sent; its name is returned in oversize.
+func groupQuestions(qs []Question, limit int) ([]questionGroup, []string, error) {
 	var groups []questionGroup
+	var oversize []string
 	var cur questionGroup
 	flush := func() {
 		if len(cur.questions) > 0 {
@@ -455,7 +460,11 @@ func groupQuestions(qs []Question, limit int) ([]questionGroup, error) {
 			q.Name,
 			questionSpec{q.Type, q.Instructions, q.Criteria},
 		); err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		if len("{}")+kv.Len() > limit {
+			oversize = append(oversize, q.Name)
+			continue
 		}
 		if len(cur.questions) > 0 && len(cur.encoded)+1+kv.Len()+1 > limit {
 			flush()
@@ -469,7 +478,7 @@ func groupQuestions(qs []Question, limit int) ([]questionGroup, error) {
 		cur.questions = append(cur.questions, q)
 	}
 	flush()
-	return groups, nil
+	return groups, oversize, nil
 }
 
 func requestBody(model string, state, questions []byte) []byte {

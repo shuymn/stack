@@ -64,6 +64,9 @@ type Outcome struct {
 	Status int
 	// Cause is a fixed string or "HTTP <status>"; empty for OK.
 	Cause string
+	// Invalid maps each question whose answer is missing or invalid in an otherwise valid
+	// answer to its fixed cause.
+	Invalid map[string]string
 	// Body is the 200 body an OK or persistent outcome was validated from, for jev-calibrate's
 	// records; never shown.
 	Body []byte
@@ -82,8 +85,8 @@ type Answer struct {
 //
 //nolint:tagliatelle // the API defines the keys in snake_case.
 type Usage struct {
-	InputTokens  int64 `json:"input_tokens"`
-	OutputTokens int64 `json:"output_tokens"`
+	InputTokens  *int64 `json:"input_tokens"`
+	OutputTokens *int64 `json:"output_tokens"`
 }
 
 // Transport sends one batch.
@@ -125,15 +128,26 @@ type Live struct {
 	Ledger *Ledger
 }
 
-// Send implements Transport.
+// Send implements Transport. The request ends LedgerMargin before ctx's deadline, so the ledger
+// line of a request cut by the deadline is still written within it.
 func (l Live) Send(ctx context.Context, b Batch) Outcome {
+	hctx := ctx
+	if d, ok := ctx.Deadline(); ok {
+		var cancel context.CancelFunc
+		hctx, cancel = context.WithDeadline(ctx, d.Add(-LedgerMargin))
+		defer cancel()
+	}
 	start := time.Now()
-	o := l.send(ctx, b)
+	o := l.send(hctx, b)
 	if l.Ledger != nil {
-		l.Ledger.Append(ctx, o, time.Since(start))
+		l.Ledger.Append(o, time.Since(start))
 	}
 	return o
 }
+
+// noRedirect makes a redirect the response itself: a 3xx is a persistent failure of the one
+// request sent, never a second request.
+func noRedirect(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 
 func (l Live) send(ctx context.Context, b Batch) Outcome {
 	req, err := http.NewRequestWithContext(
@@ -147,21 +161,33 @@ func (l Live) send(ctx context.Context, b Batch) Outcome {
 	}
 	req.Header.Set("Authorization", "Bearer "+l.Key)
 	req.Header.Set("Content-Type", "application/json")
-	client := l.Client
-	if client == nil {
-		client = &http.Client{}
+	client := &http.Client{}
+	if l.Client != nil {
+		c := *l.Client
+		client = &c
 	}
+	client.CheckRedirect = noRedirect
 	resp, err := client.Do(req)
 	if err != nil {
 		return transportFailure(ctx, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+	switch resp.StatusCode {
+	case http.StatusOK:
+	case http.StatusBadRequest:
+		// Only a 400 needs its body: max_tokens_exceeded is too large, any other 400 persistent.
+		body, err := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
+		if err != nil {
+			return transportFailure(ctx, err)
+		}
+		return statusOutcome(resp.StatusCode, bytes.Contains(body, []byte(CauseMaxTokens)))
+	default:
+		// Classified at the headers: a stalled error body cannot turn it into a timeout.
+		return statusOutcome(resp.StatusCode, false)
+	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, MaxAnswer+1))
 	if err != nil {
 		return transportFailure(ctx, err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return statusOutcome(resp.StatusCode, bytes.Contains(body, []byte(CauseMaxTokens)))
 	}
 	if len(body) > MaxAnswer {
 		return Outcome{Class: Persistent, Status: resp.StatusCode, Cause: CauseAnswerTooLong}
@@ -210,25 +236,38 @@ type answerJSON struct {
 	Probabilities map[string]*float64 `json:"probabilities"`
 }
 
-// Validate checks a 200 body against the questions asked: the pinned model and, for each question,
-// an answer of its type with finite probabilities in [0, 1]. Usage is optional.
+// Validate checks a 200 body against the questions asked. A body that is not the §2 envelope or
+// names another model is persistent; otherwise each question's answer is checked alone: a valid
+// one is kept, a missing, wrongly typed or out-of-range one goes to Invalid with its cause. Usage
+// is kept whenever it parses, with an absent count unknown.
 func Validate(body []byte, qs []Question) Outcome {
 	var doc struct {
 		Model   *string                `json:"model"`
 		Answers map[string]*answerJSON `json:"answers"`
 		Usage   *Usage                 `json:"usage"`
 	}
-	if err := json.Unmarshal(body, &doc); err != nil || doc.Model == nil || doc.Answers == nil {
-		return Outcome{Class: Persistent, Cause: CauseMalformed}
+	if err := json.Unmarshal(body, &doc); err != nil {
+		var u struct {
+			Usage *Usage `json:"usage"`
+		}
+		_ = json.Unmarshal(body, &u)
+		return Outcome{Class: Persistent, Cause: CauseMalformed, Usage: u.Usage}
+	}
+	if doc.Model == nil || doc.Answers == nil {
+		return Outcome{Class: Persistent, Cause: CauseMalformed, Usage: doc.Usage}
 	}
 	if *doc.Model != Pin {
-		return Outcome{Class: Persistent, Cause: CauseModel}
+		return Outcome{Class: Persistent, Cause: CauseModel, Usage: doc.Usage}
 	}
 	out := Outcome{Class: OK, Answers: map[string]Answer{}, Usage: doc.Usage}
 	for _, q := range qs {
 		a, cause := validAnswer(doc.Answers[q.Name], q)
 		if cause != "" {
-			return Outcome{Class: Persistent, Cause: cause}
+			if out.Invalid == nil {
+				out.Invalid = map[string]string{}
+			}
+			out.Invalid[q.Name] = cause
+			continue
 		}
 		out.Answers[q.Name] = a
 	}
@@ -284,6 +323,9 @@ func probability(p float64) bool {
 func (o Outcome) String() string {
 	switch o.Class {
 	case OK:
+		if len(o.Invalid) > 0 {
+			return "error"
+		}
 		return "ok"
 	case TooLarge:
 		return "max_tokens_exceeded"
