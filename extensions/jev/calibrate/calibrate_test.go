@@ -116,8 +116,12 @@ func copyFixtures(t *testing.T) string {
 
 // fakeJev answers each planned body from the case labels, with a small spread per attempt; it
 // answers 200 for every body, including mixed-size's second one, which its fixed fixture records
-// as a size rejection, and gives one cal case's first attempt no status.
+// as a size rejection.
 type fakeJev struct {
+	// failFirst gives the first attempt of each body of these cases a timeout with no status.
+	failFirst map[string]bool
+	// partial answers only meta_duty_regression for these cases.
+	partial  map[string]bool
 	mu       sync.Mutex
 	byHash   map[string]planned
 	attempts map[string]int
@@ -141,9 +145,6 @@ func newFake(t *testing.T, cases []Case) *fakeJev {
 	return f
 }
 
-// unreplayable is an extra cal case the test adds, so the corpus keeps its floors.
-const unreplayable = "zz-unreplayable.json"
-
 func (f *fakeJev) Send(_ context.Context, b jev.Batch) jev.Outcome {
 	f.mu.Lock()
 	n := f.attempts[b.Hash]
@@ -155,8 +156,16 @@ func (f *fakeJev) Send(_ context.Context, b jev.Batch) jev.Outcome {
 		return jev.Outcome{Class: jev.Persistent, Cause: "unplanned"}
 	}
 	name := filepath.Base(p.c.Path)
-	if name == unreplayable && n == 0 {
-		return jev.Outcome{Class: jev.Transient, Cause: jev.CauseNetwork}
+	if f.failFirst[name] && n == 0 {
+		return jev.Outcome{Class: jev.Transient, Cause: jev.CauseTimeout}
+	}
+	if f.partial[name] {
+		// Only meta_duty_regression answered: unsupported_claim is invalid.
+		return jev.Outcome{
+			Class: jev.OK, Status: 200, Body: []byte(`{}`),
+			Answers: map[string]jev.Answer{semantic.MetaDuty: {Type: jev.TypeNoul, Noul: 0.5}},
+			Invalid: map[string]string{semantic.Unsupported: jev.CauseMissing},
+		}
 	}
 	spread := []float64{0, 0.01, -0.01}[n%3]
 	answers := map[string]any{}
@@ -183,29 +192,9 @@ func (f *fakeJev) Send(_ context.Context, b jev.Batch) jev.Outcome {
 	return o
 }
 
-//nolint:gocyclo // one run, then each of its effects checked in turn
 func TestCalibrate(t *testing.T) {
 	dir := copyFixtures(t)
-	extra, err := jev.ReadFixture(filepath.Join(dir, "cal", "ja-typo-fix.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var req map[string]any
-	if err := json.Unmarshal(extra.Request, &req); err != nil {
-		t.Fatal(err)
-	}
-	req["title"] = "docs: fix a typo, without a live answer"
-	if extra.Request, err = json.Marshal(req); err != nil {
-		t.Fatal(err)
-	}
-	if err := jev.WriteFixture(filepath.Join(dir, "cal", unreplayable), extra); err != nil {
-		t.Fatal(err)
-	}
 	cases, err := Load(t.Context(), dir, proc.Exec{}, cleanEnv())
-	if err != nil {
-		t.Fatal(err)
-	}
-	before, err := os.ReadFile(filepath.Join(dir, "cal", unreplayable))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,21 +223,12 @@ func TestCalibrate(t *testing.T) {
 		fixedAfter, bytes.Equal) {
 		t.Fatal("calibration rewrote a fixed fixture")
 	}
-	after, err := os.ReadFile(filepath.Join(dir, "cal", unreplayable))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(before, after) ||
-		!strings.Contains(stdout.String(), unreplayable+": left unchanged") {
-		t.Fatalf("the unreplayable fixture changed or was not reported: %s", stdout.String())
-	}
-
 	recorded, err := Load(t.Context(), dir, proc.Exec{}, cleanEnv())
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, c := range recorded {
-		if filepath.Base(c.Path) == unreplayable || c.Fixed() {
+		if c.Fixed() {
 			continue
 		}
 		replay, err := c.Fixture.RequestRecords()
@@ -516,5 +496,75 @@ func TestRefreshReplays(t *testing.T) {
 				t.Fatalf("replay %+v\nrefreshed %s %+v", got, c.Fixture.Expect.Status, *want)
 			}
 		})
+	}
+}
+
+// TestRecalibrateFailure: when a calibrated case's refetch has no replayable first outcome, a
+// re-calibration writes neither the new table nor any fixture, and says a rerun is needed.
+func TestRecalibrateFailure(t *testing.T) {
+	dir := copyFixtures(t)
+	cases, err := Load(t.Context(), dir, proc.Exec{}, cleanEnv())
+	if err != nil {
+		t.Fatal(err)
+	}
+	table := filepath.Join(dir, "cutoffs.json")
+	opts := Options{
+		Fixtures: dir, Table: table, Transport: newFake(t, cases),
+		Runner: proc.Exec{}, Environ: cleanEnv(), Stdout: io.Discard,
+	}
+	if err := Run(t.Context(), opts); err != nil {
+		t.Fatal(err)
+	}
+	calBefore := readAll(t, filepath.Join(dir, "cal"))
+	tableBefore, err := os.ReadFile(table)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again := newFake(t, cases)
+	again.failFirst = map[string]bool{"en-deleted-assertion-claims-tests.json": true}
+	opts.Transport = again
+	err = Run(t.Context(), opts)
+	if err == nil || !strings.Contains(err.Error(), "rerun") {
+		t.Fatalf("Run returned %v", err)
+	}
+	tableAfter, err := os.ReadFile(table)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(tableBefore, tableAfter) ||
+		!maps.EqualFunc(calBefore, readAll(t, filepath.Join(dir, "cal")), bytes.Equal) {
+		t.Fatal("a failed re-calibration wrote the table or a fixture")
+	}
+}
+
+// TestUnansweredSample: a question a valid answer leaves out is sampled as null, not 0.
+func TestUnansweredSample(t *testing.T) {
+	cases, err := Load(t.Context(), fixtures, proc.Exec{}, cleanEnv())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var c *Case
+	for i := range cases {
+		if filepath.Base(cases[i].Path) == "en-feature-with-test.json" {
+			c = &cases[i]
+		}
+	}
+	fake := newFake(t, cases)
+	fake.partial = map[string]bool{"en-feature-with-test.json": true}
+	ok, err := record(t.Context(), Options{Transport: fake, Stdout: io.Discard}, c)
+	if err != nil || !ok {
+		t.Fatalf("record: %v %v", ok, err)
+	}
+	for _, b := range c.Plan.Batches {
+		for _, p := range c.Fixture.Samples[b.Hash][semantic.Unsupported] {
+			if p != nil {
+				t.Fatalf("unanswered question sampled as %v", *p)
+			}
+		}
+		for _, p := range c.Fixture.Samples[b.Hash][semantic.MetaDuty] {
+			if p == nil || *p != 0.5 {
+				t.Fatalf("answered question sampled as %v", p)
+			}
+		}
 	}
 }

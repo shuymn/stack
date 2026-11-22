@@ -207,8 +207,10 @@ func TestState(t *testing.T) {
 		if err := os.WriteFile(order, []byte("sub/z.go\na.go\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
+		// Each variant also sets a value git rejects, so plain git fails unless it ignores the
+		// variant.
 		if err := os.WriteFile(cfg, []byte("[diff]\n\tnoprefix = true\n\tcontext = 9\n"+
-			"[core]\n\tabbrev = 12\n"), 0o600); err != nil {
+			"[core]\n\tabbrev = bogus\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		withEnv := func(kv ...string) []string {
@@ -220,11 +222,19 @@ func TestState(t *testing.T) {
 		}{
 			{"system", withEnv("GIT_CONFIG_SYSTEM="+cfg, "GIT_CONFIG_NOSYSTEM=0")},
 			{"global", withEnv("GIT_CONFIG_GLOBAL=" + cfg)},
-			{"GIT_CONFIG_PARAMETERS", withEnv("GIT_CONFIG_PARAMETERS='diff.noprefix'='true'")},
-			{"GIT_CONFIG_COUNT", withEnv("GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=diff.context",
-				"GIT_CONFIG_VALUE_0=0")},
+			{"GIT_CONFIG_PARAMETERS", withEnv(
+				"GIT_CONFIG_PARAMETERS='diff.noprefix'='true' 'core.abbrev'='bogus'")},
+			{"GIT_CONFIG_COUNT", withEnv("GIT_CONFIG_COUNT=2", "GIT_CONFIG_KEY_0=diff.context",
+				"GIT_CONFIG_VALUE_0=0", "GIT_CONFIG_KEY_1=diff.context",
+				"GIT_CONFIG_VALUE_1=bogus")},
 		} {
 			t.Run(v.name, func(t *testing.T) {
+				res, err := proc.Exec{}.Run(t.Context(), proc.Cmd{
+					Name: "git", Args: []string{"diff", FixtureRange}, Dir: r.Dir, Env: v.env,
+				})
+				if err == nil && res.ExitCode == 0 {
+					t.Fatal("plain git accepts the variant, so the test does not exercise it")
+				}
 				got := hashes(t, Git{Runner: proc.Exec{}, Dir: r.Dir, Env: v.env}, texts)
 				if !slices.Equal(got, want) {
 					t.Fatal("the body changed")

@@ -47,7 +47,12 @@ const (
 	SplitFixed   = "fixed"
 )
 
-var errNoKey = errors.New(jev.KeyEnv + " is not set")
+var (
+	errNoKey = errors.New(jev.KeyEnv + " is not set")
+	// errRerun reports cal cases whose first attempt had no replayable outcome; nothing was
+	// written.
+	errRerun = errors.New("nothing written; rerun jev-calibrate: no replayable first outcome for")
+)
 
 // Options configures a run.
 type Options struct {
@@ -75,14 +80,16 @@ type Case struct {
 func (c Case) Fixed() bool { return filepath.Base(filepath.Dir(c.Path)) == SplitFixed }
 
 // Run records every cal fixture, refits the cutoffs and refreshes the cal fixtures' expect and
-// want. Fixed fixtures are never rewritten. A cal fixture whose first attempt of some body has no
-// replayable outcome is left unchanged and reported.
+// want. Fixed fixtures are never rewritten. When any cal case's first attempt of some body has no
+// replayable outcome, it writes nothing and returns an error asking for a rerun.
 func Run(ctx context.Context, o Options) error {
 	cases, err := Load(ctx, o.Fixtures, o.Runner, o.Environ)
 	if err != nil {
 		return err
 	}
-	unchanged := map[string]bool{}
+	// Record every cal case before writing anything: a refit over a partly refreshed corpus
+	// would pair a new table with an older want.
+	var failed []string
 	for i := range cases {
 		c := &cases[i]
 		// Fixed fixtures keep their synthetic answers and failures: they check behaviour, which
@@ -95,17 +102,13 @@ func Run(ctx context.Context, o Options) error {
 			return err
 		}
 		if !ok {
-			unchanged[c.Path] = true
-			continue
+			failed = append(failed, c.Path)
 		}
-		if err := jev.WriteFixture(c.Path, c.Fixture); err != nil {
-			return err
-		}
+	}
+	if len(failed) > 0 {
+		return fmt.Errorf("%w: %s", errRerun, strings.Join(failed, ", "))
 	}
 	table := Refit(cases)
-	if err := jev.WriteTable(o.Table, table); err != nil {
-		return err
-	}
 	for name, d := range table.Decisions {
 		_, _ = fmt.Fprintf(o.Stdout, "%s: enabled %v, cutoff %s, %s\n", name, d.Enabled,
 			cutoffText(d), d.Reason)
@@ -113,20 +116,24 @@ func Run(ctx context.Context, o Options) error {
 			_, _ = fmt.Fprintf(o.Stdout, "  unstable %s\n", u)
 		}
 	}
-	decisions := table.Decisions
 	for i := range cases {
 		c := &cases[i]
-		if c.Fixed() || unchanged[c.Path] {
+		if c.Fixed() {
 			continue
 		}
-		if err := Refresh(c, decisions); err != nil {
+		if err := Refresh(c, table.Decisions); err != nil {
 			return err
+		}
+	}
+	for _, c := range cases {
+		if c.Fixed() {
+			continue
 		}
 		if err := jev.WriteFixture(c.Path, c.Fixture); err != nil {
 			return err
 		}
 	}
-	return nil
+	return jev.WriteTable(o.Table, table)
 }
 
 func cutoffText(d jev.Decision) string {
@@ -206,7 +213,7 @@ func loadCase(
 }
 
 // record sends each planned body Attempts times and sets the fixture's records and samples. ok
-// is false when a first attempt has no replayable outcome; the fixture is then left unchanged.
+// is false when a first attempt has no replayable outcome; Run then writes nothing.
 func record(ctx context.Context, o Options, c *Case) (bool, error) {
 	records := map[string]jev.Record{}
 	samples := map[string]map[string][]*float64{}
@@ -222,8 +229,9 @@ func record(ctx context.Context, o Options, c *Case) (bool, error) {
 			}
 			for _, q := range b.Questions {
 				var p *float64
-				if out.Class == jev.OK {
-					v := out.Answers[q.Name].Noul
+				// Only an answer present in the outcome is a score; anything else is null.
+				if a, ok := out.Answers[q.Name]; out.Class == jev.OK && ok {
+					v := a.Noul
 					p = &v
 				}
 				scores[q.Name] = append(scores[q.Name], p)
@@ -231,8 +239,8 @@ func record(ctx context.Context, o Options, c *Case) (bool, error) {
 		}
 		rec, ok := replayable(first)
 		if !ok {
-			_, _ = fmt.Fprintf(o.Stdout, "%s: left unchanged: the first attempt of %s has no "+
-				"replayable outcome (%s)\n", c.Path, b.Hash, first.Describe())
+			_, _ = fmt.Fprintf(o.Stdout, "%s: the first attempt of %s has no replayable outcome "+
+				"(%s)\n", c.Path, b.Hash, first.Describe())
 			return false, nil
 		}
 		records[b.Hash] = rec

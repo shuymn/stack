@@ -262,7 +262,7 @@ Ground truth is bound to the scored unit, derived from per-unit labels with the 
 `jev-calibrate` (owner, with the key) builds each `cal` case's synthetic repository and requests with the extension's own
 builders, sends them through the live transport 3 times, writes the first answer (or status) to `records` and all
 three scores to `samples` (`null` for an attempt with no score), then refits; when the first attempt has no
-replayable outcome (e.g. a timeout before headers), the fixture is left unchanged and reported. Fitting uses the `fit` cases, each single-call score one sample (live
+replayable outcome (e.g. a timeout before headers), it writes no fixture and no table and exits non-zero asking for a rerun. Fitting uses the `fit` cases, each single-call score one sample (live
 decides on one call; a planned call with no score, e.g. a size rejection, is a negative prediction, never
 dropped): the cutoff is the lowest of 0.50–0.99 (step 0.01) with precision ≥ the target (semantic 0.8, classify
 0.8, router 0.7), true positives > 0 and recall ≥ 0.5; samples within ±0.05 are listed as unstable. Each decision
