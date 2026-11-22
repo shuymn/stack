@@ -262,7 +262,9 @@ pipe a payload built with `jq`:
 (likewise `<tmp>/stack-guard hook claude pre-tool-use`); deny = the JSON reason, allow = empty stdout, exit 0 always.
 Keep the command in the file: pasting it into a JSON string (`printf`, `echo`) can make the payload invalid (an
 unescaped `\` in a Windows path), which both hooks allow silently, or change the command (`\t` becomes a tab); and
-pasting it into a shell argument lets the shell consume its quotes (`& 'gh'` becomes `& gh`).
+pasting it into a shell argument lets the shell consume its quotes (`& 'gh'` becomes `& gh`). Save the file as UTF-8
+without a BOM (Windows PowerShell 5.1 writes UTF-16 or a BOM by default, and the hooks then allow everything), and run
+the pipeline with `set -o pipefail` so a `jq` error is not read as an allow.
 
 | ID | EARS criterion | Source | Scenario → observable result / failure | Real-CLI check |
 |---|---|---|---|---|
