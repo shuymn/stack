@@ -404,6 +404,12 @@ var parseTests = []struct {
 		calls{{"gh", "pr", "merge", "1"}, {"Write-Output", "$"}},
 	},
 	{
+		"member access and index make a variable word dynamic",
+		`gh -F ${HOME}.Length $HOME.Length ${HOME}[0] $HOME[0] "${HOME}.x" "$HOME[0]"`,
+		Unix,
+		calls{{"gh", "-F", "$", "$", "$", "$", "<HOME>.x", "<HOME>[0]"}},
+	},
+	{
 		"keyword prefix is a command",
 		`foreach-thing x; iffy y`,
 		Unix,

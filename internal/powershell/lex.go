@@ -353,6 +353,10 @@ func (p *parser) dollar(b *wordBuilder, inString bool) {
 			p.fail("unclosed variable")
 		}
 		p.pos = j + 1
+		if !inString && p.members() {
+			b.dyn()
+			return
+		}
 		b.variable(knownName(name.String()), p.assigned)
 	case n == '$' || n == '?' || n == '^':
 		p.pos += 2
