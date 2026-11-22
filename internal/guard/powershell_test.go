@@ -91,6 +91,7 @@ func TestRawMergePowerShell(t *testing.T) {
 		"gh pr merge 7 '--%' --help",
 		// The backtick-escaped `--%` is the stop-parsing token: `;` stays in its tail.
 		"Write-Output `--% ; gh pr merge 7",
+		"Write-Output `--%; gh pr merge 7",
 		"gh pr 'view'7",
 		"gh pr merge 7 'a'--help",
 		"gh pr merge 'x'--help",

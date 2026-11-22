@@ -389,6 +389,13 @@ var parseTests = []struct {
 		calls{{"git", "$", "c", "d"}, {"gh", "pr", "merge", "7", "$", "--help"}},
 	},
 	{
+		// The word ends at `;` and decodes to `--%`: the stop-parsing token, so `;` starts its tail.
+		"a backtick stop-parsing token directly followed by a semicolon",
+		"Write-Output `--%; gh pr merge 7\ngit `--%; gh pr merge 7",
+		Windows,
+		calls{{"Write-Output", "--%", "; gh pr merge 7"}, {"git", ";", "gh", "pr", "merge", "7"}},
+	},
+	{
 		"a member access or index on a quote-started token is part of it",
 		`git '--help'.foo "x".y 'a'[0]z 'a'. b`,
 		Windows,
@@ -646,26 +653,6 @@ func TestAmbiguousRegion(t *testing.T) {
 		}
 		if !slices.Equal(got, tt.want) {
 			t.Errorf("%q ambiguous = %v, want %v", tt.cmd, got, tt.want)
-		}
-	}
-}
-
-// TestQuotedMark checks that a word counts by its decoded value `--%` (the lexer ends a
-// quote-started token at its quote, so `'--'%` never reaches it as one word).
-func TestQuotedMark(t *testing.T) {
-	for _, tt := range []struct {
-		w    Word
-		want bool
-	}{
-		{Word{Raw: "'--%'", Text: "--%", Static: true, Quote: Single}, true},
-		{Word{Raw: `"--%"`, Text: "--%", Static: true, Quote: Double}, true},
-		{Word{Raw: "\"--`%\"", Text: "--%", Static: true, Quote: Double}, true},
-		{Word{Raw: "-'-%'", Text: "--%", Static: true, Quote: Bare}, false},
-		{Word{Raw: "'--%x'", Text: "--%x", Static: true, Quote: Single}, false},
-		{Word{Raw: `"--$(x)"`, Quote: Double}, false},
-	} {
-		if got := quotedMark(tt.w); got != tt.want {
-			t.Errorf("quotedMark(%q) = %v, want %v", tt.w.Raw, got, tt.want)
 		}
 	}
 }

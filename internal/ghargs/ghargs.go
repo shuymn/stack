@@ -131,17 +131,20 @@ func Parse(args []Arg) (Call, bool) {
 		c.Published = commandPublished(command, fs)
 	}
 	if k := slices.IndexFunc(args, func(a Arg) bool { return a.Ambiguous }); k >= 0 {
-		c.untrust(command, tokens[:k])
+		c.keepTrustedFlags(tokens[:k])
 	}
 	return c, true
 }
 
-// untrust keeps -h/--help, --disable-auto and --dry-run only when the arguments before the first
-// ambiguous one (pre) already set them: an ambiguous argument can show a merge or a publish, but
-// never prove it harmless.
-func (c *Call) untrust(command string, pre []string) {
-	fs := flagSet(command, false)
-	if cmd, rest, ok := commandPath(pre); ok && cmd == command {
+// keepTrustedFlags keeps -h/--help, --disable-auto and --dry-run only when the arguments before
+// the first ambiguous one (pre) already set them: an ambiguous argument can show a merge or a
+// publish, but never prove it harmless.
+func (c *Call) keepTrustedFlags(pre []string) {
+	if !c.Help && !c.DisableAuto && !c.DryRun {
+		return
+	}
+	fs := flagSet(c.Command, false)
+	if cmd, rest, ok := commandPath(pre); ok && cmd == c.Command {
 		_ = fs.Parse(rest)
 	}
 	c.Help = c.Help && boolValue(fs, "help")

@@ -789,21 +789,24 @@ func (p *parser) args(kind Kind) []item {
 			}
 		}
 		it := p.valueItem(kind)
+		w := it.words[0]
+		// A word decoded to `--%` (known-variable and block words are never static).
+		isMarker := w.Static && w.Text == verbatimMark
 		switch {
-		case len(it.words) == 1 && genericMark(it.words[0]):
+		case isMarker && w.Quote == Bare && len(it.words) == 1:
 			// The tokenizer reads a token that does not start with a quote as one generic token,
-			// so `-'-%'` and `--'%'` are the stop-parsing token too (5.1 and 7.7, argv stub).
-			mark := it.words[0]
-			mark.Text = verbatimMark
-			return append(items, p.stopParsing(kind, mark, j.on)...)
-		case kind != Native:
-		case quotedMark(it.words[0]):
-			// Dropped from argv; the later arguments are joined verbatim. A second one is dropped
-			// too, and starts the ambiguous region.
+			// so `-'-%'`, `--'%'` and “ `--%; “ are the stop-parsing token too (5.1 and 7.7, argv
+			// stub).
+			return append(items, p.stopParsing(kind, w, j.on)...)
+		case kind == Native && isMarker:
+			// A quote-started one (`'--%'`, `"--%"`, "\"--`%\"", a here-string) is no stop-parsing
+			// token: pwsh 5.1 and 7 drop it from argv without stopping parsing, and pass every later
+			// argument joined into the command line as written. A second one is dropped too, and
+			// starts the ambiguous region.
 			j.amb = j.amb || j.on
 			j.on = true
 			continue
-		case j.on:
+		case kind == Native && j.on:
 			if it.words = j.words(it.words[0]); len(it.words) == 0 {
 				continue
 			}
@@ -816,7 +819,7 @@ func (p *parser) args(kind Kind) []item {
 // quoted `--%` (joined), the tail is one more ambiguity.
 func (p *parser) stopParsing(kind Kind, mark Word, joined bool) []item {
 	start := p.pos
-	tail := p.verbatim()
+	tail := p.verbatim(kind != Cmdlet)
 	if kind == Cmdlet {
 		// A cmdlet keeps the token as a value and gets the rest as one literal argument
 		// (5.1 and 7.7: `Write-Output a --% $x b` writes `a`, `--%`, `$x b`).
@@ -837,13 +840,6 @@ func (p *parser) stopParsing(kind Kind, mark Word, joined bool) []item {
 	return items
 }
 
-// genericMark reports a word that starts unquoted and whose decoded value is `--%`, spelt with
-// quotes or escapes inside (`-'-%'`, `--"%"`): the tokenizer's generic token, and so the
-// stop-parsing token. One that starts with a quote is a string, which quotedMark covers.
-func genericMark(w Word) bool {
-	return w.Static && w.Known == NotKnown && !w.Block && w.Quote == Bare && w.Text == verbatimMark
-}
-
 // verbatimMarkAt returns the length of the stop-parsing token at pos, `--%` or the backtick-escaped
 // “ `--% “, followed by a boundary; 0 when there is none.
 func (p *parser) verbatimMarkAt() int {
@@ -853,14 +849,6 @@ func (p *parser) verbatimMarkAt() int {
 		}
 	}
 	return 0
-}
-
-// quotedMark reports a native argument whose decoded value is `--%` written in another form than
-// the stop-parsing token, starting with a quote (`'--%'`, `"--%"`, "\"--`%\"", a here-string): pwsh 5.1 and 7
-// drop it from argv without stopping parsing, and pass every later argument joined into the command
-// line as written. A quote-started token ends at its quote, so `'--'%` is two words.
-func quotedMark(w Word) bool {
-	return w.Static && w.Known == NotKnown && !w.Block && w.Quote != Bare && w.Text == verbatimMark
 }
 
 // paramToken reports a bare word PowerShell lexes as a parameter token: a dash, then a letter, `_`
@@ -896,16 +884,17 @@ type joining struct {
 // whose value may hold any of these). A word in the region keeps its static text,
 // so checks still match it, but is marked ambiguous: it never proves a call harmless.
 func (j *joining) words(w Word) []Word {
-	if !w.Static || w.Known != NotKnown || w.Text == "" || paramToken(w) ||
+	// A known-variable word is not static.
+	if !w.Static || w.Text == "" || paramToken(w) ||
 		strings.ContainsAny(w.Text, "\",\t\r\n") || percentVar.MatchString(w.Text) {
 		j.amb = true
 	}
 	w.joined, w.ambiguous = true, j.amb
-	if !w.Static || w.Known != NotKnown {
+	if !w.Static {
 		return []Word{w}
 	}
 	var out []Word
-	for _, f := range strings.FieldsFunc(w.Text, func(r rune) bool { return r == ' ' || r == '\t' }) {
+	for f := range strings.FieldsFuncSeq(w.Text, func(r rune) bool { return r == ' ' || r == '\t' }) {
 		part := w
 		part.Text = f
 		out = append(out, part)

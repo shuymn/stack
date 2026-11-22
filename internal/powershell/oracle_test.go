@@ -571,11 +571,10 @@ func stubShaped(els []oElem) bool {
 
 // want is one argv word as the engine parses it.
 type want struct {
-	text            string
-	static, block   bool
-	skip            bool   // not comparable (a native list)
-	verbatimSkipped bool   // the rest of argv is not compared
-	skipNote        string // why, with verbatimSkipped
+	text          string
+	static, block bool
+	skip          bool   // not comparable (a native list)
+	skipNote      string // when set, the rest of argv is not compared, for this reason
 }
 
 // expected turns the engine's command elements into argv words for a call of kind k, applying the
@@ -590,8 +589,7 @@ func expected(els []oElem, k Kind) []want {
 			ws, ok := joinedWants(e)
 			if !ok {
 				return append(out, want{
-					verbatimSkipped: true,
-					skipNote:        "ambiguous region after a quoted --% not compared",
+					skipNote: "ambiguous region after a quoted --% not compared",
 				})
 			}
 			out = append(out, ws...)
@@ -650,7 +648,7 @@ func tailWants(tail string, k Kind) []want {
 	}
 	if strings.ContainsAny(tail, "\"“”„%") {
 		return []want{
-			{verbatimSkipped: true, skipNote: "--% tail with quotes or %NAME% not compared"},
+			{skipNote: "--% tail with quotes or %NAME% not compared"},
 		}
 	}
 	var out []want
@@ -685,7 +683,7 @@ func compareArgv(c Call, els []oElem, dynamic []string) ([]string, []string) {
 	var fails, notes []string
 	ws := expected(els[1:], c.Kind)
 	got := c.Args[1:]
-	if n := len(ws); n > 0 && ws[n-1].verbatimSkipped {
+	if n := len(ws); n > 0 && ws[n-1].skipNote != "" {
 		notes = append(notes, ws[n-1].skipNote)
 		ws = ws[:n-1]
 		if len(got) > len(ws) {
@@ -733,8 +731,9 @@ func compareArgv(c Call, els []oElem, dynamic []string) ([]string, []string) {
 	return fails, notes
 }
 
-// compareStub compares ShellCall's static words with the argv the stub received. A word starting
-// with an unquoted `~` is not compared (W3 owns the native `~` rule). Under legacy argument
+// compareStub compares ShellCall's static words with the argv the stub received. A word ShellCall
+// marks as a home `~` (Tilde) is not compared, since the host's expansion depends on the engine
+// version (W3); a literal `~user` or `~foo/.git` is. Under legacy argument
 // passing (Windows PowerShell 5.1, or `$PSNativeCommandArgumentPassing = 'Legacy'`) a word holding
 // `"` reaches the program split or unquoted: documented in phase2-core §6, so such a call is
 // noted, not compared. An ambiguous word (§3, after a quoted `--%`) is engine-dependent by design
@@ -764,8 +763,8 @@ func compareStub(c Call, got []string, legacy bool, st *stats) ([]string, []stri
 		}
 	}
 	for i := range n {
-		w, a := words[i], c.Args[i+1]
-		if !compared(w) || (a.Quote == Bare && a.Flag == "" && strings.HasPrefix(a.Text, "~")) {
+		w := words[i]
+		if !compared(w) || w.Tilde {
 			continue
 		}
 		st.stubWords++

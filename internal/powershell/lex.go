@@ -474,8 +474,7 @@ func (p *parser) quoteStarted(b *wordBuilder, kind Kind) bool {
 		return false
 	}
 	b.dyn()
-	b.part(Bare)
-	p.char(b)
+	p.pos++ // the `,`; the dynamic word drops its text
 	return true
 }
 
@@ -516,13 +515,13 @@ func (p *parser) argWord(kind Kind) Word {
 		}
 		sq, dq := p.quoteAt(singleQuotes), p.quoteAt(doubleQuotes)
 		if sq > 0 || dq > 0 {
-			first := p.pos == elem
+			startsElement := p.pos == elem
 			if sq > 0 {
 				p.single(&b, sq)
 			} else {
 				p.double(&b, dq)
 			}
-			if !first {
+			if !startsElement {
 				continue
 			}
 			if !p.quoteStarted(&b, kind) {
@@ -564,12 +563,12 @@ func (p *parser) argWord(kind Kind) Word {
 
 // verbatim lexes a `--%` tail: up to a CR or LF, or an unquoted `|`, `&&` or `||`, split at blanks
 // outside `"`. A word holding `"` is dynamic (its argv depends on the native-argument mode), and so
-// is one holding `%NAME%`.
-func (p *parser) verbatim() []Word {
+// is one holding `%NAME%`. Without split (a cmdlet's tail, taken whole) it only finds the end.
+func (p *parser) verbatim(split bool) []Word {
 	var words []Word
 	start, quoted, hadQuote := p.pos, false, false
 	flush := func() {
-		if start < p.pos {
+		if split && start < p.pos {
 			// Without quotes a word's text is its source span.
 			w := Word{Raw: p.src[start:p.pos], Verbatim: true}
 			if !hadQuote && !percentRe.MatchString(w.Raw) {

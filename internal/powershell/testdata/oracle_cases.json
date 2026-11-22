@@ -475,6 +475,13 @@
     ]
   },
   {
+    "cmd": "Write-Output `--%; gh pr merge 7\ngit `--%; gh pr merge 7",
+    "calls": [
+      "Write-Output",
+      "git"
+    ]
+  },
+  {
     "cmd": "git '--help'.foo \"x\".y 'a'[0]z 'a'. b",
     "calls": [
       "git"
@@ -1250,6 +1257,12 @@
   },
   {
     "cmd": "Write-Output `--% ; gh pr merge 7",
+    "calls": [
+      "Write-Output"
+    ]
+  },
+  {
+    "cmd": "Write-Output `--%; gh pr merge 7",
     "calls": [
       "Write-Output"
     ]
