@@ -386,6 +386,12 @@ var parseTests = []struct {
 	},
 	{"array subexpression", `@(gh pr merge 1)`, Unix, calls{{"gh", "pr", "merge", "1"}}},
 	{
+		"leading subexpression ends its word",
+		`gh pr merge (7)--help $(1)x @(2)y a$(3)b`,
+		Unix,
+		calls{{"gh", "pr", "merge", "$", "--help", "$", "x", "$", "y", "$"}},
+	},
+	{
 		"keyword prefix is a command",
 		`foreach-thing x; iffy y`,
 		Unix,
