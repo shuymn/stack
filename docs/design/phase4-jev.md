@@ -157,7 +157,7 @@ run has shown yet. **Prerequisite:** the cheaper fix comes first, through the on
 kit's `attention/items.json`, in the form `itemsBlock` reads (`internal/kit/render.go:161-201`), carries
 
 ```json
-{"items": [{"role": "all", "rule": "After compaction, re-read the hiden reference of the step in progress before continuing it."}]}
+{"items": [{"role": "orchestrator", "rule": "After compaction, re-read the hiden reference of the step in progress before continuing it."}]}
 ```
 
 hiden's kit convention puts it there (a `shuymn/dotfiles` change to the hiden skill, tracked outside Phase 4). It
