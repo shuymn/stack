@@ -35,8 +35,8 @@ placeholder cutoffs disable both decisions, so nothing is sent until `jev-calibr
 (`extensions/jev/semantic/cutoffs.json`); reinstall after `jev-calibrate` changes them.
 
 The Jev extensions and `jev-calibrate` take the key from `TYPESAFE_API_KEY`, or else from `~/.config/stack/jev/key`.
-They read the file only when it is a regular file (or a symlink to one) that you own with mode `0600` (no group or
-other permissions) and holds a non-blank key of at most 4 KiB; otherwise the stage reports `jev-error` and
+They read the file only when it is a regular file (or a symlink to one) that you own with no group or other permission
+bits (the command below makes it `0600`), at most 4 KiB, holding a non-blank key; otherwise the stage reports `jev-error` and
 `jev-calibrate` exits 2. On Windows no mode or owner is checked. Removing the file (and leaving the
 variable unset) opts out. To write it, type or paste the key at the silent prompt and press Enter; nothing is
 written on EOF or empty input:
