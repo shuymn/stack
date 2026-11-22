@@ -233,12 +233,43 @@ func TestCalibrationGate(t *testing.T) {
 	}
 }
 
+// start is a cal case changing a file from some starting content.
+type start struct{ split, group, path string }
+
+// starts maps a changed file's path and starting content to a case that changes it.
+type starts map[string]start
+
+// add records the files the case at path changes, failing when another case changes one from the
+// same starting content in the other split without a shared group.
+func (m starts) add(t *testing.T, path string, repo json.RawMessage, l semantic.Label) {
+	t.Helper()
+	var spec semantic.RepoSpec
+	if err := json.Unmarshal(repo, &spec); err != nil {
+		t.Fatalf("%s: %v", path, err)
+	}
+	for _, cm := range spec.Commits {
+		for name := range cm.Files {
+			base, ok := spec.Base[name]
+			if !ok {
+				continue
+			}
+			key := name + "\x00" + base.Text + "\x00" + base.Line
+			if s, ok := m[key]; ok && s.split != l.Split && (s.group == "" || s.group != l.Group) {
+				t.Fatalf("%s and %s change %s from the same content across splits without a "+
+					"shared group", s.path, path, name)
+			}
+			m[key] = start{l.Split, l.Group, path}
+		}
+	}
+}
+
 // corpusCount is one decision's cal cases of one split and class.
 type corpusCount struct{ en, ja, hard int }
 
-// TestCorpus is §3.5's corpus: per decision 12 positive and 12 negative fit cases and 8 + 8
-// heldout ones, each class balanced between Japanese and English and at least 40% hard, and every
-// group of translations or near-duplicates in one split.
+// TestCorpus is §3.5's corpus: per decision at least 12 positive and 12 negative fit cases and
+// 8 + 8 heldout ones, each class balanced between Japanese and English (fit to within one) and at
+// least 40% hard; every group of translations or near-duplicates in one split, and no file edited
+// from the same starting content in both splits outside a shared group.
 func TestCorpus(t *testing.T) {
 	paths, err := filepath.Glob(filepath.Join(semanticFixtures, "cal", "*.json"))
 	if err != nil {
@@ -246,6 +277,7 @@ func TestCorpus(t *testing.T) {
 	}
 	got := map[string]corpusCount{}
 	groups := map[string]string{}
+	starts := starts{}
 	for _, p := range paths {
 		f, err := jev.ReadFixture(p)
 		if err != nil {
@@ -262,6 +294,7 @@ func TestCorpus(t *testing.T) {
 			t.Fatalf("%s: group %s spans %s and %s", p, l.Group, g, l.Split)
 		}
 		groups[l.Group] = l.Split
+		starts.add(t, p, f.Repo, l)
 		for _, q := range semantic.Questions {
 			truth := l.Unsupported
 			if q.Name == semantic.MetaDuty {
@@ -294,12 +327,13 @@ func TestCorpus(t *testing.T) {
 		t.Fatalf("corpus %v lacks a split or class", got)
 	}
 	for key, c := range got {
-		n := 4
+		ok := c.en == 4 && c.ja == 4
 		if strings.Contains(key, " fit ") {
-			n = 6
+			ok = c.en >= 6 && c.ja >= 6 && c.en-c.ja <= 1 && c.ja-c.en <= 1
 		}
-		if c.en != n || c.ja != n || 5*c.hard < 2*(c.en+c.ja) {
-			t.Fatalf("%s: %+v, want %d + %d cases, at least 40%% hard", key, c, n, n)
+		if !ok || 5*c.hard < 2*(c.en+c.ja) {
+			t.Fatalf("%s: %+v, want 4 + 4 heldout or at least 6 + 6 fit cases within one, at "+
+				"least 40%% hard", key, c)
 		}
 	}
 }

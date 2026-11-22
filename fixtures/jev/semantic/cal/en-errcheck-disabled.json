@@ -1,29 +1,10 @@
 {
+  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
   "request": {
     "body": "Turns off the errcheck linter.",
     "branch": "topic/en-errcheck-disabled",
     "jev": {
-      "records": {
-        "sha256:882b90c0210e8988a617295a613766c3218cb2d93f8813e9472b9e7317d3e3b2": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "meta_duty_regression": {
-                "type": "noul",
-                "noul": 0.62
-              },
-              "unsupported_claim": {
-                "type": "noul",
-                "noul": 0.05
-              }
-            },
-            "usage": {
-              "input_tokens": 834,
-              "output_tokens": 42
-            }
-          }
-        }
-      }
+      "records": {}
     },
     "prompt": "",
     "range": "jev-mb..jev-head",
@@ -31,28 +12,15 @@
     "stage": "outbound",
     "title": "chore: disable errcheck"
   },
-  "expect": {
-    "status": "warn"
-  },
-  "want": {
-    "findings": [
-      {
-        "kind": "jev-meta-duty",
-        "where": ".golangci.yml",
-        "detail": "p=0.62 ≥ 0.5 (jev-1.14.0)"
-      }
-    ],
-    "context": "jev-semantic: .golangci.yml: the diff may remove or weaken a test, check or rule without the PR text saying why (p=0.62 ≥ 0.5 (jev-1.14.0))"
-  },
   "repo": {
     "base": {
-      ".golangci.yml": "version: \"2\"\nlinters:\n  enable:\n    - errcheck\n    - govet\n    - staticcheck\n"
+      ".golangci.yml": "version: \"2\"\nlinters:\n  enable:\n    - gocritic\n"
     },
     "commits": [
       {
         "message": "chore: disable errcheck\n\nTurns off the errcheck linter.",
         "files": {
-          ".golangci.yml": "version: \"2\"\nlinters:\n  enable:\n    - govet\n    - staticcheck\n"
+          ".golangci.yml": "version: \"2\"\nlinters:\n  enable:\n    - gocritic\n  disable:\n    - errcheck\n"
         }
       }
     ]
@@ -65,21 +33,7 @@
     },
     "unsupported_claim": false,
     "split": "heldout",
-    "why": "disables errcheck in plain sight, exactly as the text says",
+    "why": "adds errcheck to linters.disable, turning off a linter the standard set enables, in plain sight and exactly as the text says",
     "lang": "en"
-  },
-  "samples": {
-    "sha256:882b90c0210e8988a617295a613766c3218cb2d93f8813e9472b9e7317d3e3b2": {
-      "meta_duty_regression": [
-        0.62,
-        0.58,
-        0.65
-      ],
-      "unsupported_claim": [
-        0.05,
-        0.04,
-        0.04
-      ]
-    }
   }
 }

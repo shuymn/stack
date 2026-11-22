@@ -1,41 +1,16 @@
 {
+  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
   "request": {
     "body": "golangci-lint moves from scripts/test to the pre-push hook in lefthook.yml.",
     "branch": "topic/en-lint-moved-to-hook",
     "jev": {
-      "records": {
-        "sha256:020b1777a0be8a7eaadde7608c09e70ca08e13febabcbbcdc100bbbc9bdfa7bf": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "meta_duty_regression": {
-                "type": "noul",
-                "noul": 0.11
-              },
-              "unsupported_claim": {
-                "type": "noul",
-                "noul": 0.05
-              }
-            },
-            "usage": {
-              "input_tokens": 1015,
-              "output_tokens": 42
-            }
-          }
-        }
-      }
+      "records": {}
     },
     "prompt": "",
     "range": "jev-mb..jev-head",
     "repo": "",
     "stage": "outbound",
     "title": "build: run lint in the pre-push hook"
-  },
-  "expect": {
-    "status": "pass"
-  },
-  "want": {
-    "findings": []
   },
   "repo": {
     "base": {
@@ -63,25 +38,11 @@
     },
     "unsupported_claim": false,
     "split": "fit",
-    "why": "moves the lint step to the pre-push hook and says so",
+    "why": "every push still runs golangci-lint, now from the pre-push hook, which the body states; nothing else in the repository runs scripts/test",
     "lang": "en",
     "hard": [
       "meta_duty_regression"
     ],
     "group": "scripts-test"
-  },
-  "samples": {
-    "sha256:020b1777a0be8a7eaadde7608c09e70ca08e13febabcbbcdc100bbbc9bdfa7bf": {
-      "meta_duty_regression": [
-        0.11,
-        0.12,
-        0.12
-      ],
-      "unsupported_claim": [
-        0.05,
-        0.05,
-        0.05
-      ]
-    }
   }
 }

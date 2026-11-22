@@ -1,0 +1,42 @@
+{
+  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
+  "request": {
+    "body": "新しいテストを3件追加しました。",
+    "branch": "topic/ja-coverage-threshold-lowered",
+    "jev": {
+      "records": {}
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "ci: カバレッジ設定を調整"
+  },
+  "repo": {
+    "base": {
+      ".testcoverage.yml": "profile: cover.out\nthreshold:\n  file: 70\n  total: 80\n"
+    },
+    "commits": [
+      {
+        "message": "ci: カバレッジ設定を調整\n\n新しいテストを3件追加しました。",
+        "files": {
+          ".testcoverage.yml": "profile: cover.out\nthreshold:\n  file: 40\n  total: 50\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      ".testcoverage.yml": {
+        "meta_duty_regression": true
+      }
+    },
+    "unsupported_claim": true,
+    "split": "heldout",
+    "why": "lowers the coverage thresholds from 80/70 to 50/40 under a vague title; the three new tests the body claims are not in the diff",
+    "lang": "ja",
+    "hard": [
+      "meta_duty_regression"
+    ]
+  }
+}
