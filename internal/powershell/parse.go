@@ -680,6 +680,10 @@ func (p *parser) exprToken(st *exprState) {
 		if tok := p.genericToken(); strings.HasPrefix(tok, ".") || strings.HasPrefix(tok, "::") {
 			st.lvars++ // a member: the target is no plain variable
 			keepsLvalue = true
+			if p.peek() == '(' {
+				p.methodArgs()
+				keepsLvalue = false
+			}
 		}
 	}
 	st.lvalue = st.lvalue && keepsLvalue

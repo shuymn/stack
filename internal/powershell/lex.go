@@ -367,15 +367,79 @@ func (p *parser) dollar(b *wordBuilder, inString bool) {
 		}
 		name := p.src[p.pos+1 : j]
 		p.pos = j
-		c := p.peek()
-		if !inString && (c == '[' || (c == '.' && isIdent(p.at(p.pos+1)))) {
-			b.dyn() // member access or indexing
+		if !inString && p.members() {
+			b.dyn()
 			return
 		}
 		b.variable(knownName(name), p.assigned)
 	default:
 		p.pos++
 		b.dyn()
+	}
+}
+
+// members consumes the member accesses (`.Length`, `::Name`), method calls and indexes after a
+// variable or expression outside a string, and reports whether there were any.
+func (p *parser) members() bool {
+	found := false
+	for {
+		switch {
+		case p.peek() == '[':
+			p.bracket()
+		case p.peek() == '.' && isIdent(p.at(p.pos+1)), p.has("::") && isIdent(p.at(p.pos+2)):
+			for p.peek() == '.' || p.peek() == ':' {
+				p.pos++
+			}
+			for isIdent(p.peek()) {
+				p.pos++
+			}
+			if p.peek() == '(' {
+				p.methodArgs()
+			}
+		default:
+			return found
+		}
+		found = true
+	}
+}
+
+// methodArgs skips the `(…)` arguments of a method call. They are expressions, not command
+// positions: only an explicit `$(…)` in them is walked.
+func (p *parser) methodArgs() {
+	p.enter()
+	defer p.leave()
+	p.pos++
+	var b wordBuilder
+	for {
+		p.skipLines()
+		switch c := p.peek(); {
+		case p.eof():
+			p.fail("unclosed method arguments")
+		case c == ')':
+			p.pos++
+			return
+		case c == '(':
+			p.methodArgs()
+		case p.has("@("):
+			p.pos++
+			p.methodArgs()
+		case p.has("@{"):
+			p.quietly(p.hash)
+		case p.has("@'"), p.has(`@"`):
+			p.hereString(&b)
+		case c == '$':
+			p.dollar(&b, false)
+		case c == '{':
+			p.block()
+		case c == '[':
+			p.bracket()
+		case p.quoteAt(singleQuotes) > 0:
+			p.single(&b, p.quoteAt(singleQuotes))
+		case p.quoteAt(doubleQuotes) > 0:
+			p.double(&b, p.quoteAt(doubleQuotes))
+		default:
+			p.pos++
+		}
 	}
 }
 

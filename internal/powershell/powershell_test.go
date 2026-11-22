@@ -392,6 +392,18 @@ var parseTests = []struct {
 		calls{{"gh", "pr", "merge", "$", "--help", "$", "x", "$", "y", "$"}},
 	},
 	{
+		"method arguments are opaque",
+		`$x.Invoke(gh pr view 7); [IO.File]::ReadAllText((gh pr view 1)); (Get-Item a).Delete(gh x); git status`,
+		Unix,
+		calls{{"Get-Item", "a"}, {"git", "status"}},
+	},
+	{
+		"method argument subexpression",
+		`$x.M($(gh pr merge 1)); Write-Output $x.Invoke(gh pr view 7)`,
+		Unix,
+		calls{{"gh", "pr", "merge", "1"}, {"Write-Output", "$"}},
+	},
+	{
 		"keyword prefix is a command",
 		`foreach-thing x; iffy y`,
 		Unix,
