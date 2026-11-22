@@ -374,6 +374,50 @@ func TestRmRootPowerShell(t *testing.T) {
 	wantAllow(t, "relative operand under an unknown cwd", d, ok)
 }
 
+// TestRmRootPowerShellExistingDrive checks that declaring a drive whose letter is the payload cwd's
+// or home's volume declares nothing: New-PSDrive fails with DriveAlreadyExists, so that root and
+// bare roots stay judged.
+func TestRmRootPowerShellExistingDrive(t *testing.T) {
+	f := newFixture(t)
+	f.cwd, f.home = `C:\work\repo`, `D:\work\home`
+	f.check(psCases{
+		windows: true, rule: RuleRmRoot,
+		deny: []string{
+			`mount C FileSystem C:\w; Remove-Item -Recurse C:\`,
+			`New-PSDrive -Name C -PSProvider FileSystem -Root C:\w; Remove-Item -Recurse C:\`,
+			`ndr d FileSystem C:\w; Remove-Item -Recurse D:\`,
+			`mount C FileSystem C:\w; Remove-Item -Recurse \`,
+		},
+		allow: []string{
+			`mount X FileSystem C:\w; Remove-Item -Recurse X:\`,
+			`New-PSDrive -Name X -PSProvider FileSystem -Root C:\w; Remove-Item -Recurse X:\`,
+			`mount X FileSystem C:\w; Remove-Item -Recurse \`,
+		},
+	})
+}
+
+// TestRmRootPowerShellHostDrive checks that a declaration named after one of the host's volumes
+// (Options.Drives) declares nothing, beyond the cwd's and home's drives.
+func TestRmRootPowerShellHostDrive(t *testing.T) {
+	opts := Options{Safety: safety.Defaults(), Home: `C:\work\home`, OS: windowsHost, Drives: "CD"}
+	for _, tt := range []struct {
+		cmd  string
+		deny bool
+	}{
+		{`mount D FileSystem C:\w; Remove-Item -Recurse D:\`, true},
+		{`New-PSDrive -Name D -PSProvider FileSystem -Root C:\w; Remove-Item -Recurse D:\`, true},
+		{`mount D FileSystem C:\w; Remove-Item -Recurse \`, true},
+		{`mount X FileSystem C:\w; Remove-Item -Recurse X:\`, false},
+	} {
+		d, ok := decidePowerShell(tt.cmd, `C:\work\repo`, opts)
+		if tt.deny {
+			wantDeny(t, tt.cmd, d, ok, RuleRmRoot)
+		} else {
+			wantAllow(t, tt.cmd, d, ok)
+		}
+	}
+}
+
 // TestRmRootPowerShellGitSymlink checks that a terminal `.` does not follow a `.git` symlink: the
 // link itself is what the path names, and it is not a directory.
 func TestRmRootPowerShellGitSymlink(t *testing.T) {

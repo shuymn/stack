@@ -46,6 +46,7 @@ var aliases = map[string]alias{
 	"ls":      {"Get-ChildItem", true},
 	"gm":      {"Get-Member", false},
 	"ndr":     {"New-PSDrive", false},
+	"mount":   {"New-PSDrive", true},
 }
 
 // verbs are the approved verbs plus ForEach and Where, so `Verb-Noun` names a cmdlet.
@@ -262,6 +263,7 @@ var (
 				param{"SSHConnection", nil, false},
 				param{"Options", nil, false},
 				param{"RemoteDebug", nil, true},
+				param{"ConnectingTimeout", nil, false},
 			),
 			positional: []string{"ScriptBlock"},
 		},

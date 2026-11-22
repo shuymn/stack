@@ -58,6 +58,35 @@ jobs:
         if: runner.os == 'Windows'
         run: ./stack.exe --version
 
+  # The PowerShell oracle (docs/design/powershell-guard.md §9 W2): the recognizer against the
+  # runner's PowerShell engines (5.1 and 7 on Windows, 7 on Linux). Not required: `check` does not
+  # need it. It fails on any fail or inconclusive verdict, including a missing engine.
+  powershell-oracle:
+    name: PowerShell oracle (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5.2.10
+        with:
+          version: 2026.11.10
+
+      - name: Oracle
+        env:
+          STACK_PS_ORACLE: "1"
+        run: mise exec -- go test -count=1 -v -run "^TestOracle$" ./internal/powershell/
+
   check:
     name: Check
     runs-on: ubuntu-latest

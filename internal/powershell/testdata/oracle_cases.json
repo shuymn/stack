@@ -1,0 +1,1983 @@
+[
+  {
+    "cmd": "gh pr merge 1 --help",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "$p = { gh pr merge 7 }",
+    "calls": [],
+    "skipped": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "1..3 | ForEach-Object { gh a } { gh b }",
+    "calls": [
+      "ForEach-Object",
+      "gh"
+    ],
+    "skipped": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "iex 'gh pr merge 7'",
+    "calls": [
+      "iex"
+    ],
+    "nested": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "git status \u0026\u0026 gh pr merge 1 || gh x",
+    "calls": [
+      "gh",
+      "gh",
+      "git"
+    ],
+    "rejects": [
+      "5.1"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Path 'a,C:\\'",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "gh pr view 1; gh pr merge 2",
+    "calls": [
+      "gh",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "Get-Date | gh pr merge 1",
+    "calls": [
+      "Get-Date",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "git status\r\ngh pr merge 1",
+    "calls": [
+      "gh",
+      "git"
+    ]
+  },
+  {
+    "cmd": "gh pr `\n  merge 1",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 1 \u0026",
+    "calls": [
+      "gh"
+    ],
+    "rejects": [
+      "5.1"
+    ]
+  },
+  {
+    "cmd": "\u0026 'x y\\gh.exe' pr merge 1",
+    "calls": [
+      "x y\\gh.exe"
+    ]
+  },
+  {
+    "cmd": ". gh pr merge 1",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "g`h pr merge 1",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "return gh pr merge 7",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "Write-Output note=gh pr merge 7",
+    "calls": [
+      "Write-Output"
+    ]
+  },
+  {
+    "cmd": "\u0026 { gh pr merge 7 }",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "if ($ok) { gh pr merge 7 }",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "if ($a) { gh a } elseif ($b) { gh b }\nelse { gh c }",
+    "calls": [
+      "gh",
+      "gh",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "try { gh pr merge 7 } catch {}",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "try { gh a } catch [System.Exception] { gh b } finally { gh c }",
+    "calls": [
+      "gh",
+      "gh",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "1..3 | ForEach-Object { gh pr merge 7 }",
+    "calls": [
+      "ForEach-Object",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "1..3 | %{ gh pr merge 7 }",
+    "calls": [
+      "%",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "$a | foreach -Process { gh a } -Begin { gh b }",
+    "calls": [
+      "foreach",
+      "gh",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "$a | % { gh a } { gh b }",
+    "calls": [
+      "%",
+      "gh"
+    ],
+    "skipped": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "$a | ? { gh pr merge 7 }",
+    "calls": [
+      "?",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "foreach ($x in $list) { gh pr merge $x }",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "for ($i=0; $i -lt 2; $i++) { gh a }; while ($true) { gh b }; do { gh c } until ($x)",
+    "calls": [
+      "gh",
+      "gh",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "switch ($x) { 'a' { gh a } default { gh b } }",
+    "calls": [
+      "gh",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "Write-Output { gh pr merge 7 } | Get-Member",
+    "calls": [
+      "Get-Member",
+      "Write-Output"
+    ],
+    "skipped": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "function f { gh pr merge 7 }",
+    "calls": [],
+    "skipped": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "icm -ScriptBlock { gh pr merge 7 }",
+    "calls": [
+      "gh",
+      "icm"
+    ]
+  },
+  {
+    "cmd": "Invoke-Command { gh pr merge 7 } -ArgumentList 1 -NoNewScope",
+    "calls": [
+      "Invoke-Command",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "icm -ScriptBlock { 'x' } -ArgumentList { gh pr merge 7 }",
+    "calls": [
+      "icm"
+    ],
+    "skipped": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "icm -ComputerName h { gh pr merge 7 }",
+    "calls": [
+      "icm"
+    ],
+    "skipped": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "icm -HostName h -ScriptBlock { gh pr merge 7 }",
+    "calls": [
+      "icm"
+    ],
+    "skipped": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "icm h -ScriptBlock { gh pr merge 7 }",
+    "calls": [
+      "icm"
+    ],
+    "skipped": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "Start-Job { gh pr merge 7 }",
+    "calls": [
+      "Start-Job"
+    ],
+    "skipped": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 7 2\u003e\u00261 --help",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr view 1 \u003e out.txt 2\u003e\u003e err.txt *\u003e all.txt",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "Write-Output ok \u003e $(gh pr merge 7; 'out.txt')",
+    "calls": [
+      "Write-Output",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "@{ Result = gh pr merge 7 }",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "@{ Result = 'gh pr merge 7' }",
+    "calls": []
+  },
+  {
+    "cmd": "$x = gh pr merge 7",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "[string]$x = gh pr merge 7",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "echo result = gh pr merge 7",
+    "calls": [
+      "echo"
+    ]
+  },
+  {
+    "cmd": "$x -eq (gh pr view 1)",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 7 --disable-auto=false -f k=v a,b -Name:value",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Path a,C:\\",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Path a, C:\\",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Write-Output @'\n  '@\ngh pr merge 7\n'@\ngh pr view 1",
+    "calls": [
+      "Write-Output",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "Write-Output @'   \nx\n'@",
+    "calls": [
+      "Write-Output"
+    ]
+  },
+  {
+    "cmd": "Write-Output @\"\n\"@",
+    "calls": [
+      "Write-Output"
+    ]
+  },
+  {
+    "cmd": "Write-Output @\"\n$(gh pr merge 7)\n\"@",
+    "calls": [
+      "Write-Output",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh --% pr merge 7 | Write-Output x",
+    "calls": [
+      "Write-Output",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "git --% a; \"b|c\" d \u0026\u0026 gh pr merge 7",
+    "calls": [
+      "gh",
+      "git"
+    ],
+    "rejects": [
+      "5.1"
+    ]
+  },
+  {
+    "cmd": "git --% \"x\ngit status\r\ngit --% a \"b\r\ngit diff",
+    "calls": [
+      "git",
+      "git",
+      "git",
+      "git"
+    ]
+  },
+  {
+    "cmd": "git --% status || gh pr merge 7",
+    "calls": [
+      "gh",
+      "git"
+    ],
+    "rejects": [
+      "5.1"
+    ]
+  },
+  {
+    "cmd": "git --% status\ngh pr merge 7",
+    "calls": [
+      "gh",
+      "git"
+    ]
+  },
+  {
+    "cmd": "cmd --% /c echo %USERPROFILE%\\x",
+    "calls": [
+      "cmd"
+    ]
+  },
+  {
+    "cmd": "echo \"gh pr merge 1\"; Write-Output 'gh pr merge 1'",
+    "calls": [
+      "Write-Output",
+      "echo"
+    ]
+  },
+  {
+    "cmd": "\"gh pr merge 1\"",
+    "calls": []
+  },
+  {
+    "cmd": "echo \"$(gh pr merge 1)\"",
+    "calls": [
+      "echo",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "\u0026 'gh' pr merge 1",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "# gh pr merge 1\n\u003c# gh pr merge 2\n#\u003e gh pr view 3 # gh pr merge 4",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "Write-Output ‘gh pr merge 1’ “x”",
+    "calls": [
+      "Write-Output"
+    ]
+  },
+  {
+    "cmd": "Write-Output \"a`tb`\"c\"\"d\" 'it''s'",
+    "calls": [
+      "Write-Output"
+    ]
+  },
+  {
+    "cmd": "7; 1..3 | gh x",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh $x @a (Get-Date) $(Get-Date) \"a$x\" $x.y",
+    "calls": [
+      "Get-Date",
+      "Get-Date",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "@(gh pr merge 1)",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr merge (7)--help $(1)x @(2)y a$(3)b",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "$x.Invoke(gh pr view 7); [IO.File]::ReadAllText((gh pr view 1)); (Get-Item a).Delete(gh x); git status",
+    "calls": [],
+    "rejects": [
+      "5.1",
+      "7"
+    ]
+  },
+  {
+    "cmd": "$x.M($(gh pr merge 1)); Write-Output $x.Invoke(gh pr view 7)",
+    "calls": [
+      "gh"
+    ],
+    "rejects": [
+      "5.1",
+      "7"
+    ]
+  },
+  {
+    "cmd": "gh -F ${HOME}.Length $HOME.Length ${HOME}[0] $HOME[0] \"${HOME}.x\" \"$HOME[0]\"",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "using module @{ ModuleName = 'Microsoft.PowerShell.Management'; ModuleVersion = '1.0' }\nusing namespace System.IO; git status\ngit diff",
+    "calls": [
+      "git",
+      "git"
+    ]
+  },
+  {
+    "cmd": "1 | ForEach-Object -Parallel { 'x' } -Process { git status }; $a | % { git a } -ArgumentList 1",
+    "calls": [
+      "%",
+      "ForEach-Object"
+    ],
+    "skipped": [
+      "git",
+      "git"
+    ]
+  },
+  {
+    "cmd": "$a | ? -Property x { git status }; $a | Where-Object -FilterScript { gh x } -InputObject $b",
+    "calls": [
+      "?",
+      "Where-Object",
+      "gh"
+    ],
+    "skipped": [
+      "git"
+    ]
+  },
+  {
+    "cmd": "git add *.txt a?b [x]y '*.q' \"*.d\" a`*b; Remove-Item *.txt",
+    "calls": [
+      "Remove-Item",
+      "git"
+    ],
+    "dynamicUnix": [
+      "*.txt",
+      "a?b",
+      "[x]y",
+      "a*b"
+    ]
+  },
+  {
+    "cmd": "git add *.txt a?b",
+    "calls": [
+      "git"
+    ],
+    "dynamicUnix": [
+      "*.txt",
+      "a?b"
+    ]
+  },
+  {
+    "cmd": "trap { gh a }; trap [System.Exception] { gh b }",
+    "calls": [
+      "gh",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "throw gh a\nexit gh b | git c",
+    "calls": [
+      "gh",
+      "gh",
+      "git"
+    ]
+  },
+  {
+    "cmd": "gh pr view ('abc').Length $(1)[0] @(2)::X (7)--help",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "1 | ForEach-Object -- { git status }",
+    "calls": [
+      "ForEach-Object",
+      "git"
+    ]
+  },
+  {
+    "cmd": "1 | \u0026 'ForEach-Object' -- { gh pr merge 7 }",
+    "calls": [
+      "ForEach-Object",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "$p = { gh pr merge 7 }; iex 'gh pr merge 7'",
+    "calls": [
+      "iex"
+    ],
+    "skipped": [
+      "gh"
+    ],
+    "nested": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "\u0026 { param($x=$(gh pr merge 7)) $x }",
+    "calls": [],
+    "skipped": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "git --% log “text | git status # ” x „a”",
+    "calls": [
+      "git"
+    ]
+  },
+  {
+    "cmd": "foreach-thing x; iffy y",
+    "calls": [
+      "foreach-thing",
+      "iffy"
+    ]
+  },
+  {
+    "cmd": "Remove-Item x",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "remove-item x",
+    "calls": [
+      "remove-item"
+    ]
+  },
+  {
+    "cmd": "Microsoft.PowerShell.Management\\Remove-Item x",
+    "calls": [
+      "Microsoft.PowerShell.Management\\Remove-Item"
+    ]
+  },
+  {
+    "cmd": "ri x",
+    "calls": [
+      "ri"
+    ]
+  },
+  {
+    "cmd": "del x",
+    "calls": [
+      "del"
+    ]
+  },
+  {
+    "cmd": "rm -r x",
+    "calls": [
+      "rm"
+    ]
+  },
+  {
+    "cmd": "rm -rf x",
+    "calls": [
+      "rm"
+    ]
+  },
+  {
+    "cmd": "rmdir x",
+    "calls": [
+      "rmdir"
+    ]
+  },
+  {
+    "cmd": "\u0026 'C:\\x\\rm.exe' -r '~'",
+    "calls": [
+      "C:\\x\\rm.exe"
+    ]
+  },
+  {
+    "cmd": "rm.exe -r x",
+    "calls": [
+      "rm.exe"
+    ]
+  },
+  {
+    "cmd": "/bin/rm -r x",
+    "calls": [
+      "/bin/rm"
+    ]
+  },
+  {
+    "cmd": "GH.EXE pr view",
+    "calls": [
+      "GH.EXE"
+    ]
+  },
+  {
+    "cmd": "Write-Output x",
+    "calls": [
+      "Write-Output"
+    ]
+  },
+  {
+    "cmd": "pre-commit run",
+    "calls": [
+      "pre-commit"
+    ]
+  },
+  {
+    "cmd": "mount X FileSystem C:\\w",
+    "calls": [
+      "mount"
+    ]
+  },
+  {
+    "cmd": "mount -t tmpfs x /w",
+    "calls": [
+      "mount"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -r -Path a",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Rec -RECURSE x",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item x -Recurse:$false -WhatIf",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item –Recurse -LP a",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -PSPath a -Exclude b",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -p x",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Bogus x",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item .\\build ~",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Path",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -- -x",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "ndr X FileSystem C:\\w",
+    "calls": [
+      "ndr"
+    ]
+  },
+  {
+    "cmd": "bash -c 'gh pr merge 1'",
+    "calls": [
+      "bash"
+    ]
+  },
+  {
+    "cmd": "pwsh -NoProfile -Command 'gh pr merge 1'",
+    "calls": [
+      "pwsh"
+    ],
+    "nested": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "iex \"bash -c 'gh pr merge 7'\"",
+    "calls": [
+      "iex"
+    ],
+    "nested": [
+      "bash"
+    ]
+  },
+  {
+    "cmd": "iex 'bash -c ''bash -c \"gh pr merge 7\"'''",
+    "calls": [
+      "iex"
+    ],
+    "nested": [
+      "bash"
+    ]
+  },
+  {
+    "cmd": "iex \"iex 'iex ''gh pr merge 7'''\"",
+    "calls": [
+      "iex"
+    ],
+    "nested": [
+      "iex",
+      "iex"
+    ]
+  },
+  {
+    "cmd": "iex $x; bash -c \"gh $x\"",
+    "calls": [
+      "bash",
+      "iex"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 7; Write-Output \"",
+    "calls": [],
+    "rejects": [
+      "5.1",
+      "7"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 7; Write-Output 'x",
+    "calls": [],
+    "rejects": [
+      "5.1",
+      "7"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 7; Write-Output @'\nx",
+    "calls": [],
+    "rejects": [
+      "5.1",
+      "7"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 7; if ($x) { gh y",
+    "calls": [],
+    "rejects": [
+      "5.1",
+      "7"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 7; (gh x",
+    "calls": [],
+    "rejects": [
+      "5.1",
+      "7"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 7 }",
+    "calls": [],
+    "rejects": [
+      "5.1",
+      "7"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 7 \u003c# x",
+    "calls": [],
+    "rejects": [
+      "5.1",
+      "7"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 7 \u003c in.txt",
+    "calls": [],
+    "rejects": [
+      "5.1",
+      "7"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 7; using namespace \"\ngit status",
+    "calls": [],
+    "rejects": [
+      "5.1",
+      "7"
+    ]
+  },
+  {
+    "cmd": "$x.M(}); git status",
+    "calls": [],
+    "rejects": [
+      "5.1",
+      "7"
+    ]
+  },
+  {
+    "cmd": "[T]::M(]); git status",
+    "calls": [],
+    "rejects": [
+      "5.1",
+      "7"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 1",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh.exe pr merge 1",
+    "calls": [
+      "gh.exe"
+    ]
+  },
+  {
+    "cmd": "\u0026 gh pr merge 1",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh -R o/r pr merge 1",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 1 --help=false",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 1 --disable-auto=false",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh api -X PUT repos/o/r/pulls/1/merge",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "cd sub \u0026\u0026 gh api graphql -F query=@q.graphql",
+    "calls": [
+      "cd",
+      "gh"
+    ],
+    "rejects": [
+      "5.1"
+    ]
+  },
+  {
+    "cmd": "Write-Output \"$(gh pr merge 1)\"",
+    "calls": [
+      "Write-Output",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "bash -c 'gh pr merge 7\nif ('",
+    "calls": [
+      "bash"
+    ]
+  },
+  {
+    "cmd": "git --% status \u0026\u0026 gh pr merge 7",
+    "calls": [
+      "gh",
+      "git"
+    ],
+    "rejects": [
+      "5.1"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 7\n@'\ntext\n'@ | Write-Output",
+    "calls": [
+      "Write-Output",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 7; iex 'Write-Output \"'",
+    "calls": [
+      "gh",
+      "iex"
+    ]
+  },
+  {
+    "cmd": "gh pr view 1",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr merge 1 --disable-auto",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "echo \"gh pr merge\"",
+    "calls": [
+      "echo"
+    ]
+  },
+  {
+    "cmd": "# gh pr merge 1",
+    "calls": []
+  },
+  {
+    "cmd": "cd sub; gh api graphql -F query=@q.graphql",
+    "calls": [
+      "cd",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "~/.config/app/token",
+    "calls": [
+      "~/.config/app/token"
+    ]
+  },
+  {
+    "cmd": ".dev.vars",
+    "calls": [
+      ".dev.vars"
+    ]
+  },
+  {
+    "cmd": "/srv/keys/prod",
+    "calls": [
+      "/srv/keys/prod"
+    ]
+  },
+  {
+    "cmd": "C:",
+    "calls": [
+      "C:"
+    ]
+  },
+  {
+    "cmd": "Users",
+    "calls": [
+      "Users"
+    ]
+  },
+  {
+    "cmd": "dev",
+    "calls": [
+      "dev"
+    ]
+  },
+  {
+    "cmd": "Get-Content .dev.vars",
+    "calls": [
+      "Get-Content"
+    ]
+  },
+  {
+    "cmd": "type .dev.vars",
+    "calls": [
+      "type"
+    ]
+  },
+  {
+    "cmd": "Get-Content ~\\.config\\app\\token",
+    "calls": [
+      "Get-Content"
+    ]
+  },
+  {
+    "cmd": "Get-Content \"$env:USERPROFILE\\.config\\app\\token\"",
+    "calls": [
+      "Get-Content"
+    ]
+  },
+  {
+    "cmd": "Get-Content /srv/keys/prod",
+    "calls": [
+      "Get-Content"
+    ]
+  },
+  {
+    "cmd": "Get-Content \\srv\\keys\\prod",
+    "calls": [
+      "Get-Content"
+    ]
+  },
+  {
+    "cmd": "Get-Date # .dev.vars",
+    "calls": [
+      "Get-Date"
+    ]
+  },
+  {
+    "cmd": "Write-Output 'Copy .dev.vars.example to .dev.vars'",
+    "calls": [
+      "Write-Output"
+    ]
+  },
+  {
+    "cmd": "Get-Content .dev.vars; Write-Output \"",
+    "calls": [],
+    "rejects": [
+      "5.1",
+      "7"
+    ]
+  },
+  {
+    "cmd": "$env:K = Get-Content -Raw -LiteralPath .dev.vars; wrangler deploy",
+    "calls": [
+      "Get-Content",
+      "wrangler"
+    ]
+  },
+  {
+    "cmd": "wrangler deploy --token (Get-Content -Raw -LiteralPath .dev.vars)",
+    "calls": [
+      "Get-Content",
+      "wrangler"
+    ]
+  },
+  {
+    "cmd": "wrangler deploy --token \"$(Get-Content .dev.vars)\"",
+    "calls": [
+      "Get-Content",
+      "wrangler"
+    ]
+  },
+  {
+    "cmd": "Get-Content .dev.vars.example",
+    "calls": [
+      "Get-Content"
+    ]
+  },
+  {
+    "cmd": "Get-Content README.md",
+    "calls": [
+      "Get-Content"
+    ]
+  },
+  {
+    "cmd": "Get-Content .\\.DEV.VARS",
+    "calls": [
+      "Get-Content"
+    ]
+  },
+  {
+    "cmd": "Get-Content .config\\\\app//token",
+    "calls": [
+      "Get-Content"
+    ]
+  },
+  {
+    "cmd": "Get-Content \"$env:USERPROFILE\\.config\\\\app\\token\"",
+    "calls": [
+      "Get-Content"
+    ]
+  },
+  {
+    "cmd": "Get-Content \\SRV\\keys\\\\prod",
+    "calls": [
+      "Get-Content"
+    ]
+  },
+  {
+    "cmd": "\\",
+    "calls": [
+      "\\"
+    ]
+  },
+  {
+    "cmd": "\\\\",
+    "calls": [
+      "\\\\"
+    ]
+  },
+  {
+    "cmd": "/\\/",
+    "calls": [
+      "/\\/"
+    ]
+  },
+  {
+    "cmd": "cd sub \u0026\u0026 gh pr create -t t --body-file b.md",
+    "calls": [
+      "cd",
+      "gh"
+    ],
+    "rejects": [
+      "5.1"
+    ]
+  },
+  {
+    "cmd": "cd sub; gh pr create -t t --body-file b.md",
+    "calls": [
+      "cd",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "Set-Location sub -PassThru | gh pr create -t t --body-file b.md",
+    "calls": [
+      "Set-Location",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "cd sub | gh pr create -t t --body-file b.md",
+    "calls": [
+      "cd",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "@'\nclean\n'@ | gh pr comment 1 -F -",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "Get-Date | gh pr comment 1 -F -",
+    "calls": [
+      "Get-Date",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "Get-Content sub/b.md | gh pr comment 1 -F -",
+    "calls": [
+      "Get-Content",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr comment 1 -F \"$env:SystemDrive\\b.md\"",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr create -t t --body-file clean.md",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr comment 1 -F \"$HOME/b.md\"",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr comment 1 -F \"$env:USERPROFILE\\b.md\"",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr comment 1 -F ~\\b.md",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr comment 1 -F ~/b.md",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr comment 1 -F '~/b.md'",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "gh pr comment 1 -F \"$env:USERPROFILE/b.md\"",
+    "calls": [
+      "gh"
+    ]
+  },
+  {
+    "cmd": "b.md",
+    "calls": [
+      "b.md"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -Force $HOME",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -r ~",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Rec '~'",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -RECURSE ~/",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse ~\\",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse:$true ${HOME}",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse \"$env:USERPROFILE\\\"",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse $HOME\\.",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "ri -r ~",
+    "calls": [
+      "ri"
+    ]
+  },
+  {
+    "cmd": "del -r ~",
+    "calls": [
+      "del"
+    ]
+  },
+  {
+    "cmd": "erase -r ~",
+    "calls": [
+      "erase"
+    ]
+  },
+  {
+    "cmd": "rd -r ~",
+    "calls": [
+      "rd"
+    ]
+  },
+  {
+    "cmd": "Microsoft.PowerShell.Management\\Remove-Item -Recurse ~",
+    "calls": [
+      "Microsoft.PowerShell.Management\\Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -Path ~",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -LiteralPath $HOME",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -LP $HOME",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -PSPath $HOME",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -LiteralPath:\"$HOME\"",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -Path a, ~",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -Path a,~",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -- ~",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -WhatIf:$false ~",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse .git",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse '.\\.git'",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse ./.git/",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -LiteralPath .git/.",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse .git\\.\\",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse .git/././",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse $HOME; Write-Output ok",
+    "calls": [
+      "Remove-Item",
+      "Write-Output"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse:$false ~",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -WhatIf ~",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -WhatIf:$true ~",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item ~",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse '$HOME'",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse \"`$HOME\"",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "$env:USERPROFILE = 'C:\\work\\x'; Remove-Item -Recurse $env:USERPROFILE",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "$HOME = 'x'; Remove-Item -Recurse $HOME",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -Path 'a,~'",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -LiteralPath '~'",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse .git\\hooks",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse wt\\.git",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -LiteralPath wt/.git/.",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -Exclude a, .git .\\build",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse .\\build -Filter '.git'",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse .\\build ~",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -p ~ -Recurse",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse .\\build",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item ~\\x -Recurse",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse ~\\src",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "echo \"Remove-Item -Recurse ~\"",
+    "calls": [
+      "echo"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse $env:SystemDrive",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse $x",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse:$y ~",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse $HOME; Write-Output \"",
+    "calls": [],
+    "rejects": [
+      "5.1",
+      "7"
+    ]
+  },
+  {
+    "cmd": "ri -r C:\\",
+    "calls": [
+      "ri"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse c:/",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse c:\\.",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -Path a, C:\\",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -Path a,C:\\",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse $env:SystemDrive\\",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse ${env:SystemDrive}\\",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse \\",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse /",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse \\.",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse /.",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "rm -r ~",
+    "calls": [
+      "rm"
+    ]
+  },
+  {
+    "cmd": "rmdir -r ~",
+    "calls": [
+      "rmdir"
+    ]
+  },
+  {
+    "cmd": "\u0026 'C:\\x\\rm.exe' -r C:\\",
+    "calls": [
+      "C:\\x\\rm.exe"
+    ]
+  },
+  {
+    "cmd": "New-PSDrive -Name X -PSProvider FileSystem -Root C:\\work\\build; Remove-Item -Recurse C:\\",
+    "calls": [
+      "New-PSDrive",
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse X:\\",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "New-PSDrive -Name X -Name X -PSProvider FileSystem -Root C:\\work\\build; Remove-Item -Recurse C:\\",
+    "calls": [
+      "New-PSDrive",
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "New-PSDrive -Name X -Name X -PSProvider FileSystem -Root C:\\w; Remove-Item -Recurse \\",
+    "calls": [
+      "New-PSDrive",
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse C:",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item C:\\",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse -Path 'a,C:\\'",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "rm -rf ~",
+    "calls": [
+      "rm"
+    ]
+  },
+  {
+    "cmd": "\u0026 'C:\\x\\rm.exe' -r ~",
+    "calls": [
+      "C:\\x\\rm.exe"
+    ]
+  },
+  {
+    "cmd": "New-PSDrive -Name X -PSProvider FileSystem -Root C:\\x; Remove-Item -Recurse \\",
+    "calls": [
+      "New-PSDrive",
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "New-PSDrive -Name X -PSProvider FileSystem -Root C:\\work\\build; Remove-Item -Recurse X:\\",
+    "calls": [
+      "New-PSDrive",
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "New-PSDrive x FileSystem C:\\work\\build; Remove-Item -Recurse X:/",
+    "calls": [
+      "New-PSDrive",
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "ndr -Name X -PSProvider FileSystem -Root C:\\work\\build; Remove-Item -Recurse X:\\",
+    "calls": [
+      "Remove-Item",
+      "ndr"
+    ]
+  },
+  {
+    "cmd": "New-PSDrive -Name $n -PSProvider FileSystem -Root C:\\w; Remove-Item -Recurse X:\\",
+    "calls": [
+      "New-PSDrive",
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "New-PSDrive X FileSystem C:\\work\\build; cd X:\\ \u0026\u0026 Remove-Item -Recurse .",
+    "calls": [
+      "New-PSDrive",
+      "Remove-Item",
+      "cd"
+    ],
+    "rejects": [
+      "5.1"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse HKCU:\\",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse C:\\*",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse \\\\server\\share",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "/bin/rm -rf ~",
+    "calls": [
+      "/bin/rm"
+    ]
+  },
+  {
+    "cmd": "ri -r /",
+    "calls": [
+      "ri"
+    ]
+  },
+  {
+    "cmd": "rm -rf .git",
+    "calls": [
+      "rm"
+    ]
+  },
+  {
+    "cmd": "rm -rf '~'",
+    "calls": [
+      "rm"
+    ]
+  },
+  {
+    "cmd": "rm -rf ~/src",
+    "calls": [
+      "rm"
+    ]
+  },
+  {
+    "cmd": "rm -f .git",
+    "calls": [
+      "rm"
+    ]
+  },
+  {
+    "cmd": "rm -rf wt/.git",
+    "calls": [
+      "rm"
+    ]
+  },
+  {
+    "cmd": "mount C FileSystem C:\\w; Remove-Item -Recurse C:\\",
+    "calls": [
+      "Remove-Item",
+      "mount"
+    ]
+  },
+  {
+    "cmd": "New-PSDrive -Name C -PSProvider FileSystem -Root C:\\w; Remove-Item -Recurse C:\\",
+    "calls": [
+      "New-PSDrive",
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "ndr d FileSystem C:\\w; Remove-Item -Recurse D:\\",
+    "calls": [
+      "Remove-Item",
+      "ndr"
+    ]
+  },
+  {
+    "cmd": "mount C FileSystem C:\\w; Remove-Item -Recurse \\",
+    "calls": [
+      "Remove-Item",
+      "mount"
+    ]
+  },
+  {
+    "cmd": "mount X FileSystem C:\\w; Remove-Item -Recurse X:\\",
+    "calls": [
+      "Remove-Item",
+      "mount"
+    ]
+  },
+  {
+    "cmd": "New-PSDrive -Name X -PSProvider FileSystem -Root C:\\w; Remove-Item -Recurse X:\\",
+    "calls": [
+      "New-PSDrive",
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "mount X FileSystem C:\\w; Remove-Item -Recurse \\",
+    "calls": [
+      "Remove-Item",
+      "mount"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse .git/./",
+    "calls": [
+      "Remove-Item"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse $HOME; iex 'Write-Output \"'",
+    "calls": [
+      "Remove-Item",
+      "iex"
+    ]
+  },
+  {
+    "cmd": "Remove-Item -Recurse $HOME; bash -c 'if ('",
+    "calls": [
+      "Remove-Item",
+      "bash"
+    ]
+  },
+  {
+    "cmd": "bash -c 'rm -rf ~\nif ('",
+    "calls": [
+      "bash"
+    ]
+  }
+]
