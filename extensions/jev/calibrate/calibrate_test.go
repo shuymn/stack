@@ -196,6 +196,7 @@ func (f *fakeJev) Send(_ context.Context, b jev.Batch) jev.Outcome {
 	return o
 }
 
+//nolint:gocyclo // one run, then each of its effects checked in turn
 func TestCalibrate(t *testing.T) {
 	dir := copyFixtures(t)
 	cases, err := Load(t.Context(), dir, proc.Exec{}, cleanEnv())
@@ -275,7 +276,10 @@ func TestCalibrate(t *testing.T) {
 	}
 	for _, q := range semantic.Questions {
 		d := got.Decisions[q.Name]
-		if !d.Enabled || d.Cutoff == nil || *d.Cutoff != 0.5 || got.Placeholder != "" {
+		// The fake's negatives reach 0.16, so the margin test clears them from 0.22; the old rule
+		// would take its floor, 0.50.
+		if !d.Enabled || d.Cutoff == nil || *d.Cutoff != 0.22 || d.Baseline == nil ||
+			*d.Baseline != 0.5 || got.Placeholder != "" {
 			t.Fatalf("%s: %+v", q.Name, d)
 		}
 	}
