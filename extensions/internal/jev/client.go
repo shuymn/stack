@@ -183,11 +183,8 @@ func (l Live) send(ctx context.Context, b Batch) Outcome {
 	case http.StatusOK:
 	case http.StatusBadRequest:
 		// Only a 400 needs its body: max_tokens_exceeded is too large, any other 400 persistent.
-		body, err := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
-		if err != nil {
-			// The status is known; without the body it cannot be told too large.
-			return statusOutcome(resp.StatusCode, false)
-		}
+		// A read that ends early keeps the status and still checks the bytes that arrived.
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
 		return statusOutcome(resp.StatusCode, bytes.Contains(body, []byte(CauseMaxTokens)))
 	default:
 		// Classified at the headers: a stalled error body cannot turn it into a timeout.
@@ -216,12 +213,12 @@ func transportFailure(ctx context.Context, err error) Outcome {
 	}
 }
 
-// statusOutcome classifies a non-200 status; mte reports that a 400 named max_tokens_exceeded.
 func isTimeout(err error) bool {
 	ne, ok := errors.AsType[net.Error](err)
 	return ok && ne.Timeout()
 }
 
+// statusOutcome classifies a non-200 status; mte reports that a 400 named max_tokens_exceeded.
 func statusOutcome(status int, mte bool) Outcome {
 	cause := "HTTP " + strconv.Itoa(status)
 	switch {

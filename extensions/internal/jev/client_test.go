@@ -334,12 +334,14 @@ func TestValidatePerAnswer(t *testing.T) {
 	}
 }
 
-// barrier is a transport whose sends block until four have started.
+// barrier is a transport that reports when four sends have started, and any send beyond them,
+// and holds every send until release closes.
 type barrier struct {
 	mu      sync.Mutex
 	started int
 	four    chan struct{}
 	extra   chan struct{}
+	release chan struct{}
 }
 
 func (b *barrier) Send(context.Context, Batch) Outcome {
@@ -356,41 +358,55 @@ func (b *barrier) Send(context.Context, Batch) Outcome {
 		default:
 		}
 	}
-	<-b.four
+	<-b.release
 	return Outcome{Class: OK}
 }
 
 func TestInFlightCap(t *testing.T) {
-	b := &barrier{four: make(chan struct{}), extra: make(chan struct{}, 1)}
-	// Hold the first four: once they start, Do must wait for a slot before a fifth.
-	release := make(chan struct{})
-	gate := &gated{inner: b, release: release}
-	done := make(chan []Outcome)
-	go func() { done <- Do(t.Context(), gate, make([]Batch, 12)) }()
-	<-b.four
+	const wait = 5 * time.Second
+	b := &barrier{
+		four: make(chan struct{}), extra: make(chan struct{}, 1), release: make(chan struct{}),
+	}
+	var once sync.Once
+	free := func() { once.Do(func() { close(b.release) }) }
+	var outs []Outcome
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		outs = Do(t.Context(), b, make([]Batch, 12))
+	}()
+	// On every exit the held sends are released and Do is awaited: no goroutine outlives the
+	// test.
+	defer func() {
+		free()
+		select {
+		case <-done:
+		case <-time.After(wait):
+			t.Error("Do did not return after the release")
+		}
+	}()
+	select {
+	case <-b.four:
+	case <-time.After(wait):
+		t.Fatal("four requests were not in flight together")
+	}
+	// Four held: Do must wait for a slot before a fifth.
 	select {
 	case <-b.extra:
 		t.Fatal("a fifth request started while four were in flight")
 	case <-time.After(50 * time.Millisecond):
 	}
-	close(release)
-	for _, o := range <-done {
+	free()
+	select {
+	case <-done:
+	case <-time.After(wait):
+		t.Fatal("Do did not return after the release")
+	}
+	for _, o := range outs {
 		if o.Class != OK {
 			t.Fatalf("outcome %+v", o)
 		}
 	}
-}
-
-// gated passes sends to inner and holds each returning one until release.
-type gated struct {
-	inner   Transport
-	release chan struct{}
-}
-
-func (g *gated) Send(ctx context.Context, b Batch) Outcome {
-	o := g.inner.Send(ctx, b)
-	<-g.release
-	return o
 }
 
 func TestValidateTypeError(t *testing.T) {
@@ -435,26 +451,40 @@ func TestClientMalformedRedirectAndStalled400(t *testing.T) {
 			t.Fatalf("outcome %+v", o)
 		}
 	})
-	t.Run("a 400 whose body stalls keeps its status", func(t *testing.T) {
-		done := make(chan struct{})
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusBadRequest)
-			_, _ = w.Write([]byte(`{"detail":`))
-			if fl, ok := w.(http.Flusher); ok {
-				fl.Flush()
+	for _, c := range []struct {
+		name, prefix string
+		class        Class
+		cause        string
+	}{
+		{"a 400 whose body stalls keeps its status", `{"detail":`, Persistent, "HTTP 400"},
+		{
+			"a 400 whose body stalls after the marker is too large",
+			`{"error":"` + CauseMaxTokens + `","detail":`, TooLarge, CauseMaxTokens,
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			done := make(chan struct{})
+			srv := httptest.NewServer(
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusBadRequest)
+					_, _ = w.Write([]byte(c.prefix))
+					if fl, ok := w.(http.Flusher); ok {
+						fl.Flush()
+					}
+					select {
+					case <-r.Context().Done():
+					case <-done:
+					}
+				}),
+			)
+			defer srv.Close()
+			defer close(done)
+			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+			defer cancel()
+			o := Live{Endpoint: srv.URL, Key: "k"}.Send(ctx, testBatch(noulQ))
+			if o.Status != http.StatusBadRequest || o.Class != c.class || o.Cause != c.cause {
+				t.Fatalf("outcome %+v", o)
 			}
-			select {
-			case <-r.Context().Done():
-			case <-done:
-			}
-		}))
-		defer srv.Close()
-		defer close(done)
-		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
-		defer cancel()
-		o := Live{Endpoint: srv.URL, Key: "k"}.Send(ctx, testBatch(noulQ))
-		if o.Status != http.StatusBadRequest || o.Class != Persistent {
-			t.Fatalf("outcome %+v", o)
-		}
-	})
+		})
+	}
 }

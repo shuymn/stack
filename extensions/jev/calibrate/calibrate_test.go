@@ -121,7 +121,9 @@ type fakeJev struct {
 	// failFirst gives the first attempt of each body of these cases a timeout with no status.
 	failFirst map[string]bool
 	// partial answers only meta_duty_regression for these cases.
-	partial  map[string]bool
+	partial map[string]bool
+	// shift moves every score of these cases.
+	shift    map[string]float64
 	mu       sync.Mutex
 	byHash   map[string]planned
 	attempts map[string]int
@@ -178,6 +180,7 @@ func (f *fakeJev) Send(_ context.Context, b jev.Batch) jev.Outcome {
 		if truth {
 			v = 0.85 + spread
 		}
+		v += f.shift[name]
 		answers[q.Name] = map[string]any{"type": "noul", "noul": v}
 	}
 	body, err := jev.Marshal(map[string]any{
@@ -520,8 +523,11 @@ func TestRecalibrateFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The last case fails; the first one, recorded before it, now scores differently, so writing
+	// it before the failure is seen would change it.
 	again := newFake(t, cases)
-	again.failFirst = map[string]bool{"en-deleted-assertion-claims-tests.json": true}
+	again.shift = map[string]float64{"en-deleted-assertion-claims-tests.json": 0.05}
+	again.failFirst = map[string]bool{"ja-vet-dropped-speedup.json": true}
 	opts.Transport = again
 	err = Run(t.Context(), opts)
 	if err == nil || !strings.Contains(err.Error(), "rerun") {
