@@ -22,7 +22,10 @@ $req = [System.IO.File]::ReadAllText($In, $utf8) | ConvertFrom-Json
 $A = 'System.Management.Automation.Language'
 
 function Convert-Element($e) {
-    $o = [ordered]@{ k = 'expr'; t = $e.Extent.Text }
+    $o = [ordered]@{ k = 'expr'; t = $e.Extent.Text; ast = $e.GetType().Name }
+    if ($e -is [System.Management.Automation.Language.ExpandableStringExpressionAst]) {
+        $o.nested = @($e.NestedExpressions | ForEach-Object { $_.GetType().Name })
+    }
     if ($e -is [System.Management.Automation.Language.StringConstantExpressionAst]) {
         $o.k = 'str'; $o.v = $e.Value; $o.q = [string]$e.StringConstantType
     } elseif ($e -is [System.Management.Automation.Language.ConstantExpressionAst]) {
@@ -78,7 +81,8 @@ foreach ($s in @(
     $blockSets[$s.cmdlet] = @{ params = @($ps[0].Parameters | ForEach-Object { $_.Name }); walk = $s.walk }
 }
 
-# Test-WalkedBlock reports whether section 3 walks $block, an argument of $cmd: the cmdlet runs
+# Test-WalkedBlock returns $null when the binding cannot be rebuilt. It reports whether section 3
+# walks $block, an argument of $cmd: the cmdlet runs
 # blocks, the engine binds every argument within the parameter set that runs them, and $block is
 # bound to a walked parameter (the first positional block binds to the first of them).
 function Test-WalkedBlock($cmd, $block) {
@@ -98,7 +102,7 @@ function Test-WalkedBlock($cmd, $block) {
         # engine binds every later argument positionally: bind the command without it.
         $rest = @($cmd.CommandElements | Select-Object -Skip ($end + 1))
         foreach ($e in $rest) {
-            if ($e -is [System.Management.Automation.Language.CommandParameterAst]) { return $false }
+            if ($e -is [System.Management.Automation.Language.CommandParameterAst]) { return $null }
         }
         $texts = New-Object System.Collections.ArrayList
         $at = -1
@@ -107,11 +111,13 @@ function Test-WalkedBlock($cmd, $block) {
             if ($cmd.CommandElements[$i] -eq $block) { $at = $texts.Count }
             [void]$texts.Add($cmd.CommandElements[$i].Extent.Text)
         }
-        if ($at -lt 0) { return $false }
+        if ($at -lt 0) { return $null }
+        $op = switch ([string]$cmd.InvocationOperator) { 'Ampersand' { '& ' } 'Dot' { '. ' } default { '' } }
         $tk = $null; $er = $null
-        $re = [System.Management.Automation.Language.Parser]::ParseInput(($texts -join ' '), [ref]$tk, [ref]$er)
+        $re = [System.Management.Automation.Language.Parser]::ParseInput($op + ($texts -join ' '), [ref]$tk, [ref]$er)
         $twin = @(Find-Commands $re)
-        if (@($er).Count -gt 0 -or $twin.Count -lt 1 -or $twin[0].CommandElements.Count -ne $texts.Count) { return $false }
+        if (@($er).Count -gt 0 -or $twin.Count -lt 1 -or $twin[0].CommandElements.Count -ne $texts.Count -or
+            $twin[0].InvocationOperator -ne $cmd.InvocationOperator) { return $null }
         $cmd = $twin[0]
         $block = $cmd.CommandElements[$at]
         $b = [System.Management.Automation.Language.StaticParameterBinder]::BindCommand($cmd, $true)
@@ -127,7 +133,7 @@ function Test-WalkedBlock($cmd, $block) {
 }
 
 # Get-Context returns 'plain' when every construct around $cmd is one section 3 walks, else
-# 'opaque:<why>'.
+# 'opaque:<why>', or 'unknown:<why>' when the position cannot be decided.
 function Get-Context($cmd) {
     $child = $cmd
     $n = $cmd.Parent
@@ -144,9 +150,10 @@ function Get-Context($cmd) {
             $p = $n.Parent
             if ($p -is [System.Management.Automation.Language.CommandParameterAst]) { $p = $p.Parent }
             if ($p -isnot [System.Management.Automation.Language.CommandAst]) { return 'opaque:block-value' }
-            $invoked = $p.CommandElements[0] -eq $n
-            if (-not $invoked -and -not (Test-WalkedBlock $p $n)) {
-                return "opaque:block-argument:$($p.GetCommandName())"
+            if ($p.CommandElements[0] -ne $n) {
+                $walked = Test-WalkedBlock $p $n
+                if ($null -eq $walked) { return 'unknown:binding' }
+                if (-not $walked) { return "opaque:block-argument:$($p.GetCommandName())" }
             }
         }
         $child = $n
@@ -221,9 +228,9 @@ function Get-NestedText($cmd) {
     $null
 }
 
-# Get-NestedNames returns the static names of the plain commands of the nested scripts that the
+# Get-NestedCommands returns the plain commands with a static name of the nested scripts that the
 # plain commands of $ast run, down to depth 2 (as the recognizer's allowance), in source order.
-function Get-NestedNames($ast, [int] $depth) {
+function Get-NestedCommands($ast, [int] $depth) {
     $out = New-Object System.Collections.ArrayList
     if ($depth -ge 2) { return , $out }
     foreach ($cmd in (Find-Commands $ast)) {
@@ -235,9 +242,14 @@ function Get-NestedNames($ast, [int] $depth) {
         if (@($er).Count -gt 0) { continue }
         foreach ($c in (Find-Commands $inner)) {
             $n = $c.GetCommandName()
-            if ($null -ne $n -and (Get-Context $c) -eq 'plain') { [void]$out.Add($n) }
+            if ($null -ne $n -and (Get-Context $c) -eq 'plain') {
+                [void]$out.Add([ordered]@{
+                        name = $n
+                        elements = @($c.CommandElements | ForEach-Object { Convert-Element $_ })
+                    })
+            }
         }
-        foreach ($n in (Get-NestedNames $inner ($depth + 1))) { [void]$out.Add($n) }
+        foreach ($n in (Get-NestedCommands $inner ($depth + 1))) { [void]$out.Add($n) }
     }
     , $out
 }
@@ -290,7 +302,7 @@ foreach ($c in $req.cases) {
         id = $c.id
         errors = @($errors | ForEach-Object { [ordered]@{ id = $_.ErrorId; offset = $_.Extent.StartOffset; text = $_.Extent.Text } })
         commands = @($cmds)
-        nested = @((Get-NestedNames $ast 0) | ForEach-Object { $_ })
+        nested = @((Get-NestedCommands $ast 0) | ForEach-Object { $_ })
     })
 }
 foreach ($n in $req.names) { [void](Resolve-Name $n) }
@@ -341,7 +353,7 @@ $result = [ordered]@{
     version = $PSVersionTable.PSVersion.ToString()
     edition = [string]$PSVersionTable.PSEdition
     languageMode = [string]$ExecutionContext.SessionState.LanguageMode
-    nativeArgumentPassing = [string](Get-Variable -Name PSNativeCommandArgumentPassing -ValueOnly -ErrorAction SilentlyContinue)
+    nativeArgumentPassing = "$(Get-Variable -Name PSNativeCommandArgumentPassing -ValueOnly -ErrorAction SilentlyContinue)"
     home = $HOME
     modules = @(Get-Module | ForEach-Object { $_.Name } | Sort-Object)
     cases = @($cases)

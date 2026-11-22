@@ -477,6 +477,14 @@ var parseTests = []struct {
 		calls{{"ForEach-Object", "--", "{}"}, {"git", "status"}},
 	},
 	{
+		"end of parameters through the call operator",
+		`1 | & 'ForEach-Object' -- { gh pr merge 7 }`,
+		Unix,
+		calls{{"ForEach-Object", "--", "{}"}, {"gh", "pr", "merge", "7"}},
+	},
+	// A parameter default of an invoked block is opaque (phase2-core §6), though pwsh evaluates it.
+	{"parameter default", `& { param($x=$(gh pr merge 7)) $x }`, Unix, calls{}},
+	{
 		"verbatim smart double quotes",
 		"git --% log “text | git status # ” x „a”",
 		Unix,

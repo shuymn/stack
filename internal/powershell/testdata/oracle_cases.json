@@ -603,6 +603,20 @@
     ]
   },
   {
+    "cmd": "1 | \u0026 'ForEach-Object' -- { gh pr merge 7 }",
+    "calls": [
+      "ForEach-Object",
+      "gh"
+    ]
+  },
+  {
+    "cmd": "\u0026 { param($x=$(gh pr merge 7)) $x }",
+    "calls": [],
+    "skipped": [
+      "gh"
+    ]
+  },
+  {
     "cmd": "git --% log “text | git status # ” x „a”",
     "calls": [
       "git"

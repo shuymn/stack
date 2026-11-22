@@ -109,13 +109,15 @@ type declared struct {
 // Oracle output (testdata/oracle.ps1).
 type (
 	oElem struct {
-		K      string  `json:"k"`
-		T      string  `json:"t"`
-		V      string  `json:"v"`
-		Q      string  `json:"q"`
-		Prefix string  `json:"prefix"`
-		Arg    *oElem  `json:"arg"`
-		Items  []oElem `json:"items"`
+		K      string   `json:"k"`
+		T      string   `json:"t"`
+		AST    string   `json:"ast"`    // the element's AST type
+		Parts  []string `json:"nested"` // the AST types inside an expandable string
+		V      string   `json:"v"`
+		Q      string   `json:"q"`
+		Prefix string   `json:"prefix"`
+		Arg    *oElem   `json:"arg"`
+		Items  []oElem  `json:"items"`
 	}
 	oCmd struct {
 		Name     *string `json:"name"`
@@ -130,10 +132,15 @@ type (
 		Text   string `json:"text"`
 	}
 	oCase struct {
-		ID       int      `json:"id"`
-		Errors   []oErr   `json:"errors"`
-		Commands []oCmd   `json:"commands"`
-		Nested   []string `json:"nested"`
+		ID       int       `json:"id"`
+		Errors   []oErr    `json:"errors"`
+		Commands []oCmd    `json:"commands"`
+		Nested   []oNested `json:"nested"`
+	}
+	// oNested is a command of a nested script, at a §3 position.
+	oNested struct {
+		Name     string  `json:"name"`
+		Elements []oElem `json:"elements"`
 	}
 	oParam struct {
 		Name    string   `json:"name"`
@@ -301,6 +308,9 @@ func observe(e evidence, st *stats) observation {
 	}
 	e.oc = &oc
 	for _, oc := range e.oc.Commands {
+		if strings.HasPrefix(oc.Ctx, "unknown:") {
+			ob.missing = append(ob.missing, "position not decided: "+oc.Ctx)
+		}
 		if oc.Name == nil {
 			continue
 		}
@@ -310,7 +320,9 @@ func observe(e evidence, st *stats) observation {
 			ob.skipped = append(ob.skipped, *oc.Name)
 		}
 	}
-	ob.nested = slices.Clone(e.oc.Nested)
+	for _, n := range e.oc.Nested {
+		ob.nested = append(ob.nested, n.Name)
+	}
 	slices.Sort(ob.calls)
 	slices.Sort(ob.skipped)
 	slices.Sort(ob.nested)
@@ -394,7 +406,20 @@ func compareCalls(e evidence, st *stats, ob *observation, partial bool) {
 	if partial {
 		return
 	}
-	var nested []string
+	// The calls of nested scripts: each engine record pairs with a call of its name, and their
+	// static words are compared.
+	for _, n := range e.oc.Nested {
+		rec := oCmd{Name: &n.Name, Ctx: "plain", Elements: n.Elements}
+		j := matchCall(e.r.Calls, used, n.Name, rec)
+		if j < 0 {
+			ob.fails = append(ob.fails, fmt.Sprintf("missed nested call %q", n.Name))
+			continue
+		}
+		used[j] = true
+		f, notes := compareArgv(e.r.Calls[j], rec, dynamicWords(e))
+		ob.fails = append(ob.fails, prefixed("nested: ", f)...)
+		ob.notes = append(ob.notes, prefixed("nested: ", notes)...)
+	}
 	dynamicParse := 0
 	for j, c := range e.r.Calls {
 		switch {
@@ -402,18 +427,29 @@ func compareCalls(e evidence, st *stats, ob *observation, partial bool) {
 		case !c.Args[0].Static:
 			dynamicParse++
 		default:
-			nested = append(nested, c.Args[0].Text)
+			ob.fails = append(ob.fails, fmt.Sprintf("call %q the engine does not find", argv(c)))
 		}
 	}
 	if dynamicParse != dynamicEngine {
 		ob.fails = append(ob.fails, fmt.Sprintf("%d calls with a dynamic name, engine %d",
 			dynamicParse, dynamicEngine))
 	}
-	slices.Sort(nested)
-	if !slices.Equal(nested, ob.nested) && (len(nested) > 0 || len(ob.nested) > 0) {
-		ob.fails = append(ob.fails, fmt.Sprintf("calls %q beyond the engine's commands; "+
-			"the engine's nested scripts hold %q", nested, ob.nested))
+}
+
+func prefixed(p string, ss []string) []string {
+	out := make([]string, len(ss))
+	for i, s := range ss {
+		out[i] = p + s
 	}
+	return out
+}
+
+// dynamicWords returns the words the case declares dynamic on this host.
+func dynamicWords(e evidence) []string {
+	if e.decl != nil && HostOS() != Windows {
+		return e.decl.DynamicUnix
+	}
+	return nil
 }
 
 // matchCall returns the first unused call named name, preferring one whose static words agree with
@@ -471,11 +507,7 @@ func compareCall(e evidence, c Call, oc oCmd, id string, st *stats, ob *observat
 	default:
 		ob.notes = append(ob.notes, fmt.Sprintf("%q resolves to %s", name, res))
 	}
-	var dynamic []string
-	if e.decl != nil && HostOS() != Windows {
-		dynamic = e.decl.DynamicUnix
-	}
-	f, n := compareArgv(c, oc, dynamic)
+	f, n := compareArgv(c, oc, dynamicWords(e))
 	ob.fails = append(ob.fails, f...)
 	ob.notes = append(ob.notes, n...)
 	st.argvWords += len(c.Args) - 1
@@ -483,10 +515,12 @@ func compareCall(e evidence, c Call, oc oCmd, id string, st *stats, ob *observat
 	if res != "native" || len(e.oc.Errors) > 0 {
 		return
 	}
+	if want := stubShaped(oc.Elements[1:]); oc.Eligible != want {
+		ob.missing = append(ob.missing,
+			fmt.Sprintf("%q: eligible = %v, its arguments' shape says %v", name, oc.Eligible, want))
+		return
+	}
 	if !oc.Eligible {
-		if literalArgs(oc) {
-			ob.missing = append(ob.missing, fmt.Sprintf("%q: literal native call not run", name))
-		}
 		return
 	}
 	got, ok := e.stub[id]
@@ -501,12 +535,27 @@ func compareCall(e evidence, c Call, oc oCmd, id string, st *stats, ob *observat
 	ob.notes = append(ob.notes, n...)
 }
 
-// literalArgs reports whether every argument of oc is a literal, so the stub must have run it.
-func literalArgs(oc oCmd) bool {
-	for _, e := range oc.Elements[1:] {
-		switch {
-		case e.K == "str":
-		case e.K == "param" && (e.Arg == nil || e.Arg.K == "str"):
+// stubShaped reports whether the stub must receive these arguments: every one is a literal, a
+// variable read, a string holding only variable reads, a parameter with such a value or a list of
+// them (the allowlist of testdata/oracle.ps1, decided here from the AST types).
+func stubShaped(els []oElem) bool {
+	for _, e := range els {
+		switch e.AST {
+		case "StringConstantExpressionAst", "ConstantExpressionAst", "VariableExpressionAst":
+		case "ExpandableStringExpressionAst":
+			for _, p := range e.Parts {
+				if p != "VariableExpressionAst" {
+					return false
+				}
+			}
+		case "CommandParameterAst":
+			if e.Arg != nil && !stubShaped([]oElem{*e.Arg}) {
+				return false
+			}
+		case "ArrayLiteralAst":
+			if !stubShaped(e.Items) {
+				return false
+			}
 		default:
 			return false
 		}
@@ -815,8 +864,9 @@ var controls = []control{
 		},
 	},
 	{"iex 'gh pr merge 7'", func(_ *oracleOut, oc *oCase, _ map[string][]string) string {
-		if len(oc.Errors) > 0 || !slices.Equal(oc.Nested, []string{"gh"}) {
-			return fmt.Sprintf("nested %q, want gh", oc.Nested)
+		if len(oc.Errors) > 0 || len(oc.Nested) != 1 || oc.Nested[0].Name != "gh" ||
+			len(oc.Nested[0].Elements) != 4 {
+			return fmt.Sprintf("nested %+v, want gh pr merge 7", oc.Nested)
 		}
 		return ""
 	}},
@@ -840,40 +890,76 @@ var controls = []control{
 	}},
 }
 
-// requiredKeys are the fields every object of the oracle output must carry, by path.
-var requiredKeys = map[string][]string{
+// Field types of the oracle output: s string, n number, b bool, a array, o object; a trailing ?
+// allows null. Every listed field is required unless it starts with ~.
+var schema = map[string]map[string]string{
 	"": {
-		"version",
-		"edition",
-		"languageMode",
-		"nativeArgumentPassing",
-		"home",
-		"modules",
-		"cases",
-		"resolved",
-		"aliasesOf",
-		"params",
-		"pBinding",
-		"stubRuns",
-		"stubSame",
+		"version": "s", "edition": "s", "languageMode": "s", "nativeArgumentPassing": "s",
+		"home": "s", "modules": "a", "cases": "a", "resolved": "o", "aliasesOf": "o",
+		"params": "o", "pBinding": "s", "stubRuns": "n", "stubSame": "o",
 	},
-	"case":     {"id", "errors", "commands", "nested"},
-	"command":  {"name", "ctx", "end", "elements", "eligible"},
-	"element":  {"k", "t"},
-	"error":    {"id", "offset", "text"},
-	"param":    {"name", "aliases", "switch"},
-	"stubLine": {"id", "argv"},
+	"case":    {"id": "n", "errors": "a", "commands": "a", "nested": "a"},
+	"command": {"name": "s?", "ctx": "s", "end": "n", "elements": "a", "eligible": "b"},
+	"nested":  {"name": "s", "elements": "a"},
+	"element": {
+		"k":       "s",
+		"t":       "s",
+		"ast":     "s",
+		"~v":      "s",
+		"~q":      "s",
+		"~prefix": "s",
+		"~arg":    "o",
+		"~items":  "a",
+		"~nested": "a",
+	},
+	"error":    {"id": "s", "offset": "n", "text": "s"},
+	"param":    {"name": "s", "aliases": "a", "switch": "b"},
+	"stubLine": {"id": "s", "argv": "a"},
 }
 
-// checkKeys returns an error when obj lacks a required field of kind.
+func typeOf(v any) string {
+	switch v.(type) {
+	case string:
+		return "s"
+	case float64:
+		return "n"
+	case bool:
+		return "b"
+	case []any:
+		return "a"
+	case map[string]any:
+		return "o"
+	}
+	return "null"
+}
+
+// checkKeys returns an error when obj lacks a required field of kind or holds one of the wrong type.
 func checkKeys(obj any, kind, where string) error {
 	m, ok := obj.(map[string]any)
 	if !ok {
 		return fmt.Errorf("%s: not an object", where)
 	}
-	for _, k := range requiredKeys[kind] {
-		if _, ok := m[k]; !ok {
+	for k, typ := range schema[kind] {
+		optional := strings.HasPrefix(k, "~")
+		k = strings.TrimPrefix(k, "~")
+		v, ok := m[k]
+		switch got := typeOf(v); {
+		case !ok && optional:
+		case !ok:
 			return fmt.Errorf("%s: no %q", where, k)
+		case got == "null" && strings.HasSuffix(typ, "?"):
+		case got != strings.TrimSuffix(typ, "?"):
+			return fmt.Errorf("%s: %q is %s, want %s", where, k, got, typ)
+		}
+	}
+	return nil
+}
+
+// checkStrings returns an error when v is not an array of strings.
+func checkStrings(v any, where string) error {
+	for _, x := range listOf(v) {
+		if _, ok := x.(string); !ok {
+			return fmt.Errorf("%s: %v is not a string", where, x)
 		}
 	}
 	return nil
@@ -884,13 +970,38 @@ func listOf(v any) []any {
 	return l
 }
 
-// validateOutput checks that the raw oracle output carries every required field.
+// checkElements checks command elements, nested ones included.
+func checkElements(v any, where string) error {
+	for _, el := range listOf(v) {
+		if err := checkKeys(el, "element", where); err != nil {
+			return err
+		}
+		m, _ := el.(map[string]any)
+		if a, ok := m["arg"]; ok {
+			if err := checkElements([]any{a}, where); err != nil {
+				return err
+			}
+		}
+		if err := checkElements(m["items"], where); err != nil {
+			return err
+		}
+		if err := checkStrings(m["nested"], where); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateOutput checks that the raw oracle output carries every required field with its type.
 func validateOutput(b []byte) error {
 	var raw map[string]any
 	if err := json.Unmarshal(b, &raw); err != nil {
 		return fmt.Errorf("oracle output: %w", err)
 	}
 	if err := checkKeys(raw, "", "output"); err != nil {
+		return err
+	}
+	if err := checkStrings(raw["modules"], "modules"); err != nil {
 		return err
 	}
 	for i, c := range listOf(raw["cases"]) {
@@ -909,11 +1020,33 @@ func validateOutput(b []byte) error {
 				return err
 			}
 			m, _ := cmd.(map[string]any)
-			for _, el := range listOf(m["elements"]) {
-				if err := checkKeys(el, "element", where); err != nil {
-					return err
-				}
+			if err := checkElements(m["elements"], where); err != nil {
+				return err
 			}
+		}
+		for j, n := range listOf(cm["nested"]) {
+			where := fmt.Sprintf("case %d nested %d", i, j)
+			if err := checkKeys(n, "nested", where); err != nil {
+				return err
+			}
+			m, _ := n.(map[string]any)
+			if err := checkElements(m["elements"], where); err != nil {
+				return err
+			}
+		}
+	}
+	for _, field := range []string{"resolved", "stubSame"} {
+		m, _ := raw[field].(map[string]any)
+		for k, v := range m {
+			if _, ok := v.(string); !ok {
+				return fmt.Errorf("%s[%q] is %s, want s", field, k, typeOf(v))
+			}
+		}
+	}
+	aliasesOf, _ := raw["aliasesOf"].(map[string]any)
+	for k, v := range aliasesOf {
+		if err := checkStrings(v, "aliasesOf "+k); err != nil {
+			return err
 		}
 	}
 	params, _ := raw["params"].(map[string]any)
@@ -1007,16 +1140,9 @@ func readStubs(file string, o *oracleOut) (map[string][]string, error) {
 		sc := bufio.NewScanner(f)
 		sc.Buffer(nil, 1<<20)
 		for sc.Scan() {
-			var raw map[string]any
-			if err := json.Unmarshal(sc.Bytes(), &raw); err != nil {
-				return nil, fmt.Errorf("stub record: %w", err)
-			}
-			if err := checkKeys(raw, "stubLine", "stub record"); err != nil {
+			r, err := parseStubLine(sc.Bytes())
+			if err != nil {
 				return nil, err
-			}
-			var r stubRecord
-			if err := json.Unmarshal(sc.Bytes(), &r); err != nil {
-				return nil, fmt.Errorf("stub record: %w", err)
 			}
 			stubs[r.ID] = r.Argv
 		}
@@ -1035,6 +1161,25 @@ func readStubs(file string, o *oracleOut) (map[string][]string, error) {
 		stubs[id] = argv
 	}
 	return stubs, nil
+}
+
+// parseStubLine decodes one stub record, checking its fields and their types.
+func parseStubLine(b []byte) (stubRecord, error) {
+	var raw map[string]any
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return stubRecord{}, fmt.Errorf("stub record: %w", err)
+	}
+	if err := checkKeys(raw, "stubLine", "stub record"); err != nil {
+		return stubRecord{}, err
+	}
+	if err := checkStrings(raw["argv"], "stub record"); err != nil {
+		return stubRecord{}, err
+	}
+	var r stubRecord
+	if err := json.Unmarshal(b, &r); err != nil {
+		return stubRecord{}, fmt.Errorf("stub record: %w", err)
+	}
+	return r, nil
 }
 
 // oracleModules are the modules the oracle imports; autoloading is off, so no other module may
