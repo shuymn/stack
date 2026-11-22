@@ -357,7 +357,11 @@ Public behaviour that changes on purpose, each from #28 or #30 or decided here:
   §4.2); §4.5 (`stack-public check`); §4.6 and C27 (removed); §4.7 (stages, request fields, block demotion, §4.9);
   §2.1's `[safety]` table (§4.6) and its new `[merge]` table and `[stages].outbound` default (§4.2, §7 PR 7).
 - `docs/design/phase3-cycle.md`: §3.1's tool list and §3.4 step 12.5 call `stack-public check`; I10 runs the real
-  `stack-public` instead of `stack check public` (§7 PR 7). `gh_model` (§3.2) is unchanged.
+  `stack-public` instead of `stack check public` (§7 PR 7). `gh_model` (§3.2) is unchanged. §3.3 replay and O6 pipe
+  each call to `stack` and then `stack-guard` (skipped after a `stack` deny; a deny of either decides, rule read
+  from the first), and a `stack guard (<rule>)` or `stack-guard (<rule>)` reason names the same rule; with
+  `stack-guard` not on `PATH` a warn finding `replay-hook-missing` names it and a recorded deny that `stack` alone
+  no longer makes is `not-comparable`.
 
 ## 5. Decisions
 
