@@ -9,12 +9,15 @@ protocol, at `668ceb6`. Code is cited as `path:line`; Jev facts by URL, and what
 
 Jev is TypeSafe's "System One" model: it answers typed questions about one `state` with calibrated probabilities and
 writes no text. Three advisory extensions use it: `jev-semantic` flags two kinds of PR risk at `outbound`,
-`jev-router` points the agent at the skill references it likely needs at `entry`, and `jev-classify` labels the
-week's owner replies at `cycle`. None can block, none is required, and with no key each answers `{"status":"pass"}`.
+`jev-router` would point the agent at the hiden reference of a kit's step in progress at `entry`, and `jev-classify`
+labels the week's owner replies at `cycle`. None can block, none is required, and with no key each answers
+`{"status":"pass"}`. `jev-router` is deferred: a per-kit attention item comes first, and the router is built only on
+the trigger of §3.2; `jev-classify` does not wait for it.
 
-**In scope:** the three extensions, a shared client, calibration on `fixtures/jev/`, key-less `--replay`, a usage
-ledger; in the implementation PRs `docs/architecture.md` §4 (opt-out, `jev-semantic`'s caller), §5 (`jev.toml`,
-router PR), §6 item 4 (§9) and the README install line; two `shuymn/dotfiles` PRs wiring the callers (§5). **Out of
+**In scope:** `jev-semantic` and `jev-classify`, `jev-router` once its trigger is met, a shared client, calibration on `fixtures/jev/`, key-less `--replay`, a usage
+ledger; in the implementation PRs `docs/architecture.md` §4 (opt-out, `jev-semantic`'s caller), §6 item 4 (§9) and
+the README install line; two `shuymn/dotfiles` PRs wiring the callers (§5). The hiden kit convention carrying the
+compaction attention item (§3.2) is a `shuymn/dotfiles` change tracked outside Phase 4. **Out of
 scope:** core changes; any gate, redaction, cut or limit on what is sent (owner decision: the key is the opt-in, so
 provider limits only shape batches); spending caps (cost is observed, as improve's); `box`, images, long context;
 the Workers AI and OpenRouter routes; `[merge].message_checks` wiring; improve's evidence (public only,
@@ -50,7 +53,7 @@ Every `jev-*` reads stdin to EOF first. Then:
 | Stdin is not one JSON object with a string `stage` | `warn`, finding `jev-error` "invalid request", context the same line | none |
 | `stage` is not the extension's own | `pass` (as `extensions/public/stage.go:95`) | none |
 | `TYPESAFE_API_KEY` unset or empty and no `jev` object (§3.4) | `pass`, no context, no file read or written | none |
-| Nothing to ask (outbound: empty `range` or a diff with no files, since both questions need the diff; entry: no kit and empty `prompt`; cycle: no `owner-reply` item) | `pass`, no context | none |
+| Nothing to ask (outbound: empty `range` or a diff with no files, since both questions need the diff; entry: no kit or no candidate; cycle: no `owner-reply` item) | `pass`, no context | none |
 | Preparation fails (semantic: a git command exits non-zero or its output is cut) | `warn`, finding `jev-error` naming the command and exit | none |
 | Preparation reaches the work deadline (a slow git) | the questions are unassessed (`preparation deadline`) | none |
 | A request fails transiently (connect or TLS error, timeout, 429, 529, any 5xx) or is too large (a 400 whose body, read up to 64 KiB and checked even when the read ends early, names `max_tokens_exceeded`; 413) | its questions are unassessed; one stderr line `jev: <n> requests skipped: <cause>` | no retry, no re-split |
@@ -58,7 +61,7 @@ Every `jev-*` reads stdin to EOF first. Then:
 | An answer in a valid body is missing or wrongly typed, or a probability is not finite in [0, 1] | `warn`, finding `jev-error` for that question; the request's valid answers still decide | — |
 
 **Unassessed** work never changes the status: it is a finding `jev-unassessed` (`detail`: which questions, how
-much, why) and a context line. A `warn` means the owner must act (a wrong key, a changed API, a retired pin, a git
+much, why) and a context line (the router: the finding only, §3.2). A `warn` means the owner must act (a wrong key, a changed API, a retired pin, a git
 failure), so an outage does not cry wolf; it loses that run's advice. The key comes only from the environment (as
 jev-lint). Details are fixed strings and the HTTP status, never the body, which can quote input.
 
@@ -79,8 +82,8 @@ later); past it the rest is unassessed and the reserve assembles the response (a
 classify's file). Children get a 0.2 s pipe wait and a timeout 0.2 s before the work deadline, so killing git and
 reaping its pipes fit inside the budget. The response stays under 512 KiB, half core's 1 MiB stdout limit
 (`internal/ext/ext.go:211`): further findings become one `jev-omitted` count, context lines are cut with a marker.
-Core's deadlines are separate (`internal/ext/ext.go:47-50`): entry 10 s at `kit open`, at compaction the earlier of
-10 s and the hook's 55 s cut-off less 2 s, run when ≥ 1 s remains (`internal/session/session.go:255-289`); outbound
+Core's deadlines are separate (`internal/ext/ext.go:47-50`): entry 10 s at `kit open`, at compaction `min(10 s, time left
+to the hook's 55 s cut-off) − 2 s`, run when ≥ 1 s remains (`internal/session/session.go:255-289`); outbound
 120 s after `public`, whose scan stops at 100 s (`extensions/public/stage.go:29-40`), leaving semantic ≥ 18 s
 usually; cycle 30 min. When core cuts a child it records a synthetic `warn`, distinct from a self-answered partial
 result; at compaction the router's stderr is discarded.
@@ -133,29 +136,92 @@ does not stop the push. `stack run outbound` already accepts these flags (`docs/
 change; CI is not wired (it would need the key as a secret). The dotfiles PR tests that on a diverged repository
 where only the base adds a test, the `--range` it passes starts at the merge base, so that test never shows deleted.
 
-**`jev-router` (entry).** Candidates are the files matching `references` globs from the router's `jev.toml`
-(`.config/stack/jev.toml` under the home directory, optional; broken → `warn` and the defaults), default
-`skills/*/references/*.md`, under the Claude configuration directory (`$CLAUDE_CONFIG_DIR`, else `.claude` joined
-to `os.UserHomeDir()`). They are slash-normalised relative to that directory, de-duplicated and sorted; questions
-`ref_<n>` are numbered in that order. Each candidate's summary is its first heading plus first paragraph (LF,
-≤ 400 bytes at a UTF-8 boundary; it describes the candidate, it is not evidence). State units, each its own state:
-the `prompt` when non-empty, and per kit of the request's `kits` its `slug` with `NORTH.md` and `state.md`
-(`internal/kit/render.go:35`) read whole, LF-normalised; the kit `dir` is used to read, never sent. One `noul` per
-candidate: "Will the agent working on this state need the reference `<skill>/references/<file>` for its next step?
-It covers: <summary>." A candidate's probability is its maximum over the requests. Kits reach the router only with
-a valid `STACK_SESSION_ID` (`internal/cli/run.go:260-264`); `kit open` without one sends `kits: []`.
+**`jev-router` (entry).** *Deferred: not built until the trigger below.* Against real inputs it rarely tells the
+agent anything it does not already have:
 
-Answer: candidates at or above the cutoff, by probability, ties by path, at most 3, as context:
+- Core sends the entry stage no prompt: `kit open` and compaction both send `prompt` `""`
+  (`internal/cli/run.go:338-349`, `internal/session/session.go:279`), so the only state is each kit's `NORTH.md`
+  and `state.md`.
+- A kit's state is mostly its essence (purpose, done condition, owner decisions, constraints; observed kits hold
+  2–13 KB). Its in-progress and next-step lines are few, and often list several workstreams or a conditional wait
+  ("CI pending, then merge"). The orchestration references (`orchestration.md`, `review.md`, `commit-pr.md`) apply
+  to nearly every kit, so pointing at them says little; the others (debugging, visual check, retrospective, scope)
+  are identifiable only when a line names that kind of step.
+- The hiden skill already routes deterministically: its table maps kinds of work to 11 of its 12 references
+  (`scope.md` is linked from its prose), and its step 2 re-reads a step's reference before the step and after
+  compaction. At `kit open` the agent has just loaded the skill and the table; at compaction the restore reads the
+  same kit files the router would score (each block capped at 4,500 units).
 
-```text
-jev-router (jev-1.14.0): references likely needed now; read each before the step it covers.
-- <Claude config dir>/skills/hiden/references/review.md (0.91): <first heading>
+A pointer therefore helps only when the agent has lost the table after compaction and skips the re-read, which no
+run has shown yet. **Prerequisite:** the cheaper fix comes first, through the one mechanism core restores: each
+kit's `attention/items.json`, in the form `itemsBlock` reads (`internal/kit/render.go:161-201`), carries
+
+```json
+{"items": [{"role": "all", "rule": "After compaction, re-read the hiden reference of the step in progress before continuing it."}]}
 ```
 
-Paths are the absolute local paths read, never cut: a line over 300 UTF-16 units drops its summary, one that would
-pass 1,000 units is dropped whole (`internal/session/budget.go:14-16`). Partial coverage adds `(n of m inputs not
-scored)`, alone when nothing hit; no hit with full coverage → `pass`, no context. Compaction placement is
-best-effort (`internal/session/session.go:292-309`).
+hiden's kit convention puts it there (a `shuymn/dotfiles` change to the hiden skill, tracked outside Phase 4). It
+counts only for a kit whose restore output shows it in its `orchestrator-attention-items` block; a kit with no file,
+another shape (a top-level array, `text` for `rule`) or no such item does not count. **Trigger:** two distinct
+cases, recorded in two separate retrospectives, of a step run after compaction in such a kit whose rule lives in that
+step's hiden reference, where that reference was not read between the compact boundary and the step's first action (a read after that
+action still counts as a miss), and where the kit state at the boundary names that step in progress (a miss the
+router would answer `none` to does not count). Each case is a review-ledger row naming the session, the compact
+boundary, the expected reference and the step's first action (transcript positions); the planned dotfiles change
+adds this check to the hiden retrospective so a miss with no other deviation is still found. The owner asking also resumes it. Until then `[stages].entry` keeps naming `jev-router` and the absent
+binary is skipped (`internal/ext/ext.go:120-122`). When built, it targets that case: one pointer per kit, to the
+reference of the step in progress, `none` when the state does not identify one.
+
+- *Candidates.* The `.md` files directly in `skills/hiden/references/` under the Claude configuration directory
+  (`$CLAUDE_CONFIG_DIR`, else `.claude` joined to `os.UserHomeDir()`, so no home path is written in code and a
+  Windows profile resolves the same way), sorted by name, labelled `ref_<n>` in that order. Only hiden's: its table
+  routes by kind of step, which is what a kit's state can name; another skill's references are routed by that
+  skill's own `SKILL.md` once it is invoked, which no kit state shows. There is no `jev.toml` and no entry in
+  `docs/architecture.md` §5; a second routed skill would add one (its globs; missing → defaults, broken → `warn` and
+  defaults). Each candidate's description is its first heading (without `#`) and first paragraph, LF, ≤ 400 bytes at
+  a UTF-8 boundary; it describes the candidate, it is not evidence. No directory or no file → `pass`, no call.
+- *State and question.* `jev.Request` gains `kits` (`[{slug, dir}]`). One request per kit, in request order: state
+  `{slug, north, state}` with `NORTH.md` and `state.md` (`internal/kit/render.go:35`) read whole and LF-normalised,
+  a missing file `""`; the kit `dir` is used to read, never sent. `prompt` is never sent (core sends none; a `stack
+  run entry --prompt-file` run is scored on its kits alone). Kits reach the router only with a valid
+  `STACK_SESSION_ID` (`internal/cli/run.go:260-264`); `kit open` without one sends `kits: []`. One `choice` question
+  `current_ref`, instructions "Which reference covers the step in progress on this kit, as its state names it?",
+  criteria `ref_<n>` → "`<file>`: <description>" and `none` → "the state names no single step in progress (done,
+  waiting, a conditional wait, or several workstreams with none marked in progress), or no listed reference covers
+  it". A kit whose state does not fit one request is unassessed, never split (the step in progress is one line among
+  the parts), an exception to §3.1's splitting; a question over 16 KiB is unasked and unassessed.
+- *Decision.* A kit's pointer is its `choice` when that is not `none` and `probabilities[choice]` ≥ the cutoff; one
+  decision function serves runtime and calibration (§3.5).
+- *Output.* Pointers in kit order, as context:
+
+  ```text
+  jev-router (jev-1.14.0): reference for each kit's step in progress; re-read it before continuing.
+  - <slug>: <Claude config dir>/skills/hiden/references/review.md (0.82): <first heading>
+  ```
+
+  The whole context, header included, stays within 1,000 UTF-16 units (as `internal/session/budget.go:14-16`
+  counts). A pointer line over 300 units drops its heading; pointers are added in kit order while the total fits, and
+  the first that does not fit is omitted with every later one, the header then ending `(k omitted: size)`. With a
+  pointer and some kits unassessed, the header ends `(n of m kits not scored)`; with both, `(k omitted: size)` comes
+  first. Paths are the absolute local paths
+  read and are never cut in the router's output. The router bounds its lines itself, so it writes them through a
+  no-cut line method that `jev.Reply` gains, not through the shared 1,000-byte line `cut`
+  (`extensions/internal/jev/protocol.go:31`). No pointer → `pass`, no context. Unassessed kits (deadline,
+  transient, too large) are the `jev-unassessed` finding only: entry context is the agent's working text, and "not
+  scored" gives it nothing to do; a persistent failure still answers `warn` with its context line, since the owner
+  must act.
+- *Placement.* At `kit open` the block prints after the kit, which it never delays (`internal/cli/kit.go`). At
+  compaction core allocates it after the restore and displays it after the kits and boards, before any handover,
+  best-effort: whole; else cut with `[...cut N chars]`; else replaced by `[entry context omitted: context limit:
+  jev-router]`; else dropped with core's stderr line `stack: entry context of jev-router dropped: context limit`. The
+  restore is never displaced (`internal/session/session.go:185-199,292-309`, `docs/design/core-stages.md` §4.3).
+  Full paths are guaranteed only when the block is shown whole; a cut may end inside a path, and the cut marker
+  shows it.
+- *Deadlines.* The router's budget is 4 s from process start with a 0.3 s reserve (§3.1), inside core's entry
+  deadline: 10 s at `kit open`; at compaction `min(10 s, time left to the hook's cut-off) − 2 s` (usually 8 s), run
+  only when that is ≥ 1 s, else core shows `[entry skipped: deadline]` when it fits. When core's deadline is the
+  shorter one, core cuts the router and the agent sees core's `[extension jev-router: warn: timed out: …]` marker;
+  when the router's own budget ends first, the agent sees the pointers found so far, or nothing.
 
 **`jev-classify` (cycle).** Input: the observe file (`.local/state/stack/observe/latest.json` under the home
 directory), fresh when `window.until` is within 24 h of classify's clock (missing or stale → `pass` saying so;
@@ -196,8 +262,7 @@ Context: counts, up to 10 `new` qualified items (`where`, ≤ 160-char excerpt),
 authoritative: missing → `skipped`; self-answered → merged; exit ≠ 0, invalid output or a synthetic `error` → a
 merged `warn` result with that `error`, and the job still exits 0.
 
-**Settled in the PR 2 / PR 3 design round** (open here): router compaction tests with full, partial and no room;
-a T3 reader or `sqlite3` fake and a fixture memory index with a known duplicate for replay; packing the index
+**Open for the `jev-classify` design round:** a T3 reader or `sqlite3` fake and a fixture memory index with a known duplicate for replay; packing the index
 against the replies; an item split into parts whose answers disagree or are missing; a fake-`stack` wrapper test.
 
 ### 3.3 Layout and shared client (item 5)
@@ -205,14 +270,14 @@ against the replies; an item split into parts whose answers disagree or are miss
 ```text
 extensions/internal/jev/          client, packing, record lookup, usage ledger, cutoff selection
 extensions/jev/semantic/          package + cmd/stack-jev-semantic/   (name in [stages]: jev-semantic)
-extensions/jev/router/            package (incl. jev.toml) + cmd/stack-jev-router/
+extensions/jev/router/            package + cmd/stack-jev-router/   (deferred, §3.2)
 extensions/jev/classify/          package + cmd/stack-jev-classify/
 extensions/jev/cmd/jev-calibrate/ owner-run, needs the key; not a stage binary
 fixtures/jev/<extension>/{fixed,cal}/<case>.json
 ```
 
 One shared package holds transport, validation, packing, replay, metering, cutoff math and the decision functions;
-state building, router configuration and classify's file stay with their extension. `net/http` only, bound by the
+state building, router candidates and classify's file stay with their extension. `net/http` only, bound by the
 work deadline; no SDK. The endpoint is a link-time variable only test builds set (`-ldflags -X`), never
 configuration. Each body is marshalled once; those bytes are hashed (§3.4) and sent. **Ledger:** each live attempt
 appends `{run, time, extension, model, outcome, elapsed_ms, input_tokens}` (outcome `ok`, `max_tokens_exceeded`,
@@ -243,7 +308,7 @@ A record maps the SHA-256 of a sent body to its answer or non-200 status; packin
 fixture holds exactly the live run's bodies. With `jev` present the extension never calls the network, key or not;
 a body with no record → `warn` `jev-unrecorded`. Machine inputs come from the fixture: `repo` (a synthetic repository
 the test builds with fixed identity and dates, refs `jev-mb`, `jev-head`, a diverged base; semantic's cwd);
-`jev.references` (globs over reference stubs) and `kits` relative to the cwd; `jev.observe` and `jev.now`. `<REFS>`
+`jev.references` (the reference stub directory) and `kits` relative to the cwd; `jev.observe` and `jev.now`. `<REFS>`
 in `want` expands to the stub directory; classify's `run.id` is asserted non-empty then normalised, its times come
 from `jev.now`. Core reads only `request` and `expect`.
 
@@ -258,7 +323,7 @@ Ground truth is bound to the scored unit, derived from per-unit labels with the 
 |---|---|---|---|---|
 | semantic meta-duty | one request (cases that split a file are fixed-only, not fitted) | any of its files labelled true | `noul` | 1 |
 | semantic unsupported claim | the whole-PR request | case label | `noul` | 1 |
-| router relevance | (state unit, candidate) | the unit's relevant-candidate list | `noul` | 1 shared by all candidates |
+| router current reference | kit (distinct kit states) | the labelled reference or `none` | `probabilities[choice]` of `current_ref`, stored before any cutoff, mapped below | 1 |
 | classify qualification | item | item label | `probabilities["correction"]`, `probabilities["drift"]` | 1 each, via the decision function |
 | classify duplicate | (reply, index) | item label | `noul` | 1 |
 
@@ -286,7 +351,20 @@ are fresh. Hard meta-duty positives weaken an assertion, suppress
 lint, drop a CI check or weaken an agent instruction quietly; hard negatives are equivalent refactors and explicitly
 justified removals, in code and in agent instructions. Hard unsupported-claim positives overstate verification, claim
 unsupported behaviour or mismatch title and diff subtly; hard negatives are evidence-backed claims and accurate terse
-descriptions (e.g. "speed up tests" for a diff that does). Calibrate refreshes `expect`
+descriptions (e.g. "speed up tests" for a diff that does). The router's calibrate stores, for each call, its `choice` and `probabilities[choice]` before any cutoff
+applies, and fitting maps them to samples: a choice of the labelled reference is a positive at its score; a choice of
+another reference is a negative at its score and, when the label is a reference, also a positive with no score (a
+recall miss); `none` is an unscored sample, positive when the label is a reference. A wrong choice thus counts as a
+false positive under the margin test whenever it reaches t − δ (at t = 0.60, a wrong choice at 0.57 is a false
+positive and a right one at 0.63 a miss). Cases are counted once each, by their ground-truth label (distinct kits),
+never by the extra samples a wrong choice adds, so the shared counter counts a case by its label. Its corpus follows
+the same rule with kit states as cases: at least 12 + 12 `fit` and 8 + 8 `heldout` kits labelled with a reference
+and with `none`, the positives covering at least 6 references; hard positives name the step in progress only
+indirectly ("addressing review r1 findings" for `review.md`), hard negatives are multi-workstream kits with none
+marked in progress, conditional waits ("CI pending, then merge"), and kits that mention a reference's topic only in
+done or decided lines. Its reference stubs copy the first heading and first paragraph of the public hiden
+references, the only text that enters the question, and record the `shuymn/dotfiles` commit they came from; a later
+change to those lines makes the live question differ from the calibrated one until calibrate runs again. Calibrate refreshes `expect`
 and `want` of the `cal` fixtures (matched exactly) and never rewrites a `fixed` fixture, whose records are written
 by hand so a live answer cannot erase the scenario it checks; until its first run C11 fails in CI (`CI=true`) and
 skips locally, naming the command. The `fixed` semantic fixtures (meta-duty hit, unsupported-claim
@@ -295,7 +373,7 @@ matched on status, finding `kind` and `where`, non-empty context with hits, and 
 (not probability, cutoff or pin text), so lost detection fails them; they run with test cutoffs injected by the test build (`-ldflags -X`, as the endpoint; no runtime override),
 so a decision that ships disabled does not break them (shipped eligibility is C10/C11's). Replay uses the recorded transport. **Model
 bump:** one PR changes the pin, re-records, refits, and reports old vs new on `heldout` (precision, recall, support,
-router top-3 hits). The corpus measures regressions on itself; the ledger does not measure live precision.
+router pointer hits). The corpus measures regressions on itself; the ledger does not measure live precision.
 
 ### 3.6 Cost and latency estimates (item 6)
 
@@ -304,10 +382,11 @@ From the published price, the §2 sizing estimate and §3.1 packing. Estimates, 
 | Extension | Typical run | Requests | Cost per run | Budget (own / core) |
 |---|---|---|---|---|
 | semantic | 20 KiB PR | ⌈diff bytes / (48 KiB − texts)⌉ ≈ 1 | ≈ $0.0003; a 112 KiB PR ≈ 3 requests ≈ $0.0012 | 10 s / 120 s shared |
-| router | one kit, 31 candidates | per state unit, ⌈questions / 16 KiB⌉ ≈ 1–2 | ≈ $0.0005 | 4 s / 10 s (≥ 1 s at compaction) |
+| router (when built) | one kit of 2–13 KB, 12 candidates (≈ 6 KiB question) | 1 per kit | ≈ $0.0002–0.0006 | 4 s / 10 s (≥ 1 s at compaction) |
 | classify | 150 items, ≈ 2 KiB each | ⌈300 KiB / 48 KiB⌉ + memory ≈ 10 | ≈ $0.008 | 5 min / 30 min |
 
-About 100 pushes, 300 kit opens and 30 cycles a month ≈ $0.4, uncapped; O6 reports what the ledger saw.
+With all three built, about 100 pushes, 300 kit opens and compactions and 30 cycles a month ≈ $0.4, uncapped; O6 reports what the ledger
+saw.
 
 ## 4. Alternatives
 
@@ -318,8 +397,12 @@ About 100 pushes, 300 kit opens and 30 cycles a month ≈ $0.4, uncapped; O6 rep
 | | split again on rejection | recovers those requests | bodies depend on provider answers; replay must record the split path | — |
 | Replay (3.4) | **records inside the fixture request, keyed by body hash (chosen)** | self-contained; core's `--replay` unchanged; any input change misses loudly | fixtures grow by the records | high |
 | Client (3.3) | **one package `extensions/internal/jev` (chosen)** | one error, packing, record and cutoff contract | a shared change touches three binaries | high |
-| Router output | **≤ 3 pointer lines (chosen)** | small; best-effort at compaction | one `Read` per reference; observe's `reference-unread` covers only hiden references over the window and cannot show a pointer was followed | high; flips if pointers are seen ignored |
-| | inline the top reference | no extra call | references reach 10 KB, over the 4,500-unit entry block | high |
+| Router (3.2) | **defer until missed re-reads are recorded; a per-kit attention item first (chosen)** | no code, corpus or owner calibration for a pointer the hiden table already gives; the item costs one line per kit and core already restores it | a re-read skipped after compaction goes unflagged until a retrospective finds it | high; flips at the §3.2 trigger |
+| | build as first planned (all skills' references, a `noul` each, ≤ 3 pointers, prompt as a unit) | pointers for any skill | the prompt never reaches entry; the orchestration references score high for almost every kit; other skills route themselves; 31 questions per kit | — |
+| Router question | **one `choice` per kit with `none` (chosen)** | one question; a step has one reference in hiden's table; `none` covers waiting states | references that apply together split the probability, so fewer pointers clear the 0.50 floor | high; flips to a `noul` per candidate if calibration ships it disabled for recall |
+| Router output | **one pointer per kit (chosen)** | small; best-effort at compaction | one `Read` per reference; observe's `reference-unread` covers the window, not a pointer | high; flips if pointers are seen ignored |
+| | inline the reference | no extra call | references reach 10 KB, over the 4,500-unit entry block | high |
+| Router config | **none; candidates are hiden's references (chosen)** | no file, parse or broken-file path | another skill needs a code change | high; a `jev.toml` with globs comes with a second routed skill |
 | Semantic caller | **explicit call beside `stack-public check`, merge-base range (chosen)** | the PR's own comparison and texts | a dotfiles change | high |
 | | `[merge].message_checks` | automatic | a missing binary or a cut child refuses the merge; no diff | — |
 
@@ -329,9 +412,12 @@ About 100 pushes, 300 kit opens and 30 cycles a month ≈ $0.4, uncapped; O6 rep
    `jev-calibrate`, `fixtures/jev/semantic/`, generated cutoffs, `docs/architecture.md` §4 ("Active when
    `TYPESAFE_API_KEY` is set"; `jev-semantic` advisory at the PR caller) and §6 item 4 (§9), README install line.
    The owner runs calibrate before merge (O1). Then dotfiles: the `commit-pr` call of §3.2.
-2. **feat(jev): `jev-router`** — its design round (§3.2 list), package, `jev.toml` in architecture §5, fixtures.
-3. **feat(jev): `jev-classify`** — after #56 closes; its design round, package, fixtures. Then dotfiles: the job
-   call of §3.2 and the key in the job's environment. (`[stages]` defaults already name the three.)
+2. **feat(jev): `jev-classify`** — after #56 closes, not waiting for the router; its design round, package,
+   fixtures. Then dotfiles: the job call of §3.2 and the key in the job's environment. (`[stages]` defaults already
+   name the three.)
+3. **feat(jev): `jev-router`** — deferred. First, outside Phase 4, the hiden kit convention in dotfiles puts the
+   compaction attention item in each kit (§3.2). Only on the §3.2 trigger: package, `fixtures/jev/router/`,
+   generated cutoffs, `docs/architecture.md` §4's router line, and the owner's calibrate run before merge (O1).
 
 ## 6. Acceptance criteria
 
@@ -341,11 +427,11 @@ About 100 pushes, 300 kit opens and 30 cycles a month ≈ $0.4, uncapped; O6 rep
 
 | ID | EARS criterion | Source | Scenario | Observable result / failure | Check |
 |---|---|---|---|---|---|
-| P1 | While no `TYPESAFE_API_KEY` is set, each `jev-*` shall answer `pass` with no context and make no call. | #57 opt-out | live request, key unset | `pass`, `context` `""`; failure: warn or a ledger line | each under `env -u TYPESAFE_API_KEY`: `stack run outbound --ext jev-semantic --range <r>`, `stack run entry --ext jev-router`, `stack run cycle --ext jev-classify` |
+| P1 | While no `TYPESAFE_API_KEY` is set, each built `jev-*` shall answer `pass` with no context and make no call. | #57 opt-out | live request, key unset | `pass`, `context` `""`; failure: warn or a ledger line | each built one under `env -u TYPESAFE_API_KEY`: `stack run outbound --ext jev-semantic --range <r>`, `stack run cycle --ext jev-classify`, and `stack run entry --ext jev-router` once built |
 | P2 | When a PR's merge-base range weakens a test or check without saying so, `jev-semantic` shall answer `warn` with a `jev-meta-duty` finding naming the files; a test added only on the base shall not show as deleted. | #57 | `fixed` hit and diverged-base fixtures; the dotfiles caller test (§3.2) | the `want` finding; failure: pass or other kinds | `replay-test`; key: O2 |
 | P3 | When the PR text claims what the diff does not show and the PR fits one request, `jev-semantic` shall answer `warn` with `jev-unsupported-claim`; when it does not fit, it shall report the question unassessed. | #57; owner decision | "add tests" without tests; a large PR | finding or `jev-unassessed` | `replay-test`; key: O2 |
 | P4 | `jev-semantic` shall never make `stack run outbound` exit 1, and `public`'s refusal shall still exit 1. | §1 | live run, both extensions | exit 0 with a semantic `warn`; exit 1 with `public: block` | C15 |
-| P5 | When a kit is open in a session and a reference scores at or above the cutoff, the entry context shall list ≤ 3 uncut paths within 1,000 UTF-16 units. | #57 | synthetic kit about a review | the `want` context | `replay-test`; key: O3 |
+| P5 | (When built, §3.2.) When an open kit's state names a single step in progress whose hiden reference scores at or above the cutoff, the entry context shall point at that reference, one path per kit, uncut in the router's output and whenever shown whole, within 1,000 UTF-16 units in total (any pointer that does not fit, the first included, is omitted with a count), at `kit open` and, room permitting, after compaction; a kit with several workstreams and none in progress, or a conditional wait, shall get no pointer. | #57; §3.2 trigger | synthetic kit reviewing a PR; a multi-workstream kit; a conditional-wait kit | the `want` context | `replay-test`, C16; key: O3 |
 | P6 | When observe found owner replies, `jev-classify` shall classify each resolvable one, check qualified ones for duplicates, and list unresolved ones separately. (After #56.) | #57 | both locator forms + memory index | its file and context | `replay-test` incl. the artifact; key: O4 |
 | P7 | Each extension shall send only the pinned model, with cutoffs from calibration on `fixtures/jev/`. | #57 | any call | `model` `jev-1.14.0` | C10, C11; O1 |
 | P8 | When a fixture carries recorded answers, the extension shall answer from them with no network, and `warn` `jev-unrecorded` on a miss. | #57 | key unset; dummy key + failing endpoint | `want` met; deleted record → feature assertion fails | C12 |
@@ -356,34 +442,35 @@ About 100 pushes, 300 kit opens and 30 cycles a month ≈ $0.4, uncapped; O6 rep
 
 | ID | EARS claim | Source | Test |
 |---|---|---|---|
-| C1 | While the key is empty and no `jev` object is present, `Main` shall write one valid `pass` after reading stdin to EOF, touch no file and open no connection. | P1 | `jev.TestOptOut` per binary |
+| C1 | While the key is empty and no `jev` object is present, each built binary's `Main` shall write one valid `pass` after reading stdin to EOF, touch no file and open no connection. | P1 | `jev.TestOptOut` per binary |
 | C2 | The client shall treat network errors, timeout, 429, 529, 5xx, a 400 whose bounded body read (partial bytes included) names `max_tokens_exceeded`, and 413 as unassessed without retry; every other non-200, a body over 1 MiB, an envelope not of the §2 shape and model mismatch as persistent; and a missing, wrongly typed, non-finite or out-of-range answer as invalid for its question only, never echoing the body (a sentinel in it is absent from output). | P9 | `jev.TestClientErrors` (`httptest`, slow body) |
-| C3 | Packing shall use the budget 48 KiB less the fixed fields, split an oversize unit into ordered parts measured in their complete encoded state, keep questions ≤ 16 KiB, send input that fits whole even under a 1 KiB budget, mark questions unassessed only when splitting is needed and the budget is under 1 KiB or the smallest part cannot fit, and lose no unit. | §3.1 | `jev.TestPack` (25 KiB texts with a small diff; a file over the budget; budgets just above and below 1 KiB, with a small diff that fits whole below it; escaped runes and `part k of n` framing at the boundary; captured bodies reassemble every unit) |
+| C3 | Packing shall use the budget 48 KiB less the fixed fields, split an oversize unit into ordered parts measured in their complete encoded state, keep questions ≤ 16 KiB, send input that fits whole even under a 1 KiB budget, mark questions unassessed only when splitting is needed and the budget is under 1 KiB or the smallest part cannot fit, and lose no unit; the router never splits a kit (§3.2) and uses packing only to measure it. | §3.1 | `jev.TestPack` (25 KiB texts with a small diff; a file over the budget; budgets just above and below 1 KiB, with a small diff that fits whole below it; escaped runes and `part k of n` framing at the boundary; captured bodies reassemble every unit) |
 | C4 | Each extension shall stop at its work deadline, report the rest unassessed (classify: `complete: false`), answer within its reserve, and keep the response under 512 KiB with `jev-omitted`; core's synthetic `warn` under a shorter parent deadline is a separate outcome. | §3.1 | `<ext>.TestBudget`: slow git → no request, questions unassessed (`preparation deadline`, classified by the deadline before the exit code), answer by 10 s, with a child holding its pipe open so a longer pipe wait fails; slow HTTP → answered batches kept, rest unassessed; many-batch result accepted by core; shortened core deadline |
-| C5 | Invalid stdin → `warn`; another stage, nothing to ask (empty range, a range whose diff has no files, no kits and prompt, no items) → `pass` with no request; results assemble in unit order under out-of-order completion. | §3.1 | `<ext>.TestNothingToAsk`, `jev.TestOrder` |
+| C5 | Invalid stdin → `warn`; another stage, nothing to ask (empty range, a range whose diff has no files, no kits or no router candidate, no items) → `pass` with no request; results assemble in unit order under out-of-order completion. | §3.1 | `<ext>.TestNothingToAsk`, `jev.TestOrder` |
 | C6 | `jev-semantic` shall build identical bodies under config variants (system, global, `GIT_CONFIG_PARAMETERS`, repository-local `diff.suppressBlankEmpty`, `diff.noprefix`, `diff.relative`, `diff.indentHeuristic` on a patch whose hunks move, `core.abbrev`, `diff.orderFile`), ask `unsupported_claim` only when the whole PR fits, and answer `warn` before any request on a git failure. | P2, P3 | `semantic.TestState` (synthetic repository) |
 | C7 | A probability just below, at and above the cutoff shall decide pass, hit, hit; a disabled decision never flags; never `block`. | P2–P4 | `semantic.TestDecision` |
-| C8 | `jev-router` shall resolve, normalise and sort candidates, send slugs not dirs, take each candidate's maximum, rank by probability then path, never cut a path, report partial coverage with or without hits, and keep ≤ 1,000 UTF-16 units with astral characters; a broken `jev.toml` gives `warn` and the defaults. | P5 | `router.TestCandidates`, `router.TestContext`, `router.TestConfig` |
+| C8 | (When built.) `jev-router` shall list the `.md` files of hiden's `references/` under `$CLAUDE_CONFIG_DIR` or the home's `.claude`, sorted; read `kits` from `jev.Request`; send one `choice` `current_ref` per kit with its slug, `NORTH.md` and `state.md`, never its dir or a prompt; leave a kit that does not fit one request unassessed, unsplit; point only at a non-`none` choice at or above the cutoff; keep the final context (header, newlines, omission count and any coverage text) ≤ 1,000 UTF-16 units with astral characters, dropping a long line's heading first and then the last pointers with an `omitted` count, never cutting a path (no shared 1,000-byte line cut); report unassessed kits as a finding with no context line. | P5 | `router.TestCandidates`, `router.TestState`, `router.TestContext` |
 | C9 | `jev-classify` shall resolve both locator forms (a tool result between the assistant text and the reply is skipped), report unresolved items, use the fixture clock, send only qualified items to `dup_` with their reply and ID, and write its file atomically. | P6 | `classify.TestRun` (missing, stale, malformed observe file; paused write and failed rename leave the old file whole) |
-| C10 | The fitted cutoff shall be the lowest of 0.50–0.95 that passes the margin test on `fit` alone (a positive a hit at ≥ t + 0.05, a negative a false positive at ≥ t − 0.05, both boundaries inclusive, an unscored planned call a miss) with the precision target, TP > 0 and recall ≥ 0.5, never under 0.50 even when the margin test passes lower, while the runtime decision stays score ≥ t; held-out eligibility is asserted separately with the runtime decision: changing held-out scores leaves the fitted number unchanged and can flip the decision to disabled; with no qualifying cutoff or under a fit or held-out floor it is disabled; the semantic corpus has the §3.5 counts, and the report gives baseline, margin test and flips by language. | P7 | `jev.TestCutoff`, `jev.TestCorpus`, `calibrate.TestReport` |
+| C10 | The fitted cutoff shall be the lowest of 0.50–0.95 that passes the margin test on `fit` alone (a positive a hit at ≥ t + 0.05, a negative a false positive at ≥ t − 0.05, both boundaries inclusive, an unscored planned call a miss) with the precision target, TP > 0 and recall ≥ 0.5, never under 0.50 even when the margin test passes lower, while the runtime decision stays score ≥ t; held-out eligibility is asserted separately with the runtime decision: changing held-out scores leaves the fitted number unchanged and can flip the decision to disabled; with no qualifying cutoff or under a fit or held-out floor it is disabled; the semantic and (when built) router corpora have the §3.5 counts, the router's counted by ground-truth label over distinct kits with ≥ 6 references among its positives, a router wrong choice maps to a false positive at its score, plus a recall miss when the ground truth names a reference (at t = 0.60 a wrong choice at 0.57 is a false positive), and the report gives baseline, margin test and flips by language. | P7 | `jev.TestCutoff`, `jev.TestCorpus`, `calibrate.TestReport`, `router.TestSamples` (when built) |
 | C11 | Every answer record and cutoff table shall name the pin, and every status record shall match a rebuilt body hash; cutoffs refitted from `samples` shall equal the committed ones; changing the root dir or clock keeps every key, and changing state, a question or the pin changes it. | P7, §3.4 | `jev.TestFixturesPinned` |
 | C12 | Every `fixed` fixture and every recorded `cal` fixture (a pending one has no `expect` yet) shall, through `replay-test`, give exactly one self-answered result with empty `error`, its `expect` status, its `want` (`cal`: exact findings and context, classify: artifact; `fixed`: §3.5 matching), and no `jev-unrecorded` or `jev-error` unless wanted; once with the key unset and once with a dummy key and a test endpoint that fails the test on any request; a hit fixture with its records deleted shall fail the `want` assertion. The mixed fixture keeps the hit and reports the rejected batch's questions unassessed with no `jev-error`, and its live counterpart against a fake endpoint sends exactly one request per planned body. | P2–P9 | `<ext>.TestFixtures`, `semantic.TestMixedLive` |
 | C13 | No package under `cmd/` or `internal/` shall import `extensions/`, and the jev packages shall import no `internal/` package outside test helpers. | owner decision | existing `depguard` rules |
 | C14 | Each live attempt shall append one serialised ledger line with run, outcome, elapsed time and known or `null` usage, waiting at most 0.1 s; an I/O error or an abandoned wait shall be one stderr line with the status unchanged, and a line abandoned before it is written is dropped; replay shall write none. | P10 | `jev.TestLedger` |
 | C15 | A live `stack run outbound --ext public --ext jev-semantic --range <r>` with built binaries and a test endpoint answering a hit shall exit 0 with both named results (`public: pass`, semantic `warn`) on clean texts, and exit 1 with `public: block` and the semantic result on a texts hit. | P4 | `semantic.TestExitCodes` (non-replay) |
+| C16 | (When built.) With built `stack` and `stack-jev-router`, test cutoffs, a test endpoint answering a pointer, a temp home, no handover, and the 9,500-unit restore budget filled by several blocks (worker rules, kits' `NORTH.md`, `state.md` and items), `stack hook claude session-start` on a `compact` payload shall, in four separate cases, show the whole router block; show it cut with `[...cut N chars]`; show only `[entry context omitted: context limit: jev-router]`; and show no router text with core's stderr line `stack: entry context of jev-router dropped: context limit`. In each case the decoded `additionalContext` with the entry part removed equals the same run's with `entry = []` (the entry part sits between boards and handover, so a prefix match is not enough). | P5 | `router.TestCompaction` (non-replay) |
 
 ## 7. Test plan
 
 CI never reaches the network: the client against `httptest` servers (C2–C5, C14), the binaries built with a test
-endpoint (C12, C15), state building against synthetic repositories (`internal/gittest`, a test-only import). macOS
+endpoint (C12, C15, C16), state building against synthetic repositories (`internal/gittest`, a test-only import). macOS
 and Linux run them in `scripts/test`; Windows CI runs `go vet`, `go test -race` and the build
 (`.github/workflows/ci.yml:40-55`). Real-key checks are owner steps:
 
 **O1** each PR: `jev-calibrate`; committed cutoffs equal its output; unstable list read. **O2** the §3.2 caller on
-a scratch PR deleting an assertion → warn, on a clean change → pass. **O3** `kit open demo` with a review state →
-pointer block; `/compact` → restored when room is left. **O4** (after #56) `stack run cycle --ext jev-classify` after
+a scratch PR deleting an assertion → warn, on a clean change → pass. **O3** (when built) `kit open demo` with a state
+reviewing a PR → pointer to `review.md`; `/compact` → restored when room is left. **O4** (after #56) `stack run cycle --ext jev-classify` after
 a real observe run with T3 and Claude replies; spot-check outcomes. **O5** `TYPESAFE_API_KEY=invalid` with input at
-each stage → `warn` 401; network off → unassessed. **O6** after a week: `usage.jsonl` totals, unknown usage,
+each stage with a built extension (entry once the router is built) → `warn` 401; network off → unassessed. **O6** after a week: `usage.jsonl` totals, unknown usage,
 `max_tokens_exceeded` count, coverage against runs.
 
 ## 8. Risks
@@ -395,11 +482,13 @@ each stage → `warn` 401; network off → unassessed. **O6** after a week: `usa
 - The memory key encoding and the T3 schema are observed, not documented; a change shows as `unassessed`
   duplicates or `unresolved` items. The launchd job needs the key for classify; without it classify opts out.
 
-## 9. Replacement text for `docs/architecture.md` §6 item 4
+## 9. Text of `docs/architecture.md` §6 item 4
 
-> 4. **Phase 4 (Jev extensions):** Add `jev-semantic` -> `jev-router` -> `jev-classify`, each with cutoffs
-> calibrated on `fixtures/jev/` and key-less `--replay` verification; `jev-classify` follows the end of Phase 3
-> (#56), since only it consumes observe's output. Design: `docs/design/phase4-jev.md`.
+> 4. **Phase 4 (Jev extensions):** `jev-semantic` (done) and `jev-classify`, each with cutoffs calibrated on
+> `fixtures/jev/` and key-less `--replay` verification; `jev-classify` follows the end of Phase 3 (#56), since only it
+> consumes observe's output, and does not wait for `jev-router`. `jev-router` is deferred: a per-kit attention item
+> to re-read the step's reference after compaction comes first, and the router is built only when missed re-reads
+> are recorded or the owner asks. Design: `docs/design/phase4-jev.md`.
 
 ## 10. Owner questions
 
