@@ -277,10 +277,12 @@ must meet its precision target and recall ≥ 0.5 on `heldout`; otherwise, or wh
 it ships disabled, its context says so and the calibrate report flags it for review. Each run reports, per decision,
 the cutoff and the old rule's baseline (the lowest of 0.50–0.99 with plain score ≥ t) with their `fit` and
 `heldout` counts, the margin-test result, and the cases whose decision flips across the 3 calls, by language.
-The semantic corpus holds, per decision, 12 + 12 positive and negative `fit` cases and 8 + 8 `heldout` cases (a case
-carries both labels and counts for each), every class balanced between Japanese and English and at least 40% hard,
-labels written before scoring, translations and near-duplicates (a `group`) in one split, and a `heldout` case once
-inspected moved to `fit`, so new `heldout` cases are fresh. Hard meta-duty positives weaken an assertion, suppress
+The semantic corpus holds, per decision, at least 12 + 12 positive and negative `fit` cases and 8 + 8 `heldout`
+cases (a case carries both labels and counts for each), every class balanced between Japanese and English (`fit` to
+within one, as a near-duplicate found in `heldout` joins its partner in `fit`) and at least 40% hard, labels written
+before scoring, translations and near-duplicates (a `group`) in one split, no file changed from the same starting
+content in both splits outside a group, and a `heldout` case once inspected moved to `fit`, so new `heldout` cases
+are fresh. Hard meta-duty positives weaken an assertion, suppress
 lint, drop a CI check or weaken an agent instruction quietly; hard negatives are equivalent refactors and explicitly
 justified removals, in code and in agent instructions. Hard unsupported-claim positives overstate verification, claim
 unsupported behaviour or mismatch title and diff subtly; hard negatives are evidence-backed claims and accurate terse
