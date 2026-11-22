@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/shuymn/stack/internal/paths"
 	"github.com/shuymn/stack/internal/shell"
@@ -842,6 +844,18 @@ func quotedMark(w Word) bool {
 	return w.Static && w.Known == NotKnown && !w.Block && w.Text == verbatimMark
 }
 
+// paramToken reports a bare word PowerShell lexes as a parameter token: a dash, then a letter, `_`
+// or `?` (`-h`, `-_a`, `-h=true`; not `--x`, `-1` or `-`).
+func paramToken(w Word) bool {
+	for _, d := range dashes {
+		if rest, ok := strings.CutPrefix(w.Raw, d); ok {
+			r, _ := utf8.DecodeRuneInString(rest)
+			return unicode.IsLetter(r) || r == '_' || r == '?'
+		}
+	}
+	return false
+}
+
 // percentVar matches a `%NAME%` reference, which both engines expand in a joined argument.
 var percentVar = regexp.MustCompile(`%[^%]+%`)
 
@@ -855,14 +869,16 @@ type joining struct {
 
 // words is the argv a native argument after a quoted `--%` becomes: its static value split at
 // blanks, each part never a home `~` (5.1 and 7.7 agree on this, argv stub). An argument the
-// engines can pass differently starts the ambiguous region: a value holding `"`, `,` or a line
-// break (`'--body=a"b' --help` is one argument on 5.1, two on 7.7), a `%NAME%` (expanded to an
-// unknown value), an empty value (an argument on 7.7 only), and one that is not static (a variable
-// or interpolation, whose value may hold any of these). A word in the region keeps its static text,
+// engines can pass differently starts the ambiguous region: a value holding `"`, `,`, a tab (5.1
+// splits there, 7.7 does not) or a line break (`'--body=a"b' --help` is one argument on 5.1, two
+// on 7.7), a `%NAME%` (expanded to an unknown value), an empty value (an argument on 7.7 only), a
+// bare parameter token (`-h` and `-h=true` vanish on 5.1 and pass an empty value on 7.7, and the
+// argument after one keeps its quotes), and one that is not static (a variable or interpolation,
+// whose value may hold any of these). A word in the region keeps its static text,
 // so checks still match it, but is marked ambiguous: it never proves a call harmless.
 func (j *joining) words(w Word) []Word {
-	if !w.Static || w.Known != NotKnown || w.Text == "" ||
-		strings.ContainsAny(w.Text, "\",\r\n") || percentVar.MatchString(w.Text) {
+	if !w.Static || w.Known != NotKnown || w.Text == "" || paramToken(w) ||
+		strings.ContainsAny(w.Text, "\",\t\r\n") || percentVar.MatchString(w.Text) {
 		j.amb = true
 	}
 	w.joined, w.ambiguous = true, j.amb

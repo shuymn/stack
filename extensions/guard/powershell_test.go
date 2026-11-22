@@ -531,7 +531,12 @@ func TestPowerShellNoNewAllow(t *testing.T) {
 		{"gh pr comment 1 '--%' '' --body-file=b.md", false, false, ""},
 		{`$t = 'a"b'; gh pr comment 1 '--%' "--body=$t" --body-file=b.md`, false, false, ""},
 		{"gh pr create -t t '--%' 'a','b' --body-file b.md", false, false, ""},
-		{"gh pr comment 1 -F 'b'.md", true, true, "both engines pass the file b, then .md"},
+		{"& rm.exe -r '--%' -h .git", true, true, ""},
+		{"& rm.exe -r '.git'.foo", false, false, ""},
+		{
+			"gh pr comment 1 -F 'b'.md", true, true,
+			"both engines evaluate 'b'.md to $null and pass only -F, which reads no file",
+		},
 	} {
 		for _, windows := range bothOS {
 			d, ok := f.psDecide(tt.cmd, windows)

@@ -459,6 +459,26 @@ func (p *parser) paren() {
 	p.pos++
 }
 
+// quoteStarted continues a word whose current element started with a quote that just closed, and
+// reports whether a next array element follows. A token that starts with a quote ends at its
+// closing quote: `'a'b` is two arguments (5.1 and 7.7, cmdlets and native commands). A member
+// access or index on it is an expression (`'--help'.foo` is $null, so no argument, and
+// `'--help'[0]` is `-`): the word is dynamic. A native `,` after it makes an array, which 5.1 and
+// 7.7 pass differently (`a,b` vs `'a',b`): the word is dynamic, and each quote-started element
+// ends at its quote too (`'a','b'c` is the array, then `c`).
+func (p *parser) quoteStarted(b *wordBuilder, kind Kind) bool {
+	if p.members() {
+		b.dyn()
+	}
+	if kind == Cmdlet || p.peek() != ',' {
+		return false
+	}
+	b.dyn()
+	b.part(Bare)
+	p.char(b)
+	return true
+}
+
 // argWord lexes one argument-mode word at pos. In a cmdlet's arguments an unquoted `,` ends it.
 func (p *parser) argWord(kind Kind) Word {
 	start := p.pos
@@ -505,18 +525,11 @@ func (p *parser) argWord(kind Kind) Word {
 			if !first {
 				continue
 			}
-			// A token that starts with a quote ends at its closing quote: `'a'b` is two arguments
-			// (5.1 and 7.7, cmdlets and native commands). A native `,` after it makes an array,
-			// which 5.1 and 7.7 pass differently (`a,b` vs `'a',b`): the word is dynamic, and each
-			// quote-started element ends at its quote too (`'a','b'c` is the array, then `c`).
-			if kind != Cmdlet && p.peek() == ',' {
-				b.dyn()
-				b.part(Bare)
-				p.char(&b)
-				elem = p.pos
-				continue
+			if !p.quoteStarted(&b, kind) {
+				break
 			}
-			break
+			elem = p.pos
+			continue
 		}
 		b.part(Bare)
 		switch c {

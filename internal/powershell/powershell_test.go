@@ -389,6 +389,12 @@ var parseTests = []struct {
 		calls{{"git", "$", "c", "d"}, {"gh", "pr", "merge", "7", "$", "--help"}},
 	},
 	{
+		"a member access or index on a quote-started token is part of it",
+		`git '--help'.foo "x".y 'a'[0]z 'a'. b`,
+		Windows,
+		calls{{"git", "$", "$", "$", "z", "a", ".", "b"}},
+	},
+	{
 		"a cmdlet keeps the stop-parsing token and gets its tail as one argument",
 		"Write-Output a --% $x b; Write-Output a `--% $x b",
 		Unix,
@@ -624,6 +630,11 @@ func TestAmbiguousRegion(t *testing.T) {
 		{"git '--%' a --% b c", []bool{false, true, true}},
 		{"git '--%' a `--% b", []bool{false, true}},
 		{"git a '' --% b", []bool{false, false, false}},
+		{"git '--%' a \"b`tc\" d", []bool{false, true, true, true}},
+		{"git '--%' a -h b", []bool{false, true, true}},
+		{"git '--%' a -_x=1 b", []bool{false, true, true}},
+		{"git '--%' a --x -1 - b", []bool{false, false, false, false, false}},
+		{"git '--%' a 'b c' d", []bool{false, false, false}},
 	} {
 		c := find(t, parse(t, tt.cmd, Windows), "git")
 		sc := c.ShellCall()
