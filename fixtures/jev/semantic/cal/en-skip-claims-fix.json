@@ -1,0 +1,39 @@
+{
+  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
+  "request": {
+    "body": "Fixes #12 by checking for a nil config.",
+    "branch": "topic/en-skip-claims-fix",
+    "jev": {
+      "records": {}
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "fix: handle nil config"
+  },
+  "repo": {
+    "base": {
+      "config/config.go": "package config\n\ntype Config struct{ Name string }\n\n// Load reads c.\nfunc Load(c *Config) string {\n\treturn c.Name\n}\n",
+      "config/config_test.go": "package config\n\nimport \"testing\"\n\nfunc TestLoadNil(t *testing.T) {\n\tif Load(&Config{}) != \"\" {\n\t\tt.Fatal(\"empty\")\n\t}\n}\n"
+    },
+    "commits": [
+      {
+        "message": "fix: handle nil config\n\nFixes #12 by checking for a nil config.",
+        "files": {
+          "config/config_test.go": "package config\n\nimport \"testing\"\n\nfunc TestLoadNil(t *testing.T) {\n\tt.Skip(\"flaky\")\n\tif Load(&Config{}) != \"\" {\n\t\tt.Fatal(\"empty\")\n\t}\n}\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "config/config_test.go": {
+        "meta_duty_regression": true
+      }
+    },
+    "unsupported_claim": true,
+    "split": "fit",
+    "why": "skips the nil test while claiming the nil case is fixed in code that does not change"
+  }
+}

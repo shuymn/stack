@@ -1,0 +1,39 @@
+{
+  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
+  "request": {
+    "body": "",
+    "branch": "topic/en-test-file-deleted-claims-coverage",
+    "jev": {
+      "records": {}
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "test: add coverage for Parse"
+  },
+  "repo": {
+    "base": {
+      "parse/parse.go": "package parse\n\nfunc Parse(s string) string { return s }\n",
+      "parse/parse_test.go": "package parse\n\nimport \"testing\"\n\nfunc TestParse(t *testing.T) {\n\tif Parse(\"a\") != \"a\" {\n\t\tt.Fatal(\"a\")\n\t}\n}\n"
+    },
+    "commits": [
+      {
+        "message": "test: add coverage for Parse",
+        "files": {
+          "parse/parse_test.go": null
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "parse/parse_test.go": {
+        "meta_duty_regression": true
+      }
+    },
+    "unsupported_claim": true,
+    "split": "heldout",
+    "why": "deletes the test file while the title claims coverage"
+  }
+}

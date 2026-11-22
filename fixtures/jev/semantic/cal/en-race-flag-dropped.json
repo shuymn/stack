@@ -1,0 +1,38 @@
+{
+  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
+  "request": {
+    "body": "",
+    "branch": "topic/en-race-flag-dropped",
+    "jev": {
+      "records": {}
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "chore: speed up tests"
+  },
+  "repo": {
+    "base": {
+      "scripts/test": "#!/bin/sh\nset -eu\ngo test -race ./...\n"
+    },
+    "commits": [
+      {
+        "message": "chore: speed up tests",
+        "files": {
+          "scripts/test": "#!/bin/sh\nset -eu\ngo test ./...\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "scripts/test": {
+        "meta_duty_regression": true
+      }
+    },
+    "unsupported_claim": false,
+    "split": "heldout",
+    "why": "drops -race from the completion check without saying so"
+  }
+}

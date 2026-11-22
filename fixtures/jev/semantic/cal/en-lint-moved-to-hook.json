@@ -1,0 +1,43 @@
+{
+  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
+  "request": {
+    "body": "golangci-lint moves from scripts/test to the pre-push hook in lefthook.yml.",
+    "branch": "topic/en-lint-moved-to-hook",
+    "jev": {
+      "records": {}
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "build: run lint in the pre-push hook"
+  },
+  "repo": {
+    "base": {
+      "scripts/test": "#!/bin/sh\nset -eu\ngolangci-lint run ./...\ngo test ./...\n",
+      "lefthook.yml": "pre-push:\n  commands:\n    test:\n      run: scripts/test\n"
+    },
+    "commits": [
+      {
+        "message": "build: run lint in the pre-push hook\n\ngolangci-lint moves from scripts/test to the pre-push hook in lefthook.yml.",
+        "files": {
+          "scripts/test": "#!/bin/sh\nset -eu\ngo test ./...\n",
+          "lefthook.yml": "pre-push:\n  commands:\n    lint:\n      run: golangci-lint run ./...\n    test:\n      run: scripts/test\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "scripts/test": {
+        "meta_duty_regression": false
+      },
+      "lefthook.yml": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": false,
+    "split": "heldout",
+    "why": "moves the lint step to the pre-push hook and says so"
+  }
+}

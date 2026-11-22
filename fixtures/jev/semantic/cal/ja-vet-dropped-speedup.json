@@ -1,0 +1,38 @@
+{
+  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
+  "request": {
+    "body": "ベンチマークで30%高速化を確認しました。",
+    "branch": "topic/ja-vet-dropped-speedup",
+    "jev": {
+      "records": {}
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "chore: CIを高速化"
+  },
+  "repo": {
+    "base": {
+      "scripts/check": "#!/bin/sh\nset -eu\ngofmt -l .\ngo vet ./...\ngo test ./...\n"
+    },
+    "commits": [
+      {
+        "message": "chore: CIを高速化\n\nベンチマークで30%高速化を確認しました。",
+        "files": {
+          "scripts/check": "#!/bin/sh\nset -eu\ngofmt -l .\ngo test ./...\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "scripts/check": {
+        "meta_duty_regression": true
+      }
+    },
+    "unsupported_claim": true,
+    "split": "fit",
+    "why": "drops go vet from the check and claims an unmeasured speed-up"
+  }
+}

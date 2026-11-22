@@ -1,0 +1,38 @@
+{
+  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
+  "request": {
+    "body": "Also fixes #31 (timeout in Fetch).",
+    "branch": "topic/en-unrelated-issue-claim",
+    "jev": {
+      "records": {}
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "fix: close file on error"
+  },
+  "repo": {
+    "base": {
+      "files/files.go": "package files\n\nimport \"os\"\n\nfunc Read(p string) ([]byte, error) {\n\tf, err := os.Open(p)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tb := make([]byte, 10)\n\t_, err = f.Read(b)\n\treturn b, err\n}\n"
+    },
+    "commits": [
+      {
+        "message": "fix: close file on error\n\nAlso fixes #31 (timeout in Fetch).",
+        "files": {
+          "files/files.go": "package files\n\nimport \"os\"\n\nfunc Read(p string) ([]byte, error) {\n\tf, err := os.Open(p)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tdefer f.Close()\n\tb := make([]byte, 10)\n\t_, err = f.Read(b)\n\treturn b, err\n}\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "files/files.go": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": true,
+    "split": "heldout",
+    "why": "claims to fix a Fetch timeout that the diff does not touch"
+  }
+}

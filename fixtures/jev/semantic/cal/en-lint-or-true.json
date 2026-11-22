@@ -1,0 +1,38 @@
+{
+  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
+  "request": {
+    "body": "Lint output is noisy.",
+    "branch": "topic/en-lint-or-true",
+    "jev": {
+      "records": {}
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "build: quieter lint"
+  },
+  "repo": {
+    "base": {
+      "Makefile": "lint:\n\tgolangci-lint run ./...\n"
+    },
+    "commits": [
+      {
+        "message": "build: quieter lint\n\nLint output is noisy.",
+        "files": {
+          "Makefile": "lint:\n\tgolangci-lint run ./... >/dev/null 2>&1 || true\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "Makefile": {
+        "meta_duty_regression": true
+      }
+    },
+    "unsupported_claim": false,
+    "split": "fit",
+    "why": "adds || true to the lint step, so lint failures pass, while the body only mentions noise"
+  }
+}

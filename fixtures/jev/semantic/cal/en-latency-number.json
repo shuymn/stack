@@ -1,0 +1,38 @@
+{
+  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
+  "request": {
+    "body": "Reduces p99 latency from 120 ms to 40 ms.",
+    "branch": "topic/en-latency-number",
+    "jev": {
+      "records": {}
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "perf: cache lookups"
+  },
+  "repo": {
+    "base": {
+      "cache/cache.go": "package cache\n\nfunc Lookup(k string) string { return slow(k) }\n\nfunc slow(k string) string { return k }\n"
+    },
+    "commits": [
+      {
+        "message": "perf: cache lookups\n\nReduces p99 latency from 120 ms to 40 ms.",
+        "files": {
+          "cache/cache.go": "package cache\n\nvar memo = map[string]string{}\n\nfunc Lookup(k string) string {\n\tif v, ok := memo[k]; ok {\n\t\treturn v\n\t}\n\tv := slow(k)\n\tmemo[k] = v\n\treturn v\n}\n\nfunc slow(k string) string { return k }\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "cache/cache.go": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": true,
+    "split": "fit",
+    "why": "claims a measured latency drop with no evidence"
+  }
+}

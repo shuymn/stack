@@ -1,0 +1,38 @@
+{
+  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
+  "request": {
+    "body": "「設定」の誤字を直しました。",
+    "branch": "topic/ja-typo-fix",
+    "jev": {
+      "records": {}
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "docs: 誤字を修正"
+  },
+  "repo": {
+    "base": {
+      "docs/guide.md": "# ガイド\n\n設堤ファイルを編集します。\n"
+    },
+    "commits": [
+      {
+        "message": "docs: 誤字を修正\n\n「設定」の誤字を直しました。",
+        "files": {
+          "docs/guide.md": "# ガイド\n\n設定ファイルを編集します。\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "docs/guide.md": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": false,
+    "split": "fit",
+    "why": "a typo fix that says exactly what it does"
+  }
+}
