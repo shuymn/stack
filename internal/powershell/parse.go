@@ -202,15 +202,26 @@ func (p *parser) keyword() bool {
 			p.argWord(Native) // the label
 		}
 	case "using":
-		for !p.eof() && p.peek() != '\n' && p.peek() != ';' {
-			p.pos++
-		}
+		p.pos += len(kw)
+		p.quietly(p.using)
 	case "else", "elseif", "catch", "finally", "until":
 		p.fail("unexpected " + kw)
 	default:
 		return false
 	}
 	return true
+}
+
+// using consumes the words of a `using` directive, quotes and brackets included, up to the end of
+// its statement.
+func (p *parser) using() {
+	for {
+		p.skipBlank()
+		if p.atEnd() {
+			return
+		}
+		p.argWord(Native)
+	}
 }
 
 // ifStatement parses the rest of an `if` with its `elseif` and `else` clauses.

@@ -410,6 +410,12 @@ var parseTests = []struct {
 		calls{{"gh", "-F", "$", "$", "$", "$", "<HOME>.x", "<HOME>[0]"}},
 	},
 	{
+		"using directive consumed whole",
+		"using module @{ ModuleName = 'Microsoft.PowerShell.Management'; ModuleVersion = '1.0' }; git status\nusing namespace System.IO\ngit diff",
+		Unix,
+		calls{{"git", "status"}, {"git", "diff"}},
+	},
+	{
 		"keyword prefix is a command",
 		`foreach-thing x; iffy y`,
 		Unix,
@@ -622,6 +628,7 @@ func TestParseFailure(t *testing.T) {
 		`gh pr merge 7 }`,
 		`gh pr merge 7 <# x`,
 		`gh pr merge 7 < in.txt`,
+		"gh pr merge 7; using namespace \"\ngit status",
 	} {
 		if r := Parse(cmd, "", "", Unix); r.Err == nil || len(r.Calls) != 0 || len(r.Nested) != 0 {
 			t.Errorf(
