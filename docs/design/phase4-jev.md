@@ -71,9 +71,10 @@ never the body, which can quote input.
 `~/.config/stack/jev/key`, read up to 4 KiB and trimmed of surrounding whitespace. A missing file, or an unknown home
 directory, is the opt-out, so unsetting the variable alone no longer opts out while the file exists. A symlink at the
 key path is followed and its target checked; one pointing at nothing is an unusable key file. A `jev` field that is
-present but `null` is an invalid replay (`jev-error`), never a live request. On Unix the file must be owned by the current user and closed to group and others; on
-Windows the profile's ACLs guard it and no mode or owner is checked. `stack-guard` denies reading it as a secret
-under any `secrets` list (`docs/design/core-stages.md` §4.6). Replay (§3.4) never looks the key up.
+present but `null` is an invalid replay (`jev-error`), never a live request. On Unix the file must be owned by the
+current user and closed to group and others; on Windows the profile's ACLs guard it and no mode or owner is checked.
+`stack-guard` denies reading it as a secret under any `secrets` list (`docs/design/core-stages.md` §4.6). Replay
+(§3.4) never looks the key up.
 
 **Batching.** Provider limits shape batches and never drop input. Packing is decided before sending, from encoded
 sizes alone, by one function in `extensions/internal/jev` (also used by §3.6 and the tests). Each request carries
