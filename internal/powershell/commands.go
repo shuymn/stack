@@ -46,6 +46,7 @@ var aliases = map[string]alias{
 	"ls":      {"Get-ChildItem", true},
 	"gm":      {"Get-Member", false},
 	"ndr":     {"New-PSDrive", false},
+	"mount":   {"New-PSDrive", true},
 }
 
 // verbs are the approved verbs plus ForEach and Where, so `Verb-Noun` names a cmdlet.

@@ -532,6 +532,8 @@ var kindTests = []struct {
 	{`GH.EXE pr view`, Windows, Native, "GH"},
 	{`Write-Output x`, Unix, Cmdlet, "Write-Output"},
 	{`pre-commit run`, Unix, Native, "pre-commit"},
+	{`mount X FileSystem C:\w`, Windows, Cmdlet, "New-PSDrive"},
+	{`mount -t tmpfs x /w`, Unix, Native, "mount"},
 }
 
 func TestParseKind(t *testing.T) {
