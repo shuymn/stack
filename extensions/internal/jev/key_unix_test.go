@@ -64,3 +64,17 @@ func TestKeyFileUnreadable(t *testing.T) {
 	key, err := Key(envOf(""), home)
 	wantKeyError(t, key, err, KeyUnreadable)
 }
+
+func TestKeyFileSymlinkShared(t *testing.T) {
+	home := t.TempDir()
+	target := filepath.Join(t.TempDir(), "key")
+	if err := os.WriteFile(target, []byte(keySentinel), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(target, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	symlinkKey(t, home, target)
+	key, err := Key(envOf(""), home)
+	wantKeyError(t, key, err, KeyShared)
+}

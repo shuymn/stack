@@ -116,3 +116,55 @@ func TestKeyFileNotRegular(t *testing.T) {
 	key, err := Key(envOf(""), home)
 	wantKeyError(t, key, err, KeyNotRegular)
 }
+
+// TestKeyFileSize: the file is read up to MaxKeyFile bytes; a longer one is refused unread.
+func TestKeyFileSize(t *testing.T) {
+	home := t.TempDir()
+	writeKey(t, home, strings.Repeat("k", MaxKeyFile), 0o600)
+	if key, err := Key(envOf(""), home); err != nil || len(key) != MaxKeyFile {
+		t.Fatalf("at the cap: Key = %d bytes, %v", len(key), err)
+	}
+	writeKey(t, home, keySentinel+strings.Repeat("k", MaxKeyFile), 0o600)
+	key, err := Key(envOf(""), home)
+	wantKeyError(t, key, err, KeyTooLarge)
+}
+
+// symlinkKey makes the key path a symlink to target, skipping where links cannot be made.
+func symlinkKey(t *testing.T, home, target string) {
+	t.Helper()
+	p := KeyPath(home)
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, p); err != nil {
+		t.Skipf("cannot create a symlink: %v", err)
+	}
+}
+
+// TestKeyFileSymlink: a link is followed and its target checked; a link to nothing is a present
+// but unusable key file, not the opt-out.
+func TestKeyFileSymlink(t *testing.T) {
+	home := t.TempDir()
+	target := filepath.Join(t.TempDir(), "key")
+	if err := os.WriteFile(target, []byte("linked-key\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	symlinkKey(t, home, target)
+	if key, err := Key(envOf(""), home); err != nil || key != "linked-key" {
+		t.Fatalf("Key = %q, %v; want the target's key", key, err)
+	}
+
+	home = t.TempDir()
+	symlinkKey(t, home, filepath.Join(t.TempDir(), "absent"))
+	key, err := Key(envOf(""), home)
+	wantKeyError(t, key, err, KeyDangling)
+}
+
+// TestKeyFixes: only the causes about mode name chmod 600.
+func TestKeyFixes(t *testing.T) {
+	for _, cause := range []string{KeyUnreadable, KeyNotRegular, KeyBlank, KeyTooLarge, KeyDangling} {
+		if msg := (&KeyError{Cause: cause}).Error(); strings.Contains(msg, "chmod") {
+			t.Errorf("%s: %q names chmod", cause, msg)
+		}
+	}
+}
