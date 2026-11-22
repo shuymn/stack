@@ -520,31 +520,32 @@ func (p *parser) argWord(kind Kind) Word {
 	return b.word(p.src[start:p.pos])
 }
 
-// verbatim lexes a `--%` tail: up to an unquoted `|`, `&&`, `||` or newline, split at blanks outside
-// `"`, with the quotes removed. A word holding `%NAME%` is dynamic.
+// verbatim lexes a `--%` tail: up to a CR or LF, or an unquoted `|`, `&&` or `||`, split at blanks
+// outside `"`. A word holding `"` is dynamic (its argv depends on the native-argument mode), and so
+// is one holding `%NAME%`.
 func (p *parser) verbatim() []Word {
 	var words []Word
 	var text strings.Builder
-	start, have, quoted := p.pos, false, false
+	start, have, quoted, hadQuote := p.pos, false, false, false
 	flush := func() {
 		if have {
 			w := Word{Raw: p.src[start:p.pos], Verbatim: true}
-			if t := text.String(); !percentRe.MatchString(t) {
+			if t := text.String(); !hadQuote && !percentRe.MatchString(t) {
 				w.Text, w.Static = t, true
 			}
 			words = append(words, w)
 		}
 		text.Reset()
-		have = false
+		have, hadQuote = false, false
 	}
 	for !p.eof() {
 		c := p.peek()
-		if !quoted && (c == '\n' || c == '|' || p.has("&&")) {
+		if c == '\n' || c == '\r' || (!quoted && (c == '|' || p.has("&&"))) {
 			break
 		}
 		switch {
 		case c == '"':
-			quoted = !quoted
+			quoted, hadQuote = !quoted, true
 		case !quoted && isBlank(c):
 			flush()
 			p.pos++

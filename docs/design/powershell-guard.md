@@ -92,9 +92,10 @@ dashes for cmdlet parameters only, never rewritten in native argv.
 not, or a built-in alias of one on that host) or *native* (any other name, and always an explicit path or a name
 ending in `.exe`). `& 'C:\Program Files\Git\usr\bin\rm.exe' -r '~'` is native, never `Remove-Item`.
 
-**`--%`.** Stripped from argv. The verbatim tail ends at an unquoted `|`, `&&`, `||` or newline (the 7.x tokenizer's
-boundaries; `;` and a quoted `"a|b"` stay in the tail), split at whitespace outside `"`; a word holding `%NAME%` is
-dynamic; what follows the boundary is parsed normally, so `git --% status && gh pr merge 7` denies.
+**`--%`.** Stripped from argv. The verbatim tail ends at a CR or LF, quoted or not, or at an unquoted `|`, `&&` or
+`||` (the 7.x tokenizer's boundaries; `;` and a quoted `"a|b"` stay in the tail), split at whitespace outside `"`; a
+word holding `"` is dynamic (its argv depends on the native-argument mode), and so is one holding `%NAME%`; what
+follows the boundary is parsed normally, so `git --% status && gh pr merge 7` denies.
 
 **Words.** `powershell.Word` keeps `Text`, `Static`, its quoting (bare, single, double, here-string), the parameter
 it binds to after cmdlet binding, its `,`-list group, and a known-variable mark. A word is static when it holds no

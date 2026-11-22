@@ -324,7 +324,13 @@ var parseTests = []struct {
 		"verbatim keeps semicolon and quoted pipe",
 		`git --% a; "b|c" d && gh pr merge 7`,
 		Unix,
-		calls{{"git", "a;", "b|c", "d"}, {"gh", "pr", "merge", "7"}},
+		calls{{"git", "a;", "$", "d"}, {"gh", "pr", "merge", "7"}},
+	},
+	{
+		"verbatim ends at a newline inside quotes",
+		"git --% \"x\ngit status\r\ngit --% a \"b\r\ngit diff",
+		Unix,
+		calls{{"git", "$"}, {"git", "status"}, {"git", "a", "$"}, {"git", "diff"}},
 	},
 	{
 		"verbatim or",
