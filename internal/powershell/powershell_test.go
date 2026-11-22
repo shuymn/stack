@@ -687,6 +687,8 @@ func TestParseFailure(t *testing.T) {
 		`gh pr merge 7 <# x`,
 		`gh pr merge 7 < in.txt`,
 		"gh pr merge 7; using namespace \"\ngit status",
+		`$x.M(}); git status`,
+		`[T]::M(]); git status`,
 	} {
 		if r := Parse(cmd, "", "", Unix); r.Err == nil || len(r.Calls) != 0 || len(r.Nested) != 0 {
 			t.Errorf(

@@ -294,7 +294,8 @@ rule's last clause becomes "(local paths in prose, Git Bash path forms, the Powe
 phase2-core §6, "Out of static scope" row, Where-it-appears cell replaced by: "`gh` aliases, `xargs`, scripts,
 `python -c`, `$VAR` words, `cat f \| gh … -F -`, the unparsable tail after a syntax error (secrets still scan it as
 text). `PowerShell`, all call rules: a script that fails to lex (secrets still scan it), constructs outside the
-recognizer's listed command positions (script blocks other than the listed ones), `cmd /c`, `Start-Process`, .NET/COM calls, splatting, variables other than the known
+recognizer's listed command positions (script blocks other than the listed ones, calls inside method-call
+arguments other than `$()`), `cmd /c`, `Start-Process`, .NET/COM calls, splatting, variables other than the known
 home and drive names; raw-merge and gh-publish: `gh` reached only through those; gh-publish: file-producing pipes
 (`Get-Content F \| gh … -F -`), a native `~` argument on Windows, `$env:USERPROFILE` in native argv on other hosts, cwd after `;`, `Push-Location` or a bare `cd`; rmroot: pipeline
 input to `Remove-Item`, globs (`C:\*`), provider-qualified, `\\?\`, UNC and non-FileSystem paths (`HKCU:\`),

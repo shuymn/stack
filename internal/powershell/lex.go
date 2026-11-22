@@ -425,6 +425,8 @@ func (p *parser) methodArgs() {
 		case c == ')':
 			p.pos++
 			return
+		case c == '}' || c == ']':
+			p.fail("unbalanced closing bracket in method arguments")
 		case c == '(':
 			p.methodArgs()
 		case p.has("@("):
