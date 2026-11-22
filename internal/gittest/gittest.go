@@ -367,3 +367,30 @@ func diff(before, after state) string {
 	}
 	return strings.Join(changed, "\n")
 }
+
+// Ops adapts a Repo to builders whose write, remove and git steps return errors, such as
+// extensions/jev/semantic's RepoOps. Write and Git fail the test as the Repo's own methods do;
+// Remove returns its error.
+type Ops struct{ Repo *Repo }
+
+// Write creates or replaces a work-tree file.
+func (o Ops) Write(name, content string) error {
+	o.Repo.tb.Helper()
+	o.Repo.Write(name, content)
+	return nil
+}
+
+// Remove deletes a work-tree file.
+func (o Ops) Remove(name string) error {
+	if err := os.Remove(filepath.Join(o.Repo.Dir, filepath.FromSlash(name))); err != nil {
+		return fmt.Errorf("remove %s: %w", name, err)
+	}
+	return nil
+}
+
+// Git runs git with the fixture check of Repo.Git.
+func (o Ops) Git(args ...string) error {
+	o.Repo.tb.Helper()
+	o.Repo.Git(args...)
+	return nil
+}

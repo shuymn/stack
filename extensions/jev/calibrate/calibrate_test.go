@@ -293,26 +293,6 @@ func TestCalibrate(t *testing.T) {
 	}
 }
 
-// gitOps builds a RepoSpec with gittest.
-type gitOps struct{ r *gittest.Repo }
-
-func (o gitOps) Write(name, content string) error {
-	o.r.Write(name, content)
-	return nil
-}
-
-func (o gitOps) Remove(name string) error {
-	if err := os.Remove(filepath.Join(o.r.Dir, filepath.FromSlash(name))); err != nil {
-		return fmt.Errorf("remove %s: %w", name, err)
-	}
-	return nil
-}
-
-func (o gitOps) Git(args ...string) error {
-	o.r.Git(args...)
-	return nil
-}
-
 // TestBuilders checks that jev-calibrate's own repository builder gives the bodies of the tests'
 // gittest repositories, whose dates differ, for every fixture.
 func TestBuilders(t *testing.T) {
@@ -332,7 +312,7 @@ func TestBuilders(t *testing.T) {
 		r := gittest.New(t)
 		r.Env = append(r.Env, "GIT_AUTHOR_DATE=2031-05-06T07:08:09Z",
 			"GIT_COMMITTER_DATE=2031-05-06T07:08:09Z")
-		if err := spec.Build(gitOps{r}); err != nil {
+		if err := spec.Build(gittest.Ops{Repo: r}); err != nil {
 			t.Fatal(err)
 		}
 		st, err := semantic.Prepare(t.Context(), semantic.Git{
@@ -467,7 +447,7 @@ func TestRefreshReplays(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := gittest.New(t)
-	if err := spec.Build(gitOps{r}); err != nil {
+	if err := spec.Build(gittest.Ops{Repo: r}); err != nil {
 		t.Fatal(err)
 	}
 	cutoff, err := strconv.ParseFloat(refreshCutoff, 64)

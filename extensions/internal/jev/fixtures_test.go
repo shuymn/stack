@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"maps"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -94,7 +93,7 @@ func TestFixturesPinned(t *testing.T) {
 			}
 			r := gittest.New(t)
 			r.Env = append(r.Env, "GIT_AUTHOR_DATE="+date, "GIT_COMMITTER_DATE="+date)
-			if err := spec.Build(gitOps{r}); err != nil {
+			if err := spec.Build(gittest.Ops{Repo: r}); err != nil {
 				t.Fatal(err)
 			}
 			st, err := semantic.Prepare(t.Context(), semantic.Git{
@@ -203,26 +202,6 @@ func checkRefit(t *testing.T, cases []calibrate.Case, table jev.Table, pending i
 	if string(refit) != string(committed) {
 		t.Fatalf("refit %s\ncommitted %s", refit, committed)
 	}
-}
-
-// gitOps builds a RepoSpec with gittest.
-type gitOps struct{ r *gittest.Repo }
-
-func (o gitOps) Write(name, content string) error {
-	o.r.Write(name, content)
-	return nil
-}
-
-func (o gitOps) Remove(name string) error {
-	if err := os.Remove(filepath.Join(o.r.Dir, filepath.FromSlash(name))); err != nil {
-		return fmt.Errorf("remove %s: %w", name, err)
-	}
-	return nil
-}
-
-func (o gitOps) Git(args ...string) error {
-	o.r.Git(args...)
-	return nil
 }
 
 func TestCalibrationGate(t *testing.T) {

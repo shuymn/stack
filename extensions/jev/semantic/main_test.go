@@ -107,18 +107,15 @@ func buildBinaries() func() {
 	built.semantic = filepath.Join(dir, "stack-jev-semantic"+exe)
 	built.committed = filepath.Join(dir, "committed")
 	committedBin := filepath.Join(built.committed, "stack-jev-semantic"+exe)
-	ldflags := "-X github.com/shuymn/stack/extensions/internal/jev.endpoint=" + fake.server.URL +
-		" -X github.com/shuymn/stack/extensions/jev/semantic.testCutoffs=" +
+	endpoint := "-X github.com/shuymn/stack/extensions/internal/jev.endpoint=" + fake.server.URL
+	ldflags := endpoint + " -X github.com/shuymn/stack/extensions/jev/semantic.testCutoffs=" +
 		MetaDuty + "=" + testCutoffValue + "," + Unsupported + "=" + testCutoffValue
 	env := gittest.CleanEnv(os.Environ())
 	for _, c := range [][]string{
 		{"build", "-o", built.stack, "../../../cmd/stack"},
 		{"build", "-o", built.public, "../../public/cmd/stack-public"},
 		{"build", "-ldflags", ldflags, "-o", built.semantic, "./cmd/stack-jev-semantic"},
-		{
-			"build", "-ldflags", "-X github.com/shuymn/stack/extensions/internal/jev.endpoint=" +
-				fake.server.URL, "-o", committedBin, "./cmd/stack-jev-semantic",
-		},
+		{"build", "-ldflags", endpoint, "-o", committedBin, "./cmd/stack-jev-semantic"},
 	} {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		cmd := exec.CommandContext(ctx, "go", c...)
@@ -140,30 +137,10 @@ func needBuilt(t *testing.T) {
 	}
 }
 
-// gitOps builds a RepoSpec with gittest.
-type gitOps struct{ r *gittest.Repo }
-
-func (o gitOps) Write(name, content string) error {
-	o.r.Write(name, content)
-	return nil
-}
-
-func (o gitOps) Remove(name string) error {
-	if err := os.Remove(filepath.Join(o.r.Dir, filepath.FromSlash(name))); err != nil {
-		return fmt.Errorf("remove %s: %w", name, err)
-	}
-	return nil
-}
-
-func (o gitOps) Git(args ...string) error {
-	o.r.Git(args...)
-	return nil
-}
-
 func buildRepo(t *testing.T, spec RepoSpec) *gittest.Repo {
 	t.Helper()
 	r := gittest.New(t)
-	if err := spec.Build(gitOps{r}); err != nil {
+	if err := spec.Build(gittest.Ops{Repo: r}); err != nil {
 		t.Fatal(err)
 	}
 	return r
