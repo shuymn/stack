@@ -32,6 +32,31 @@ func TestParseCwdGrowth(t *testing.T) {
 	}
 }
 
+// TestParseCwdBudgetInBlocks checks that the lookahead over a block spends no cd steps of its own:
+// an inert block leaves the budget whole, and an executed one counts its steps once.
+func TestParseCwdBudgetInBlocks(t *testing.T) {
+	sep := string(filepath.Separator)
+	gitCwd := func(cmd string) string {
+		t.Helper()
+		r := Parse(cmd, "/w", "", Unix)
+		for _, c := range r.Calls {
+			if c.Is("git") {
+				return c.Cwd
+			}
+		}
+		t.Fatalf("no git call in %q (err %v)", cmd, r.Err)
+		return ""
+	}
+	inert := "$p = { " + strings.Repeat("cd x && ", maxCdSteps) + "'done' }; cd sub && git status"
+	if got, want := gitCwd(inert), "/w"+sep+"sub"; got != want {
+		t.Errorf("after an inert block: git cwd = %q, want %q", got, want)
+	}
+	executed := "& { " + strings.Repeat("cd x && ", 20) + "git status }"
+	if got, want := gitCwd(executed), "/w"+strings.Repeat(sep+"x", 20); got != want {
+		t.Errorf("inside an executed block: git cwd = %q, want %q", got, want)
+	}
+}
+
 // TestParseDeepNesting checks that every recursion path spends the one nesting budget, so a hostile
 // command fails open (no calls) instead of growing the stack with its length.
 func TestParseDeepNesting(t *testing.T) {

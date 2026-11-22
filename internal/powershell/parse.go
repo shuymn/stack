@@ -370,13 +370,15 @@ func (p *parser) opaqueDefinition() {
 	}
 }
 
-// quietly runs f inside an opaque context.
+// quietly runs f inside an opaque context. f gets a cd-step budget of its own, and the caller's
+// cwd state is restored after it.
 func (p *parser) quietly(f func()) {
-	moved, cwd := p.moved, p.cwd
+	moved, cwd, steps := p.moved, p.cwd, p.cdSteps
+	p.cdSteps = 0
 	p.quiet++
 	f()
 	p.quiet--
-	p.moved, p.cwd = moved, cwd
+	p.moved, p.cwd, p.cdSteps = moved, cwd, steps
 }
 
 // block lexes a `{…}` at pos without recording anything and returns its body range and whether it
@@ -387,13 +389,12 @@ func (p *parser) block() (int, int, bool) {
 	}
 	p.pos++
 	start := p.pos
-	savedMoved, savedCwd := p.moved, p.cwd
-	p.moved = false
-	p.quiet++
-	p.statements('}')
-	p.quiet--
-	moved := p.moved
-	p.moved, p.cwd = savedMoved, savedCwd
+	moved := false
+	p.quietly(func() {
+		p.moved = false
+		p.statements('}')
+		moved = p.moved
+	})
 	end := p.pos
 	p.pos++
 	return start, end, moved
