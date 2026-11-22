@@ -444,7 +444,7 @@ var parseTests = []struct {
 		"native wildcard dynamic on unix",
 		"git add *.txt a?b [x]y '*.q' \"*.d\" a`*b; Remove-Item *.txt",
 		Unix,
-		calls{{"git", "add", "$", "$", "$", "*.q", "*.d", "a*b"}, {"Remove-Item", "*.txt"}},
+		calls{{"git", "add", "$", "$", "$", "*.q", "*.d", "$"}, {"Remove-Item", "*.txt"}},
 	},
 	{
 		"native wildcard static on windows",
@@ -469,6 +469,18 @@ var parseTests = []struct {
 		`gh pr view ('abc').Length $(1)[0] @(2)::X (7)--help`,
 		Unix,
 		calls{{"gh", "pr", "view", "$", "$", "$", "$", "--help"}},
+	},
+	{
+		"end of parameters in an executing cmdlet",
+		`1 | ForEach-Object -- { git status }`,
+		Unix,
+		calls{{"ForEach-Object", "--", "{}"}, {"git", "status"}},
+	},
+	{
+		"verbatim smart double quotes",
+		"git --% log “text | git status # ” x „a”",
+		Unix,
+		calls{{"git", "log", "$", "x", "$"}},
 	},
 	{
 		"keyword prefix is a command",

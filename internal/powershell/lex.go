@@ -12,6 +12,8 @@ import (
 var (
 	singleQuotes = []string{"'", "‘", "’"}
 	doubleQuotes = []string{`"`, "“", "”"}
+	// verbatimQuotes are the double quotes PowerShell's `--%` tokenizer tracks.
+	verbatimQuotes = []string{`"`, "“", "”", "„"}
 )
 
 var (
@@ -511,6 +513,8 @@ func (p *parser) argWord(kind Kind) Word {
 			if p.eof() {
 				p.fail("trailing backtick")
 			}
+			// The native binder globs the unescaped bareword, so an escaped wildcard counts.
+			b.glob = b.glob || strings.IndexByte("*?[", p.peek()) >= 0
 			p.char(&b)
 		case '$':
 			p.dollar(&b, false)
@@ -553,9 +557,12 @@ func (p *parser) verbatim() []Word {
 		if c == '\n' || c == '\r' || (!quoted && (c == '|' || p.has("&&"))) {
 			break
 		}
+		if n := p.quoteAt(verbatimQuotes); n > 0 {
+			quoted, hadQuote, have = !quoted, true, true
+			p.pos += n
+			continue
+		}
 		switch {
-		case c == '"':
-			quoted, hadQuote = !quoted, true
 		case !quoted && isBlank(c):
 			flush()
 			p.pos++
