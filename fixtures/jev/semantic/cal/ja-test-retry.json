@@ -14,7 +14,7 @@
               },
               "unsupported_claim": {
                 "type": "noul",
-                "noul": 0.08
+                "noul": 0.09
               }
             },
             "usage": {
@@ -69,11 +69,11 @@
     "sha256:2cd35e59fd4d1080dfe77c58ad09f373d9f8018bfcead0cd6ca99289db6f5d72": {
       "meta_duty_regression": [
         0.1,
-        0.1,
-        0.08
+        0.09,
+        0.09
       ],
       "unsupported_claim": [
-        0.08,
+        0.09,
         0.08,
         0.09
       ]

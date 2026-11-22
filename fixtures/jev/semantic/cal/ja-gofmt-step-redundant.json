@@ -14,7 +14,7 @@
               },
               "unsupported_claim": {
                 "type": "noul",
-                "noul": 0.21
+                "noul": 0.24
               }
             },
             "usage": {
@@ -74,9 +74,9 @@
         0.04
       ],
       "unsupported_claim": [
+        0.24,
         0.21,
-        0.2,
-        0.21
+        0.18
       ]
     }
   }

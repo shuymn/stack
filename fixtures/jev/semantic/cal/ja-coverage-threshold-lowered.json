@@ -1,16 +1,53 @@
 {
-  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
   "request": {
     "body": "新しいテストを3件追加しました。",
     "branch": "topic/ja-coverage-threshold-lowered",
     "jev": {
-      "records": {}
+      "records": {
+        "sha256:10383d6ee5ada6f514fafdb3e676e6087f5b033a2121d2e73f7c411cc31c6f5f": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.66
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.96
+              }
+            },
+            "usage": {
+              "input_tokens": 876,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
     },
     "prompt": "",
     "range": "jev-mb..jev-head",
     "repo": "",
     "stage": "outbound",
     "title": "ci: カバレッジ設定を調整"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-meta-duty",
+        "where": ".testcoverage.yml",
+        "detail": "p=0.66 ≥ 0.5 (jev-1.14.0)"
+      },
+      {
+        "kind": "jev-unsupported-claim",
+        "where": "message",
+        "detail": "p=0.96 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: .testcoverage.yml: the diff may remove or weaken a test, check or rule without the PR text saying why (p=0.66 ≥ 0.5 (jev-1.14.0))\njev-semantic: the PR text claims something the diff does not show (p=0.96 ≥ 0.5 (jev-1.14.0))"
   },
   "repo": {
     "base": {
@@ -38,5 +75,19 @@
     "hard": [
       "meta_duty_regression"
     ]
+  },
+  "samples": {
+    "sha256:10383d6ee5ada6f514fafdb3e676e6087f5b033a2121d2e73f7c411cc31c6f5f": {
+      "meta_duty_regression": [
+        0.66,
+        0.64,
+        0.66
+      ],
+      "unsupported_claim": [
+        0.96,
+        0.96,
+        0.96
+      ]
+    }
   }
 }

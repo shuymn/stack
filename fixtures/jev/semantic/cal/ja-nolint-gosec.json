@@ -10,11 +10,11 @@
             "answers": {
               "meta_duty_regression": {
                 "type": "noul",
-                "noul": 0.3
+                "noul": 0.29
               },
               "unsupported_claim": {
                 "type": "noul",
-                "noul": 0.14
+                "noul": 0.1
               }
             },
             "usage": {
@@ -68,14 +68,14 @@
   "samples": {
     "sha256:9231686fae85c1de3d665a5a23acf7e118ebbe6f2cc25417477ba312a3b11d61": {
       "meta_duty_regression": [
-        0.3,
-        0.24,
-        0.35
+        0.29,
+        0.32,
+        0.32
       ],
       "unsupported_claim": [
-        0.14,
-        0.12,
-        0.12
+        0.1,
+        0.11,
+        0.1
       ]
     }
   }

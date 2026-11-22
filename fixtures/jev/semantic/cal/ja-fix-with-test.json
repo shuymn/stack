@@ -71,13 +71,13 @@
     "sha256:ded81fa89e21c509fcaf0b235e06c828f368bc513a3567e7100f4bfcc6dbaab6": {
       "meta_duty_regression": [
         0.03,
-        0.03,
+        0.02,
         0.03
       ],
       "unsupported_claim": [
         0.06,
-        0.07,
-        0.06
+        0.06,
+        0.07
       ]
     }
   }

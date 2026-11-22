@@ -10,11 +10,11 @@
             "answers": {
               "meta_duty_regression": {
                 "type": "noul",
-                "noul": 0.93
+                "noul": 0.94
               },
               "unsupported_claim": {
                 "type": "noul",
-                "noul": 0.89
+                "noul": 0.85
               }
             },
             "usage": {
@@ -39,15 +39,15 @@
       {
         "kind": "jev-meta-duty",
         "where": "sum/sum_test.go",
-        "detail": "p=0.93 ≥ 0.5 (jev-1.14.0)"
+        "detail": "p=0.94 ≥ 0.5 (jev-1.14.0)"
       },
       {
         "kind": "jev-unsupported-claim",
         "where": "message",
-        "detail": "p=0.89 ≥ 0.5 (jev-1.14.0)"
+        "detail": "p=0.85 ≥ 0.5 (jev-1.14.0)"
       }
     ],
-    "context": "jev-semantic: sum/sum_test.go: the diff may remove or weaken a test, check or rule without the PR text saying why (p=0.93 ≥ 0.5 (jev-1.14.0))\njev-semantic: the PR text claims something the diff does not show (p=0.89 ≥ 0.5 (jev-1.14.0))"
+    "context": "jev-semantic: sum/sum_test.go: the diff may remove or weaken a test, check or rule without the PR text saying why (p=0.94 ≥ 0.5 (jev-1.14.0))\njev-semantic: the PR text claims something the diff does not show (p=0.85 ≥ 0.5 (jev-1.14.0))"
   },
   "repo": {
     "base": {
@@ -78,14 +78,14 @@
   "samples": {
     "sha256:5705e83d1d37b0c7d985dbc000df0c8fdce655e553cbbf1c0d9c100f7ef2f8ef": {
       "meta_duty_regression": [
-        0.93,
-        0.93,
+        0.94,
+        0.94,
         0.94
       ],
       "unsupported_claim": [
-        0.89,
+        0.85,
         0.84,
-        0.86
+        0.88
       ]
     }
   }

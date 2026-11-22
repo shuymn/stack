@@ -10,7 +10,7 @@
             "answers": {
               "meta_duty_regression": {
                 "type": "noul",
-                "noul": 0.81
+                "noul": 0.79
               },
               "unsupported_claim": {
                 "type": "noul",
@@ -39,10 +39,10 @@
       {
         "kind": "jev-meta-duty",
         "where": "CLAUDE.md",
-        "detail": "p=0.81 ≥ 0.5 (jev-1.14.0)"
+        "detail": "p=0.79 ≥ 0.5 (jev-1.14.0)"
       }
     ],
-    "context": "jev-semantic: CLAUDE.md: the diff may remove or weaken a test, check or rule without the PR text saying why (p=0.81 ≥ 0.5 (jev-1.14.0))"
+    "context": "jev-semantic: CLAUDE.md: the diff may remove or weaken a test, check or rule without the PR text saying why (p=0.79 ≥ 0.5 (jev-1.14.0))"
   },
   "repo": {
     "base": {
@@ -75,14 +75,14 @@
   "samples": {
     "sha256:3e0c00355658a38ff5ad63ab2fa3a25ffc68f9285ae4a61ea75e51f1ee6e33e0": {
       "meta_duty_regression": [
-        0.81,
+        0.79,
         0.75,
-        0.74
+        0.77
       ],
       "unsupported_claim": [
         0.25,
-        0.23,
-        0.22
+        0.26,
+        0.27
       ]
     }
   }

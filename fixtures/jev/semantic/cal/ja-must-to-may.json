@@ -10,11 +10,11 @@
             "answers": {
               "meta_duty_regression": {
                 "type": "noul",
-                "noul": 0.92
+                "noul": 0.93
               },
               "unsupported_claim": {
                 "type": "noul",
-                "noul": 0.27
+                "noul": 0.29
               }
             },
             "usage": {
@@ -39,10 +39,10 @@
       {
         "kind": "jev-meta-duty",
         "where": "AGENTS.md",
-        "detail": "p=0.92 ≥ 0.5 (jev-1.14.0)"
+        "detail": "p=0.93 ≥ 0.5 (jev-1.14.0)"
       }
     ],
-    "context": "jev-semantic: AGENTS.md: the diff may remove or weaken a test, check or rule without the PR text saying why (p=0.92 ≥ 0.5 (jev-1.14.0))"
+    "context": "jev-semantic: AGENTS.md: the diff may remove or weaken a test, check or rule without the PR text saying why (p=0.93 ≥ 0.5 (jev-1.14.0))"
   },
   "repo": {
     "base": {
@@ -75,14 +75,14 @@
   "samples": {
     "sha256:7ba13ab0a93ccbcada1b372f1f41748ec0a1cb4a5ec04e18c65bc942841d1435": {
       "meta_duty_regression": [
-        0.92,
+        0.93,
         0.94,
-        0.92
+        0.93
       ],
       "unsupported_claim": [
-        0.27,
-        0.3,
-        0.31
+        0.29,
+        0.33,
+        0.3
       ]
     }
   }

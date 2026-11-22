@@ -10,7 +10,7 @@
             "answers": {
               "meta_duty_regression": {
                 "type": "noul",
-                "noul": 0.9
+                "noul": 0.92
               },
               "unsupported_claim": {
                 "type": "noul",
@@ -39,10 +39,10 @@
       {
         "kind": "jev-meta-duty",
         "where": "rules/deny.txt",
-        "detail": "p=0.9 ≥ 0.5 (jev-1.14.0)"
+        "detail": "p=0.92 ≥ 0.5 (jev-1.14.0)"
       }
     ],
-    "context": "jev-semantic: rules/deny.txt: the diff may remove or weaken a test, check or rule without the PR text saying why (p=0.9 ≥ 0.5 (jev-1.14.0))"
+    "context": "jev-semantic: rules/deny.txt: the diff may remove or weaken a test, check or rule without the PR text saying why (p=0.92 ≥ 0.5 (jev-1.14.0))"
   },
   "repo": {
     "base": {
@@ -75,13 +75,13 @@
   "samples": {
     "sha256:c7eb291b2988c1dec97be9a9478c64d8e2665de23449c261b6bd56a4457e2a8e": {
       "meta_duty_regression": [
-        0.9,
-        0.9,
+        0.92,
+        0.91,
         0.91
       ],
       "unsupported_claim": [
         0.15,
-        0.15,
+        0.14,
         0.15
       ]
     }

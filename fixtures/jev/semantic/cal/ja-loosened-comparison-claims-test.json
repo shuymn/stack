@@ -10,11 +10,11 @@
             "answers": {
               "meta_duty_regression": {
                 "type": "noul",
-                "noul": 0.49
+                "noul": 0.48
               },
               "unsupported_claim": {
                 "type": "noul",
-                "noul": 0.91
+                "noul": 0.9
               }
             },
             "usage": {
@@ -39,10 +39,10 @@
       {
         "kind": "jev-unsupported-claim",
         "where": "message",
-        "detail": "p=0.91 ≥ 0.5 (jev-1.14.0)"
+        "detail": "p=0.9 ≥ 0.5 (jev-1.14.0)"
       }
     ],
-    "context": "jev-semantic: the PR text claims something the diff does not show (p=0.91 ≥ 0.5 (jev-1.14.0))"
+    "context": "jev-semantic: the PR text claims something the diff does not show (p=0.9 ≥ 0.5 (jev-1.14.0))"
   },
   "repo": {
     "base": {
@@ -77,14 +77,14 @@
   "samples": {
     "sha256:9b79b606da8019bf55cae1c73cae4ae59e5de69710cb50366f0f230e0518ac79": {
       "meta_duty_regression": [
-        0.49,
-        0.55,
-        0.45
+        0.48,
+        0.46,
+        0.43
       ],
       "unsupported_claim": [
-        0.91,
-        0.93,
-        0.92
+        0.9,
+        0.9,
+        0.91
       ]
     }
   }

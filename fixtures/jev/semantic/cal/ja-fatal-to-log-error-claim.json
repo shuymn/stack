@@ -1,16 +1,53 @@
 {
-  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
   "request": {
     "body": "Pop が空のときにエラーを返すようにしました。",
     "branch": "topic/ja-fatal-to-log-error-claim",
     "jev": {
-      "records": {}
+      "records": {
+        "sha256:a31902ee0f211135b29c78e26084fa4d18ce221717a09a18b8ca3d5c7c0b8d37": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "meta_duty_regression": {
+                "type": "noul",
+                "noul": 0.69
+              },
+              "unsupported_claim": {
+                "type": "noul",
+                "noul": 0.75
+              }
+            },
+            "usage": {
+              "input_tokens": 913,
+              "output_tokens": 42
+            }
+          }
+        }
+      }
     },
     "prompt": "",
     "range": "jev-mb..jev-head",
     "repo": "",
     "stage": "outbound",
     "title": "test: テストのログ出力を改善"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-meta-duty",
+        "where": "queue/queue_test.go",
+        "detail": "p=0.69 ≥ 0.5 (jev-1.14.0)"
+      },
+      {
+        "kind": "jev-unsupported-claim",
+        "where": "message",
+        "detail": "p=0.75 ≥ 0.5 (jev-1.14.0)"
+      }
+    ],
+    "context": "jev-semantic: queue/queue_test.go: the diff may remove or weaken a test, check or rule without the PR text saying why (p=0.69 ≥ 0.5 (jev-1.14.0))\njev-semantic: the PR text claims something the diff does not show (p=0.75 ≥ 0.5 (jev-1.14.0))"
   },
   "repo": {
     "base": {
@@ -40,5 +77,19 @@
       "meta_duty_regression"
     ],
     "group": "empty-pop"
+  },
+  "samples": {
+    "sha256:a31902ee0f211135b29c78e26084fa4d18ce221717a09a18b8ca3d5c7c0b8d37": {
+      "meta_duty_regression": [
+        0.69,
+        0.65,
+        0.68
+      ],
+      "unsupported_claim": [
+        0.75,
+        0.72,
+        0.7
+      ]
+    }
   }
 }

@@ -75,8 +75,8 @@
     "sha256:96159c8759b4ee02bf4d1d79068ec6ba24ad1851b372c44742075096d760a103": {
       "meta_duty_regression": [
         0.14,
-        0.11,
-        0.14
+        0.12,
+        0.12
       ],
       "unsupported_claim": [
         0.98,
