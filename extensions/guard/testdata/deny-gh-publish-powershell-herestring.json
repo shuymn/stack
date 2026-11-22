@@ -1,0 +1,13 @@
+{
+  "session_id": "0b9c6f7e-3d1a-4c2b-9f5e-8a7d6c5b4a39",
+  "transcript_path": "@@HOME@@/.claude/projects/-work-app/0b9c6f7e-3d1a-4c2b-9f5e-8a7d6c5b4a39.jsonl",
+  "cwd": "@@CWD@@",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "PowerShell",
+  "tool_input": {
+    "command": "@'\nReproduced with the log at @@LOCAL@@/run.log\n'@ | gh -R o/r issue comment 12 -F -",
+    "description": "Comment on the issue"
+  },
+  "tool_use_id": "toolu_010000000000000000000033"
+}

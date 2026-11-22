@@ -1,14 +1,14 @@
 # PowerShell Guard Design: Shell Rules for the `PowerShell` Tool
 
-Design for issue #44, against `docs/design/phase2-core.md` (§0, §2.3, §3, §4.3, §6) and `docs/design/core-stages.md`
-(§4.5, §4.10) at `ccba4e2`. Design only: the implementation PR applies the doc changes of §8 and the code of §6.
+Design for issue #44: the core hook judges raw merges, and `stack-guard` judges secrets, gh-publish and rmroot, for
+the `PowerShell` tool as for `Bash`. It extends `docs/design/phase2-core.md` (§2.3, §3, §4.3, §6) and
+`docs/design/core-stages.md` (§4.5); those documents state the resulting contracts (§8 here).
 
 ## 1. Purpose
 
-Both PreToolUse deciders return early for any tool other than `Bash` (`internal/guard/guard.go` `Decide`;
-`extensions/guard/guard.go` `Decide` has no `PowerShell` case). A session can offer both the `Bash` tool and the
-`PowerShell` tool, so a command denied through `Bash` (a secret read, a local path published through `gh`, a raw
-`gh pr merge`, a recursive delete of home or a drive root) passes through `PowerShell`. This design extends the
+A session can offer both the `Bash` tool and the `PowerShell` tool. A hook that judged only `Bash` would let
+a command denied through `Bash` (a secret read, a local path published through `gh`, a raw `gh pr merge`, a recursive
+delete of home or a drive root) pass through `PowerShell`. This design extends the
 raw-merge, secrets, gh-publish and rmroot rules to `PowerShell` with the same rule IDs and reason prefixes and the
 same hard-boundary policy: near-zero false positives, irreversible hazards only, fail open.
 
@@ -19,7 +19,7 @@ Linux, macOS and WSL where Claude Code enables it, per Claude Code's tools refer
 `stack-observe` replay; the matcher change in dotfiles (stated here, made there).
 
 Out of scope: a full PowerShell parser (issue #44); `CLAUDE_ENV_FILE`/`STACK_SESSION_ID` in PowerShell-only
-sessions (issue #44); the pencil rule (not a shell rule); every construct §8's "Out of static scope" text lists.
+sessions (issue #44); the pencil rule (not a shell rule); every construct that phase2-core §6 "Out of static scope" lists.
 
 **Tool input.** No recorded PowerShell call exists in this repository's testdata. Claude Code's hooks reference
 documents `tool_input.command` for `PowerShell`; the schema in the installed Claude Code 2.1.x also has `timeout`,
@@ -51,7 +51,7 @@ parsed AST (a third option with no child process). A binding or provider disagre
 the AST and is fixed in the rule, not the parser.
 
 **Boundary rule.** The recognizer judges a finite, named list of command positions and operand forms: the ones
-this section and §4 list. Everything else is opaque and fails open (no call, no operand), and §8's "Out of static
+this section and §4 list. Everything else is opaque and fails open (no call, no operand), and phase2-core §6 "Out of static
 scope" text names the opaque categories. A missed construct is added only by extending this list with its own paired
 tests, never by widening a general rule.
 
@@ -186,7 +186,10 @@ unknown (W3), with no home substituted.
 
 A cmdlet-kind `Remove-Item` call (name or alias, module-qualified or not) with `-Recurse` effective denies, on
 every host, when a path operand is the home directory, a drive root or an existing `.git` directory. The `.git` case
-extends issue #44's list to the full rmroot boundary of AGENTS.md (same rule, same reason). A native `rm` (`rm` on
+extends issue #44's list to the full rmroot boundary of AGENTS.md (same rule, same reason). The operand, after its
+trailing separators and terminal `.` components are trimmed, must end in a `.git` component that `Lstat` finds to be
+a directory; `..` is not collapsed (through a symlink a lexical collapse can name another directory), so forms such
+as `.git/hooks/..` are not judged, and `.git/.` checks a `.git` symlink itself, not its target. A native `rm` (`rm` on
 non-Windows hosts, `/bin/rm`, `rm.exe`, any explicit path) goes through the Bash `rmArgs`/`rootKind` matcher with
 native argv semantics, since it is the binary the Bash rule guards: home-form known variables reach it substituted;
 on non-Windows an unquoted leading `~` is home and a quoted `'~'` is literal; on Windows a quoted `'~'` is literal
@@ -208,9 +211,13 @@ PowerShell expands it.
   equal to the payload home under the host comparison. `'$HOME'` is a directory named `$HOME` and passes.
 - **Drive roots (Windows):** `C:\`, `C:/`, `c:\.`, and bare `\`, `/`, `\.`, `/.` (the root of the current drive,
   whatever that drive is, so a root even with an unknown cwd; a non-FileSystem current location is out of scope, and
-  a script that runs `New-PSDrive` leaves bare roots opaque, since the current drive may then be a custom one; this
-  also skips a bare root that is still on the OS volume, a limitation kept for the no-false-positive rule), and
-  `$env:SystemDrive\`, `${env:SystemDrive}\` (recognised symbolically). `C:` alone is the current directory of drive C
+  a script that runs `New-PSDrive` (`ndr`) leaves bare roots opaque, since the current drive may then be a custom one;
+  this also skips a bare root that is still on the OS volume, a limitation kept for the no-false-positive rule), and
+  `$env:SystemDrive\`, `${env:SystemDrive}\` (recognised symbolically). A drive the script declares with a static
+  `New-PSDrive -Name X` is a custom drive, so paths on `X:` are opaque, as resolved operands (a relative one under a
+  cwd on `X:` too); a name that is not static makes every letter opaque, and a call pwsh refuses to bind declares
+  nothing. Declarations are collected script-wide, not in statement order, so a later declaration also makes an
+  earlier `X:\` opaque. Another volume's root (`C:\`) still denies. `C:` alone is the current directory of drive C
   and is not judged.
 - **Allowed:** `Remove-Item -Recurse .\build`, `Remove-Item -Recurse .\build ~` (two positionals: pwsh refuses it),
   `Remove-Item ~\x -Recurse`, `Remove-Item C:\` without `-Recurse`, `Remove-Item -Recurse .git\hooks`, a worktree's
@@ -279,36 +286,16 @@ Every allow case is paired with a deny fixture that differs only in the behaviou
 | C9 | When observe scans `PowerShell` tool calls, it shall replay each through both hooks like a `Bash` call. | §6 observe | `observe.TestReplayRealHook`: a transcript with a core-only PowerShell deny (raw-merge) and an extension-only one (rmroot), both matched; exact `Compared` and `Unrecoverable` totals; a `{}` input counted as not replayable with no hook invocation |
 | C10 | `paths.ResolvePowerShell` and the `windows`-flagged `Norm`/`Same` shall resolve PowerShell paths without Git Bash forms. | §6 | `paths.TestResolvePowerShell`: relative join opens the real file on every OS; Windows `\x` on the cwd's drive, unknown without one; `C:x` unknown; `/c` with cwd `D:\work` resolves to `D:\c` on Windows (not drive C); `C:\Users\<Name>` ≡ `c:/users/<name>` only with `windows` |
 
-## 8. Doc updates the implementation PR makes
+## 8. Where the contracts are stated
 
-phase2-core §2.3, **Hook scope** paragraph, replaced by: "**Hook scope.** The shell rules apply to Claude Code's
-`Bash` and `PowerShell` tools. `PowerShell` commands are judged by raw-merge, secrets, gh-publish and rmroot through
-the bounded PowerShell recognizer of `docs/design/powershell-guard.md` (§3 there), not a PowerShell parser: a command
-outside its subset is skipped by the call-based rules, and a command it cannot lex is judged by secrets only. Without
-Git Bash the SessionStart hook receives no `CLAUDE_ENV_FILE`, so `STACK_SESSION_ID` is unset and `kit open` takes its
-unrecorded path (§4.1). File-tool rules (`Read`, `Grep`, …) apply on every OS."
-
-phase2-core §3, new Library Choices row: "| PowerShell command analysis | hand-written recognizer
-(`internal/powershell`) | pwsh's `Parser.ParseInput` in a child process; `mvdan.cc/sh` | Approved exception to the
-parser rule: PowerShell's parser exists only inside pwsh, a process start per hook call and a runtime dependency;
-bash parsing misreads backticks, `&` and script blocks. The recognizer tokenizes as PowerShell does, judges only
-listed command positions, fails open, and is checked against PowerShell 5.1 and 7 (powershell-guard §3). |", and the
-rule's last clause becomes "(local paths in prose, Git Bash path forms, the PowerShell subset)".
-
-phase2-core §6, "Out of static scope" row, Where-it-appears cell replaced by: "`gh` aliases, `xargs`, scripts,
-`python -c`, `$VAR` words, `cat f \| gh … -F -`, the unparsable tail after a syntax error (secrets still scan it as
-text). `PowerShell`, all call rules: a script that fails to lex (secrets still scan it), constructs outside the
-recognizer's listed command positions (script blocks other than the listed ones, calls inside method-call
-arguments other than `$()`), `cmd /c`, `Start-Process`, .NET/COM calls, splatting, variables other than the known
-home and drive names; raw-merge and gh-publish: `gh` reached only through those; gh-publish: file-producing pipes
-(`Get-Content F \| gh … -F -`), a native `~` argument on Windows, `$env:USERPROFILE` in native argv on other hosts, cwd after `;`, `Push-Location` or a bare `cd`; rmroot: pipeline
-input to `Remove-Item`, globs (`C:\*`), provider-qualified, `\\?\`, UNC and non-FileSystem paths (`HKCU:\`),
-`-LiteralPath '~'` until W3, an unquoted native `~` on Windows until W3, bare roots after `New-PSDrive`; secrets: deliberate obfuscation (backtick in a name, built strings)"; Coverage cell
-"documented, not guarded (§0.4, §2.3)".
-
-phase2-core §4.3: the Tools column adds `PowerShell` to secrets, gh publish, raw merge and rmroot with a pointer to
-powershell-guard §4, and the settings-wiring line adds `PowerShell`. core-stages §4.5: the matcher and the import
-allow list (§6). phase3-cycle §3.3: the replayed tool list adds `PowerShell`.
+- phase2-core §2.3 **Hook scope**: both shell tools, the recognizer instead of a parser, the SessionStart limits
+  without Git Bash.
+- phase2-core §3 Library Choices: the PowerShell row, the approved exception to the parser rule.
+- phase2-core §4.3: the `PowerShell` tool in the secrets, gh-publish, raw-merge and rmroot rows and in the settings
+  wiring; the rmroot row keeps Git Bash path semantics to `Bash` and points here (§4.4) for `PowerShell`.
+- phase2-core §6 "Out of static scope": the per-rule list of PowerShell forms that are not judged.
+- core-stages §4.5: which hook owns which rule, both matchers, the import allow list.
+- phase3-cycle §3.3: `PowerShell` among the replayed tools.
 
 ## 9. Test plan and risks
 

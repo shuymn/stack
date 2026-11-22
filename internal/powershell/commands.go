@@ -45,6 +45,7 @@ var aliases = map[string]alias{
 	"dir":     {"Get-ChildItem", false},
 	"ls":      {"Get-ChildItem", true},
 	"gm":      {"Get-Member", false},
+	"ndr":     {"New-PSDrive", false},
 }
 
 // verbs are the approved verbs plus ForEach and Where, so `Verb-Noun` names a cmdlet.
@@ -68,7 +69,7 @@ var canonical = func() map[string]string {
 	m := map[string]string{}
 	for n := range strings.FieldsSeq(`Remove-Item Set-Location Push-Location Pop-Location
 		Invoke-Command Invoke-Expression ForEach-Object Where-Object Set-Variable Set-Item
-		Write-Output Get-Content Start-Job Get-Member`) {
+		Write-Output Get-Content Start-Job Get-Member New-PSDrive`) {
 		m[strings.ToLower(n)] = n
 	}
 	return m
@@ -188,6 +189,14 @@ var (
 				param{"Path", nil, false}, literalPath,
 				param{"PassThru", nil, true}, param{"StackName", nil, false}),
 			positional: []string{"Path"},
+		},
+		"New-PSDrive": {
+			params: withCommon(true,
+				param{"Name", nil, false}, param{"PSProvider", []string{"PSP"}, false},
+				param{"Root", nil, false}, param{"Description", nil, false},
+				param{"Scope", nil, false}, param{"Persist", nil, true},
+				param{"Credential", nil, false}),
+			positional: []string{"Name", "PSProvider", "Root", "Description"},
 		},
 		"Invoke-Expression": {
 			params:     withCommon(false, param{"Command", nil, false}),

@@ -257,26 +257,29 @@ private to `extensions/`); `stack-guard` and `stack-public` share `publictext`. 
 ### 4.5 `stack-guard` (bundled hook)
 
 `extensions/guard`, binary `stack-guard`, run by Claude Code as `stack-guard hook claude pre-tool-use`, wired in the
-owner's settings as its own `PreToolUse` entry with matcher `Bash|Read|NotebookRead|Grep|Glob|mcp__pencil__execute`,
-exec form, `timeout: 5`, `onFailure: "continue"`. It is a hook bundled with this repository, not a stage
-extension: invoked without arguments it prints usage and exits 2, so a `guard` name put in `[stages]` by mistake
-shows up as a `warn`. It holds the secrets, gh-publish, rmroot and pencil rules of `docs/design/phase2-core.md`
-§4.3 unchanged in what they deny, in that order, fails open like the core hook (`hookio`), and reads
-`~/.config/stack/safety.toml` (§4.6). Its deny reasons start with `stack-guard (<rule>): `, distinct from the core
-hook's `stack guard (raw-merge): `, so a live session shows which hook denied.
+owner's settings as its own `PreToolUse` entry with matcher
+`Bash|PowerShell|Read|NotebookRead|Grep|Glob|mcp__pencil__execute`, exec form, `timeout: 5`, `onFailure:
+"continue"`. It is a hook bundled with this repository, not a stage extension: invoked without arguments it prints
+usage and exits 2, so a `guard` name put in `[stages]` by mistake shows up as a `warn`. It holds the rules of
+`docs/design/phase2-core.md` §4.3 other than raw-merge, unchanged in what they deny, in this order: secrets,
+gh-publish and rmroot for `Bash` and `PowerShell` commands (`PowerShell` as `docs/design/powershell-guard.md` §4
+specifies), secrets for the file tools (`Read`, `NotebookRead`, `Grep`, `Glob`), and pencil for
+`mcp__pencil__execute`. It fails open like the core hook (`hookio`) and reads `~/.config/stack/safety.toml` (§4.6).
+Its deny reasons start with `stack-guard (<rule>): `, distinct from the core hook's `stack guard (raw-merge): `, so
+a live session shows which hook denied.
 
-The core hook keeps the raw-merge rule only; Claude Code runs both hooks of a matching event in parallel and
-denies when either denies. In v10 one Bash input matching several rules got the first deny in the order secrets →
-gh-publish → raw-merge → rmroot (`internal/guard/guard.go:68-81`). With two hooks, an input matching raw-merge and a
-moved rule is denied by both, and the reason Claude Code shows may differ from v10's; the input stays denied
-(§4.9).
+The core hook (matcher `Bash|PowerShell`) holds only raw-merge, for `Bash` and `PowerShell` commands; Claude Code
+runs both hooks of a matching event in parallel and denies when either denies. In v10 one Bash input matching several rules got the first deny in
+the order secrets → gh-publish → raw-merge → rmroot (`internal/guard/guard.go:68-81`). With two hooks, an input
+matching raw-merge and a moved rule is denied by both, and the reason Claude Code shows may differ from v10's; the
+input stays denied (§4.9).
 
-Import boundary: `stack-guard` imports `internal/shell`, `internal/ghargs`, `internal/paths` and `internal/hookio`,
-a narrow dependency inside this repository, not a public API. `.golangci.yaml` `depguard` gains an allow list for
-`extensions/guard/**` (non-test) naming exactly those four; every other extension keeps the existing deny of
-`github.com/shuymn/stack/internal` ("protocol and documented CLI only", `.golangci.yaml:26-34`). Copying the
-1k-line shell and gh models would let the raw-merge deny and the guard drift apart on the same gh version; moving
-them to a public `pkg/` tree would rename every core import for the same coupling.
+Import boundary: `stack-guard` imports `internal/shell`, `internal/powershell`, `internal/ghargs`, `internal/paths`
+and `internal/hookio`, a narrow dependency inside this repository, not a public API. `.golangci.yaml` `depguard`
+gains an allow list for `extensions/guard/**` (non-test) naming exactly those five; every other extension keeps the
+existing deny of `github.com/shuymn/stack/internal` ("protocol and documented CLI only", `.golangci.yaml:26-34`).
+Copying the 1k-line shell and gh models would let the raw-merge deny and the guard drift apart on the same gh
+version; moving them to a public `pkg/` tree would rename every core import for the same coupling.
 
 ### 4.6 `~/.config/stack/safety.toml`
 

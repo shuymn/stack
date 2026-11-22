@@ -756,6 +756,10 @@ func TestParseCwd(t *testing.T) {
 		{`cd $x && gh x`, ""},
 		{`pushd sub && gh x`, ""},
 		{`cd sub || gh x`, ""},
+		{`Set-Location sub -PassThru | gh x`, ""},
+		{`cd sub | gh x`, ""},
+		{`cd sub | Write-Output; gh x`, ""},
+		{`cd sub | Write-Output && gh x`, ""},
 		{`if ($a) { cd sub }; gh x`, ""},
 		{`$p = { cd sub }; gh x`, cwd},
 		{`foreach ($d in $l) { gh x; cd sub }`, ""},
@@ -814,6 +818,7 @@ func TestParseBinding(t *testing.T) {
 		{`Remove-Item .\build ~`, true, nil},
 		{`Remove-Item -Path`, true, nil},
 		{`Remove-Item -Recurse -- -x`, false, []string{"Recurse", "", "Path"}},
+		{`ndr X FileSystem C:\w`, false, []string{"Name", "PSProvider", "Root"}},
 	}
 	for _, tt := range tests {
 		c := parse(t, tt.cmd, Unix).Calls[0]

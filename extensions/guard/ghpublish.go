@@ -16,7 +16,7 @@ func ghPublish(calls []ghCall, opts Options) (Decision, bool) {
 			continue
 		}
 		for _, in := range c.gh.Published {
-			text, ok := readInput(in, c.call, opts.Home)
+			text, ok := readInput(in, c, opts.Home)
 			if !ok {
 				continue
 			}

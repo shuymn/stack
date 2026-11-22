@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/shuymn/stack/internal/hookio"
+	"github.com/shuymn/stack/internal/powershell"
 )
 
 var update = flag.Bool("update", false, "rewrite the .golden files of TestGolden")
@@ -43,7 +44,7 @@ func TestGolden(t *testing.T) {
 				t.Fatalf("payload: %v", err)
 			}
 			var out []byte
-			if d, ok := Decide(in, Options{Home: t.TempDir()}); ok {
+			if d, ok := Decide(in, Options{Home: t.TempDir(), OS: powershell.HostOS()}); ok {
 				if !strings.Contains(name, d.Rule) {
 					t.Errorf("deny by %s, but the golden name %q names another rule", d.Rule, name)
 				}
