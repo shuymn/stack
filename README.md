@@ -31,8 +31,8 @@ Install `stack-improve` after `stack-public`: improve's public check runs `stack
 
 `stack-jev-semantic` answers `pass` without `TYPESAFE_API_KEY`; the key opts in to live use, and it then sends the
 PR's texts and diff to Jev for the questions it can assess under an enabled decision, warning on a likely hit. The
-committed placeholder cutoffs disable both decisions, so nothing is sent until `jev-calibrate` has run. It embeds its cutoffs (`extensions/jev/semantic/cutoffs.json`); reinstall after
-`jev-calibrate` changes them.
+committed placeholder cutoffs disable both decisions, so nothing is sent until `jev-calibrate` has run. It embeds
+its cutoffs (`extensions/jev/semantic/cutoffs.json`); reinstall after `jev-calibrate` changes them.
 
 `stack-guard` is a Claude Code hook of its own, not a stage extension: wire it as a separate `PreToolUse` entry
 (matcher `Bash|PowerShell|Read|NotebookRead|Grep|Glob|mcp__pencil__execute`, exec form `stack-guard hook claude pre-tool-use`,
