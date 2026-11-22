@@ -2,9 +2,11 @@ package jev
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -83,10 +85,10 @@ func TestClientErrors(t *testing.T) {
 			"wrong type", 200, `{"model":"jev-1.14.0","answers":{"q":{"type":"choice"}}}`, noulQ,
 			OK, CauseMissing, 0, 0,
 		},
-		{"string noul", 200, noulBody(Pin, `"0.5"`), noulQ, Persistent, CauseMalformed, 0, 0},
+		{"string noul", 200, noulBody(Pin, `"0.5"`), noulQ, OK, CauseMissing, 0, 0},
 		{"above 1", 200, noulBody(Pin, "1.5"), noulQ, OK, CauseProbability, 0, 0},
 		{"below 0", 200, noulBody(Pin, "-0.1"), noulQ, OK, CauseProbability, 0, 0},
-		{"overflow", 200, noulBody(Pin, "1e999"), noulQ, Persistent, CauseMalformed, 0, 0},
+		{"overflow", 200, noulBody(Pin, "1e999"), noulQ, OK, CauseMissing, 0, 0},
 		{
 			"choice label unknown", 200, `{"model":"jev-1.14.0","answers":{"q":{"type":"choice",` +
 				`"choice":"z","confidence":0.7,"probabilities":{"a":0.7,"b":0.3}}}}`, choiceQ,
@@ -332,28 +334,127 @@ func TestValidatePerAnswer(t *testing.T) {
 	}
 }
 
-// peak is a transport that records how many sends run at once.
-type peak struct {
-	mu       sync.Mutex
-	cur, max int
+// barrier is a transport whose sends block until four have started.
+type barrier struct {
+	mu      sync.Mutex
+	started int
+	four    chan struct{}
+	extra   chan struct{}
 }
 
-func (p *peak) Send(context.Context, Batch) Outcome {
-	p.mu.Lock()
-	p.cur++
-	p.max = max(p.max, p.cur)
-	p.mu.Unlock()
-	time.Sleep(20 * time.Millisecond)
-	p.mu.Lock()
-	p.cur--
-	p.mu.Unlock()
+func (b *barrier) Send(context.Context, Batch) Outcome {
+	b.mu.Lock()
+	b.started++
+	n := b.started
+	b.mu.Unlock()
+	switch {
+	case n == 4:
+		close(b.four)
+	case n > 4:
+		select {
+		case b.extra <- struct{}{}:
+		default:
+		}
+	}
+	<-b.four
 	return Outcome{Class: OK}
 }
 
 func TestInFlightCap(t *testing.T) {
-	p := &peak{}
-	Do(t.Context(), p, make([]Batch, 12))
-	if p.max != 4 {
-		t.Fatalf("%d requests in flight at most, want 4", p.max)
+	b := &barrier{four: make(chan struct{}), extra: make(chan struct{}, 1)}
+	// Hold the first four: once they start, Do must wait for a slot before a fifth.
+	release := make(chan struct{})
+	gate := &gated{inner: b, release: release}
+	done := make(chan []Outcome)
+	go func() { done <- Do(t.Context(), gate, make([]Batch, 12)) }()
+	<-b.four
+	select {
+	case <-b.extra:
+		t.Fatal("a fifth request started while four were in flight")
+	case <-time.After(50 * time.Millisecond):
 	}
+	close(release)
+	for _, o := range <-done {
+		if o.Class != OK {
+			t.Fatalf("outcome %+v", o)
+		}
+	}
+}
+
+// gated passes sends to inner and holds each returning one until release.
+type gated struct {
+	inner   Transport
+	release chan struct{}
+}
+
+func (g *gated) Send(ctx context.Context, b Batch) Outcome {
+	o := g.inner.Send(ctx, b)
+	<-g.release
+	return o
+}
+
+func TestValidateTypeError(t *testing.T) {
+	qs := []Question{{Name: "a", Type: TypeNoul}, {Name: "b", Type: TypeNoul}}
+	o := Validate([]byte(`{"model":"jev-1.14.0","answers":{"a":{"type":"noul","noul":0.9},`+
+		`"b":{"type":"noul","noul":"0.5"}}}`), qs)
+	if o.Class != OK || o.Answers["a"].Noul != 0.9 || o.Invalid["b"] != CauseMissing {
+		t.Fatalf("outcome %+v", o)
+	}
+}
+
+func TestSendAfterHTTPDeadline(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		_, _ = w.Write([]byte(noulBody(Pin, "0.5")))
+	}))
+	defer srv.Close()
+	home := t.TempDir()
+	l := &Ledger{Path: LedgerPath(home), Run: "r", Extension: "x"}
+	// Inside the ledger margin: the request's own deadline has already passed.
+	ctx, cancel := context.WithTimeout(t.Context(), LedgerMargin/2)
+	defer cancel()
+	o := Live{Endpoint: srv.URL, Key: "k", Ledger: l}.Send(ctx, testBatch(noulQ))
+	if o.Class != Deadline || hits.Load() != 0 {
+		t.Fatalf("outcome %+v after %d requests", o, hits.Load())
+	}
+	if _, err := os.Stat(LedgerPath(home)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("an unsent request was ledgered (%v)", err)
+	}
+}
+
+func TestClientMalformedRedirectAndStalled400(t *testing.T) {
+	t.Run("a redirect with a malformed Location", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Location", "%")
+			w.WriteHeader(http.StatusTemporaryRedirect)
+		}))
+		defer srv.Close()
+		o := Live{Endpoint: srv.URL, Key: "k"}.Send(t.Context(), testBatch(noulQ))
+		if o.Class != Persistent || o.Cause != "HTTP 307" {
+			t.Fatalf("outcome %+v", o)
+		}
+	})
+	t.Run("a 400 whose body stalls keeps its status", func(t *testing.T) {
+		done := make(chan struct{})
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"detail":`))
+			if fl, ok := w.(http.Flusher); ok {
+				fl.Flush()
+			}
+			select {
+			case <-r.Context().Done():
+			case <-done:
+			}
+		}))
+		defer srv.Close()
+		defer close(done)
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+		defer cancel()
+		o := Live{Endpoint: srv.URL, Key: "k"}.Send(ctx, testBatch(noulQ))
+		if o.Status != http.StatusBadRequest || o.Class != Persistent {
+			t.Fatalf("outcome %+v", o)
+		}
+	})
 }

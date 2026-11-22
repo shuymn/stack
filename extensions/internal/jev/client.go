@@ -137,6 +137,10 @@ func (l Live) Send(ctx context.Context, b Batch) Outcome {
 		hctx, cancel = context.WithDeadline(ctx, d.Add(-LedgerMargin))
 		defer cancel()
 	}
+	if hctx.Err() != nil {
+		// Never sent, so not an attempt: no ledger line.
+		return Outcome{Class: Deadline, Cause: CauseDeadline}
+	}
 	start := time.Now()
 	o := l.send(hctx, b)
 	if l.Ledger != nil {
@@ -144,10 +148,6 @@ func (l Live) Send(ctx context.Context, b Batch) Outcome {
 	}
 	return o
 }
-
-// noRedirect makes a redirect the response itself: a 3xx is a persistent failure of the one
-// request sent, never a second request.
-func noRedirect(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 
 func (l Live) send(ctx context.Context, b Batch) Outcome {
 	req, err := http.NewRequestWithContext(
@@ -161,13 +161,20 @@ func (l Live) send(ctx context.Context, b Batch) Outcome {
 	}
 	req.Header.Set("Authorization", "Bearer "+l.Key)
 	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{}
+	// One round trip: a 3xx, even with a Location the client could not parse, is the answer.
+	rt := http.DefaultTransport
 	if l.Client != nil {
-		c := *l.Client
-		client = &c
+		if l.Client.Transport != nil {
+			rt = l.Client.Transport
+		}
+		if l.Client.Timeout > 0 {
+			// A client timeout is transient; only ctx's own end is the work deadline.
+			rctx, cancel := context.WithTimeout(ctx, l.Client.Timeout)
+			defer cancel()
+			req = req.WithContext(rctx)
+		}
 	}
-	client.CheckRedirect = noRedirect
-	resp, err := client.Do(req)
+	resp, err := rt.RoundTrip(req)
 	if err != nil {
 		return transportFailure(ctx, err)
 	}
@@ -178,7 +185,8 @@ func (l Live) send(ctx context.Context, b Batch) Outcome {
 		// Only a 400 needs its body: max_tokens_exceeded is too large, any other 400 persistent.
 		body, err := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
 		if err != nil {
-			return transportFailure(ctx, err)
+			// The status is known; without the body it cannot be told too large.
+			return statusOutcome(resp.StatusCode, false)
 		}
 		return statusOutcome(resp.StatusCode, bytes.Contains(body, []byte(CauseMaxTokens)))
 	default:
@@ -242,9 +250,9 @@ type answerJSON struct {
 // is kept whenever it parses, with an absent count unknown.
 func Validate(body []byte, qs []Question) Outcome {
 	var doc struct {
-		Model   *string                `json:"model"`
-		Answers map[string]*answerJSON `json:"answers"`
-		Usage   *Usage                 `json:"usage"`
+		Model   *string                    `json:"model"`
+		Answers map[string]json.RawMessage `json:"answers"`
+		Usage   *Usage                     `json:"usage"`
 	}
 	if err := json.Unmarshal(body, &doc); err != nil {
 		var u struct {
@@ -261,7 +269,17 @@ func Validate(body []byte, qs []Question) Outcome {
 	}
 	out := Outcome{Class: OK, Answers: map[string]Answer{}, Usage: doc.Usage}
 	for _, q := range qs {
-		a, cause := validAnswer(doc.Answers[q.Name], q)
+		// Each answer is decoded alone: a wrongly typed field fails only its question.
+		var raw *answerJSON
+		cause := ""
+		if err := json.Unmarshal(doc.Answers[q.Name], &raw); doc.Answers[q.Name] != nil &&
+			err != nil {
+			cause = CauseMissing
+		}
+		a, vcause := validAnswer(raw, q)
+		if cause == "" {
+			cause = vcause
+		}
 		if cause != "" {
 			if out.Invalid == nil {
 				out.Invalid = map[string]string{}

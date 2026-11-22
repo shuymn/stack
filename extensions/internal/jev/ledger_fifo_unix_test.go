@@ -51,3 +51,35 @@ func TestLedgerStuck(t *testing.T) {
 		t.Fatalf("stderr %q", got)
 	}
 }
+
+// TestLedgerAbandonedWaiter: an append abandoned while it waits for the ledger's mutex drops
+// its line instead of writing it late.
+func TestLedgerAbandonedWaiter(t *testing.T) {
+	home := t.TempDir()
+	path := LedgerPath(home)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Mkfifo(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stderr bytes.Buffer
+	l := &Ledger{Path: path, Run: "r", Extension: "x", Stderr: &stderr}
+	l.Append(Outcome{Class: OK}, 0) // holds the mutex, blocked opening the FIFO
+	l.Append(Outcome{Class: OK}, 0) // abandoned while waiting for the mutex
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	var got []byte
+	buf := make([]byte, 4096)
+	for deadline := time.Now().Add(500 * time.Millisecond); time.Now().Before(deadline); {
+		n, _ := f.Read(buf)
+		got = append(got, buf[:n]...)
+		time.Sleep(10 * time.Millisecond)
+	}
+	if n := bytes.Count(got, []byte("\n")); n != 1 {
+		t.Fatalf("%d ledger lines written, want only the first: %q", n, got)
+	}
+}

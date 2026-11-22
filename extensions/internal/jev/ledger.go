@@ -83,6 +83,10 @@ func (l *Ledger) Append(o Outcome, elapsed time.Duration) {
 		defer close(done)
 		l.mu.Lock()
 		defer l.mu.Unlock()
+		if abandoned.Load() {
+			// Its wait ended while an earlier append held the ledger: never written late.
+			return
+		}
 		if err := appendLine(l.Path, append(data, '\n')); err != nil && !abandoned.Load() {
 			l.fail(err)
 		}
