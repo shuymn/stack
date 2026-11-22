@@ -47,7 +47,8 @@ func TestParseCwdGrowth(t *testing.T) {
 
 	t.Run("length cap", func(t *testing.T) {
 		short, long := strings.Repeat("a", 100), strings.Repeat("b", maxCwdLen)
-		r := parse("cd "+short+" && git a; cd "+long+" && git b", "/w", "", 4)
+		// `&&` keeps the cwd known up to the long cd, so only the byte cap can make it unknown.
+		r := parse("cd "+short+" && git a && cd "+long+" && git b", "/w", "", 4)
 		if want := "/w" + sep + short; r.Calls[1].Cwd != want {
 			t.Errorf("cwd after a short cd = %q, want %q", r.Calls[1].Cwd, want)
 		}

@@ -177,7 +177,8 @@ Any other pipe, including `Get-Content F | gh …` (encoding and provider semant
 Body files resolve against the call's known cwd: payload `cwd`, changed only by `Set-Location`/`cd`/`sl`/`chdir X
 &&` with a static `X`; `cd` with no argument, any other location change, `Push-Location`/`pushd` and
 `Pop-Location`/`popd` make it unknown. Cwd updates are tracked for at most 32 steps and 4096 bytes; beyond that the
-cwd is unknown and call collection continues. A native `~` follows §4.4's native rule: on non-Windows hosts an unquoted
+cwd is unknown and call collection continues. The byte check is a conservative estimate made before building the path
+(from the current cwd, home and target lengths), so a very long home or cwd can leave a short result unknown. A native `~` follows §4.4's native rule: on non-Windows hosts an unquoted
 leading `~` is home (PowerShell 7 expands it for native commands); on Windows a native `~` input is skipped as
 unknown (W3), with no home substituted.
 
