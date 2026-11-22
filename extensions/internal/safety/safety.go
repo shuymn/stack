@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 
 	"github.com/BurntSushi/toml"
 )
@@ -29,10 +30,15 @@ type Config struct {
 // literal path stays out of public-text scans of this repository.
 var T3Secrets = path.Join("~", ".t3", "userdata", "secrets")
 
-// Defaults returns the v10 `[safety]` defaults. Each call returns fresh slices.
+// JevKey is the Jev extensions' key file (extensions/internal/jev KeyPath). It is a secret under
+// any configured list: Load appends it when the list does not name it.
+var JevKey = path.Join("~", ".config", "stack", "jev", "key")
+
+// Defaults returns the v10 `[safety]` defaults and the Jev key file. Each call returns fresh
+// slices.
 func Defaults() Config {
 	return Config{
-		Secrets:            []string{T3Secrets, ".dev.vars"},
+		Secrets:            []string{T3Secrets, ".dev.vars", JevKey},
 		PrivateTerms:       "~/.config/stack/private-terms",
 		DenyPencilGenerate: true,
 	}
@@ -80,6 +86,9 @@ func Load(path string) (Config, []string, error) {
 		if err := md.PrimitiveDecode(p, dst); err != nil {
 			return Defaults(), nil, fmt.Errorf("%w: %s: %w", ErrInvalid, path, err)
 		}
+	}
+	if !slices.Contains(cfg.Secrets, JevKey) {
+		cfg.Secrets = append(cfg.Secrets, JevKey)
 	}
 	var warnings []string
 	for _, k := range md.Keys() {

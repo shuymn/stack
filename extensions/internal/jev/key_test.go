@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/shuymn/stack/extensions/internal/safety"
 )
 
 // keySentinel is file content no diagnostic may show.
@@ -57,8 +59,9 @@ func TestKeyPath(t *testing.T) {
 	if got := KeyPath(home); got != want {
 		t.Fatalf("KeyPath = %q, want %q", got, want)
 	}
-	if KeyDisplay != "~/.config/stack/jev/key" {
-		t.Fatalf("KeyDisplay = %q", KeyDisplay)
+	// stack-guard protects the same file.
+	if KeyDisplay != "~/.config/stack/jev/key" || KeyDisplay != safety.JevKey {
+		t.Fatalf("KeyDisplay = %q, safety.JevKey = %q", KeyDisplay, safety.JevKey)
 	}
 }
 

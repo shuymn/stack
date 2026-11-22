@@ -1,10 +1,14 @@
 package guard
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/shuymn/stack/extensions/internal/safety"
 )
 
 // TestBinary is C16: the built stack-guard decides the four moved rules as the core hook does,
@@ -210,4 +214,38 @@ func TestSafetyConfig(t *testing.T) {
 		RuleSecrets,
 	)
 	assertDeny(t, "valid file: Pencil default kept", runHook(t, home, pencil(cwd)), RulePencil)
+}
+
+// TestJevKeySecret: the Jev key file is a secret by default and under a custom secrets list
+// that does not name it.
+func TestJevKeySecret(t *testing.T) {
+	for name, file := range map[string]string{
+		"defaults":    "",
+		"custom list": "secrets = [\"custom.key\"]\n",
+	} {
+		home, cwd := t.TempDir(), t.TempDir()
+		if file != "" {
+			writeSafety(t, home, file)
+		}
+		key := filepath.Join(home, ".config", "stack", "jev", "key")
+		r := runHook(t, home, payload(t, cwd, "Read", map[string]any{"file_path": key}))
+		assertDeny(t, name+": Read the key file", r, RuleSecrets)
+		var out denyOutput
+		if err := json.Unmarshal([]byte(r.stdout), &out); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		reason := out.HookSpecificOutput.PermissionDecisionReason
+		want := "stack-guard (secrets): Read targets the secret " +
+			strconv.Quote(safety.JevKey) + ". "
+		if !strings.HasPrefix(reason, want) {
+			t.Errorf("%s: reason %q, want the prefix %q", name, reason, want)
+		}
+		assertDeny(t, name+": cat the key file",
+			runHook(t, home, bashPayload(t, cwd, "cat "+safety.JevKey)), RuleSecrets)
+		if file != "" {
+			assertDeny(t, name+": custom secret",
+				runHook(t, home, payload(t, cwd, "Read", map[string]any{"file_path": "custom.key"})),
+				RuleSecrets)
+		}
+	}
 }
