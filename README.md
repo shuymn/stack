@@ -36,12 +36,13 @@ placeholder cutoffs disable both decisions, so nothing is sent until `jev-calibr
 
 The Jev extensions and `jev-calibrate` take the key from `TYPESAFE_API_KEY`, or else from `~/.config/stack/jev/key`.
 They read the file only when it is a regular file (or a symlink to one) that you own with mode `0600` (no group or
-other permissions), and warn otherwise; on Windows no mode or owner is checked. Removing the file (and leaving the
+other permissions) and holds a non-blank key of at most 4 KiB; otherwise the stage reports `jev-error` and
+`jev-calibrate` exits 2. On Windows no mode or owner is checked. Removing the file (and leaving the
 variable unset) opts out. To write it, type or paste the key at the silent prompt and press Enter; nothing is
 written on EOF or empty input:
 
 ```sh
-(umask 077; mkdir -p ~/.config/stack/jev && IFS= read -rs k && [ -n "$k" ] && printf '%s\n' "$k" > ~/.config/stack/jev/key)
+(umask 077; mkdir -p ~/.config/stack/jev && IFS= read -rs k && [ -n "$k" ] && f=~/.config/stack/jev/key && touch "$f" && chmod 600 "$f" && printf '%s\n' "$k" > "$f")
 ```
 
 stack checks the file's mode and owner only, not ACLs or its parent directories.
