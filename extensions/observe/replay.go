@@ -25,22 +25,30 @@ const prepCheck = 1024
 // Its request body is built from the newest record only when a worker runs it.
 type payload struct {
 	records []*toolCall
-	result  string
+	// core and guard are the decisions of stack and stack-guard (decMissing when stack-guard is
+	// not on PATH).
+	core, guard string
 	// late marks a payload cut by the deadline while it ran.
 	late bool
 }
+
+// decMissing is the decision of a hook that is not installed.
+const decMissing = "missing"
+
+// coreRules are the rules the core hook holds since v11 (docs/design/core-stages.md §4.5); every
+// other rule is stack-guard's.
+var coreRules = map[string]bool{"raw-merge": true}
 
 var errChanged = errors.New("the transcript line changed")
 
 // hookArgs is the argv of both installed PreToolUse hooks.
 var hookArgs = []string{"hook", "claude", "pre-tool-use"}
 
-// replay pipes each recorded guard-wired call to the installed hooks, `stack hook claude
+// replay pipes each recorded guard-wired call to both installed hooks, `stack hook claude
 // pre-tool-use` and `stack-guard hook claude pre-tool-use` (docs/design/core-stages.md §4.5,
-// §4.10), and compares their combined decision with the one recorded in the transcript (design
-// §3.3 replay). Without stack-guard on PATH the calls replay through stack only, a warn finding
-// names it, and a recorded deny that stack alone no longer makes is not comparable: the rule may
-// be one stack-guard holds.
+// §4.10), and compares their decisions with the one recorded in the transcript (design §3.3
+// replay). Without stack-guard on PATH the calls replay through stack only and a warn finding
+// names it (judge).
 func (s *state) replay(st *Source) error {
 	stack, err := s.o.LookPath("stack")
 	if err != nil {
@@ -52,8 +60,8 @@ func (s *state) replay(st *Source) error {
 		s.finding(
 			kindReplayHookMissing,
 			"stack-guard",
-			"stack-guard not on PATH: replayed through stack only; a recorded deny stack no longer "+
-				"makes is not comparable",
+			"stack-guard not on PATH: replayed through stack only; a recorded deny of a rule "+
+				"stack-guard holds is not comparable",
 		)
 	}
 	totals := &s.latest.Replay
@@ -102,6 +110,7 @@ func (s *state) replay(st *Source) error {
 	}
 
 	env := append(slices.Clone(s.o.Env), "STACK_DEBUG=1")
+	// Each worker runs the two hooks of a payload at once: at most 2 × replayWorkers children.
 	jobs := make(chan *payload)
 	var wg sync.WaitGroup
 	for range s.o.replayWorkers {
@@ -113,10 +122,10 @@ func (s *state) replay(st *Source) error {
 				}
 				body, err := requestBody(p.records[0])
 				if err != nil {
-					p.result = decNotComparable
+					p.core, p.guard = decNotComparable, decNotComparable
 					continue
 				}
-				p.result, p.late = s.replayHooks(stack, guard, env, body)
+				p.core, p.guard, p.late = s.replayHooks(stack, guard, env, body)
 			}
 		})
 	}
@@ -127,7 +136,7 @@ func (s *state) replay(st *Source) error {
 	wg.Wait()
 
 	for _, p := range run {
-		s.compare(p, guard == "")
+		s.compare(p)
 	}
 	if totals.TruncatedTime > 0 {
 		return fmt.Errorf("replay: %w", context.DeadlineExceeded)
@@ -135,67 +144,93 @@ func (s *state) replay(st *Source) error {
 	return nil
 }
 
-// compare counts the replayed decision of p against each of its records. guardless marks a replay
-// without stack-guard: a recorded deny replayed as no-deny may be a rule only stack-guard holds.
-func (s *state) compare(p *payload, guardless bool) {
+// compare counts the replayed decisions of p against each of its records.
+func (s *state) compare(p *payload) {
 	totals := &s.latest.Replay
-	switch {
-	case p.late:
+	if p.late {
 		totals.TruncatedTime += len(p.records)
-		return
-	case p.result == decNotComparable:
-		totals.NotComparable += len(p.records)
 		return
 	}
 	for _, c := range p.records {
-		if guardless && p.result == decNoDeny && c.recorded != decNoDeny {
+		result, ok := judge(c.recorded, p.core, p.guard)
+		if !ok {
 			totals.NotComparable++
 			continue
 		}
 		totals.Compared++
-		if p.result == c.recorded {
+		if result == c.recorded {
 			continue
 		}
 		totals.Changed++
 		switch {
 		case c.recorded == decNoDeny:
 			totals.ChangedByKind.NewDeny++
-		case p.result == decNoDeny:
+		case result == decNoDeny:
 			totals.ChangedByKind.LostDeny++
 		default:
 			totals.ChangedByKind.RuleChanged++
 		}
 		if totals.Changed <= maxListedChanges {
 			s.finding(kindReplayChange, fmt.Sprintf("%s:%d", c.path, c.line),
-				fmt.Sprintf("%s: %s -> %s", c.tool, c.recorded, p.result))
+				fmt.Sprintf("%s: %s -> %s", c.tool, c.recorded, result))
 		}
 	}
 }
 
-// replayHooks runs the payload through stack, then stack-guard unless stack denied or guard is
-// "". The decision is a deny when either denies, with the rule of the first that denied (the
-// settings order); otherwise not comparable when either is. late reports a hook cut by the run
-// deadline.
-func (s *state) replayHooks(stack, guard string, env []string, body []byte) (string, bool) {
-	result := decNoDeny
-	for _, name := range []string{stack, guard} {
-		if name == "" {
-			continue
+// judge returns the replayed decision to compare with recorded, or false when it is not
+// comparable. Claude Code runs both hooks and denies when either denies, so a recorded rule
+// either hook denies now is unchanged; otherwise the replayed decision is the first deny (core,
+// then stack-guard, the settings order) or no-deny. A hook that was not comparable leaves a
+// no-deny unknown. A recorded deny no hook made again is judged by the hook holding its rule
+// (coreRules): not comparable when that hook was not comparable or is missing. A missing
+// stack-guard leaves a recorded no-deny compared through stack alone, named by the
+// replay-hook-missing warn.
+func judge(recorded, core, guard string) (string, bool) {
+	var denies []string
+	for _, d := range []string{core, guard} {
+		if strings.HasPrefix(d, denyPrefix) {
+			denies = append(denies, d)
 		}
+	}
+	if slices.Contains(denies, recorded) {
+		return recorded, true
+	}
+	failed := core == decNotComparable || guard == decNotComparable
+	if recorded != decNoDeny {
+		holder := guard
+		if coreRules[strings.TrimPrefix(recorded, denyPrefix)] {
+			holder = core
+		}
+		if holder == decNotComparable || holder == decMissing {
+			return "", false
+		}
+	}
+	if len(denies) > 0 {
+		return denies[0], true
+	}
+	return decNoDeny, !failed
+}
+
+// replayHooks runs the payload through stack and stack-guard at once (stack-guard is decMissing
+// when guard is ""). late reports a hook cut by the run deadline.
+func (s *state) replayHooks(stack, guard string, env []string, body []byte) (string, string, bool) {
+	run := func(name string) (string, bool) {
 		out := s.child(command{
 			name: name, args: hookArgs, env: env, stdin: body, timeout: s.o.replayTimeout,
 		})
 		if out.timedOut && s.work.Err() != nil {
 			return "", true
 		}
-		switch d := replayedDecision(out); {
-		case strings.HasPrefix(d, denyPrefix):
-			return d, false
-		case d == decNotComparable:
-			result = d
-		}
+		return replayedDecision(out), false
 	}
-	return result, false
+	guardDec, guardLate := decMissing, false
+	var wg sync.WaitGroup
+	if guard != "" {
+		wg.Go(func() { guardDec, guardLate = run(guard) })
+	}
+	core, coreLate := run(stack)
+	wg.Wait()
+	return core, guardDec, coreLate || guardLate
 }
 
 // compared: only deny:<rule> and no-deny are compared.

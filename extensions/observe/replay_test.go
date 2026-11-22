@@ -312,18 +312,61 @@ func TestReplayHooks(t *testing.T) {
 			t.Errorf("replay = %+v, findings %+v", l.Replay, resp.Findings)
 		}
 	})
-	t.Run("both hooks: the core deny decides first", func(t *testing.T) {
+	t.Run("both hooks deny: either recorded rule is unchanged", func(t *testing.T) {
 		t.Parallel()
 		f := newFixture(t)
-		f.calls("r", bashCall(hourAgo, f.cwd, cmd("m"), guardDenyRawMerge))
-		guard := f.fake("stack-guard", proctest.Response{Args: hookArgs, Stdout: denyJSONGuard})
+		f.calls(
+			"r",
+			bashCall(hourAgo, f.cwd, cmd("s"), guardDenySecrets),
+			bashCall(hourAgo, f.cwd, cmd("g"), guardDenySecretsV11),
+			bashCall(hourAgo, f.cwd, cmd("m"), guardDenyRawMerge),
+			bashCall(hourAgo, f.cwd, cmd("n"), "ok"),
+		)
+		f.fake("stack-guard", proctest.Response{Args: hookArgs, Stdout: denyJSONGuard})
 		f.fake("stack", stackModel, proctest.Response{Args: hookArgs, Stdout: denyJSONRawMerge})
 		resp, l := f.run()
-		if l.Replay != (ReplayTotals{Compared: 1}) || len(findings(resp, kindReplayChange)) != 0 {
+		want := ReplayTotals{Compared: 4, Changed: 1, ChangedByKind: ChangeKinds{NewDeny: 1}}
+		if l.Replay != want {
 			t.Errorf("replay = %+v, findings %+v", l.Replay, resp.Findings)
 		}
-		if calls := proctest.Calls(t, guard); len(calls) != 0 {
-			t.Errorf("stack-guard ran %d times after the core deny", len(calls))
+		if got := replayFindings(
+			resp,
+		); !slices.Equal(
+			got,
+			[]string{"Bash: no-deny -> deny:raw-merge"},
+		) {
+			t.Errorf("findings = %q", got)
+		}
+	})
+	t.Run("stack-guard alone denies: new deny", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t)
+		f.calls("r", bashCall(hourAgo, f.cwd, cmd("n"), "ok"))
+		f.fake("stack-guard", proctest.Response{Args: hookArgs, Stdout: denyJSONGuard})
+		f.fake("stack", stackModel, proctest.Response{Args: hookArgs})
+		resp, l := f.run()
+		if l.Replay != (ReplayTotals{Compared: 1, Changed: 1, ChangedByKind: ChangeKinds{NewDeny: 1}}) {
+			t.Errorf("replay = %+v", l.Replay)
+		}
+		if got := replayFindings(
+			resp,
+		); !slices.Equal(
+			got,
+			[]string{"Bash: no-deny -> deny:secrets"},
+		) {
+			t.Errorf("findings = %q", got)
+		}
+	})
+	t.Run("stack-guard times out: not comparable", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t)
+		f.opts.replayTimeout = 500 * time.Millisecond
+		f.calls("r", bashCall(hourAgo, f.cwd, cmd("n"), "ok"))
+		f.fake("stack-guard", proctest.Response{Args: hookArgs, Sleep: 10 * time.Second})
+		f.fake("stack", stackModel, proctest.Response{Args: hookArgs})
+		_, l := f.run()
+		if l.Replay != (ReplayTotals{NotComparable: 1}) {
+			t.Errorf("replay = %+v", l.Replay)
 		}
 	})
 	t.Run("stack-guard not comparable", func(t *testing.T) {
@@ -338,7 +381,7 @@ func TestReplayHooks(t *testing.T) {
 		}
 	})
 	t.Run(
-		"stack-guard missing: warn, a deny stack no longer makes not comparable",
+		"stack-guard missing: warn, a moved rule's deny not comparable",
 		func(t *testing.T) {
 			t.Parallel()
 			f := newFixture(t)
@@ -346,12 +389,17 @@ func TestReplayHooks(t *testing.T) {
 				"r",
 				bashCall(hourAgo, f.cwd, cmd("b"), guardDenySecrets),
 				bashCall(hourAgo, f.cwd, cmd("n"), "ok"),
+				// raw-merge is a rule stack still holds: its loss is seen without stack-guard.
+				bashCall(hourAgo, f.cwd, cmd("m"), guardDenyRawMerge),
 			)
 			f.fake("stack", stackModel, proctest.Response{Args: hookArgs})
 			delete(f.tools, "stack-guard")
 			resp, l := f.run()
-			if l.Replay != (ReplayTotals{Compared: 1, NotComparable: 1}) ||
-				l.Sources["replay"].Status != srcOK || len(findings(resp, kindReplayChange)) != 0 {
+			want := ReplayTotals{
+				Compared: 2, Changed: 1, NotComparable: 1, ChangedByKind: ChangeKinds{LostDeny: 1},
+			}
+			if l.Replay != want || l.Sources["replay"].Status != srcOK ||
+				!slices.Equal(replayFindings(resp), []string{"Bash: deny:raw-merge -> no-deny"}) {
 				t.Errorf(
 					"replay = %+v %+v, findings %+v",
 					l.Replay,
@@ -498,6 +546,8 @@ func TestReplayRealHook(t *testing.T) {
 		f.calls(
 			"new",
 			bashCall(hourAgo, f.cwd, cmd(`gh pr merge 1 --body "log at `+local+`"`), "merged"),
+			// Both hooks deny it (raw-merge, secrets): the recorded secrets deny stays.
+			bashCall(hourAgo, f.cwd, cmd("gh pr merge 1 && cat .dev.vars"), guardDenySecrets),
 		)
 		return f
 	}
@@ -527,13 +577,14 @@ func TestReplayRealHook(t *testing.T) {
 		t.Parallel()
 		f := setup(t)
 		resp, l := f.run()
-		// Compared: the two recorded v10 `stack guard (secrets)` denies, which stack-guard makes
-		// now (unchanged), the no-deny ls (unchanged) and the gh call (raw-merge, new).
+		// Compared: the three recorded v10 `stack guard (secrets)` denies, which stack-guard makes
+		// now (unchanged, one also denied by raw-merge), the no-deny ls (unchanged) and the gh
+		// call (raw-merge, new).
 		check(
 			t,
 			f,
 			resp,
-			ReplayTotals{Compared: 4, Changed: 1, ChangedByKind: ChangeKinds{NewDeny: 1}},
+			ReplayTotals{Compared: 5, Changed: 1, ChangedByKind: ChangeKinds{NewDeny: 1}},
 			l,
 		)
 		if got := findings(resp, kindReplayHookMissing); len(got) != 0 {
@@ -545,9 +596,9 @@ func TestReplayRealHook(t *testing.T) {
 		f := setup(t)
 		delete(f.tools, "stack-guard")
 		resp, l := f.run()
-		// The recorded secrets denies are not comparable, not lost.
+		// The recorded secrets denies are not comparable, not lost or changed to raw-merge.
 		check(t, f, resp, ReplayTotals{
-			Compared: 2, Changed: 1, NotComparable: 2, ChangedByKind: ChangeKinds{NewDeny: 1},
+			Compared: 2, Changed: 1, NotComparable: 3, ChangedByKind: ChangeKinds{NewDeny: 1},
 		}, l)
 		if got := findings(resp, kindReplayHookMissing); len(got) != 1 {
 			t.Errorf("hook-missing findings %+v", resp.Findings)
