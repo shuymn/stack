@@ -118,8 +118,9 @@ func Do(ctx context.Context, t Transport, batches []Batch) []Outcome {
 	return out
 }
 
-// Live sends batches to the API. The zero Client uses a plain http.Client; every request is bound
-// by its context only. It never retries.
+// Live sends batches to the API in one RoundTrip each: redirects are answers, never followed. A nil
+// Client, or one without a Transport, uses http.DefaultTransport; a Client.Timeout bounds each
+// request as a transient timeout. Every request is also bound by its context. It never retries.
 type Live struct {
 	Endpoint string
 	Key      string
@@ -128,8 +129,8 @@ type Live struct {
 	Ledger *Ledger
 }
 
-// Send implements Transport. The request ends LedgerMargin before ctx's deadline, so the ledger
-// line of a request cut by the deadline is still written within it.
+// Send implements Transport. The request ends LedgerMargin before ctx's deadline, leaving that
+// margin for the ledger append of a request cut by the deadline.
 func (l Live) Send(ctx context.Context, b Batch) Outcome {
 	hctx := ctx
 	if d, ok := ctx.Deadline(); ok {

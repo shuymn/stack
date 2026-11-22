@@ -53,8 +53,8 @@ Every `jev-*` reads stdin to EOF first. Then:
 | Nothing to ask (outbound: empty `range` or a diff with no files, since both questions need the diff; entry: no kit and empty `prompt`; cycle: no `owner-reply` item) | `pass`, no context | none |
 | Preparation fails (semantic: a git command exits non-zero or its output is cut) | `warn`, finding `jev-error` naming the command and exit | none |
 | Preparation reaches the work deadline (a slow git) | the questions are unassessed (`preparation deadline`) | none |
-| A request fails transiently (connect or TLS error, timeout, 429, 529, any 5xx) or is too large (400 `max_tokens_exceeded`, 413) | its questions are unassessed; one stderr line `jev: <n> requests skipped: <cause>` | no retry, no re-split |
-| A request fails persistently: any other non-200 (400, 401, 402, 403, 404, 415, 422, …, and any 3xx: redirects are not followed), classified at its headers, a body not of the §2 shape, `model` ≠ the pin, a body over 1 MiB | `warn`, finding `jev-error` (`detail`: status or fixed cause) and one context line naming the cause and the action (`jev-router: Jev answered 401: check TYPESAFE_API_KEY`) | — |
+| A request fails transiently (connect or TLS error, timeout, 429, 529, any 5xx) or is too large (a 400 whose body, read up to 64 KiB and checked even when the read ends early, names `max_tokens_exceeded`; 413) | its questions are unassessed; one stderr line `jev: <n> requests skipped: <cause>` | no retry, no re-split |
+| A request fails persistently: any other non-200 (400, 401, 402, 403, 404, 415, 422, …, and any 3xx: redirects are not followed), classified at its headers (a 400 after its bounded body read), a body not of the §2 shape, `model` ≠ the pin, a body over 1 MiB | `warn`, finding `jev-error` (`detail`: status or fixed cause) and one context line naming the cause and the action (`jev-router: Jev answered 401: check TYPESAFE_API_KEY`) | — |
 | An answer in a valid body is missing or wrongly typed, or a probability is not finite in [0, 1] | `warn`, finding `jev-error` for that question; the request's valid answers still decide | — |
 
 **Unassessed** work never changes the status: it is a finding `jev-unassessed` (`detail`: which questions, how
@@ -68,13 +68,14 @@ the fixed fields its questions need (semantic: the texts) and units in a fixed o
 packed greedily up to a unit budget of 48 KiB less the encoded fixed fields; a larger unit is split by lines (a
 longer line at UTF-8 boundaries) into parts marked `part k of n`, each measured in its complete encoded state.
 Input that fits one request whole is sent whole, whatever the budget. Only when splitting is needed: a budget
-under 1 KiB, or a smallest non-empty part that cannot fit, makes the questions that need it unassessed. Questions stay ≤ 16 KiB per request; more go to another request on the same state. Every body is thus
+under 1 KiB, or a smallest non-empty part that cannot fit, makes the questions that need it unassessed. Questions stay ≤ 16 KiB per request; more go to another request on the same state, and a question over 16 KiB by itself stays unasked. Every body is thus
 determined by the input alone. Up to 4 requests are in flight; results are assembled in unit order.
 
 **Budgets.** Each extension's budget runs from process start: router 4 s, semantic 10 s, classify 5 min. The work
 deadline is the budget less a finalisation reserve (0.3 s, 0.5 s, 20 s) and bounds every cancellable step: git, file
-reads, requests (each cut 0.1 s before it, so a cut request is still ledgered), ledger appends (each waits at most
-0.1 s, then one stderr line); past it the rest is unassessed and the reserve assembles the response (and
+reads, requests (each cut 0.1 s before it, leaving room for its ledger append), ledger appends (the caller waits at
+most 0.1 s, then one stderr line; a line still waiting for the ledger is dropped, one already being written may finish
+later); past it the rest is unassessed and the reserve assembles the response (and
 classify's file). Children get a 0.2 s pipe wait and a timeout 0.2 s before the work deadline, so killing git and
 reaping its pipes fit inside the budget. The response stays under 512 KiB, half core's 1 MiB stdout limit
 (`internal/ext/ext.go:211`): further findings become one `jev-omitted` count, context lines are cut with a marker.
@@ -216,7 +217,9 @@ work deadline; no SDK. The endpoint is a link-time variable only test builds set
 configuration. Each body is marshalled once; those bytes are hashed (§3.4) and sent. **Ledger:** each live attempt
 appends `{run, time, extension, model, outcome, elapsed_ms, input_tokens}` (outcome `ok`, `max_tokens_exceeded`,
 `transient` or `error`; tokens `null` without a `usage.input_tokens` count) to `.local/state/stack/jev/usage.jsonl`; `run` is a random
-per-process ID; appends are serialised; an I/O error is one stderr line and changes no status. Replay never writes.
+per-process ID; appends are serialised and the caller waits at most 0.1 s for each (a line abandoned before it is
+written is dropped, one already being written may finish later); a slow or failed append is one stderr line and
+changes no status. Replay never writes.
 
 ### 3.4 `--replay` without a key (item 4)
 
@@ -331,14 +334,14 @@ About 100 pushes, 300 kit opens and 30 cycles a month ≈ $0.4, uncapped; O6 rep
 | P7 | Each extension shall send only the pinned model, with cutoffs from calibration on `fixtures/jev/`. | #57 | any call | `model` `jev-1.14.0` | C10, C11; O1 |
 | P8 | When a fixture carries recorded answers, the extension shall answer from them with no network, and `warn` `jev-unrecorded` on a miss. | #57 | key unset; dummy key + failing endpoint | `want` met; deleted record → feature assertion fails | C12 |
 | P9 | If Jev fails or answers malformed, the stage shall continue: unassessed on transient or too large, `warn` on persistent, within the budgets. | §3.1 | fake server | per §3.1 | C2, C4; key: O5 |
-| P10 | Each live attempt shall add one ledger line; cost is observed, not asserted. | #57 | real runs | lines with known/unknown usage | C14; key: O6 |
+| P10 | Each live attempt shall try to add one ledger line within its bounded wait; cost is observed, not asserted. | #57 | real runs | lines with known/unknown usage | C14; key: O6 |
 
 ### 6.2 Plan layer
 
 | ID | EARS claim | Source | Test |
 |---|---|---|---|
 | C1 | While the key is empty and no `jev` object is present, `Main` shall write one valid `pass` after reading stdin to EOF, touch no file and open no connection. | P1 | `jev.TestOptOut` per binary |
-| C2 | The client shall treat network errors, timeout, 429, 529, 5xx, 400 `max_tokens_exceeded` and 413 as unassessed without retry, and every other non-200, a body over 1 MiB, missing or null fields, model mismatch and non-finite or out-of-range probabilities as persistent, never echoing the body (a sentinel in it is absent from output). | P9 | `jev.TestClientErrors` (`httptest`, slow body) |
+| C2 | The client shall treat network errors, timeout, 429, 529, 5xx, a 400 whose bounded body read (partial bytes included) names `max_tokens_exceeded`, and 413 as unassessed without retry; every other non-200, a body over 1 MiB, an envelope not of the §2 shape and model mismatch as persistent; and a missing, wrongly typed, non-finite or out-of-range answer as invalid for its question only, never echoing the body (a sentinel in it is absent from output). | P9 | `jev.TestClientErrors` (`httptest`, slow body) |
 | C3 | Packing shall use the budget 48 KiB less the fixed fields, split an oversize unit into ordered parts measured in their complete encoded state, keep questions ≤ 16 KiB, send input that fits whole even under a 1 KiB budget, mark questions unassessed only when splitting is needed and the budget is under 1 KiB or the smallest part cannot fit, and lose no unit. | §3.1 | `jev.TestPack` (25 KiB texts with a small diff; a file over the budget; budgets just above and below 1 KiB, with a small diff that fits whole below it; escaped runes and `part k of n` framing at the boundary; captured bodies reassemble every unit) |
 | C4 | Each extension shall stop at its work deadline, report the rest unassessed (classify: `complete: false`), answer within its reserve, and keep the response under 512 KiB with `jev-omitted`; core's synthetic `warn` under a shorter parent deadline is a separate outcome. | §3.1 | `<ext>.TestBudget`: slow git → no request, questions unassessed (`preparation deadline`, classified by the deadline before the exit code), answer by 10 s, with a child holding its pipe open so a longer pipe wait fails; slow HTTP → answered batches kept, rest unassessed; many-batch result accepted by core; shortened core deadline |
 | C5 | Invalid stdin → `warn`; another stage, nothing to ask (empty range, a range whose diff has no files, no kits and prompt, no items) → `pass` with no request; results assemble in unit order under out-of-order completion. | §3.1 | `<ext>.TestNothingToAsk`, `jev.TestOrder` |
@@ -348,9 +351,9 @@ About 100 pushes, 300 kit opens and 30 cycles a month ≈ $0.4, uncapped; O6 rep
 | C9 | `jev-classify` shall resolve both locator forms (a tool result between the assistant text and the reply is skipped), report unresolved items, use the fixture clock, send only qualified items to `dup_` with their reply and ID, and write its file atomically. | P6 | `classify.TestRun` (missing, stale, malformed observe file; paused write and failed rename leave the old file whole) |
 | C10 | The fitted cutoff shall meet the precision target with TP > 0 and recall ≥ 0.5 on `fit` alone, count an unscored planned call as a negative prediction, and use the runtime decision function; held-out eligibility is asserted separately: changing held-out scores leaves the fitted number unchanged and can flip the decision to disabled; under a fit or held-out floor it is disabled. | P7 | `jev.TestCutoff` |
 | C11 | Every answer record and cutoff table shall name the pin, and every status record shall match a rebuilt body hash; cutoffs refitted from `samples` shall equal the committed ones; changing the root dir or clock keeps every key, and changing state, a question or the pin changes it. | P7, §3.4 | `jev.TestFixturesPinned` |
-| C12 | Every fixture shall, through `replay-test`, give exactly one self-answered result with empty `error`, its `expect` status, its `want` (`cal`: exact findings and context, classify: artifact; `fixed`: §3.5 matching), and no `jev-unrecorded` or `jev-error` unless wanted; once with the key unset and once with a dummy key and a test endpoint that fails the test on any request; a hit fixture with its records deleted shall fail the `want` assertion. The mixed fixture keeps the hit and reports the rejected batch's questions unassessed with no `jev-error`, and its live counterpart against a fake endpoint sends exactly one request per planned body. | P2–P9 | `<ext>.TestFixtures`, `semantic.TestMixedLive` |
+| C12 | Every `fixed` fixture and every recorded `cal` fixture (a pending one has no `expect` yet) shall, through `replay-test`, give exactly one self-answered result with empty `error`, its `expect` status, its `want` (`cal`: exact findings and context, classify: artifact; `fixed`: §3.5 matching), and no `jev-unrecorded` or `jev-error` unless wanted; once with the key unset and once with a dummy key and a test endpoint that fails the test on any request; a hit fixture with its records deleted shall fail the `want` assertion. The mixed fixture keeps the hit and reports the rejected batch's questions unassessed with no `jev-error`, and its live counterpart against a fake endpoint sends exactly one request per planned body. | P2–P9 | `<ext>.TestFixtures`, `semantic.TestMixedLive` |
 | C13 | No package under `cmd/` or `internal/` shall import `extensions/`, and the jev packages shall import no `internal/` package outside test helpers. | owner decision | existing `depguard` rules |
-| C14 | Each live attempt shall append one serialised ledger line with run, outcome, elapsed time and known or `null` usage; an I/O error shall be one stderr line with the status unchanged; replay shall write none. | P10 | `jev.TestLedger` |
+| C14 | Each live attempt shall append one serialised ledger line with run, outcome, elapsed time and known or `null` usage, waiting at most 0.1 s; an I/O error or an abandoned wait shall be one stderr line with the status unchanged, and a line abandoned before it is written is dropped; replay shall write none. | P10 | `jev.TestLedger` |
 | C15 | A live `stack run outbound --ext public --ext jev-semantic --range <r>` with built binaries and a test endpoint answering a hit shall exit 0 with both named results (`public: pass`, semantic `warn`) on clean texts, and exit 1 with `public: block` and the semantic result on a texts hit. | P4 | `semantic.TestExitCodes` (non-replay) |
 
 ## 7. Test plan

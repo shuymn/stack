@@ -40,7 +40,8 @@ type Env struct {
 	Git string
 	// Endpoint is the API URL; "" means the one this binary was built with.
 	Endpoint string
-	// Client sends live requests; nil means a plain http.Client.
+	// Client supplies the live transport and timeout (jev.Live); nil means
+	// http.DefaultTransport and the work deadline alone.
 	Client *http.Client
 	// Decisions replaces the shipped decisions when not nil.
 	Decisions map[string]jev.Decision

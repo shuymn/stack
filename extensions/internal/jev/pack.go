@@ -112,7 +112,8 @@ const (
 // groups of at most QuestionLimit (§3.1). Input that fits one state whole is sent whole. Otherwise
 // units are packed greedily in order up to the unit budget (the limit less the encoded fixed
 // fields), a unit larger than the budget split by lines, a longer line at UTF-8 boundaries, into
-// parts marked "part k of n". A budget under MinUnitBudget packs nothing.
+// parts marked "part k of n". Only when splitting is needed does a budget under MinUnitBudget pack
+// nothing. A question over QuestionLimit by itself stays unasked.
 func Pack(in Input) (Plan, error) {
 	limit := orDefault(in.StateLimit, StateBudget)
 	model := in.Model

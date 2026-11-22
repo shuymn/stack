@@ -150,9 +150,9 @@ installed, unsafe if left to extensions, stable); the reasoning per built-in is 
 - **Worker detection:** `agent_type == "opus-worker"`, `WORKER_LINE` in first prompt, or `-worktrees/agent-*` only. Never guess from `~/.t3/worktrees/`.
 
 ### Optional Jev (System One) Extensions
-- **Opt-out:** Active when `TYPESAFE_API_KEY` is set. An installed `jev-*` without the key opts out by answering `{"status":"pass"}` with no context and no call.
+- **Opt-in by key:** Live only when `TYPESAFE_API_KEY` is set, and then only for work it can assess under an enabled decision. An installed `jev-*` without the key opts out by answering `{"status":"pass"}` with no context and no call.
 - `jev-router` (`entry`): scores `references/*.md` for Just-in-Time injection.
-- `jev-semantic` (`outbound`): flags meta-duty regression or unsupported claims, advisory: a hit is `warn`, never `block`. Its supported caller is the hiden `commit-pr` step, which runs `stack run outbound --ext jev-semantic --range <merge-base>..<head>` with the PR's title, body and branch after `stack-public check` passes; CI is not wired. Design: `docs/design/phase4-jev.md`.
+- `jev-semantic` (`outbound`): flags meta-duty regression or unsupported claims, advisory: a hit is `warn`, never `block`. Its supported caller is the hiden `commit-pr` step, which runs `stack run outbound --ext jev-semantic --range <merge-base>..<head>` with the PR's title, body and branch after `stack-public check` passes; CI does not invoke it live. Design: `docs/design/phase4-jev.md`.
 - `jev-classify` (`cycle`): batch-classifies 7-day transcripts for corrections/drift and pre-filters memory duplicates.
 
 ## 5. Configuration (`~/.config/stack/config.toml`)
