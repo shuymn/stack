@@ -93,7 +93,7 @@ dropped (as `extensions/internal/checkpub/checkpub.go:244-253`), `GIT_CONFIG_PAR
 `diff.mnemonicPrefix=false`, `diff.suppressBlankEmpty=false`, `diff.relative=false`, `diff.renames=false`,
 `diff.context=3`, `diff.interHunkContext=0`, `diff.algorithm=myers`, `diff.indentHeuristic=true`, `diff.orderFile`
 neutralised, `i18n.logOutputEncoding=UTF-8`. Commands: `git log -z --encoding=UTF-8 --no-show-signature --format=%B
---end-of-options <range>` (NUL-separated into `commits`, the empty last field dropped) and `git diff --text
+--end-of-options <range>` (NUL-separated into `commits`, a trailing field dropped only if empty) and `git diff --text
 --no-ext-diff --no-textconv --no-color --no-renames --no-relative --ignore-submodules=none --submodule=short
 --full-index --src-prefix=a/ --dst-prefix=b/ -U3 --end-of-options <range> --` (`--full-index` against
 `core.abbrev`), LF-normalised; bodies are reproducible in this environment for the settings C6 exercises. Fixed
@@ -269,7 +269,7 @@ and recall ≥ 0.5 on `heldout`; otherwise it ships disabled and its context say
 and `want` of the `cal` fixtures (matched exactly). The `fixed` semantic fixtures (meta-duty hit, unsupported-claim
 hit, clean, diverged base, split file, one batch hit with another rejected for size) keep hand-written `want`,
 matched on status, finding `kind` and `where`, non-empty context with hits, and no `jev-unrecorded`/`jev-error`
-(not probability, cutoff or pin text), so lost detection fails them; they run with test cutoffs set in the test,
+(not probability, cutoff or pin text), so lost detection fails them; they run with test cutoffs injected by the test build (`-ldflags -X`, as the endpoint; no runtime override),
 so a decision that ships disabled does not break them (shipped eligibility is C10/C11's). Replay uses the recorded transport. **Model
 bump:** one PR changes the pin, re-records, refits, and reports old vs new on `heldout` (precision, recall, support,
 router top-3 hits). The corpus measures regressions on itself; the ledger does not measure live precision.
