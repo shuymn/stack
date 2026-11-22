@@ -511,29 +511,31 @@ func TestParseCommaGroups(t *testing.T) {
 	}
 }
 
+// kindTests are the command kinds of §3 "Command kind".
+var kindTests = []struct {
+	cmd  string
+	os   OS
+	kind Kind
+	name string
+}{
+	{`Remove-Item x`, Unix, Cmdlet, "Remove-Item"},
+	{`remove-item x`, Unix, Cmdlet, "Remove-Item"},
+	{`Microsoft.PowerShell.Management\Remove-Item x`, Unix, Cmdlet, "Remove-Item"},
+	{`ri x`, Unix, Cmdlet, "Remove-Item"},
+	{`del x`, Unix, Cmdlet, "Remove-Item"},
+	{`rm -r x`, Windows, Cmdlet, "Remove-Item"},
+	{`rm -rf x`, Unix, Native, "rm"},
+	{`rmdir x`, Unix, Native, "rmdir"},
+	{`& 'C:\x\rm.exe' -r '~'`, Windows, Native, "rm"},
+	{`rm.exe -r x`, Windows, Native, "rm"},
+	{`/bin/rm -r x`, Unix, Native, "rm"},
+	{`GH.EXE pr view`, Windows, Native, "GH"},
+	{`Write-Output x`, Unix, Cmdlet, "Write-Output"},
+	{`pre-commit run`, Unix, Native, "pre-commit"},
+}
+
 func TestParseKind(t *testing.T) {
-	tests := []struct {
-		cmd  string
-		os   OS
-		kind Kind
-		name string
-	}{
-		{`Remove-Item x`, Unix, Cmdlet, "Remove-Item"},
-		{`remove-item x`, Unix, Cmdlet, "Remove-Item"},
-		{`Microsoft.PowerShell.Management\Remove-Item x`, Unix, Cmdlet, "Remove-Item"},
-		{`ri x`, Unix, Cmdlet, "Remove-Item"},
-		{`del x`, Unix, Cmdlet, "Remove-Item"},
-		{`rm -r x`, Windows, Cmdlet, "Remove-Item"},
-		{`rm -rf x`, Unix, Native, "rm"},
-		{`rmdir x`, Unix, Native, "rmdir"},
-		{`& 'C:\x\rm.exe' -r '~'`, Windows, Native, "rm"},
-		{`rm.exe -r x`, Windows, Native, "rm"},
-		{`/bin/rm -r x`, Unix, Native, "rm"},
-		{`GH.EXE pr view`, Windows, Native, "GH"},
-		{`Write-Output x`, Unix, Cmdlet, "Write-Output"},
-		{`pre-commit run`, Unix, Native, "pre-commit"},
-	}
-	for _, tt := range tests {
+	for _, tt := range kindTests {
 		r := parse(t, tt.cmd, tt.os)
 		if len(r.Calls) != 1 {
 			t.Fatalf("%q calls = %q", tt.cmd, argvs(r))
@@ -615,61 +617,63 @@ func TestParseKnownVariables(t *testing.T) {
 	}
 }
 
+// nestedTests are nested scripts with their dialect and depth.
+var nestedTests = []struct {
+	cmd    string
+	calls  calls
+	nested []Script
+}{
+	{
+		`iex 'gh pr merge 7'`,
+		calls{{"iex", "gh pr merge 7"}, {"gh", "pr", "merge", "7"}},
+		[]Script{{Dialect: PowerShell, Text: "gh pr merge 7", Depth: 1}},
+	},
+	{
+		`bash -c 'gh pr merge 1'`,
+		calls{{"bash", "-c", "gh pr merge 1"}},
+		[]Script{{Dialect: Bash, Text: "gh pr merge 1", Depth: 1}},
+	},
+	{
+		`pwsh -NoProfile -Command 'gh pr merge 1'`,
+		calls{{"pwsh", "-NoProfile", "-Command", "gh pr merge 1"}, {"gh", "pr", "merge", "1"}},
+		[]Script{{Dialect: PowerShell, Text: "gh pr merge 1", Depth: 1}},
+	},
+	{
+		`iex "bash -c 'gh pr merge 7'"`,
+		calls{{"iex", "bash -c 'gh pr merge 7'"}, {"bash", "-c", "gh pr merge 7"}},
+		[]Script{
+			{Dialect: PowerShell, Text: "bash -c 'gh pr merge 7'", Depth: 1},
+			{Dialect: Bash, Text: "gh pr merge 7", Depth: 2},
+		},
+	},
+	{
+		`iex 'bash -c ''bash -c "gh pr merge 7"'''`,
+		calls{
+			{"iex", `bash -c 'bash -c "gh pr merge 7"'`},
+			{"bash", "-c", `bash -c "gh pr merge 7"`},
+		},
+		[]Script{
+			{Dialect: PowerShell, Text: `bash -c 'bash -c "gh pr merge 7"'`, Depth: 1},
+			{Dialect: Bash, Text: `bash -c "gh pr merge 7"`, Depth: 2},
+		},
+	},
+	{
+		`iex "iex 'iex ''gh pr merge 7'''"`,
+		calls{
+			{"iex", "iex 'iex ''gh pr merge 7'''"},
+			{"iex", "iex 'gh pr merge 7'"},
+			{"iex", "gh pr merge 7"},
+		},
+		[]Script{
+			{Dialect: PowerShell, Text: "iex 'iex ''gh pr merge 7'''", Depth: 1},
+			{Dialect: PowerShell, Text: "iex 'gh pr merge 7'", Depth: 2},
+		},
+	},
+	{`iex $x; bash -c "gh $x"`, calls{{"iex", "$"}, {"bash", "-c", "$"}}, nil},
+}
+
 func TestParseNested(t *testing.T) {
-	tests := []struct {
-		cmd    string
-		calls  calls
-		nested []Script
-	}{
-		{
-			`iex 'gh pr merge 7'`,
-			calls{{"iex", "gh pr merge 7"}, {"gh", "pr", "merge", "7"}},
-			[]Script{{Dialect: PowerShell, Text: "gh pr merge 7", Depth: 1}},
-		},
-		{
-			`bash -c 'gh pr merge 1'`,
-			calls{{"bash", "-c", "gh pr merge 1"}},
-			[]Script{{Dialect: Bash, Text: "gh pr merge 1", Depth: 1}},
-		},
-		{
-			`pwsh -NoProfile -Command 'gh pr merge 1'`,
-			calls{{"pwsh", "-NoProfile", "-Command", "gh pr merge 1"}, {"gh", "pr", "merge", "1"}},
-			[]Script{{Dialect: PowerShell, Text: "gh pr merge 1", Depth: 1}},
-		},
-		{
-			`iex "bash -c 'gh pr merge 7'"`,
-			calls{{"iex", "bash -c 'gh pr merge 7'"}, {"bash", "-c", "gh pr merge 7"}},
-			[]Script{
-				{Dialect: PowerShell, Text: "bash -c 'gh pr merge 7'", Depth: 1},
-				{Dialect: Bash, Text: "gh pr merge 7", Depth: 2},
-			},
-		},
-		{
-			`iex 'bash -c ''bash -c "gh pr merge 7"'''`,
-			calls{
-				{"iex", `bash -c 'bash -c "gh pr merge 7"'`},
-				{"bash", "-c", `bash -c "gh pr merge 7"`},
-			},
-			[]Script{
-				{Dialect: PowerShell, Text: `bash -c 'bash -c "gh pr merge 7"'`, Depth: 1},
-				{Dialect: Bash, Text: `bash -c "gh pr merge 7"`, Depth: 2},
-			},
-		},
-		{
-			`iex "iex 'iex ''gh pr merge 7'''"`,
-			calls{
-				{"iex", "iex 'iex ''gh pr merge 7'''"},
-				{"iex", "iex 'gh pr merge 7'"},
-				{"iex", "gh pr merge 7"},
-			},
-			[]Script{
-				{Dialect: PowerShell, Text: "iex 'iex ''gh pr merge 7'''", Depth: 1},
-				{Dialect: PowerShell, Text: "iex 'gh pr merge 7'", Depth: 2},
-			},
-		},
-		{`iex $x; bash -c "gh $x"`, calls{{"iex", "$"}, {"bash", "-c", "$"}}, nil},
-	}
-	for _, tt := range tests {
+	for _, tt := range nestedTests {
 		r := parse(t, tt.cmd, Unix)
 		if got := argvs(r); !slices.EqualFunc(got, tt.calls, slices.Equal) {
 			t.Errorf("%q calls = %q, want %q", tt.cmd, got, tt.calls)
@@ -694,20 +698,23 @@ func TestParseNested(t *testing.T) {
 	}
 }
 
+// parseFailures fail to tokenize: Parse returns no calls.
+var parseFailures = []string{
+	`gh pr merge 7; Write-Output "`,
+	`gh pr merge 7; Write-Output 'x`,
+	"gh pr merge 7; Write-Output @'\nx",
+	`gh pr merge 7; if ($x) { gh y`,
+	`gh pr merge 7; (gh x`,
+	`gh pr merge 7 }`,
+	`gh pr merge 7 <# x`,
+	`gh pr merge 7 < in.txt`,
+	"gh pr merge 7; using namespace \"\ngit status",
+	`$x.M(}); git status`,
+	`[T]::M(]); git status`,
+}
+
 func TestParseFailure(t *testing.T) {
-	for _, cmd := range []string{
-		`gh pr merge 7; Write-Output "`,
-		`gh pr merge 7; Write-Output 'x`,
-		"gh pr merge 7; Write-Output @'\nx",
-		`gh pr merge 7; if ($x) { gh y`,
-		`gh pr merge 7; (gh x`,
-		`gh pr merge 7 }`,
-		`gh pr merge 7 <# x`,
-		`gh pr merge 7 < in.txt`,
-		"gh pr merge 7; using namespace \"\ngit status",
-		`$x.M(}); git status`,
-		`[T]::M(]); git status`,
-	} {
+	for _, cmd := range parseFailures {
 		if r := Parse(cmd, "", "", Unix); r.Err == nil || len(r.Calls) != 0 || len(r.Nested) != 0 {
 			t.Errorf(
 				"Parse(%q) = calls %q err %v; want an error and no calls",
@@ -794,33 +801,35 @@ func TestParseCwd(t *testing.T) {
 	}
 }
 
+// bindingTests are cmdlet bindings: refusals and the parameter each word binds to.
+var bindingTests = []struct {
+	cmd     string
+	refused bool
+	params  []string // Param of each word after the name
+}{
+	{`Remove-Item -r -Path a`, false, []string{"Recurse", "Path", "Path"}},
+	{`Remove-Item -Rec -RECURSE x`, true, nil},
+	{`Remove-Item x -Recurse:$false -WhatIf`, false, []string{"Path", "Recurse", "WhatIf"}},
+	{
+		"Remove-Item \u2013Recurse -LP a",
+		false,
+		[]string{"Recurse", "LiteralPath", "LiteralPath"},
+	},
+	{
+		`Remove-Item -PSPath a -Exclude b`,
+		false,
+		[]string{"LiteralPath", "LiteralPath", "Exclude", "Exclude"},
+	},
+	{`Remove-Item -p x`, true, nil},
+	{`Remove-Item -Bogus x`, true, nil},
+	{`Remove-Item .\build ~`, true, nil},
+	{`Remove-Item -Path`, true, nil},
+	{`Remove-Item -Recurse -- -x`, false, []string{"Recurse", "", "Path"}},
+	{`ndr X FileSystem C:\w`, false, []string{"Name", "PSProvider", "Root"}},
+}
+
 func TestParseBinding(t *testing.T) {
-	tests := []struct {
-		cmd     string
-		refused bool
-		params  []string // Param of each word after the name
-	}{
-		{`Remove-Item -r -Path a`, false, []string{"Recurse", "Path", "Path"}},
-		{`Remove-Item -Rec -RECURSE x`, true, nil},
-		{`Remove-Item x -Recurse:$false -WhatIf`, false, []string{"Path", "Recurse", "WhatIf"}},
-		{
-			"Remove-Item \u2013Recurse -LP a",
-			false,
-			[]string{"Recurse", "LiteralPath", "LiteralPath"},
-		},
-		{
-			`Remove-Item -PSPath a -Exclude b`,
-			false,
-			[]string{"LiteralPath", "LiteralPath", "Exclude", "Exclude"},
-		},
-		{`Remove-Item -p x`, true, nil},
-		{`Remove-Item -Bogus x`, true, nil},
-		{`Remove-Item .\build ~`, true, nil},
-		{`Remove-Item -Path`, true, nil},
-		{`Remove-Item -Recurse -- -x`, false, []string{"Recurse", "", "Path"}},
-		{`ndr X FileSystem C:\w`, false, []string{"Name", "PSProvider", "Root"}},
-	}
-	for _, tt := range tests {
+	for _, tt := range bindingTests {
 		c := parse(t, tt.cmd, Unix).Calls[0]
 		if !c.Bound || c.Refused != tt.refused {
 			t.Errorf(
