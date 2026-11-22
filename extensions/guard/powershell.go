@@ -35,7 +35,7 @@ func decidePowerShell(command, cwd string, opts Options) (Decision, bool) {
 	if d, ok := ghPublish(calls, opts); ok {
 		return d, true
 	}
-	if d, ok := rmRootPowerShell(parsed.Calls, opts); ok {
+	if d, ok := rmRootPowerShell(parsed.Calls, cwd, opts); ok {
 		return d, true
 	}
 	for _, s := range parsed.Nested {
@@ -90,11 +90,11 @@ func secretsPowerShell(command string, opts Options) (Decision, bool) {
 // rmRootPowerShell denies a recursive `Remove-Item` (name or alias) of the home directory, a drive
 // root or an existing `.git` directory, and a native `rm` the Bash rule would deny
 // (powershell-guard §4.4).
-func rmRootPowerShell(calls []powershell.Call, opts Options) (Decision, bool) {
+func rmRootPowerShell(calls []powershell.Call, cwd string, opts Options) (Decision, bool) {
 	windows := opts.OS == windowsHost
 	var declared drives // drives exist only on Windows
 	if windows {
-		declared = declaredDrives(calls)
+		declared = declaredDrives(calls, existingDrives(cwd, opts.Home))
 	}
 	for _, c := range calls {
 		switch {
@@ -111,41 +111,52 @@ func rmRootPowerShell(calls []powershell.Call, opts Options) (Decision, bool) {
 	return Decision{}, false
 }
 
-// drives are the drives a script declares with New-PSDrive (`ndr`). A declared drive may be made
-// the current one, so a bare root is opaque once any is declared; a declared name's own root is
-// opaque too, and every letter's when a name is not static.
+// drives are the drives a script declares with New-PSDrive (`ndr`, `mount`). A declared drive may
+// be made the current one, so a bare root is opaque once any is declared; a declared name's own
+// root is opaque too, and every letter's when a name is not static.
 type drives struct {
 	any, dynamic bool
 	names        map[string]bool
 }
 
-func declaredDrives(calls []powershell.Call) drives {
+// existingDrives returns the lower-case letters of the drives the payload cwd and home lie on:
+// volumes PowerShell has mounted as FileSystem drives before the script runs.
+func existingDrives(cwd, home string) map[string]bool {
+	m := map[string]bool{}
+	for _, p := range []string{cwd, home} {
+		if len(p) >= 2 && p[1] == ':' && isLetter(p[0]) {
+			m[strings.ToLower(p[:1])] = true
+		}
+	}
+	return m
+}
+
+// declaredDrives collects the drives calls declare. A declaration whose static name is an existing
+// drive fails (DriveAlreadyExists) and declares nothing, as does a call pwsh refuses to bind.
+func declaredDrives(calls []powershell.Call, existing map[string]bool) drives {
 	var d drives
 	for _, c := range calls {
-		// A call pwsh refuses to bind declares nothing.
 		if c.Kind != powershell.Cmdlet || !c.Is("New-PSDrive") || !c.Bound || c.Refused {
 			continue
 		}
-		d.any = true
-		named := false
-		for _, w := range c.Args[1:] {
-			if w.Param != "Name" || w.IsParam {
-				continue
-			}
-			named = true
-			switch {
-			case !w.Static:
-				d.dynamic = true
-			case len(w.Text) == 1 && isLetter(w.Text[0]): // only a letter can be looked up
-				if d.names == nil {
-					d.names = map[string]bool{}
-				}
-				d.names[strings.ToLower(w.Text)] = true
+		var name *powershell.Word
+		for i, w := range c.Args[1:] {
+			if w.Param == "Name" && !w.IsParam {
+				name = &c.Args[i+1]
 			}
 		}
-		if !named {
+		switch {
+		case name == nil || !name.Static:
 			d.dynamic = true
+		case existing[strings.ToLower(name.Text)]:
+			continue
+		case len(name.Text) == 1 && isLetter(name.Text[0]): // only a letter can be looked up
+			if d.names == nil {
+				d.names = map[string]bool{}
+			}
+			d.names[strings.ToLower(name.Text)] = true
 		}
+		d.any = true
 	}
 	return d
 }

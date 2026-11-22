@@ -374,6 +374,28 @@ func TestRmRootPowerShell(t *testing.T) {
 	wantAllow(t, "relative operand under an unknown cwd", d, ok)
 }
 
+// TestRmRootPowerShellExistingDrive checks that declaring a drive whose letter is the payload cwd's
+// or home's volume declares nothing: New-PSDrive fails with DriveAlreadyExists, so that root and
+// bare roots stay judged.
+func TestRmRootPowerShellExistingDrive(t *testing.T) {
+	f := newFixture(t)
+	f.cwd, f.home = `C:\work\repo`, `D:\work\home`
+	f.check(psCases{
+		windows: true, rule: RuleRmRoot,
+		deny: []string{
+			`mount C FileSystem C:\w; Remove-Item -Recurse C:\`,
+			`New-PSDrive -Name C -PSProvider FileSystem -Root C:\w; Remove-Item -Recurse C:\`,
+			`ndr d FileSystem C:\w; Remove-Item -Recurse D:\`,
+			`mount C FileSystem C:\w; Remove-Item -Recurse \`,
+		},
+		allow: []string{
+			`mount X FileSystem C:\w; Remove-Item -Recurse X:\`,
+			`New-PSDrive -Name X -PSProvider FileSystem -Root C:\w; Remove-Item -Recurse X:\`,
+			`mount X FileSystem C:\w; Remove-Item -Recurse \`,
+		},
+	})
+}
+
 // TestRmRootPowerShellGitSymlink checks that a terminal `.` does not follow a `.git` symlink: the
 // link itself is what the path names, and it is not a directory.
 func TestRmRootPowerShellGitSymlink(t *testing.T) {
