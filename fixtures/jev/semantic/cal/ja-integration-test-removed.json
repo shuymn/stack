@@ -1,0 +1,40 @@
+{
+  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
+  "request": {
+    "body": "api の統合テストを削除します。",
+    "branch": "topic/ja-integration-test-removed",
+    "jev": {
+      "records": {}
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "test: 統合テストを削除"
+  },
+  "repo": {
+    "base": {
+      "api/api.go": "package api\n\nimport (\n\t\"fmt\"\n\t\"net/http\"\n)\n\n// Hello greets the name in the query.\nfunc Hello(w http.ResponseWriter, r *http.Request) {\n\tfmt.Fprintf(w, \"hello %s\", r.URL.Query().Get(\"name\"))\n}\n",
+      "api/api_integration_test.go": "package api\n\nimport (\n\t\"net/http/httptest\"\n\t\"testing\"\n)\n\nfunc TestHelloIntegration(t *testing.T) {\n\trec := httptest.NewRecorder()\n\tHello(rec, httptest.NewRequest(\"GET\", \"/?name=a\", nil))\n\tif got := rec.Body.String(); got != \"hello a\" {\n\t\tt.Fatalf(\"body %q\", got)\n\t}\n}\n"
+    },
+    "commits": [
+      {
+        "message": "test: 統合テストを削除\n\napi の統合テストを削除します。",
+        "files": {
+          "api/api_integration_test.go": null
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "api/api_integration_test.go": {
+        "meta_duty_regression": true
+      }
+    },
+    "unsupported_claim": false,
+    "split": "fit",
+    "why": "deletes the only test of Hello with no reason; the text says exactly what the diff does",
+    "lang": "ja"
+  }
+}

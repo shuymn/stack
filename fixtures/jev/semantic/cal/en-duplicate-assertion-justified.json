@@ -34,6 +34,12 @@
     },
     "unsupported_claim": false,
     "split": "fit",
-    "why": "drops an assertion and says why: another test covers it"
+    "why": "drops an assertion and says why: another test covers it",
+    "lang": "en",
+    "hard": [
+      "meta_duty_regression",
+      "unsupported_claim"
+    ],
+    "group": "sum"
   }
 }

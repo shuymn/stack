@@ -38,6 +38,8 @@
     },
     "unsupported_claim": false,
     "split": "fit",
-    "why": "adds Mean with the test its body names"
+    "why": "adds Mean with the test its body names",
+    "lang": "en",
+    "group": "sum"
   }
 }

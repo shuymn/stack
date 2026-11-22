@@ -33,7 +33,8 @@
       }
     },
     "unsupported_claim": true,
-    "split": "heldout",
-    "why": "deletes the test file while the title claims coverage"
+    "split": "fit",
+    "why": "deletes the test file while the title claims coverage",
+    "lang": "en"
   }
 }

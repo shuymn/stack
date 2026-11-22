@@ -34,6 +34,8 @@
     },
     "unsupported_claim": true,
     "split": "fit",
-    "why": "claims a README update the diff does not contain"
+    "why": "claims a README update the diff does not contain",
+    "lang": "ja",
+    "group": "config"
   }
 }

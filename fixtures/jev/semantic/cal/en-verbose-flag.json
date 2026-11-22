@@ -1,0 +1,39 @@
+{
+  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
+  "request": {
+    "body": "-v prints each processed file.",
+    "branch": "topic/en-verbose-flag",
+    "jev": {
+      "records": {}
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "feat: add a -v flag"
+  },
+  "repo": {
+    "base": {
+      "cmd/count/main.go": "package main\n\nimport (\n\t\"flag\"\n\t\"fmt\"\n\t\"os\"\n)\n\nfunc main() {\n\tn := flag.Int(\"n\", 10, \"lines per file\")\n\tflag.Parse()\n\tfor _, p := range flag.Args() {\n\t\tif _, err := os.Stat(p); err != nil {\n\t\t\tfmt.Fprintln(os.Stderr, err)\n\t\t\tos.Exit(1)\n\t\t}\n\t}\n\tfmt.Println(*n, len(flag.Args()))\n}\n"
+    },
+    "commits": [
+      {
+        "message": "feat: add a -v flag\n\n-v prints each processed file.",
+        "files": {
+          "cmd/count/main.go": "package main\n\nimport (\n\t\"flag\"\n\t\"fmt\"\n\t\"os\"\n)\n\nfunc main() {\n\tn := flag.Int(\"n\", 10, \"lines per file\")\n\tverbose := flag.Bool(\"v\", false, \"print each processed file\")\n\tflag.Parse()\n\tfor _, p := range flag.Args() {\n\t\tif _, err := os.Stat(p); err != nil {\n\t\t\tfmt.Fprintln(os.Stderr, err)\n\t\t\tos.Exit(1)\n\t\t}\n\t\tif *verbose {\n\t\t\tfmt.Println(p)\n\t\t}\n\t}\n\tfmt.Println(*n, len(flag.Args()))\n}\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "cmd/count/main.go": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": false,
+    "split": "heldout",
+    "why": "adds -v, which prints each processed file, as described",
+    "lang": "en"
+  }
+}

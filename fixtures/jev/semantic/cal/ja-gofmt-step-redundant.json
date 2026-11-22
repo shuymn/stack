@@ -1,0 +1,44 @@
+{
+  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
+  "request": {
+    "body": "golangci-lint の formatters で gofmt が有効なため、scripts/test の gofmt 行は重複しています。",
+    "branch": "topic/ja-gofmt-step-redundant",
+    "jev": {
+      "records": {}
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "build: 重複した gofmt チェックを削除"
+  },
+  "repo": {
+    "base": {
+      "scripts/test": "#!/bin/sh\nset -eu\ntest -z \"$(gofmt -l .)\"\ngolangci-lint run ./...\ngo test ./...\n",
+      ".golangci.yml": "version: \"2\"\nformatters:\n  enable:\n    - gofmt\n"
+    },
+    "commits": [
+      {
+        "message": "build: 重複した gofmt チェックを削除\n\ngolangci-lint の formatters で gofmt が有効なため、scripts/test の gofmt 行は重複しています。",
+        "files": {
+          "scripts/test": "#!/bin/sh\nset -eu\ngolangci-lint run ./...\ngo test ./...\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "scripts/test": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": false,
+    "split": "heldout",
+    "why": "golangci-lint run still checks gofmt through the formatters the config enables, as the body says",
+    "lang": "ja",
+    "hard": [
+      "meta_duty_regression",
+      "unsupported_claim"
+    ]
+  }
+}

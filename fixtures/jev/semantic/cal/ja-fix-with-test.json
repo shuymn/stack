@@ -37,7 +37,9 @@
       }
     },
     "unsupported_claim": false,
-    "split": "heldout",
-    "why": "a fix with the test its body names"
+    "split": "fit",
+    "why": "a fix with the test its body names",
+    "lang": "ja",
+    "group": "limit"
   }
 }

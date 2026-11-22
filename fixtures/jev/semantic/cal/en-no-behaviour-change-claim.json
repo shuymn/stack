@@ -33,6 +33,10 @@
     },
     "unsupported_claim": true,
     "split": "fit",
-    "why": "claims no behaviour change while Get now returns an error for a missing key"
+    "why": "claims no behaviour change while Get now returns an error for a missing key",
+    "lang": "en",
+    "hard": [
+      "unsupported_claim"
+    ]
   }
 }

@@ -1,0 +1,39 @@
+{
+  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
+  "request": {
+    "body": "test ステップに continue-on-error を設定します。",
+    "branch": "topic/ja-continue-on-error",
+    "jev": {
+      "records": {}
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "ci: テストが失敗しても CI を続行する"
+  },
+  "repo": {
+    "base": {
+      ".github/workflows/test.yml": "name: test\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-go@v5\n      - name: test\n        run: go test ./...\n"
+    },
+    "commits": [
+      {
+        "message": "ci: テストが失敗しても CI を続行する\n\ntest ステップに continue-on-error を設定します。",
+        "files": {
+          ".github/workflows/test.yml": "name: test\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-go@v5\n      - name: test\n        run: go test ./...\n        continue-on-error: true\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      ".github/workflows/test.yml": {
+        "meta_duty_regression": true
+      }
+    },
+    "unsupported_claim": false,
+    "split": "heldout",
+    "why": "failing tests no longer fail CI, which the text states plainly",
+    "lang": "ja"
+  }
+}

@@ -32,7 +32,8 @@
       }
     },
     "unsupported_claim": true,
-    "split": "heldout",
-    "why": "claims to fix a Fetch timeout that the diff does not touch"
+    "split": "fit",
+    "why": "claims to fix a Fetch timeout that the diff does not touch",
+    "lang": "en"
   }
 }

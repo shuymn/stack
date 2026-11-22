@@ -33,7 +33,13 @@
       }
     },
     "unsupported_claim": true,
-    "split": "heldout",
-    "why": "loosens == to >= in an assertion and claims an added boundary test that is not there"
+    "split": "fit",
+    "why": "loosens == to >= in an assertion and claims an added boundary test that is not there",
+    "lang": "ja",
+    "hard": [
+      "meta_duty_regression",
+      "unsupported_claim"
+    ],
+    "group": "limit"
   }
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -229,5 +230,79 @@ func TestCalibrationGate(t *testing.T) {
 				t.Fatalf("message %q does not name the command", msg)
 			}
 		})
+	}
+}
+
+// corpusCount is one decision's cal cases of one split and class.
+type corpusCount struct{ en, ja, hard int }
+
+// TestCorpus is §3.5's corpus: per decision 12 positive and 12 negative fit cases and 8 + 8
+// heldout ones, each class balanced between Japanese and English and half hard, and every group
+// of translations or near-duplicates in one split.
+func TestCorpus(t *testing.T) {
+	paths, err := filepath.Glob(filepath.Join(semanticFixtures, "cal", "*.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]corpusCount{}
+	groups := map[string]string{}
+	for _, p := range paths {
+		f, err := jev.ReadFixture(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var l semantic.Label
+		if err := json.Unmarshal(f.Label, &l); err != nil {
+			t.Fatalf("%s: %v", p, err)
+		}
+		if l.Why == "" || (l.Split != calibrate.SplitFit && l.Split != calibrate.SplitHeldout) {
+			t.Fatalf("%s: label %+v", p, l)
+		}
+		if g, ok := groups[l.Group]; l.Group != "" && ok && g != l.Split {
+			t.Fatalf("%s: group %s spans %s and %s", p, l.Group, g, l.Split)
+		}
+		groups[l.Group] = l.Split
+		for _, q := range semantic.Questions {
+			truth := l.Unsupported
+			if q.Name == semantic.MetaDuty {
+				truth = l.MetaTruth(slices.Collect(maps.Keys(l.Files)))
+			}
+			key := fmt.Sprintf("%s %s %v", q.Name, l.Split, truth)
+			c := got[key]
+			switch l.Lang {
+			case "en":
+				c.en++
+			case "ja":
+				c.ja++
+			default:
+				t.Fatalf("%s: lang %q", p, l.Lang)
+			}
+			if slices.Contains(l.Hard, q.Name) {
+				c.hard++
+			}
+			got[key] = c
+		}
+		for _, h := range l.Hard {
+			if !slices.ContainsFunc(semantic.Questions, func(q jev.Question) bool {
+				return q.Name == h
+			}) {
+				t.Fatalf("%s: hard names %q", p, h)
+			}
+		}
+	}
+	fit := corpusCount{en: 6, ja: 6, hard: 6}
+	held := corpusCount{en: 4, ja: 4, hard: 4}
+	want := map[string]corpusCount{}
+	for _, q := range semantic.Questions {
+		for _, truth := range []bool{true, false} {
+			want[fmt.Sprintf("%s fit %v", q.Name, truth)] = fit
+			want[fmt.Sprintf("%s heldout %v", q.Name, truth)] = held
+		}
+	}
+	// The seven straightforward meta-duty negatives of the first corpus are all in fit, and fit
+	// holds six Japanese and six English negatives: one hard case short of half.
+	want[semantic.MetaDuty+" fit false"] = corpusCount{en: 6, ja: 6, hard: 5}
+	if !maps.Equal(got, want) {
+		t.Fatalf("corpus %v, want %v", got, want)
 	}
 }

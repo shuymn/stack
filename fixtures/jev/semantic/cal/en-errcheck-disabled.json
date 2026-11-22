@@ -1,0 +1,39 @@
+{
+  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
+  "request": {
+    "body": "Turns off the errcheck linter.",
+    "branch": "topic/en-errcheck-disabled",
+    "jev": {
+      "records": {}
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "chore: disable errcheck"
+  },
+  "repo": {
+    "base": {
+      ".golangci.yml": "version: \"2\"\nlinters:\n  enable:\n    - errcheck\n    - govet\n    - staticcheck\n"
+    },
+    "commits": [
+      {
+        "message": "chore: disable errcheck\n\nTurns off the errcheck linter.",
+        "files": {
+          ".golangci.yml": "version: \"2\"\nlinters:\n  enable:\n    - govet\n    - staticcheck\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      ".golangci.yml": {
+        "meta_duty_regression": true
+      }
+    },
+    "unsupported_claim": false,
+    "split": "heldout",
+    "why": "disables errcheck in plain sight, exactly as the text says",
+    "lang": "en"
+  }
+}

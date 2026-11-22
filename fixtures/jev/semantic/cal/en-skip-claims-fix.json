@@ -34,6 +34,8 @@
     },
     "unsupported_claim": true,
     "split": "fit",
-    "why": "skips the nil test while claiming the nil case is fixed in code that does not change"
+    "why": "skips the nil test while claiming the nil case is fixed in code that does not change",
+    "lang": "en",
+    "group": "config"
   }
 }

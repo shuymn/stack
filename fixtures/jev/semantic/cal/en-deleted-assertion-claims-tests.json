@@ -34,6 +34,8 @@
     },
     "unsupported_claim": true,
     "split": "fit",
-    "why": "deletes the empty-input assertion and claims to add tests"
+    "why": "deletes the empty-input assertion and claims to add tests",
+    "lang": "en",
+    "group": "sum"
   }
 }

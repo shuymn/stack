@@ -1,0 +1,42 @@
+{
+  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
+  "request": {
+    "body": "Ran the full CI matrix on a fork; everything is green and nothing depended on the lint job.",
+    "branch": "topic/en-lint-job-removed-verified",
+    "jev": {
+      "records": {}
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "ci: remove the lint job"
+  },
+  "repo": {
+    "base": {
+      ".github/workflows/ci.yml": "name: ci\non: [push]\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: golangci/golangci-lint-action@v8\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-go@v5\n      - run: go test ./...\n"
+    },
+    "commits": [
+      {
+        "message": "ci: remove the lint job\n\nRan the full CI matrix on a fork; everything is green and nothing depended on the lint job.",
+        "files": {
+          ".github/workflows/ci.yml": "name: ci\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-go@v5\n      - run: go test ./...\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      ".github/workflows/ci.yml": {
+        "meta_duty_regression": true
+      }
+    },
+    "unsupported_claim": true,
+    "split": "heldout",
+    "why": "removes the lint job outright; the fork run it cites as verification is not evidenced",
+    "lang": "en",
+    "hard": [
+      "unsupported_claim"
+    ]
+  }
+}

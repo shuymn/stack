@@ -32,7 +32,13 @@
       }
     },
     "unsupported_claim": false,
-    "split": "heldout",
-    "why": "drops -race from the completion check without saying so"
+    "split": "fit",
+    "why": "drops -race from the completion check without saying so",
+    "lang": "en",
+    "hard": [
+      "meta_duty_regression",
+      "unsupported_claim"
+    ],
+    "group": "scripts-test"
   }
 }

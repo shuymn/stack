@@ -33,6 +33,10 @@
     },
     "unsupported_claim": true,
     "split": "fit",
-    "why": "claims a measured latency drop with no evidence"
+    "why": "claims a measured latency drop with no evidence",
+    "lang": "en",
+    "hard": [
+      "unsupported_claim"
+    ]
   }
 }

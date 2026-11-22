@@ -33,6 +33,10 @@
     },
     "unsupported_claim": true,
     "split": "fit",
-    "why": "drops go vet from the check and claims an unmeasured speed-up"
+    "why": "drops go vet from the check and claims an unmeasured speed-up",
+    "lang": "ja",
+    "hard": [
+      "unsupported_claim"
+    ]
   }
 }

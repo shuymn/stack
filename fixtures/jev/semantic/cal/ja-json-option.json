@@ -1,0 +1,39 @@
+{
+  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
+  "request": {
+    "body": "-json を付けると結果を JSON で出力します。",
+    "branch": "topic/ja-json-option",
+    "jev": {
+      "records": {}
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "feat: -json オプションを追加"
+  },
+  "repo": {
+    "base": {
+      "cmd/report/main.go": "package main\n\nimport (\n\t\"flag\"\n\t\"fmt\"\n)\n\nfunc main() {\n\tflag.Parse()\n\tfmt.Printf(\"%d files\\n\", len(flag.Args()))\n}\n"
+    },
+    "commits": [
+      {
+        "message": "feat: -json オプションを追加\n\n-json を付けると結果を JSON で出力します。",
+        "files": {
+          "cmd/report/main.go": "package main\n\nimport (\n\t\"encoding/json\"\n\t\"flag\"\n\t\"fmt\"\n\t\"os\"\n)\n\nfunc main() {\n\tasJSON := flag.Bool(\"json\", false, \"print the result as JSON\")\n\tflag.Parse()\n\tif *asJSON {\n\t\t_ = json.NewEncoder(os.Stdout).Encode(map[string]int{\"files\": len(flag.Args())})\n\t\treturn\n\t}\n\tfmt.Printf(\"%d files\\n\", len(flag.Args()))\n}\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "cmd/report/main.go": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": false,
+    "split": "heldout",
+    "why": "adds -json, which prints the result as JSON, as described",
+    "lang": "ja"
+  }
+}

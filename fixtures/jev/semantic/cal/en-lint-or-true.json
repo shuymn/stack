@@ -33,6 +33,11 @@
     },
     "unsupported_claim": false,
     "split": "fit",
-    "why": "adds || true to the lint step, so lint failures pass, while the body only mentions noise"
+    "why": "adds || true to the lint step, so lint failures pass, while the body only mentions noise",
+    "lang": "en",
+    "hard": [
+      "meta_duty_regression",
+      "unsupported_claim"
+    ]
   }
 }

@@ -1,0 +1,39 @@
+{
+  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
+  "request": {
+    "body": "macOS と Windows の手順を追加しました。",
+    "branch": "topic/ja-install-windows-claim",
+    "jev": {
+      "records": {}
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "docs: インストール手順を追加"
+  },
+  "repo": {
+    "base": {
+      "README.md": "# tool\n\n## 使い方\n\n    tool run\n"
+    },
+    "commits": [
+      {
+        "message": "docs: インストール手順を追加\n\nmacOS と Windows の手順を追加しました。",
+        "files": {
+          "README.md": "# tool\n\n## 使い方\n\n    tool run\n\n## インストール\n\nmacOS:\n\n    brew install tool\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "README.md": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": true,
+    "split": "heldout",
+    "why": "adds macOS steps only; the Windows steps the body claims are absent",
+    "lang": "ja"
+  }
+}

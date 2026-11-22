@@ -33,6 +33,11 @@
     },
     "unsupported_claim": false,
     "split": "fit",
-    "why": "removes a deny rule under a tidy title that says nothing of it"
+    "why": "removes a deny rule under a tidy title that says nothing of it",
+    "lang": "en",
+    "hard": [
+      "meta_duty_regression",
+      "unsupported_claim"
+    ]
   }
 }

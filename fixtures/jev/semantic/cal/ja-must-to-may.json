@@ -33,6 +33,11 @@
     },
     "unsupported_claim": false,
     "split": "fit",
-    "why": "turns a must into a may in agent instructions without saying why"
+    "why": "turns a must into a may in agent instructions without saying why",
+    "lang": "ja",
+    "hard": [
+      "meta_duty_regression",
+      "unsupported_claim"
+    ]
   }
 }

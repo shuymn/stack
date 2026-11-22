@@ -37,7 +37,12 @@
       }
     },
     "unsupported_claim": false,
-    "split": "heldout",
-    "why": "moves the lint step to the pre-push hook and says so"
+    "split": "fit",
+    "why": "moves the lint step to the pre-push hook and says so",
+    "lang": "en",
+    "hard": [
+      "meta_duty_regression"
+    ],
+    "group": "scripts-test"
   }
 }

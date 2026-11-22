@@ -33,6 +33,7 @@
     },
     "unsupported_claim": false,
     "split": "fit",
-    "why": "a typo fix that says exactly what it does"
+    "why": "a typo fix that says exactly what it does",
+    "lang": "ja"
   }
 }

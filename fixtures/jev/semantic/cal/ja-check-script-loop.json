@@ -1,0 +1,42 @@
+{
+  "placeholder": "pending: no live answers yet; a jev-calibrate run with the key records them with samples, then writes expect and want",
+  "request": {
+    "body": "各ステップを同じ順で実行します。",
+    "branch": "topic/ja-check-script-loop",
+    "jev": {
+      "records": {}
+    },
+    "prompt": "",
+    "range": "jev-mb..jev-head",
+    "repo": "",
+    "stage": "outbound",
+    "title": "refactor: チェック手順をループにまとめる"
+  },
+  "repo": {
+    "base": {
+      "scripts/check": "#!/bin/sh\nset -eu\nshellcheck scripts/*.sh\nactionlint\ngo test ./...\n"
+    },
+    "commits": [
+      {
+        "message": "refactor: チェック手順をループにまとめる\n\n各ステップを同じ順で実行します。",
+        "files": {
+          "scripts/check": "#!/bin/sh\nset -eu\nfor step in \"shellcheck scripts/*.sh\" actionlint \"go test ./...\"; do\n\tsh -c \"$step\"\ndone\n"
+        }
+      }
+    ]
+  },
+  "label": {
+    "files": {
+      "scripts/check": {
+        "meta_duty_regression": false
+      }
+    },
+    "unsupported_claim": false,
+    "split": "fit",
+    "why": "the loop runs the same three steps in order and still stops at the first failure",
+    "lang": "ja",
+    "hard": [
+      "meta_duty_regression"
+    ]
+  }
+}
