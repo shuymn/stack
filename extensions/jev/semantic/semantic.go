@@ -16,12 +16,11 @@ import (
 	"github.com/shuymn/stack/extensions/internal/proc"
 )
 
-// budget runs from process start; reserve is kept after the work deadline to answer (§3.1).
-// Variables only for tests.
-var (
-	budget  = 10 * time.Second
-	reserve = 500 * time.Millisecond
-)
+// budget runs from process start; a variable only for tests (§3.1).
+var budget = 10 * time.Second
+
+// reserve is kept after the work deadline to answer (§3.1).
+const reserve = 500 * time.Millisecond
 
 // Env is everything jev-semantic takes from the process.
 type Env struct {

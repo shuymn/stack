@@ -87,28 +87,26 @@ func Run(ctx context.Context, o Options) error {
 	if err != nil {
 		return err
 	}
+	// Fixed fixtures are loaded so a malformed one fails before any request, then left alone:
+	// they keep their synthetic answers and failures, which check behaviour that live answers
+	// would change. Live answers live in the cal corpus.
+	cal := slices.DeleteFunc(cases, Case.Fixed)
 	// Record every cal case before writing anything: a refit over a partly refreshed corpus
 	// would pair a new table with an older want.
 	var failed []string
-	for i := range cases {
-		c := &cases[i]
-		// Fixed fixtures keep their synthetic answers and failures: they check behaviour, which
-		// live answers would change. Live answers live in the cal corpus.
-		if c.Fixed() {
-			continue
-		}
-		ok, err := record(ctx, o, c)
+	for i := range cal {
+		ok, err := record(ctx, o, &cal[i])
 		if err != nil {
 			return err
 		}
 		if !ok {
-			failed = append(failed, c.Path)
+			failed = append(failed, cal[i].Path)
 		}
 	}
 	if len(failed) > 0 {
 		return fmt.Errorf("%w: %s", errRerun, strings.Join(failed, ", "))
 	}
-	table := Refit(cases)
+	table := Refit(cal)
 	for name, d := range table.Decisions {
 		_, _ = fmt.Fprintf(o.Stdout, "%s: enabled %v, cutoff %s, %s\n", name, d.Enabled,
 			cutoffText(d), d.Reason)
@@ -116,19 +114,12 @@ func Run(ctx context.Context, o Options) error {
 			_, _ = fmt.Fprintf(o.Stdout, "  unstable %s\n", u)
 		}
 	}
-	for i := range cases {
-		c := &cases[i]
-		if c.Fixed() {
-			continue
-		}
-		if err := Refresh(c, table.Decisions); err != nil {
+	for i := range cal {
+		if err := Refresh(&cal[i], table.Decisions); err != nil {
 			return err
 		}
 	}
-	for _, c := range cases {
-		if c.Fixed() {
-			continue
-		}
+	for _, c := range cal {
 		if err := jev.WriteFixture(c.Path, c.Fixture); err != nil {
 			return err
 		}

@@ -90,7 +90,7 @@ result; at compaction the router's stderr is discarded.
 All requests use `model: "jev-1.14.0"`; generated metadata in them has no wall-clock time or local absolute path.
 
 **`jev-semantic` (outbound).** Read from `repo` (the cwd when `""`). Git runs with the repository-location variables
-dropped (as `extensions/internal/checkpub/checkpub.go:244-253`), `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_COUNT` and its
+dropped (as `extensions/internal/proc/repovars.go`), `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_COUNT` and its
 `GIT_CONFIG_KEY_*`/`GIT_CONFIG_VALUE_*` dropped, `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL` the null device, and
 `-c` overrides that beat repository-local config: `core.quotePath=false`, `diff.noprefix=false`,
 `diff.mnemonicPrefix=false`, `diff.suppressBlankEmpty=false`, `diff.relative=false`, `diff.renames=false`,

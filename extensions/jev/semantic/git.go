@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/shuymn/stack/extensions/internal/checkpub"
 	"github.com/shuymn/stack/extensions/internal/jev"
 	"github.com/shuymn/stack/extensions/internal/proc"
 )
@@ -67,7 +66,7 @@ func configArgs() []string {
 // GitEnv is env without the repository-location variables and the config passed through the
 // environment, with system config off and global config the null device.
 func GitEnv(env []string) []string {
-	env = checkpub.DropRepoVars(env)
+	env = proc.DropRepoVars(env)
 	env = slices.DeleteFunc(env, func(kv string) bool {
 		name, _, _ := strings.Cut(kv, "=")
 		name = strings.ToUpper(name)
