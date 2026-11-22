@@ -20,7 +20,7 @@ import (
 // Variables only for tests.
 var (
 	budget  = 10 * time.Second
-	reserve = 300 * time.Millisecond
+	reserve = 500 * time.Millisecond
 )
 
 // Env is everything jev-semantic takes from the process.
@@ -104,6 +104,13 @@ func respond(ctx context.Context, env Env) jev.Response {
 	if req.Range == "" {
 		return pass()
 	}
+	ds := env.Decisions
+	if ds == nil {
+		ds = Decisions()
+	}
+	if AllDisabled(ds) {
+		return Disabled(ds)
+	}
 	runner := env.Runner
 	if runner == nil {
 		runner = proc.Exec{WaitDelay: jev.PipeWait}
@@ -129,12 +136,7 @@ func respond(ctx context.Context, env Env) jev.Response {
 		return warnLine(jev.Finding{Kind: jev.KindError, Detail: "cannot encode the request"},
 			name+": cannot encode the request")
 	}
-	outcomes := jev.Do(ctx, transport, plan.Batches)
-	ds := env.Decisions
-	if ds == nil {
-		ds = Decisions()
-	}
-	return Respond(plan, state.Units, outcomes, ds, env.Stderr)
+	return Evaluate(ctx, plan, state.Units, transport, ds, env.Stderr)
 }
 
 func (env Env) live(key string) jev.Live {

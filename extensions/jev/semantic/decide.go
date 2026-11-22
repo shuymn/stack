@@ -1,6 +1,7 @@
 package semantic
 
 import (
+	"context"
 	_ "embed"
 	"fmt"
 	"io"
@@ -65,6 +66,41 @@ func parseTestCutoffs(s string) map[string]jev.Decision {
 	return ds
 }
 
+// AllDisabled reports that no decision can flag, so nothing is worth sending.
+func AllDisabled(ds map[string]jev.Decision) bool {
+	for _, q := range Questions {
+		if ds[q.Name].Enabled {
+			return false
+		}
+	}
+	return true
+}
+
+// Disabled is the answer when every decision is disabled: pass, nothing sent, and the context
+// says why.
+func Disabled(ds map[string]jev.Decision) jev.Response {
+	reasons := make([]string, 0, len(Questions))
+	for _, q := range Questions {
+		reasons = append(reasons, q.Name+": "+ds[q.Name].Reason)
+	}
+	r := &jev.Reply{}
+	r.Line(fmt.Sprintf("%s: every decision is disabled (%s); nothing was sent", name,
+		strings.Join(reasons, "; ")))
+	return r.Response()
+}
+
+// Evaluate sends a plan's batches and answers from their outcomes; with every decision disabled
+// it sends nothing. jev-calibrate refreshes cal fixtures through it with a replay transport.
+func Evaluate(
+	ctx context.Context, plan jev.Plan, units []jev.Unit, t jev.Transport,
+	ds map[string]jev.Decision, stderr io.Writer,
+) jev.Response {
+	if AllDisabled(ds) {
+		return Disabled(ds)
+	}
+	return Respond(plan, units, jev.Do(ctx, t, plan.Batches), ds, stderr)
+}
+
 // group collects the requests left unassessed for one cause.
 type group struct {
 	cause     string
@@ -93,6 +129,15 @@ func Respond(
 		switch {
 		case o.Class == jev.OK:
 			for _, q := range b.Questions {
+				if cause, bad := o.Invalid[q.Name]; bad {
+					detail := q.Name + ": " + cause
+					if !errSeen[detail] {
+						errSeen[detail] = true
+						r.Warn(jev.Finding{Kind: jev.KindError, Where: where, Detail: detail},
+							fmt.Sprintf("%s: Jev answered %s: %s", name, detail, action(o)))
+					}
+					continue
+				}
 				p := o.Answers[q.Name].Noul
 				d := ds[q.Name]
 				if !d.Enabled || d.Cutoff == nil || !jev.Hit(p, *d.Cutoff) {

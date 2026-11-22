@@ -30,7 +30,16 @@ const testCutoffValue = "0.5"
 // stack-jev-semantic whose endpoint is fake.server and whose cutoffs are the test cutoffs.
 var built struct {
 	dir, stack, public, semantic string
-	err                          error
+	// committed holds a stack-jev-semantic with the committed cutoff table, for cal fixtures.
+	committed string
+	err       error
+}
+
+// committedPath is the PATH entry that puts the committed-cutoff build of stack-jev-semantic
+// before the test build.
+func committedPath() string {
+	return "PATH=" + built.committed + string(os.PathListSeparator) + built.dir +
+		string(os.PathListSeparator) + os.Getenv("PATH")
 }
 
 // fake is the endpoint the test build calls. Its handler is set per test; the default fails the
@@ -96,6 +105,8 @@ func buildBinaries() func() {
 	built.stack = filepath.Join(dir, "stack"+exe)
 	built.public = filepath.Join(dir, "stack-public"+exe)
 	built.semantic = filepath.Join(dir, "stack-jev-semantic"+exe)
+	built.committed = filepath.Join(dir, "committed")
+	committedBin := filepath.Join(built.committed, "stack-jev-semantic"+exe)
 	ldflags := "-X github.com/shuymn/stack/extensions/internal/jev.endpoint=" + fake.server.URL +
 		" -X github.com/shuymn/stack/extensions/jev/semantic.testCutoffs=" +
 		MetaDuty + "=" + testCutoffValue + "," + Unsupported + "=" + testCutoffValue
@@ -104,6 +115,10 @@ func buildBinaries() func() {
 		{"build", "-o", built.stack, "../../../cmd/stack"},
 		{"build", "-o", built.public, "../../public/cmd/stack-public"},
 		{"build", "-ldflags", ldflags, "-o", built.semantic, "./cmd/stack-jev-semantic"},
+		{
+			"build", "-ldflags", "-X github.com/shuymn/stack/extensions/internal/jev.endpoint=" +
+				fake.server.URL, "-o", committedBin, "./cmd/stack-jev-semantic",
+		},
 	} {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		cmd := exec.CommandContext(ctx, "go", c...)

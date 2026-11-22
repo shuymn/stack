@@ -103,13 +103,22 @@ func matchWant(sf semFixture, status, context string, findings []jev.Finding) er
 }
 
 // replay runs `stack run outbound --ext jev-semantic --replay <fixture>` in the fixture's
-// repository and returns the single result.
+// repository and returns the single result. A fixed fixture runs the test build with the
+// injected test cutoffs, a cal fixture the build with the committed cutoffs (§3.5). Replay
+// writes nothing under the home directory, not even a ledger line.
 func replay(t *testing.T, sf semFixture, path string, r *gittest.Repo, extra []string) (
 	runResult, string, string, []jev.Finding,
 ) {
 	t.Helper()
-	res := runBinary(t, r, t.TempDir(), r.Dir, extra, built.stack, "run", "outbound",
+	if !sf.fixed() {
+		extra = append(slices.Clone(extra), committedPath())
+	}
+	home := t.TempDir()
+	res := runBinary(t, r, home, r.Dir, extra, built.stack, "run", "outbound",
 		"--ext", "jev-semantic", "--replay", path)
+	if entries, err := os.ReadDir(home); err != nil || len(entries) != 0 {
+		t.Fatalf("%s: replay wrote under home: %v (%v)", sf.name(), entries, err)
+	}
 	agg := parseAggregate(t, res.stdout)
 	if len(agg.Results) != 1 || agg.Results[0].Name != "jev-semantic" ||
 		agg.Results[0].Error != "" {
@@ -259,7 +268,7 @@ func TestMixedLive(t *testing.T) {
 
 func TestExitCodes(t *testing.T) {
 	needBuilt(t)
-	serve(t, func(w http.ResponseWriter, req *http.Request) {
+	bodies := serve(t, func(w http.ResponseWriter, req *http.Request) {
 		body, _ := io.ReadAll(req.Body)
 		_, _ = w.Write(answer(t, body, map[string]float64{MetaDuty: 0.9}))
 	})
@@ -288,6 +297,7 @@ func TestExitCodes(t *testing.T) {
 		{"texts hit", leaky, 1, "block", "block"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			before := len(bodies())
 			res := runBinary(t, r, t.TempDir(), r.Dir, []string{jev.KeyEnv + "=dummy"},
 				built.stack, "run", "outbound", "--ext", "public", "--ext", "jev-semantic",
 				"--range", FixtureRange, "--title-file", c.title, "--branch", "x")
@@ -298,9 +308,24 @@ func TestExitCodes(t *testing.T) {
 			byName := map[string]string{}
 			for _, x := range agg.Results {
 				byName[x.Name] = x.Status
+				if x.Error != "" {
+					t.Fatalf("%s: synthetic result %q", x.Name, x.Error)
+				}
+				if x.Name != "jev-semantic" {
+					continue
+				}
+				// The extension's own advisory, not a synthetic warn from a failed start.
+				var fs []jev.Finding
+				if err := json.Unmarshal(x.Findings, &fs); err != nil || len(fs) != 1 ||
+					fs[0].Kind != KindMetaDuty {
+					t.Fatalf("semantic findings %s (%v)", x.Findings, err)
+				}
 			}
 			if byName["public"] != c.publicStatus || byName["jev-semantic"] != "warn" {
 				t.Fatalf("results %v", byName)
+			}
+			if n := len(bodies()) - before; n != 1 {
+				t.Fatalf("the fake endpoint received %d requests, want 1", n)
 			}
 		})
 	}

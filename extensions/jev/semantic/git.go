@@ -13,6 +13,10 @@ import (
 	"github.com/shuymn/stack/extensions/internal/proc"
 )
 
+// noOrderFile disables diff.orderFile in Git's documented form; Git for Windows maps /dev/null
+// too.
+const noOrderFile = "-O/dev/null"
+
 const (
 	maxLog  = 8 << 20
 	maxDiff = 32 << 20
@@ -50,7 +54,7 @@ func configArgs() []string {
 		"core.quotePath=false", "diff.noprefix=false", "diff.mnemonicPrefix=false",
 		"diff.suppressBlankEmpty=false", "diff.relative=false", "diff.renames=false",
 		"diff.context=3", "diff.interHunkContext=0", "diff.algorithm=myers",
-		"diff.indentHeuristic=true", "diff.orderFile=" + os.DevNull,
+		"diff.indentHeuristic=true",
 		"i18n.logOutputEncoding=UTF-8",
 	}
 	args := make([]string, 0, len(kvs)+len(kvs))
@@ -95,7 +99,7 @@ func (g Git) Diff(ctx context.Context, rng string) (string, error) {
 	out, err := g.run(ctx, "git diff", maxDiff, "diff", "--text", "--no-ext-diff",
 		"--no-textconv", "--no-color", "--no-renames", "--no-relative",
 		"--ignore-submodules=none", "--submodule=short", "--full-index", "--src-prefix=a/",
-		"--dst-prefix=b/", "-U3", "--end-of-options", rng, "--")
+		"--dst-prefix=b/", "-U3", noOrderFile, "--end-of-options", rng, "--")
 	if err != nil {
 		return "", err
 	}

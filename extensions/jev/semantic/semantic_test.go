@@ -570,3 +570,49 @@ func TestBudget(t *testing.T) {
 		}
 	})
 }
+
+func TestReserve(t *testing.T) {
+	if budget != 10*time.Second || reserve != 500*time.Millisecond {
+		t.Fatalf("budget %v, reserve %v; the design sets 10 s and 500 ms", budget, reserve)
+	}
+}
+
+// TestPartialAnswer: a valid answer beside a null one keeps its finding and adds a jev-error
+// for the null one (a clarification of §3.1: answers are checked one by one).
+func TestPartialAnswer(t *testing.T) {
+	units := []jev.Unit{{Name: "a_test.go", Text: "-x\n"}}
+	plan := jev.Plan{Whole: true, Batches: []jev.Batch{{
+		Pieces: []jev.Piece{{Unit: 0}}, Questions: Questions,
+	}}}
+	o := jev.Outcome{
+		Class:   jev.OK,
+		Answers: map[string]jev.Answer{MetaDuty: {Type: jev.TypeNoul, Noul: 0.9}},
+		Invalid: map[string]string{Unsupported: jev.CauseMissing},
+	}
+	r := Respond(plan, units, []jev.Outcome{o}, testDecisions(), io.Discard)
+	kinds := map[string]int{}
+	for _, f := range r.Findings {
+		kinds[f.Kind]++
+	}
+	if r.Status != jev.StatusWarn || kinds[KindMetaDuty] != 1 || kinds[jev.KindError] != 1 {
+		t.Fatalf("response %+v", r)
+	}
+}
+
+func TestAllDisabled(t *testing.T) {
+	srv, hits := countingServer(t, http.StatusOK, map[string]float64{MetaDuty: 0.9})
+	r := stateRepo(t)
+	env := repoEnv(r)
+	env.Endpoint, env.Home = srv.URL, t.TempDir()
+	env.Decisions = map[string]jev.Decision{
+		MetaDuty: {Reason: "not calibrated"}, Unsupported: {Reason: "not calibrated"},
+	}
+	res := runMain(t, env, outboundReq(r, "t", "b"))
+	if hits.Load() != 0 {
+		t.Fatalf("%d requests sent with every decision disabled", hits.Load())
+	}
+	if res.resp.Status != jev.StatusPass ||
+		!strings.Contains(res.resp.Context, "every decision is disabled") {
+		t.Fatalf("response %+v", res.resp)
+	}
+}
