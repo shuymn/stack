@@ -14,6 +14,13 @@ import (
 // maxNest bounds bracket nesting, so hostile input cannot exhaust the stack.
 const maxNest = 200
 
+// maxCdSteps and maxCwdLen bound the known cwd: past either, the cwd is unknown, so a long
+// `cd x &&` chain cannot build ever longer strings.
+const (
+	maxCdSteps = 32
+	maxCwdLen  = 4096
+)
+
 // verbatimMark is the stop-parsing token.
 const verbatimMark = "--%"
 
@@ -44,7 +51,9 @@ type parser struct {
 	// assigned holds the known variables the script has assigned so far.
 	assigned map[Known]bool
 	groups   int
-	res      Result
+	// cdSteps counts the `Set-Location` targets resolved so far.
+	cdSteps int
+	res     Result
 }
 
 func newParser(src, cwd, home string, os OS, depth int, assigned map[Known]bool) *parser {
@@ -945,10 +954,14 @@ func (p *parser) cdTarget(c Call) (string, bool) {
 	if len(target) != 1 || !target[0].Static || target[0].Group != 0 || target[0].Text == "" {
 		return "", false
 	}
+	if p.cdSteps >= maxCdSteps {
+		return "", true // bounds the cwd strings a long `cd x &&` chain builds
+	}
 	dir, ok := paths.ResolvePowerShell(p.home, p.cwd, target[0].Text, p.os == Windows)
-	if !ok {
+	if !ok || len(dir) > maxCwdLen {
 		return "", true
 	}
+	p.cdSteps++
 	return dir, true
 }
 
