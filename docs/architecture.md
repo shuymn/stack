@@ -85,8 +85,8 @@ fixtures) are in `docs/design/phase2-core.md` §4.7.
   counts even with a non-zero exit).
   stderr is forwarded to core's stderr with `[<name>] ` before each line.
 - **Limits and failures:** one deadline per stage shared by its extensions (entry 10 s, outbound 120 s, merged 10 s,
-  cycle 30 min). Entry at compaction ends at the earlier of its 10 s window and the hook's cut-off 55 s after the
-  hook started (Claude Code's 60 s less 5 s for the output); the cut-off sets only the entry runner's deadline, not
+  cycle 30 min). Entry at compaction takes its runner deadline from the earlier of its 10 s window and the hook's cut-off 55 s
+  after the hook started (Claude Code's 60 s less 5 s for the output); the cut-off sets only the entry runner's deadline, not
   the restore's own reads and boards, nor the extension lookup or the output write, which rest on the restore's own
   I/O progressing and Claude Code draining the hook's stdout (outside that premise the hook can pass the 60 s and the
   restore is lost). It runs only with a restored kit and a non-empty
@@ -118,7 +118,7 @@ Session identity and kits are core and not stages: `SessionStart` exports `STACK
 
 | Stage | Fires (position) | Semantic | Can block | Failure of an extension | Extensions |
 |---|---|---|---|---|---|
-| **`entry`** | after `stack kit open` printed the kit; on `compact` after the restored kits (when at least one kit was restored), reusing the restored session id and kits, when the hook's cut-off leaves time for it (otherwise, with a non-empty `[stages].entry`, `[entry skipped: deadline]` if that fits); `stack run entry` | inject | no | `warn` marker; the kit and the restore are unaffected | optional `jev-router` |
+| **`entry`** | after `stack kit open` printed the kit; on `compact` after the restored kits (when at least one kit was restored and `[stages].entry` is not empty), reusing the restored session id and kits, when the hook's cut-off leaves time for it (otherwise, with a non-empty `[stages].entry`, `[entry skipped: deadline]` if that fits); `stack run entry` | inject | no | `warn` marker; the kit and the restore are unaffected | optional `jev-router` |
 | **`outbound`** | `stack run outbound` (push hooks, CI, skills) with `[stages].outbound`; `stack pr merge` before any `gh` call when `--subject`/`--body` is given, with `[merge].message_checks` (default `[]`: nothing runs) | gate | yes | `warn`, does not block; at `pr merge` a listed check that is missing or fails refuses the merge | `public`, optional `jev-semantic` |
 | **`merged`** | `stack pr merge` at its verified-success point (read-back of `MERGED` on the checked head with a full merge OID, direct or `--auto`, including the final read-back), unless cancelled by SIGINT/SIGTERM; `stack run merged` | observe / inject | no (the merge is irreversible) | `warn` marker after the `MERGED` line; exit code unchanged | `audit-due` |
 | **`cycle`** | `launchd` -> `stack run cycle` (macOS); `stack run cycle` anywhere | observe | no | `warn` | `observe` (+ optional `jev-classify`) and minimal `improve` (plain worktree + `claude -p`, single period stamp file `~/.local/state/stack/improve/YYYY-Www` to avoid daily re-runs when a proposal is not pushed). Apply via `make apply`. |
