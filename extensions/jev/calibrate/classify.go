@@ -650,9 +650,6 @@ func endToEnd(data []*caseData, qual, dup jev.Decision, lang string) jev.EndToEn
 			case listed:
 				e.FP++
 			}
-			if want {
-				e.Support++
-			}
 			if isNew {
 				newSupport++
 				if listed {
@@ -664,8 +661,10 @@ func endToEnd(data []*caseData, qual, dup jev.Decision, lang string) jev.EndToEn
 	if e.TP+e.FP > 0 {
 		e.Precision = float64(e.TP) / float64(e.TP+e.FP)
 	}
-	if e.TP+e.FN > 0 {
-		e.Recall = float64(e.TP) / float64(e.TP+e.FN)
+	// Every target item is a hit or a miss.
+	e.Support = e.TP + e.FN
+	if e.Support > 0 {
+		e.Recall = float64(e.TP) / float64(e.Support)
 	}
 	e.Passed = e.TP > 0 && e.Precision >= ClassifyTarget && e.Recall >= minRecall
 	if e.List == jev.ListQualified {

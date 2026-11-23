@@ -22,8 +22,13 @@ import (
 	"github.com/shuymn/stack/internal/gittest"
 )
 
-// testCutoffValue is the cutoff the test build injects for both decisions (§3.5).
-const testCutoffValue = "0.5"
+// testCutoffValue is the cutoff the test build injects for both decisions (§3.5), and
+// defaultTestCutoffs the default fixed-fixture build's cutoffs: both decisions at it.
+const (
+	testCutoffValue    = "0.5"
+	defaultTestCutoffs = Qualification + "=" + testCutoffValue + "," + Duplicate + "=" +
+		testCutoffValue
+)
 
 // built holds the binaries TestMain builds: stack and a test build of stack-jev-classify whose
 // endpoint is spy.server and whose cutoffs are the test cutoffs; committed/ holds one with the
@@ -97,8 +102,7 @@ func buildBinaries() func() {
 	committedBin := filepath.Join(built.committed, "stack-jev-classify"+exe)
 	endpoint := "-X github.com/shuymn/stack/extensions/internal/jev.endpoint=" + spy.server.URL
 	cutoffs := " -X github.com/shuymn/stack/extensions/jev/classify.testCutoffs="
-	ldflags := endpoint + cutoffs + Qualification + "=" + testCutoffValue + "," + Duplicate + "=" +
-		testCutoffValue
+	ldflags := endpoint + cutoffs + defaultTestCutoffs
 	env := gittest.CleanEnv(os.Environ())
 	cmds := [][]string{
 		{"build", "-o", built.stack, "../../../cmd/stack"},

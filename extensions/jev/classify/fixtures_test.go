@@ -68,8 +68,7 @@ func (c clsFixture) decisions() map[string]jev.Decision {
 		}
 		return nil
 	}
-	return ParseTestCutoffs(Qualification + "=" + testCutoffValue + "," + Duplicate + "=" +
-		testCutoffValue)
+	return ParseTestCutoffs(defaultTestCutoffs)
 }
 
 // materialize builds a fixture's disk inputs in a fresh fixture repository root and returns the

@@ -86,18 +86,16 @@ func labelIndex(t *testing.T, dir string) map[string]ItemLabel {
 }
 
 type bodyItem struct {
-	ID        string `json:"id"`
-	Owner     string `json:"owner"`
-	Assistant string `json:"assistant"`
-	Reply     string `json:"reply"`
+	ID    string `json:"id"`
+	Owner string `json:"owner"`
+	Reply string `json:"reply"`
 }
 
 type bodyDoc struct {
 	State struct {
-		Items       []bodyItem `json:"items"`
-		MemoryIndex string     `json:"memory_index"` //nolint:tagliatelle // the state key
-		Owner       string     `json:"owner"`
-		Reply       string     `json:"reply"`
+		Items []bodyItem `json:"items"`
+		Owner string     `json:"owner"`
+		Reply string     `json:"reply"`
 	} `json:"state"`
 }
 
@@ -131,8 +129,6 @@ type labelJev struct {
 	miss map[string]bool
 	// missDupLabel makes correcting items with this dup label score as the opposite on kind_.
 	hideDup string
-	// kindScore sets the qualification score of these replies on every call.
-	kindScore map[string]float64
 	// dupScore sets the dup_ score of these replies on every call.
 	dupScore map[string]float64
 	// tooLarge answers 413 to a kind_ body carrying any of these replies.
@@ -185,16 +181,10 @@ func (f *labelJev) Send(_ context.Context, b jev.Batch) jev.Outcome {
 				p[x] = 0.025
 			}
 			choice := classify.LabelNoise
-			switch score, ok := f.kindScore[it.Reply]; {
-			case ok:
+			if high {
 				choice = classify.LabelCorrection
-				p[choice] = score - p[classify.LabelDrift]
-			case high:
-				choice = classify.LabelCorrection
-				p[choice] = 0.9
-			default:
-				p[choice] = 0.9
 			}
+			p[choice] = 0.9
 			answers[q.Name] = map[string]any{
 				"type": "choice", "choice": choice, "confidence": 0.9, "probabilities": p,
 			}
@@ -223,7 +213,7 @@ func (f *labelJev) Send(_ context.Context, b jev.Batch) jev.Outcome {
 
 // replies returns the replies of the items of split whose label pred accepts, in case order.
 func replies(
-	t *testing.T, dir string, _ map[string]ItemLabel, split string, pred func(ItemLabel) bool,
+	t *testing.T, dir string, split string, pred func(ItemLabel) bool,
 ) []string {
 	t.Helper()
 	cases, err := LoadClassify(dir)
@@ -546,7 +536,7 @@ func TestClassify(t *testing.T) {
 	t.Run("records the kind_ bodies and the dup_ union, refits and refreshes", func(t *testing.T) {
 		dir := copyClassify(t)
 		// A fit noise reply qualifies: its dup_ body joins the union, the heldout figures stay.
-		noiseReply := replies(t, dir, labels, SplitFit, func(l ItemLabel) bool {
+		noiseReply := replies(t, dir, SplitFit, func(l ItemLabel) bool {
 			return l.Kind == classify.LabelNoise && l.Lang == "en"
 		})[0]
 		f := &labelJev{labels: labels, qualify: map[string]bool{noiseReply: true}}
@@ -646,7 +636,7 @@ func TestClassify(t *testing.T) {
 
 	// heldDup are the heldout duplicate replies; failDup makes the duplicate decision fail its own
 	// gate on heldout (3 of the 8 found, recall 0.38) while fit stays as labelled.
-	heldDup := replies(t, probe, labels, SplitHeldout, func(l ItemLabel) bool {
+	heldDup := replies(t, probe, SplitHeldout, func(l ItemLabel) bool {
 		return l.Correcting() && l.Dup == classify.DupDuplicate
 	})
 	failDup := func() map[string]float64 {
@@ -660,7 +650,7 @@ func TestClassify(t *testing.T) {
 	// correcting qualifies too (precision 0.50).
 	failQual := func() map[string]bool {
 		m := map[string]bool{}
-		for _, r := range replies(t, probe, labels, SplitHeldout, func(l ItemLabel) bool {
+		for _, r := range replies(t, probe, SplitHeldout, func(l ItemLabel) bool {
 			return !l.Correcting()
 		}) {
 			m[r] = true
@@ -899,7 +889,7 @@ func TestClassify(t *testing.T) {
 	})
 
 	// heldCorrecting are the heldout correcting replies.
-	heldCorrecting := replies(t, probe, labels, SplitHeldout, ItemLabel.Correcting)
+	heldCorrecting := replies(t, probe, SplitHeldout, ItemLabel.Correcting)
 	firstLow := func(rs []string) map[string]bool {
 		m := map[string]bool{}
 		for _, r := range rs {
@@ -908,7 +898,7 @@ func TestClassify(t *testing.T) {
 		return m
 	}
 	t.Run("the own gate counts every attempt, the list the first answers", func(t *testing.T) {
-		heldOthers := replies(t, probe, labels, SplitHeldout, func(l ItemLabel) bool {
+		heldOthers := replies(t, probe, SplitHeldout, func(l ItemLabel) bool {
 			return !l.Correcting()
 		})
 		for _, tc := range []struct {
@@ -959,7 +949,7 @@ func TestClassify(t *testing.T) {
 		dir := copyClassify(t)
 		// Qualification misses 4 of the 8 heldout new items on every call.
 		miss := map[string]bool{}
-		for _, r := range replies(t, dir, labels, SplitHeldout, func(l ItemLabel) bool {
+		for _, r := range replies(t, dir, SplitHeldout, func(l ItemLabel) bool {
 			return l.Correcting() && l.Dup == classify.DupNew
 		})[:4] {
 			miss[r] = true
@@ -1010,7 +1000,7 @@ func TestClassify(t *testing.T) {
 
 	t.Run("a missing dup_ score is a miss and one at the cutoff is duplicate", func(t *testing.T) {
 		dir := copyClassify(t)
-		news := replies(t, dir, labels, SplitHeldout, func(l ItemLabel) bool {
+		news := replies(t, dir, SplitHeldout, func(l ItemLabel) bool {
 			return l.Correcting() && l.Dup == classify.DupNew && l.DupKind == ""
 		})
 		// One new item has no dup_ score on any call, another scores exactly the cutoff; a third
@@ -1050,7 +1040,7 @@ func TestClassify(t *testing.T) {
 		dir := copyClassify(t)
 		// Every fit duplicate scores low: no cutoff passes the margin test.
 		low := map[string]float64{}
-		for _, r := range replies(t, dir, labels, SplitFit, func(l ItemLabel) bool {
+		for _, r := range replies(t, dir, SplitFit, func(l ItemLabel) bool {
 			return l.Correcting() && l.Dup == classify.DupDuplicate
 		}) {
 			low[r] = 0.1
@@ -1077,7 +1067,7 @@ func TestClassify(t *testing.T) {
 
 	t.Run("a kind_ body answered 413 still records its correcting items' dup_", func(t *testing.T) {
 		dir := copyClassify(t)
-		big := replies(t, dir, labels, SplitFit, ItemLabel.Correcting)[0]
+		big := replies(t, dir, SplitFit, ItemLabel.Correcting)[0]
 		f := &labelJev{labels: labels, tooLarge: map[string]bool{big: true}}
 		if out, err := runClassify(t, dir, f); err != nil {
 			t.Fatalf("%v\n%s", err, out)
@@ -1147,7 +1137,7 @@ func TestClassify(t *testing.T) {
 		dir := copyClassify(t)
 		// Two English heldout new items lose their kind_ answers; Japanese keeps all four.
 		miss := map[string]bool{}
-		for _, r := range replies(t, dir, labels, SplitHeldout, func(l ItemLabel) bool {
+		for _, r := range replies(t, dir, SplitHeldout, func(l ItemLabel) bool {
 			return l.Correcting() && l.Dup == classify.DupNew && l.Lang == "en"
 		})[:2] {
 			miss[r] = true
