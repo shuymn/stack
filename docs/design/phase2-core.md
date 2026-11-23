@@ -8,15 +8,11 @@ is a follow-up in `shuymn/dotfiles` (§7).
 Legacy sources are cited by their deployed path (`~/.claude/...`, deployed from `shuymn/dotfiles:home/dot_claude/`,
 byte-identical today) and `dotfiles:scripts/kaizen/public-check`.
 
-`docs/design/core-stages.md` (architecture v11) supersedes parts of this design: §4.3's rules other than raw-merge, §4.4 step 1 (merge messages are checked only by the extensions
-listed in the new `[merge].message_checks`, default `[]`), §4.5, §4.6, §4.7's stages, request fields and
-`block` handling (a `block` at `entry` or `cycle` becomes `warn` with exit 0, and replay fixtures expecting `block`
-there move to `warn`), the `[safety]` table and the matching C10–C12, C14–C15,
-C26 (its message clause) and C27; the list is in that design's §4.10.
+`docs/design/core-stages.md` (architecture v11) supersedes parts of this design; for the current core-stage and
+guard rules see its §4.10 (what it overrides here) and §4.9 (the compatibility exceptions).
 
 §4.1, §4.1.1 and §4.2 are also the contract for programs and agents outside this repository that read kit files,
-`sessions/<id>.kits` or the restored text; `docs/design/kit-contracts.md` §2 lists where each such contract is
-stated.
+`sessions/<id>.kits` or the restored text; `docs/design/kit-contracts.md` §2 indexes them.
 
 ## 0. Principles
 
@@ -227,16 +223,14 @@ error. Hook commands always exit `0`.
 - After a successful `open`, `cli` runs the `entry` stage (§4.7) with `prompt = ""`, `range = ""` and appends each
   result's `context`; `block` there is shown, not enforced. The stage also runs at compaction (§4.2 step 2) and
   explicitly through `stack run entry`.
-- **Concurrency.** Every access to `<id>.kits`, read or write, holds an exclusive OS lock on `<id>.lock`
-  (`gofrs/flock`, `TryLockContext` polling every 25 ms). The OS releases it when the holder exits, so there is no
-  time-based stale reclaim; the lock file itself is never deleted. `open`/`close` wait up to 5 s; on timeout they
-  exit 1 with `stack: <id>.kits is locked by another process` and change nothing (`open` then prints no context either,
-  so the caller retries the whole command). A write goes to a uniquely named temp file in the sessions dir, its
-  handle is closed, and it is renamed over the old file through an `os.Root` on that dir (`Root.Rename`); an emptied
-  list is removed (`Root.Remove`). A rename is atomic on Unix; on Windows a rename or remove can fail while another
-  handle to the file is open, which the lock rules out among `stack`'s own readers, since they hold it too and close
-  their handle before unlocking (lockless outside readers: below). Different ids never share a file or lock. No
-  command retries by itself: a failure is reported, and rerunning the command succeeds once the conflict is gone.
+- **Concurrency.** `stack` serializes its reads and writes of `<id>.kits` per (lower-cased) session id through an
+  exclusive OS lock on `<id>.lock`. The OS releases the lock when its holder exits, so nothing reclaims a stale
+  lock, and the lock file persists. `open`/`close` wait up to 5 s; on timeout they exit 1 with
+  `stack: <id>.kits is locked by another process`, change nothing and print no context, so the caller retries the
+  whole command. A write replaces the list by renaming a fresh, closed temp file in the sessions dir over it; an
+  emptied list is removed. `stack`'s own readers hold the lock and close the file before unlocking, so they never
+  make that rename or remove fail; for lockless outside readers and platform behaviour see "Lockless reads" below.
+  No command retries by itself: a failure is reported, and rerunning the command succeeds once the conflict is gone.
 - **Read-only format for external readers.** Programs that cannot run `stack` (a Claude Code hook, an agent limited
   to file tools) may read `<id>.kits` directly; the format below is stable, and changing it is a breaking change.
   - *Path:* `~/.local/state/stack/sessions/<id>.kits`, `<id>` the session id (`^[A-Za-z0-9_-]{1,128}$`, §2.1)
@@ -245,10 +239,10 @@ error. Hook commands always exit `0`.
     LF, in the order they were added (a slug closed and opened again goes last). `stack` reads each line with
     surrounding whitespace trimmed (so CRLF and a final line without LF read the same) and skips blank lines,
     invalid slugs and repeats; a reader does the same.
-  - *Meaning:* the file exists only while it lists a slug (an emptied list deletes it), so a non-empty file means at
-    least one slug is recorded for that id. A recorded slug means that `kit open` recorded it and no `kit close`
-    removed it. It is not yet a restorable kit: compaction and the `kits` request field take only recorded slugs
-    whose dir `<kit root>/<slug>` exists (§2.1). It says nothing about whether the session still runs or whether
+  - *Meaning:* a file written by `stack` exists only while it lists a slug (an emptied list deletes it), so a
+    non-empty file means at least one slug is recorded for that id. A recorded slug means that `kit open` recorded
+    it and no `kit close` removed it. It is not yet a restorable kit: compaction and the `kits` field of live
+    requests take only recorded slugs whose `<kit root>/<slug>` (§2.1) exists and is a directory. It says nothing about whether the session still runs or whether
     another session has the same kit open, and the file names no dir.
   - *Lockless reads:* a reader never creates, locks, renames or deletes anything in the sessions dir and ignores
     `<id>.lock` and the `<id>.kits.*.tmp` files of a write in progress. On Unix it sees the whole old or the whole
@@ -285,22 +279,27 @@ board and `entry` parts still run as they apply. One unreadable part never stops
 marker, so it has an `orchestration-state` block and still asks for `state.md`; `stack-audit-due` hashes the missing
 `state.md` as `absent` (`docs/design/core-stages.md` §4.7).
 
-**Attention items** (`internal/kit/render.go:161-201`). Accepted shape: one JSON object whose `items` is an array of
+**Attention items** (`internal/kit/render.go:175-242`). Accepted shape: one JSON object whose `items` is an array of
 objects, each with a string `role` and a string `rule`; other fields are ignored, and the keys `items`, `role` and
-`rule` match in any letter case (Go's JSON decoding):
+`rule` match in any letter case (Go's JSON decoding). For a repeated key the last value in file order wins, but a
+type error in an earlier value still rejects the file or element even when a later value is usable; an `items`
+whose last value is `null` leaves no array.
 
 ```json
-{"items": [{"role": "orchestrator", "rule": "After compaction, re-read the hiden reference of the step in progress before continuing it."}]}
+{"items": [{"role": "orchestrator", "rule": "Check the current objective before continuing."}]}
 ```
 
 An item is rendered when its `role` value is exactly `orchestrator` or `all` (case-sensitive) and its `rule` is a
 string: `- ` followed by the rule verbatim (not trimmed; a rule holding newlines keeps them, under its one `- `
 prefix; an empty rule renders as `- `), one per item in file order, joined by LF. Items for other roles (for example
-`worker`) may stay in the file; `stack` renders them nowhere. Ignored, with no marker in the output: a file that is
-not a JSON object whose `items` is an array (invalid JSON, a top-level array, `null` or other non-object value, an
-`items` that is missing, `null` or not an array: no block); an element that is not an object (`null` included), or
-whose `rule` or `role` is missing, `null` or not a string (that element skipped); a file with no rendered item (no
-block). Which entry point reports the malformed cases, and how, is stated in `docs/design/kit-contracts.md` §4.
+`worker`) may stay in the file; `stack` renders them nowhere. Three cases render nothing, with no marker in the
+output: a *malformed file*, one that is not a JSON object whose `items` is an array (invalid JSON, a top-level
+array, `null` or other non-object value, an `items` that is missing, `null` or not an array: no block); a
+*malformed element*, one that is not an object (`null` included), or whose `rule` or `role` is missing, `null` or
+not a string (that element skipped); and a *valid but not rendered* item, one whose `role` is neither
+`orchestrator` nor `all` (a file with no rendered item, including an empty `items` array, has no block). Which entry
+point reports the malformed files and elements, and how, is stated in `docs/design/kit-contracts.md` §4; a valid
+but not rendered item is reported nowhere.
 
 **`kit open`** writes to stdout, as plain text: the parts above in that order (state files, items, handover,
 board), then each `entry` result as it completes (§4.7, `docs/design/core-stages.md` §4.3): an
@@ -328,10 +327,13 @@ Stdin: SessionStart payload. Env: `CLAUDE_ENV_FILE`.
    worker part below is still restored. Independently, if the session is a worker (step 3), restore the worker body (frontmatter
    stripped, CRLF-tolerant) and the original brief (`orchestration-context.py:276-300`). A broken transcript
    loses only the brief; an unreadable kit loses only its blocks (`orchestration-context.py:288-300`). The `entry`
-   stage runs last, when at least one kit was restored and time is left (`docs/design/core-stages.md` §4.3). Boards run after everything else is placed (step 5), each only while its block can still fit; one that cannot
-   is not launched and leaves `[board omitted: context limit: <path>]` when that fits. One deadline of 40 s covers all
-   boards (`orchestration-context.py:47`); once it passes, no further board is launched and each remaining one gets
-   `[board skipped: deadline]`. A board's leading repeat of the state of any restored kit is dropped, as legacy did.
+   stage runs last, when at least one kit was restored and time is left (`docs/design/core-stages.md` §4.3). Boards
+   run in `.kits` order after the handover is budgeted and before the `entry` results (step 5). A board lookup
+   that finds no board yields nothing, and a board that cannot be resolved or run on this OS yields its §4.1.1 marker. A
+   runnable board whose block cannot fit is not launched and leaves `[board omitted: context limit: <path>]`. One
+   deadline of 40 s covers all boards (`orchestration-context.py:47`); once it passes, a runnable board that clears
+   the space check is not launched and leaves `[board skipped: deadline]`. Each marker appears only when it fits. A
+   board's leading repeat of the state of any restored kit is dropped, as legacy did.
 3. **Worker detection** (`docs/architecture.md:57`), any of: a line of the first prompt starts with `[worker].marker`;
    `cwd` passes `IsAgentWorktree`; `agent_type` in `[worker].agent_types`. `agent_type` is an auxiliary signal: it is
    present when the session itself runs as that agent (`claude --agent …`); in-process subagents are not assumed to
@@ -341,24 +343,23 @@ Stdin: SessionStart payload. Env: `CLAUDE_ENV_FILE`.
    `isSidechain`; `message.content` as a string is the prompt; as a block array, the `text` blocks joined by blank
    lines are the prompt; an array with no text block but a `tool_result` block is skipped (next record); any other
    array yields `""`. A malformed line ends the read with no brief.
-5. **Budget: 9,500 chars** (`orchestration-context.py:43`), counting everything emitted: block tags, path headers
-   and markers included. Chars are UTF-16 code units, the string length Claude Code compares with its 10,000-char
-   hook output limit; cuts fall on code-point boundaries. Before any text is placed, in this order and each only
-   while it still fits, the brief reserves `[brief omitted: context limit]`, a `.kits` failure its marker, and every
-   `NORTH.md`/`state.md` block of every kit, in `.kits` order, `[state omitted: context limit: <path>]` (bare kit
-   markers such as `[new kit: …]` reserve themselves); a reserved marker is replaced only by a longer rendering. So
-   no brief or kit disappears silently while the markers fit; with enough kits whose paths are long, the markers
-   alone use up the budget, and the kits after that point leave no text at all, while the earlier ones keep their
-   markers. Then, in priority order: (1) the worker rules body, whole when it fits, else cut at its tail with
-   `[...cut N chars]` (legacy puts rules first); (2) the brief, verbatim if it fits in the remainder, else cut at its
-   tail and ended with `[...cut N chars]`; (3) kits: first, per kit in `.kits` order, the block header and up to the
-   first 600 chars of each of its `NORTH.md`/`state.md` blocks, as far as room is left, so with several kits each
-   kit keeps its start while room allows; then, again in `.kits` order, the rest of those blocks and the items
-   blocks, each body capped at 4,500 chars as legacy (the cut marker comes on top); (4) the handover block, which
-   appears once per compact, not per kit, and the board blocks; (5) the `entry` results, each body capped at 4,500
-   chars, with no reservation (`docs/design/core-stages.md` §4.3). A block that does not fit is cut with the same
-   marker, or keeps its omitted marker when not even its tags fit. A later pass never shrinks text an earlier pass
-   placed.
+5. **Budget: 9,500 chars** (`orchestration-context.py:43`) for the whole `additionalContext` text: block tags, path
+   headers, markers, the blank lines between pieces and the final LF. Chars are UTF-16 code units, the string length
+   Claude Code compares with its 10,000-char hook output limit; cuts fall on code-point boundaries. Before any text
+   is placed, in this order, each marker reserves its space when it still fits: the brief's
+   `[brief omitted: context limit]`, then a `.kits` failure marker or, per kit in `.kits` order, each `NORTH.md`/
+   `state.md` block's `[state omitted: context limit: <path>]` and each bare kit marker (such as `[new kit: …]`).
+   Each reservation stands on its own: one that does not fit takes nothing, and a later, shorter marker can still
+   fit after it. A reserved marker is replaced only by a longer rendering. Then, in priority order: (1) the worker
+   rules (legacy puts rules first); (2) the brief; (3) kits: first, per kit in `.kits` order, the header and up to
+   the first 600 chars of the body of each `NORTH.md`/`state.md` block, so with several kits each kit keeps its
+   start while room allows; then, again in `.kits` order, the rest of those blocks and the items blocks, each body
+   capped at 4,500 chars as legacy; (4) the handover block, once per compact, not per kit; (5) the board blocks
+   (step 2); (6) the `entry` results, each body capped at 4,500 chars, with no reservation
+   (`docs/design/core-stages.md` §4.3). Each piece takes its whole text when that fits within its cap; else its
+   body cut at the tail and closed with `[...cut N chars]` (the marker comes on top of the cap), for a tagged block
+   or an entry result; else its omitted marker (step 6) when that fits; else it leaves no text. A later pass never
+   shrinks text an earlier pass placed.
 6. **Output** (`internal/session/session.go:77-200`). Only `compact` prints, and only when something was placed:
    one JSON line `{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"<text>"}}`. The text
    holds the placed pieces separated by blank lines and ends with LF. Display order: (1) for a worker, the line
@@ -372,18 +373,24 @@ Stdin: SessionStart payload. Env: `CLAUDE_ENV_FILE`.
    `handover`, `worker rules`; `[brief omitted: context limit]`; `[...cut N chars]` closing a cut body inside its
    tags, or closing a cut entry result that is a bare warn marker; `[entry skipped: deadline]`,
    `[entry extensions skipped: <reason>]` (an invalid name in `[stages].entry`) and
-   `[entry context omitted: context limit: <name>]`. Any other source prints nothing (step 1).
+   `[entry context omitted: context limit: <name>]`.
 7. **Entry points compared.** The one statement of which text each entry point can emit:
 
    | Text | `stack kit open <slug>` (stdout) | SessionStart `compact` (`additionalContext`) | Other SessionStart sources |
    |---|---|---|---|
    | State and items parts, `[new kit: …]`, `[unreadable: …]` (§4.1.1) | the opened kit | each restorable kit in `.kits` order, within the budget | nothing |
-   | `<orchestration-handover>` | when an entry is active | once, after the `entry` results, when at least one kit was restored | nothing |
-   | `<orchestration-board>` and board markers | yes | yes, while its block can fit (else `[board omitted: …]`) | nothing |
-   | `<extension-context>`, warn markers, `[entry extensions skipped: …]` | each `entry` result | each `entry` result, room permitting | nothing |
+   | `<orchestration-handover>` | when an entry is active | the one active handover, after the `entry` results, when at least one kit was restored and the budget permits | nothing |
+   | `<orchestration-board>` and board markers | yes (§4.1.1) | board resolution as §4.1.1; launch and skip rules in step 2; output subject to step 5 | nothing |
+   | `<extension-context>`, warn markers, `[entry extensions skipped: …]` | each `entry` result; the skip marker when the request cannot be built | each `entry` result, room permitting; the skip marker for an invalid name in `[stages].entry` | nothing |
    | Worker line, `<worker-rules>`, `<original-brief>` | never | for a detected worker | nothing |
    | `[kits omitted: …]`, `[… omitted: context limit…]`, `[...cut N chars]`, `[entry skipped: deadline]` | never | as they apply | nothing |
    | Size | no total budget; 1 MiB caps per board output and per extension response (§4.1.1) | 9,500 UTF-16 units in all (step 5) | — |
+
+   When the budget runs out, a kit's state block can be replaced by its `[state omitted: …]` marker or omitted,
+   while the kit's other pieces are budgeted independently (step 5). An agent that misses a kit's state block after
+   compaction reruns `stack kit open <slug>`, whose
+   output has no total budget; hiden checks for `<orchestration-state>` after `kit open` in a handover session, not
+   after compaction.
 
 Settings wiring (dotfiles): `SessionStart`, no matcher, exec form (argv, no shell) of the pinned Claude Code
 version, `timeout: 60`, failure-continue (`onFailure: "continue"` where that version supports it) so a launch failure
@@ -673,8 +680,7 @@ Each PR passes `scripts/test` on Linux/macOS and `go vet` + `go test -race` + bu
    fallback (the patched snippet is not available), and §4.3 and §5 state that limit.
 6. **feat: add kit open and close** — `internal/kit` (store, lock, renderer, board), `stack kit open/close`. Done
    when: C16–C17 pass.
-7. **feat: add session-start hook** — `internal/session`, `stack hook claude session-start`. Done when: C18–C20 pass;
-   C19's extension assertion uses a fake `stack-<name>` on `PATH` that logs any call.
+7. **feat: add session-start hook** — `internal/session`, `stack hook claude session-start`. Done when: C18–C20 pass.
 8. **feat: add extension protocol and run** — `internal/ext`, `stack run`, entry stage after `kit open`. Done when:
    C21–C22 pass.
 9. **feat: add checked-head pr merge** — `internal/github`, `internal/merge`, `stack pr merge`. Done when: C23–C26
