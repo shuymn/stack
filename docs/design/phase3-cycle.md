@@ -777,8 +777,9 @@ owner, not of the repository.
    `home/dot_claude/attention/create_budget.json` and the global `home/dot_claude/attention/items.json` (no reader
    since Phase 2); the deleted paths leave `automation.yml`; `docs/kaizen.md` trimmed (§5). `signals.py`, `probe/`
    and their tests stay. Nothing is added to `home/.chezmoiremove`: deleting a source file leaves its live copy in
-   place, and the live copies go on the post-retirement list below. After at least one week of daily `stack-cycle`
-   runs with P1–P6 holding and P5 observed once. Done when P7 holds.
+   place, and the live copies go on the post-retirement list below. After daily `stack-cycle` runs with P1–P6
+   holding and P5 observed once; the owner chose not to wait for a full week, since the retired scripts stay in
+   the Git history. Done when P7 holds.
 
 **Cutover order** (owner, on the real machine; this is the one order, §9 D2 refers to it). Git order alone does not
 order these, because `make switch` loads launchd jobs while `make apply` writes the private terms and the
