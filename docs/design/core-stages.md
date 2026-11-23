@@ -208,13 +208,23 @@ Step 2 of `docs/design/phase2-core.md` §4.2 gains a last step: when at least on
   write the output). The cut-off bounds only the entry stage, not the restore's own file reads and board commands,
   which keep their v10 bounds (`docs/design/phase2-core.md` §4.2). Once the restore is built, the stage's deadline
   is the earlier of 10 s from its start and the cut-off, less the runner's pipe-reaping allowance (2 s,
-  `internal/proc/proc.go:28`), so an extension that runs to that deadline and leaves a pipe open to a grandchild is
-  reaped about when the cut-off arrives (the 1 s minimum below is measured on that deadline, after the allowance is
-  subtracted). The stage runs only when that deadline is at least 1 s away. Extension discovery takes no deadline;
-  the runner then uses the remaining entry window, kills an extension at the deadline and launches no further
-  extension once it has passed, leaving each unstarted one with a `warn`. Placing the results and encoding and
-  writing the output follow, outside the deadline. When the stage does not run, its place shows
-  `[entry skipped: deadline]` if that fits.
+  `internal/proc/proc.go:28`; `internal/session/session.go:257-258`), so an extension that runs to that deadline and
+  leaves a pipe open to a grandchild is reaped about when that earlier time arrives, never after the cut-off. The
+  runner kills an extension at the deadline and launches no further extension once it has passed, leaving each
+  unstarted one with a `warn` (`internal/ext/ext.go:247-260`). Placing the results and encoding and writing the
+  output follow, outside the deadline.
+- **Skips**, checked in this order (`internal/session/session.go:245-278`): with no restored kit or an empty
+  `[stages].entry` the stage does nothing and leaves no text; with a deadline (after the allowance) less than 1 s
+  away it leaves `[entry skipped: deadline]` if that fits, so that marker appears only with a restored kit and a
+  non-empty selection; an invalid name in `[stages].entry` leaves `[entry extensions skipped: <reason>]` and
+  starts nothing; when no selected `stack-<name>` is found on `PATH`, nothing starts and no text is left (a name
+  found but not runnable gets a `warn` from the runner).
+- **Discovery:** the deadline is fixed before the names are checked and looked up, so the lookup's time comes out
+  of the entry window, and a lookup that ends past the deadline leaves every extension unstarted with its `warn`
+  (`session.TestCompactEntryDeadline`). The lookup itself takes no deadline and cannot be interrupted: it is one
+  `PATH` search per name, file-system calls only (`internal/ext/ext.go:142-149`, `internal/proc/resolve.go:51-85`).
+  Nothing in the hook bounds a `PATH` directory whose file system stalls; such a lookup can keep the hook past the
+  cut-off and Claude Code's 60 s timeout.
 - **Restore first:** the rules, brief, kits, boards and handover are placed before the stage starts and are never
   changed by it. Whatever the extensions do (hang, crash, flood stdout, leave a pipe open), the hook writes the
   already-built restore, plus what entry added.
