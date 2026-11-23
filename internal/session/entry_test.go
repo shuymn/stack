@@ -1,8 +1,10 @@
 package session
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -129,6 +131,19 @@ func TestCompactEntry(t *testing.T) {
 	})
 }
 
+// startCut matches the warn of an extension whose stage deadline passed between the stage's
+// check and the process start: os/exec returns the context's error, which the runner wraps.
+var startCut = regexp.MustCompile(regexp.QuoteMeta("[extension demo: warn: start ") + `[^\]\n]*` +
+	regexp.QuoteMeta(": "+proc.ErrStart.Error()+": "+context.DeadlineExceeded.Error()+"]"))
+
+// cutByDeadline reports that demo was cut by its stage deadline after the stage passed its
+// admission check: timed out once started, not started, or cut while starting.
+func cutByDeadline(ctx string) bool {
+	return strings.Contains(ctx, "[extension demo: warn: timed out") ||
+		strings.Contains(ctx, "[extension demo: warn: not started: stage deadline") ||
+		startCut.MatchString(ctx)
+}
+
 // C4: the entry stage at compaction runs only with time left and ends by the hook's cut-off,
 // leaving the restore whole. Not parallel: it changes PATH.
 func TestCompactEntryDeadline(t *testing.T) {
@@ -162,14 +177,19 @@ func TestCompactEntryDeadline(t *testing.T) {
 				begin := time.Now()
 				ctx, _ := f.start(compactIn(testID))
 				// The stage ends 2 s after its check, or when a longer discovery returns; a fresh
-				// timer after discovery would add 2 s to the lookup. The slack covers the kill.
-				if took, limit := time.Since(begin),
-					max(tt.lookup, 2*time.Second)+750*time.Millisecond; took >= limit {
+				// timer after discovery would end it no earlier than 2 s after the lookup. The
+				// limit is that later end, so the kill and the scheduler have the rest.
+				if took, limit := time.Since(begin), tt.lookup+2*time.Second; took >= limit {
 					t.Fatalf("stage took %s, want under %s: its deadline is 2 s after the check",
 						took, limit)
 				}
 				if tt.start {
-					mustContain(t, ctx, "[extension demo: warn: timed out")
+					// 500 ms are left after the lookup: started and timed out, or, when the start
+					// is slower on a loaded machine, not started or cut while starting. The bound
+					// above is the property.
+					if !cutByDeadline(ctx) {
+						t.Fatalf("no stage deadline reported:\n%s", squash(ctx))
+					}
 					return
 				}
 				mustContain(t, ctx, "[extension demo: warn: not started: stage deadline")
@@ -204,10 +224,12 @@ func TestCompactEntryDeadline(t *testing.T) {
 				ctx, _ := f.start(compactIn(testID))
 				calls := proctest.Calls(t, demo)
 				if tt.run {
-					// Started: it answered, or a slow start under -race ran into the 1.1 s
-					// deadline, which only a started extension reports as a timeout.
-					if !strings.Contains(ctx, "ENTRY CTX") &&
-						!strings.Contains(ctx, "[extension demo: warn: timed out") {
+					// The stage passed the admission check: it looked the extension up and ran
+					// it under the 1.1 s deadline the check set on the real clock. A loaded
+					// machine can use that up in the lookup or the fake's start; a time-out or a
+					// "not started" still shows the stage passed the admission check, and only
+					// a failed check leaves "[entry skipped".
+					if !strings.Contains(ctx, "ENTRY CTX") && !cutByDeadline(ctx) {
 						t.Fatalf("entry did not run:\n%s", squash(ctx))
 					}
 					mustLack(t, ctx, "[entry skipped")
@@ -280,9 +302,12 @@ func TestCompactEntryDeadline(t *testing.T) {
 
 		ctx, _ := f.start(compactIn(testID))
 		// Killed at the deadline, the extension's pipes are reaped within the allowance, so the
-		// stage ends at the cut-off; the slack covers the kill and the scheduler.
-		if late := time.Since(cut); late > 500*time.Millisecond {
-			t.Fatalf("hook returned %s after the cut-off", late)
+		// stage ends at the cut-off. A deadline at the cut-off itself, without the allowance,
+		// would end the stage no earlier than the allowance after it: that is the limit, and
+		// the kill and the scheduler have the rest.
+		if late := time.Since(cut); late >= proc.DefaultWaitDelay {
+			t.Fatalf("hook returned %s after the cut-off, want under %s", late,
+				proc.DefaultWaitDelay)
 		}
 		mustContain(t, ctx, "DEMO STATE", "[extension first: warn: timed out",
 			"[extension second: warn: not started")

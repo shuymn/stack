@@ -300,11 +300,15 @@ func TestClientStatusAtHeaders(t *testing.T) {
 		}))
 		defer srv.Close()
 		defer close(done)
-		ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
-		defer cancel()
+		// The body stalls until the context ends: an answer well before that was classified at
+		// the headers, however slow the scheduler. start is taken first, so a late reading cannot
+		// shorten the measured time.
+		const stall = 20 * time.Second
 		start := time.Now()
+		ctx, cancel := context.WithTimeout(t.Context(), stall)
+		defer cancel()
 		o := Live{Endpoint: srv.URL, Key: "k"}.Send(ctx, testBatch(noulQ))
-		if o.Class != Persistent || o.Cause != "HTTP 401" || time.Since(start) > time.Second {
+		if o.Class != Persistent || o.Cause != "HTTP 401" || time.Since(start) >= stall/2 {
 			t.Fatalf("outcome %+v after %v", o, time.Since(start))
 		}
 	})

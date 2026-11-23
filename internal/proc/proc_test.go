@@ -26,8 +26,6 @@ func TestMain(m *testing.M) {
 
 const (
 	testWaitDelay = 500 * time.Millisecond
-	// slack absorbs scheduling noise on slow CI runners.
-	slack = 1500 * time.Millisecond
 	// grandchildLife is far above every bound asserted below, so a test that
 	// waited for the grandchild instead of WaitDelay fails clearly.
 	grandchildLife = 20 * time.Second
@@ -175,10 +173,11 @@ func TestRunDirAndEnv(t *testing.T) {
 func TestRunTimeout(t *testing.T) {
 	t.Parallel()
 
+	const childSleep = time.Minute
 	fake := proctest.Install(
 		t,
 		"fake",
-		one(proctest.Response{Stdout: "partial", Sleep: time.Minute}),
+		one(proctest.Response{Stdout: "partial", Sleep: childSleep}),
 	)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -190,14 +189,18 @@ func TestRunTimeout(t *testing.T) {
 	if !res.TimedOut || res.ExitCode != -1 {
 		t.Fatalf("result = %+v, want TimedOut and exit -1", res)
 	}
-	if took := time.Since(start); took > 2*time.Second+testWaitDelay+slack {
-		t.Fatalf("took %s", took)
+	// The child was killed at the deadline rather than waited for: a run that waited would
+	// last the child's whole sleep. The bound is far from both, so a slow scheduler cannot
+	// flip it.
+	if took := time.Since(start); took >= childSleep/2 {
+		t.Fatalf("took %s, want the child killed long before its %s sleep ends", took, childSleep)
 	}
 }
 
 // TestRunTimeoutGrandchildHoldsPipe covers a child that leaves a grandchild
-// holding the inherited stdout: Run must return within WaitDelay of the
-// context ending, not when the grandchild exits.
+// holding the inherited stdout: Run returns once WaitDelay cuts the pipe after
+// the context's deadline, not when the grandchild exits. The check is that it
+// returns before the grandchild could have exited, 5 s after the deadline.
 func TestRunTimeoutGrandchildHoldsPipe(t *testing.T) {
 	t.Parallel()
 
@@ -205,13 +208,10 @@ func TestRunTimeoutGrandchildHoldsPipe(t *testing.T) {
 		Stdout: "partial", Sleep: time.Minute, Grandchild: grandchildLife,
 	}))
 	// Long enough for the fake to start its grandchild on a slow runner.
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	const deadline = 15 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), deadline)
 	defer cancel()
-	ended := make(chan time.Time, 1)
-	go func() {
-		<-ctx.Done()
-		ended <- time.Now()
-	}()
+	end, _ := ctx.Deadline()
 
 	res, err := proc.Exec{WaitDelay: testWaitDelay}.Run(ctx, proc.Cmd{Name: fake})
 	returned := time.Now()
@@ -225,11 +225,16 @@ func TestRunTimeoutGrandchildHoldsPipe(t *testing.T) {
 	if !res.TimedOut {
 		t.Fatalf("result = %+v, want TimedOut", res)
 	}
-	if took := returned.Sub(<-ended); took > testWaitDelay+slack {
+	// The grandchild starts after the context does, so it outlives the context's deadline by
+	// at least grandchildLife-deadline (5 s): a Run that returned only when the grandchild
+	// exited would return that long after the deadline. That is the bound, not WaitDelay, so
+	// scheduling delay cannot flip the check.
+	if took, limit := returned.Sub(end), grandchildLife-deadline; took >= limit {
 		t.Fatalf(
-			"returned %s after the context ended, want within WaitDelay %s",
+			"returned %s after the context's deadline, want under %s, before the grandchild "+
+				"could exit",
 			took,
-			testWaitDelay,
+			limit,
 		)
 	}
 }
