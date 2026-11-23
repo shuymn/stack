@@ -281,9 +281,12 @@ marker, so it has an `orchestration-state` block and still asks for `state.md`; 
 
 **Attention items** (`internal/kit/render.go:175-243`). Accepted shape: one JSON object whose `items` is an array of
 objects, each with a string `role` and a string `rule`; other fields are ignored, and the keys `items`, `role` and
-`rule` match in any letter case (Go's JSON decoding). For a repeated key the last value in file order wins, but a
-type error in an earlier value still rejects the file or element even when a later value is usable; an `items`
-whose last value is `null` leaves no array.
+`rule` match in any letter case (Go's JSON decoding). For a repeated key the last value in file order wins.
+`items` decodes as an array of raw elements, so an earlier `items` that is neither an array nor `null` still
+rejects the file even when a later one is an array, and an `items` whose last value is `null` leaves no array.
+`role` and `rule` decode into any JSON value, so an earlier value of another type is replaced by a later string
+and the element renders, unless the earlier value cannot be decoded at all (a number past float64 such as `1e400`),
+which rejects the element (`internal/kit/render.go:211-223`).
 
 ```json
 {"items": [{"role": "orchestrator", "rule": "Check the current objective before continuing."}]}
