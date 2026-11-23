@@ -5,6 +5,8 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/shuymn/stack/extensions/internal/jev"
@@ -1208,4 +1210,51 @@ func TestGenerateCal(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+}
+
+// calPairErrors lists the antecedent pairs of the drafted corpus whose members do not share their
+// assistant message and reply under two owner turns (§3.5).
+func calPairErrors(fs []calFixture) []string {
+	var errs []string
+	for _, cf := range fs {
+		members := map[string][]calCase{}
+		for _, c := range cf.cases {
+			if strings.HasPrefix(c.group, "pair-") {
+				members[c.group] = append(members[c.group], c)
+			}
+		}
+		for _, g := range slices.Sorted(maps.Keys(members)) {
+			m := members[g]
+			if len(m) != 2 || m[0].closing != m[1].closing || m[0].reply != m[1].reply ||
+				m[0].task == m[1].task {
+				errs = append(errs, cf.name+": "+g)
+			}
+		}
+	}
+	return errs
+}
+
+// TestCalPairs: each drafted antecedent pair sends one assistant message and reply under two owner
+// turns, and a member whose assistant message changes fails the check. It reads the draft data
+// only: no runtime, transport or write.
+func TestCalPairs(t *testing.T) {
+	if errs := calPairErrors(calFixtures); len(errs) > 0 {
+		t.Fatalf("pairs not sharing their texts: %v", errs)
+	}
+	changed := slices.Clone(calFixtures)
+	for i, cf := range changed {
+		for k, c := range cf.cases {
+			if !strings.HasPrefix(c.group, "pair-") {
+				continue
+			}
+			cases := slices.Clone(cf.cases)
+			cases[k].closing += " Done."
+			changed[i].cases = cases
+			if errs := calPairErrors(changed); len(errs) != 1 {
+				t.Fatalf("a changed assistant message gave %v", errs)
+			}
+			return
+		}
+	}
+	t.Fatal("no pair to change")
 }

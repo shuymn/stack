@@ -433,6 +433,21 @@ func TestClassifyCorpus(t *testing.T) {
 			})
 			set(cs, i, id, func(l *ItemLabel) { l.Group = "" })
 		}},
+		{"a pair split across two fixtures", "spans 2 fixtures, want one", func(cs []ClassifyCase) {
+			// The request halves of two fit pairs swap groups: each group still holds a drift and
+			// a request, from two weeks.
+			i, a := find(cs, func(c ClassifyCase, _ string, l ItemLabel) bool {
+				return c.Label.Split == SplitFit && l.Kind == classify.LabelRequest &&
+					strings.HasPrefix(l.Group, "pair-")
+			})
+			j, b := find(cs, func(c ClassifyCase, _ string, l ItemLabel) bool {
+				return c.Label.Split == SplitFit && l.Kind == classify.LabelRequest &&
+					strings.HasPrefix(l.Group, "pair-") && c.Path != cs[i].Path
+			})
+			ga, gb := cs[i].Label.Items[a].Group, cs[j].Label.Items[b].Group
+			set(cs, i, a, func(l *ItemLabel) { l.Group = gb })
+			set(cs, j, b, func(l *ItemLabel) { l.Group = ga })
+		}},
 		{"a held-out-only dup_kind in fit", "dup_kind multi is held-out only", func(cs []ClassifyCase) {
 			i, id := find(cs, func(c ClassifyCase, _ string, l ItemLabel) bool {
 				return c.Label.Split == SplitFit && l.Dup == classify.DupDuplicate && l.Hard
@@ -518,56 +533,6 @@ func TestClassifyCorpus(t *testing.T) {
 			}
 		})
 	}
-}
-
-// TestClassifyPairs is C10's pair-text check: each antecedent pair of the committed corpus sends
-// one assistant message and reply under two owner turns, and a member whose assistant message
-// differs fails.
-func TestClassifyPairs(t *testing.T) {
-	cases, err := LoadClassify(classifyFixtures)
-	if err != nil {
-		t.Fatal(err)
-	}
-	o := ClassifyOptions{Runner: proc.Exec{}, Environ: cleanEnv()}
-	if err := CheckClassifyPairs(t.Context(), o, cases); err != nil {
-		t.Fatalf("the shipped corpus: %v", err)
-	}
-	// The first assistant message of the en pair in heldout-b gains a sentence.
-	for i, c := range cases {
-		if c.Label.Split != SplitHeldout {
-			continue
-		}
-		for path, raw := range c.Fixture.Files {
-			var recs []map[string]any
-			if json.Unmarshal(raw, &recs) != nil {
-				continue
-			}
-			for _, r := range recs {
-				msg, _ := r["message"].(map[string]any)
-				parts, _ := msg["content"].([]any)
-				for _, part := range parts {
-					m, _ := part.(map[string]any)
-					if text, _ := m["text"].(string); strings.Contains(text, "migration 0042") {
-						m["text"] = text + " Done."
-						data, err := json.Marshal(recs)
-						if err != nil {
-							t.Fatal(err)
-						}
-						files := maps.Clone(c.Fixture.Files)
-						files[path] = data
-						cases[i].Fixture.Files = files
-						err = CheckClassifyPairs(t.Context(), o, cases)
-						if err == nil || !strings.Contains(err.Error(), "does not share its "+
-							"assistant message and reply") {
-							t.Fatalf("err %v", err)
-						}
-						return
-					}
-				}
-			}
-		}
-	}
-	t.Fatal("no pair member to change")
 }
 
 // TestClassify is C10 for classify, against a fake endpoint that answers by label.
