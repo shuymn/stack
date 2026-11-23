@@ -69,7 +69,7 @@ The line keeps its text: it is matched by its consumer, and its meaning can be s
 names is defined by the root the merge itself used, because that is the dir the extension counted. The consumer
 resolves the current config, on the premise that the root is not edited from the start of `pr merge` until the
 consumer has resolved the dir; a snapshot of the merge's config would guard only against that edit, so none is added.
-How the consumer finds the dir is in `core-stages.md` §4.7; it does not reuse a dir from earlier output.
+How the consumer finds the dir is in `core-stages.md` §4.7.
 Rejected: adding the kit dir to the line (§6).
 
 ### 3.5 Steward out of `stack`
