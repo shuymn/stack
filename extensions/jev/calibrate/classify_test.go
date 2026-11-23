@@ -139,6 +139,9 @@ type labelJev struct {
 	tooLarge map[string]bool
 	// firstLow makes these replies score as noise on the first call of their kind_ body only.
 	firstLow map[string]bool
+	// firstOnly makes these replies score as a correction on the first call of their kind_ body
+	// only.
+	firstOnly map[string]bool
 	// dupMiss drops the dup_ answer of these replies on the attempts listed (1-based; 0: every
 	// attempt).
 	dupMiss map[string]int
@@ -174,7 +177,8 @@ func (f *labelJev) Send(_ context.Context, b jev.Batch) jev.Outcome {
 			if f.miss[it.Reply] {
 				continue
 			}
-			high := (l.Correcting() && l.Dup != f.hideDup || f.qualify[it.Reply]) &&
+			high := (l.Correcting() && l.Dup != f.hideDup || f.qualify[it.Reply] ||
+				f.firstOnly[it.Reply] && attempt == 1) &&
 				(!f.firstLow[it.Reply] || attempt != 1)
 			p := map[string]float64{}
 			for _, x := range classify.Labels {
@@ -392,11 +396,13 @@ func TestClassifyCorpus(t *testing.T) {
 				}
 			}
 		}},
-		{"too few hard items", "hard", func(cs []ClassifyCase) {
+		{"too few hard items", "heldout has 10 hard items of 32", func(cs []ClassifyCase) {
+			// Items with a dup_kind stay hard, so only the share check can fail.
 			for i, c := range cs {
 				for id, l := range c.Label.Items {
-					l.Hard = false
-					cs[i].Label.Items[id] = l
+					if l.DupKind == "" {
+						set(cs, i, id, func(l *ItemLabel) { l.Hard = false })
+					}
 				}
 			}
 		}},
@@ -410,13 +416,28 @@ func TestClassifyCorpus(t *testing.T) {
 				Kind: classify.LabelNoise, Lang: "en", Why: "x", Group: l.Group,
 			}
 		}},
-		{"fewer than four pairs", "antecedent pairs", func(cs []ClassifyCase) {
+		{"fewer than four pairs", "2 antecedent pairs (groups pair-*), want at least 4", func(cs []ClassifyCase) {
+			// The fit pairs go; heldout keeps its en and ja pair.
 			for i, c := range cs {
-				for id, l := range c.Label.Items {
-					l.Group = ""
-					cs[i].Label.Items[id] = l
+				for id := range c.Label.Items {
+					if c.Label.Split == SplitFit {
+						set(cs, i, id, func(l *ItemLabel) { l.Group = "" })
+					}
 				}
 			}
+		}},
+		{"a pair with one member", "has members [drift], want one drift and one request", func(cs []ClassifyCase) {
+			i, id := find(cs, func(c ClassifyCase, _ string, l ItemLabel) bool {
+				return held(c, "", l) && l.Kind == classify.LabelRequest && l.Lang == "en" &&
+					strings.HasPrefix(l.Group, "pair-")
+			})
+			set(cs, i, id, func(l *ItemLabel) { l.Group = "" })
+		}},
+		{"a held-out-only dup_kind in fit", "dup_kind multi is held-out only", func(cs []ClassifyCase) {
+			i, id := find(cs, func(c ClassifyCase, _ string, l ItemLabel) bool {
+				return c.Label.Split == SplitFit && l.Dup == classify.DupDuplicate && l.Hard
+			})
+			set(cs, i, id, func(l *ItemLabel) { l.DupKind = "multi" })
 		}},
 		{"heldout duplicate 5 + 3 and new 3 + 5", "heldout languages: duplicate", func(cs []ClassifyCase) {
 			// Correcting stays 8 + 8 by language.
@@ -497,6 +518,56 @@ func TestClassifyCorpus(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestClassifyPairs is C10's pair-text check: each antecedent pair of the committed corpus sends
+// one assistant message and reply under two owner turns, and a member whose assistant message
+// differs fails.
+func TestClassifyPairs(t *testing.T) {
+	cases, err := LoadClassify(classifyFixtures)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := ClassifyOptions{Runner: proc.Exec{}, Environ: cleanEnv()}
+	if err := CheckClassifyPairs(t.Context(), o, cases); err != nil {
+		t.Fatalf("the shipped corpus: %v", err)
+	}
+	// The first assistant message of the en pair in heldout-b gains a sentence.
+	for i, c := range cases {
+		if c.Label.Split != SplitHeldout {
+			continue
+		}
+		for path, raw := range c.Fixture.Files {
+			var recs []map[string]any
+			if json.Unmarshal(raw, &recs) != nil {
+				continue
+			}
+			for _, r := range recs {
+				msg, _ := r["message"].(map[string]any)
+				parts, _ := msg["content"].([]any)
+				for _, part := range parts {
+					m, _ := part.(map[string]any)
+					if text, _ := m["text"].(string); strings.Contains(text, "migration 0042") {
+						m["text"] = text + " Done."
+						data, err := json.Marshal(recs)
+						if err != nil {
+							t.Fatal(err)
+						}
+						files := maps.Clone(c.Fixture.Files)
+						files[path] = data
+						cases[i].Fixture.Files = files
+						err = CheckClassifyPairs(t.Context(), o, cases)
+						if err == nil || !strings.Contains(err.Error(), "does not share its "+
+							"assistant message and reply") {
+							t.Fatalf("err %v", err)
+						}
+						return
+					}
+				}
+			}
+		}
+	}
+	t.Fatal("no pair member to change")
 }
 
 // TestClassify is C10 for classify, against a fake endpoint that answers by label.
@@ -871,19 +942,28 @@ func TestClassify(t *testing.T) {
 		return m
 	}
 	t.Run("the own gate counts every attempt, the list the first answers", func(t *testing.T) {
+		heldOthers := replies(t, probe, labels, SplitHeldout, func(l ItemLabel) bool {
+			return !l.Correcting()
+		})
 		for _, tc := range []struct {
-			name   string
-			low    []string
-			reason string
+			name      string
+			low, high []string
+			reason    string
 		}{
 			// 9 of 16 first answers miss: own recall 39/48, the list's 7/16.
 			{
-				"a list under its recall", heldCorrecting[:9],
+				"a list under its recall", heldCorrecting[:9], nil,
 				"end-to-end `qualified` list on heldout: precision 1.00, recall 0.44, new recall ",
+			},
+			// 5 others qualify on their first call only: own precision 48/53, the list's 16/21.
+			{
+				"a list under its precision", nil, heldOthers[:5],
+				"end-to-end `qualified` list on heldout: precision 0.76, recall 1.00, new recall " +
+					"1.00, support 16",
 			},
 			// Every first answer misses: the own gate passes on the other calls, the list is empty.
 			{
-				"an empty list", heldCorrecting,
+				"an empty list", heldCorrecting, nil,
 				"end-to-end `qualified` list on heldout: precision 0.00, recall 0.00, new recall " +
 					"0.00, support 16",
 			},
@@ -891,7 +971,8 @@ func TestClassify(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				dir := copyClassify(t)
 				out, err := runClassify(t, dir, &labelJev{
-					labels: labels, firstLow: firstLow(tc.low), dupScore: failDup(),
+					labels: labels, firstLow: firstLow(tc.low), firstOnly: firstLow(tc.high),
+					dupScore: failDup(),
 				})
 				if err != nil {
 					t.Fatalf("%v\n%s", err, out)
@@ -906,6 +987,28 @@ func TestClassify(t *testing.T) {
 				verify(t, dir)
 			})
 		}
+	})
+
+	t.Run("a new recall of exactly 0.50 passes", func(t *testing.T) {
+		dir := copyClassify(t)
+		// Qualification misses 4 of the 8 heldout new items on every call.
+		miss := map[string]bool{}
+		for _, r := range replies(t, dir, labels, SplitHeldout, func(l ItemLabel) bool {
+			return l.Correcting() && l.Dup == classify.DupNew
+		})[:4] {
+			miss[r] = true
+		}
+		out, err := runClassify(t, dir, &labelJev{labels: labels, miss: miss, dupScore: failDup()})
+		if err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+		tb := readTable(t, dir)
+		q, e := tb.Decisions[classify.Qualification], tb.EndToEnd
+		if e == nil || e.List != jev.ListQualified || e.NewRecall == nil || *e.NewRecall != 0.5 ||
+			!e.Passed || !q.Enabled || q.Reason != "" {
+			t.Fatalf("qualification %+v e2e %+v\n%s", q, e, out)
+		}
+		verify(t, dir)
 	})
 
 	// heldItem finds a heldout correcting item by label: its ID and reply.

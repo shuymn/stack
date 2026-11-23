@@ -21,9 +21,11 @@ import (
 	"github.com/shuymn/stack/extensions/jev/classify"
 )
 
-// minPairs is the antecedent pairs the corpus needs; minRecall the end-to-end recall (§3.5).
+// minPairs is the antecedent pairs the corpus needs, pairSize the members of each (a drift and a
+// request); minRecall the end-to-end recall (§3.5).
 const (
 	minPairs  = 4
+	pairSize  = 2
 	minRecall = 0.5
 )
 
@@ -62,6 +64,9 @@ var (
 	positiveDupKinds = []string{"restatement", "paraphrase", "general", "multi"}
 	negativeDupKinds = []string{"object", "condition", "action", "broken", "partial"}
 )
+
+// heldoutOnlyDupKinds are the categories no fit case has: heldout-b is their first measure.
+var heldoutOnlyDupKinds = []string{"multi", "partial"}
 
 // heldoutDupKinds are the held-out quotas of each dup_kind.
 //
@@ -154,6 +159,7 @@ func CheckClassifyCorpus(cases []ClassifyCase) error {
 	seen := map[string]bool{}
 	pairs := map[string]int{}
 	pairLangs := map[string]map[string]bool{}
+	pairKinds := map[string][]string{}
 	for _, c := range cases {
 		sp := c.Label.Split
 		if sp != SplitFit && sp != SplitHeldout {
@@ -196,6 +202,7 @@ func CheckClassifyCorpus(cases []ClassifyCase) error {
 						pairLangs[l.Group] = map[string]bool{}
 					}
 					pairLangs[l.Group][l.Lang] = true
+					pairKinds[l.Group] = append(pairKinds[l.Group], l.Kind)
 				}
 			}
 			if l.DupKind != "" {
@@ -209,6 +216,8 @@ func CheckClassifyCorpus(cases []ClassifyCase) error {
 						l.Dup)
 				case !l.Hard:
 					fail("%s: case %s: dup_kind %s on an item not hard", c.Path, id, l.DupKind)
+				case sp == SplitFit && slices.Contains(heldoutOnlyDupKinds, l.DupKind):
+					fail("%s: case %s: dup_kind %s is held-out only", c.Path, id, l.DupKind)
 				}
 				cc.dupKinds[l.DupKind]++
 				if neg && l.Overlap {
@@ -302,6 +311,12 @@ func CheckClassifyCorpus(cases []ClassifyCase) error {
 	if held.overlapNeg == 0 {
 		fail("heldout has no overlap among its hard negatives, want at least 1")
 	}
+	for _, g := range slices.Sorted(maps.Keys(pairKinds)) {
+		kinds := slices.Sorted(slices.Values(pairKinds[g]))
+		if !slices.Equal(kinds, []string{classify.LabelDrift, classify.LabelRequest}) {
+			fail("antecedent pair %s has members %v, want one drift and one request", g, kinds)
+		}
+	}
 	heldPairs := map[string]int{}
 	for g, sp := range groups {
 		if sp != SplitHeldout || !strings.HasPrefix(g, "pair-") {
@@ -322,6 +337,116 @@ func CheckClassifyCorpus(cases []ClassifyCase) error {
 		fail("%d antecedent pairs (groups pair-*), want at least 4", len(pairs))
 	}
 	return errors.Join(errs...)
+}
+
+// CheckClassifyPairs checks that the two members of each antecedent pair are sent with the same
+// assistant message and reply under different owner turns (§3.5), as the runtime resolves them. It
+// runs each fixture with a transport that answers nothing, so no request leaves the process.
+func CheckClassifyPairs(ctx context.Context, o ClassifyOptions, cases []ClassifyCase) error {
+	var errs []error
+	for _, c := range cases {
+		members := map[string][]string{}
+		for _, id := range slices.Sorted(maps.Keys(c.Label.Items)) {
+			if g := c.Label.Items[id].Group; strings.HasPrefix(g, "pair-") {
+				members[g] = append(members[g], id)
+			}
+		}
+		if len(members) == 0 {
+			continue
+		}
+		texts, err := sentTexts(ctx, o, c)
+		if err != nil {
+			return err
+		}
+		for _, g := range slices.Sorted(maps.Keys(members)) {
+			ids := members[g]
+			if len(ids) != pairSize {
+				continue // CheckClassifyCorpus reports the member count.
+			}
+			a, okA := texts[ids[0]]
+			b, okB := texts[ids[1]]
+			switch {
+			case !okA || !okB:
+				errs = append(errs, fmt.Errorf("%w: %s: pair %s: a member is not sent", errCorpus,
+					c.Path, g))
+			case a.Assistant != b.Assistant || a.Reply != b.Reply || a.Owner == b.Owner:
+				errs = append(errs, fmt.Errorf("%w: %s: pair %s does not share its assistant "+
+					"message and reply under two owner turns", errCorpus, c.Path, g))
+			}
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// sentText is the owner turn, assistant message and reply an item is sent with.
+type sentText struct {
+	Owner     string `json:"owner"`
+	Assistant string `json:"assistant"`
+	Reply     string `json:"reply"`
+}
+
+// silent answers every request as a transient failure without sending it, recording the bodies.
+type silent struct {
+	mu     sync.Mutex
+	bodies [][]byte
+}
+
+// Send implements jev.Transport.
+func (s *silent) Send(_ context.Context, b jev.Batch) jev.Outcome {
+	s.mu.Lock()
+	s.bodies = append(s.bodies, b.Body)
+	s.mu.Unlock()
+	return jev.Outcome{Class: jev.Transient, Cause: jev.CauseNetwork}
+}
+
+// sentTexts maps each item of a case to the texts its kind_ body carries.
+func sentTexts(
+	ctx context.Context,
+	o ClassifyOptions,
+	c ClassifyCase,
+) (map[string]sentText, error) {
+	zero := 0.0
+	ds := map[string]jev.Decision{
+		classify.Qualification: {Enabled: true, Cutoff: &zero},
+		classify.Duplicate:     {Reason: "reading the sent texts"},
+	}
+	t := &silent{}
+	var sent map[string]string
+	if _, _, err := classifyRun(
+		ctx,
+		o,
+		c,
+		ds,
+		t,
+		func(m map[string]string) { sent = m },
+	); err != nil {
+		return nil, err
+	}
+	byRef := map[string]sentText{}
+	for _, body := range t.bodies {
+		var doc struct {
+			State struct {
+				Items []struct {
+					sentText
+
+					ID string `json:"id"`
+				} `json:"items"`
+			} `json:"state"`
+		}
+		if err := json.Unmarshal(body, &doc); err != nil {
+			return nil, fmt.Errorf("%s: decode a kind_ body: %w", c.Path, err)
+		}
+		for _, it := range doc.State.Items {
+			byRef[it.ID] = it.sentText
+		}
+	}
+	out := map[string]sentText{}
+	for id, ref := range sent {
+		if x, ok := byRef[ref]; ok {
+			out[id] = x
+		}
+	}
+	return out, nil
 }
 
 // classifyRun is one fixture run in process: its materialised root and the transport that serves
@@ -723,6 +848,9 @@ func RunClassify(ctx context.Context, o ClassifyOptions) error {
 		return err
 	}
 	if err := CheckClassifyCorpus(cases); err != nil {
+		return fmt.Errorf("the corpus is not eligible:\n%w", err)
+	}
+	if err := CheckClassifyPairs(ctx, o, cases); err != nil {
 		return fmt.Errorf("the corpus is not eligible:\n%w", err)
 	}
 	zero := 0.0
