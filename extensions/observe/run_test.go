@@ -213,10 +213,12 @@ func TestLatestFileRun(t *testing.T) {
 
 func TestDeadline(t *testing.T) {
 	t.Parallel()
-	const budget, reserve = 3 * time.Second, time.Second
-	// replayBudget leaves the fakes that start before replay time to start on a loaded machine,
-	// where replay runs to the deadline.
-	const replayBudget = 30 * time.Second
+	// reserve is the publication reserve after the work deadline: wide, so cleanup and scheduling
+	// on a loaded machine cannot use it up before latest.json is written. The work windows are what
+	// the cases depend on: 2 s, and 29 s where replay runs to the deadline, which leaves the fakes
+	// that start before replay time to start on a loaded machine.
+	const reserve = 10 * time.Second
+	const budget, replayBudget = 2*time.Second + reserve, 29*time.Second + reserve
 	// hang is how long a hung fake sleeps. A run that waited for it instead of cutting it at the
 	// deadline would last at least that long: halfway between the budget and hang bounds the run
 	// far from both.
