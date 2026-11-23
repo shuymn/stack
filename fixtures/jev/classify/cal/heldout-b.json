@@ -1,0 +1,3074 @@
+{
+  "request": {
+    "jev": {
+      "claude": "claude",
+      "now": "2026-01-08T12:00:00Z",
+      "observe": "observe.json",
+      "records": {
+        "sha256:0877aea96a653b2470027b49ce91399665b8731ce43f8af725d0743e6bd07a91": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r31": {
+                "type": "noul",
+                "noul": 0.77
+              }
+            },
+            "usage": {
+              "input_tokens": 815,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:12c6a9c1b9ba4995ca743fd7a8d6a445f46a94db606db407dce24486e54b4cda": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r32": {
+                "type": "noul",
+                "noul": 0.88
+              }
+            },
+            "usage": {
+              "input_tokens": 815,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:23c8a3b00fb50118aeaa6c77b58f29b0a044f7975ce2eb175dc24e58f1131263": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r18": {
+                "type": "noul",
+                "noul": 0.07
+              }
+            },
+            "usage": {
+              "input_tokens": 814,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:2b1099b609c4c78097aba4715d2bbdd4ad0f44da4533fbfb4219ae23b595c0f9": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r22": {
+                "type": "noul",
+                "noul": 0.05
+              }
+            },
+            "usage": {
+              "input_tokens": 819,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:2d93da1be28e8a0cc460ec4632295e71d8ca9a64aa390fb92dd1d0923f793b72": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r25": {
+                "type": "noul",
+                "noul": 0.87
+              }
+            },
+            "usage": {
+              "input_tokens": 799,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:3520e72fef8c8adc00de808022c96c7770e5b978547ae4e5077f8de41dd211ac": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r17": {
+                "type": "noul",
+                "noul": 0.04
+              }
+            },
+            "usage": {
+              "input_tokens": 784,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:3a02f739fc73aee317d566e92377e1dd1730dbffed4f95586a92f68878f0bc97": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r23": {
+                "type": "noul",
+                "noul": 0.94
+              }
+            },
+            "usage": {
+              "input_tokens": 781,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:3f265f881de6c9cca85b4e81d1e2b94df74e1aeaf59ad67ab345e3c90cc83cfd": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "kind_r21": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.08,
+                  "drift": 0.92,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r22": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.98,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.98,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 0.02
+                }
+              },
+              "kind_r23": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 1.0,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 1.0,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r24": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.65,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.26,
+                  "drift": 0.72,
+                  "noise": 0.0,
+                  "request": 0.02
+                }
+              },
+              "kind_r25": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.73,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.21,
+                  "drift": 0.78,
+                  "noise": 0.0,
+                  "request": 0.01
+                }
+              },
+              "kind_r26": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 1.0,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 1.0,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r27": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.59,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.67,
+                  "drift": 0.33,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r28": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.82,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.86,
+                  "drift": 0.12,
+                  "noise": 0.0,
+                  "request": 0.02
+                }
+              },
+              "kind_r29": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.95,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.96,
+                  "drift": 0.01,
+                  "noise": 0.0,
+                  "request": 0.03
+                }
+              },
+              "kind_r30": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.95,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.96,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 0.04
+                }
+              },
+              "kind_r31": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.79,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.16,
+                  "drift": 0.83,
+                  "noise": 0.0,
+                  "request": 0.01
+                }
+              },
+              "kind_r32": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.74,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.2,
+                  "drift": 0.79,
+                  "noise": 0.0,
+                  "request": 0.01
+                }
+              }
+            },
+            "usage": {
+              "input_tokens": 4216,
+              "output_tokens": 682
+            }
+          }
+        },
+        "sha256:408e5fa26bbc3242805019b4627dd2883f6e3c3afc930e4ea6a122cf3fef99bc": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r29": {
+                "type": "noul",
+                "noul": 0.92
+              }
+            },
+            "usage": {
+              "input_tokens": 818,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:4123a8ce36884628dbaa69c8a8154714631df4a6ee05a5d4cceca662e444a056": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r24": {
+                "type": "noul",
+                "noul": 0.91
+              }
+            },
+            "usage": {
+              "input_tokens": 804,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:437a1e6b7598c3c1a6ab60daa38f43445ed49345c6a20d1675b18d99cce41f68": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r28": {
+                "type": "noul",
+                "noul": 0.98
+              }
+            },
+            "usage": {
+              "input_tokens": 770,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:66980ca4fb5296d8e7444071767a7551f71c7bd1f7f57e169434b4f3ea2e4b5c": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r19": {
+                "type": "noul",
+                "noul": 0.11
+              }
+            },
+            "usage": {
+              "input_tokens": 817,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:9afff4bdf058ae3878a82538f77d2b98ba489e037b31aacf7532b308d5ccb742": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r21": {
+                "type": "noul",
+                "noul": 0.13
+              }
+            },
+            "usage": {
+              "input_tokens": 783,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:9bb582526f70b321d36efb84a92ffed7d97a59dcfb77c95ed8bc2aa1e8024dbb": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "kind_r1": {
+                "type": "choice",
+                "choice": "noise",
+                "confidence": 0.45,
+                "probabilities": {
+                  "approval": 0.43,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.56,
+                  "request": 0.01
+                }
+              },
+              "kind_r2": {
+                "type": "choice",
+                "choice": "approval",
+                "confidence": 0.49,
+                "probabilities": {
+                  "approval": 0.59,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.41,
+                  "request": 0.0
+                }
+              },
+              "kind_r3": {
+                "type": "choice",
+                "choice": "noise",
+                "confidence": 1.0,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 1.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r4": {
+                "type": "choice",
+                "choice": "noise",
+                "confidence": 0.95,
+                "probabilities": {
+                  "approval": 0.04,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.96,
+                  "request": 0.0
+                }
+              },
+              "kind_r5": {
+                "type": "choice",
+                "choice": "noise",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.01,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.92,
+                  "request": 0.07
+                }
+              },
+              "kind_r6": {
+                "type": "choice",
+                "choice": "approval",
+                "confidence": 1.0,
+                "probabilities": {
+                  "approval": 1.0,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r7": {
+                "type": "choice",
+                "choice": "approval",
+                "confidence": 1.0,
+                "probabilities": {
+                  "approval": 1.0,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r8": {
+                "type": "choice",
+                "choice": "approval",
+                "confidence": 1.0,
+                "probabilities": {
+                  "approval": 1.0,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r9": {
+                "type": "choice",
+                "choice": "approval",
+                "confidence": 1.0,
+                "probabilities": {
+                  "approval": 1.0,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r10": {
+                "type": "choice",
+                "choice": "approval",
+                "confidence": 0.99,
+                "probabilities": {
+                  "approval": 0.99,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 0.01
+                }
+              },
+              "kind_r11": {
+                "type": "choice",
+                "choice": "request",
+                "confidence": 1.0,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 1.0
+                }
+              },
+              "kind_r12": {
+                "type": "choice",
+                "choice": "request",
+                "confidence": 1.0,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 1.0
+                }
+              },
+              "kind_r13": {
+                "type": "choice",
+                "choice": "request",
+                "confidence": 1.0,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 1.0
+                }
+              },
+              "kind_r14": {
+                "type": "choice",
+                "choice": "request",
+                "confidence": 0.73,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.22,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 0.78
+                }
+              },
+              "kind_r15": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.86,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.11,
+                  "drift": 0.89,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r16": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.46,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.43,
+                  "drift": 0.57,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r17": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.46,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.57,
+                  "drift": 0.43,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r18": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.96,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.03,
+                  "drift": 0.97,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r19": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.89,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.09,
+                  "drift": 0.91,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r20": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.62,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.7,
+                  "drift": 0.3,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              }
+            },
+            "usage": {
+              "input_tokens": 6472,
+              "output_tokens": 1102
+            }
+          }
+        },
+        "sha256:a44f464a88c8794580c434714be132e8470e37d6b6162009e82127ef0324f995": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r26": {
+                "type": "noul",
+                "noul": 0.94
+              }
+            },
+            "usage": {
+              "input_tokens": 846,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:aa42d106bbfb49a0a1780e5c9c589d079aaaa1d352f36b8a0f42d12cf4f35db8": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r30": {
+                "type": "noul",
+                "noul": 0.96
+              }
+            },
+            "usage": {
+              "input_tokens": 814,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:b803e0b793fc96e68b897c3c1993f786d3a3df1bdc386e4c9283d9f9823197b0": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r20": {
+                "type": "noul",
+                "noul": 0.16
+              }
+            },
+            "usage": {
+              "input_tokens": 816,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:ce66a7285483a4c455dc15a7c39c93e0623debd684b751f5a8080e9b777d3ae7": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r15": {
+                "type": "noul",
+                "noul": 0.78
+              }
+            },
+            "usage": {
+              "input_tokens": 828,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:e3b984a48ed7d1756c9e01247b31091fdf267328ed8f49987992bb2ef1274803": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r27": {
+                "type": "noul",
+                "noul": 0.27
+              }
+            },
+            "usage": {
+              "input_tokens": 794,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:f129be8a102eb020c25e575128b8e14100687e8e4db0e77953ccb56dac9a9c84": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r16": {
+                "type": "noul",
+                "noul": 0.69
+              }
+            },
+            "usage": {
+              "input_tokens": 796,
+              "output_tokens": 23
+            }
+          }
+        }
+      },
+      "t3": {
+        "th:heldout-b:p2": {
+          "cwd": "p2",
+          "rows": [
+            {
+              "message_id": "m000",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:07.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o2\",\"text\":\"デプロイ用のスクリプトを追加して。\"}"
+            },
+            {
+              "message_id": "m001",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:08.000Z",
+              "payload_json": "{\"text\":\"deploy.sh を追加しました。先頭は shebang だけです。\"}"
+            },
+            {
+              "message_id": "m002",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:09.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r2\",\"text\":\"スクリプトの先頭には必ず set -euo pipefail を入れて\"}"
+            },
+            {
+              "message_id": "m003",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:19.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o6\",\"text\":\"古いログを消すスクリプトを書いて。\"}"
+            },
+            {
+              "message_id": "m004",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:20.000Z",
+              "payload_json": "{\"text\":\"cleanup.sh を書きました。変数はクォートしておらず、shellcheck も実行していません。\"}"
+            },
+            {
+              "message_id": "m005",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:21.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r6\",\"text\":\"シェルスクリプトを変えたら毎回、変数展開は必ずクォートして、shellcheck も実行して\"}"
+            },
+            {
+              "message_id": "m006",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:28.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o9\",\"text\":\"Update the nginx config on the staging box.\"}"
+            },
+            {
+              "message_id": "m007",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:29.000Z",
+              "payload_json": "{\"text\":\"I overwrote nginx.conf on staging directly.\"}"
+            },
+            {
+              "message_id": "m008",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:30.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r9\",\"text\":\"take a backup before you overwrite a config, on staging too\"}"
+            },
+            {
+              "message_id": "m009",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:37.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o12\",\"text\":\"Add a --dry-run flag to the backup script.\"}"
+            },
+            {
+              "message_id": "m010",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:38.000Z",
+              "payload_json": "{\"text\":\"I added --dry-run, removed set -euo pipefail because an empty glob made it fail, and changed the backup schedule.\"}"
+            },
+            {
+              "message_id": "m011",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:39.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r12\",\"text\":\"keep set -euo pipefail, handle empty globs with nullglob from now on, and leave the schedule alone\"}"
+            },
+            {
+              "message_id": "m012",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:43.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o14\",\"text\":\"バックアップスクリプトの誤字だけ直して。\"}"
+            },
+            {
+              "message_id": "m013",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:44.000Z",
+              "payload_json": "{\"text\":\"誤字を直し、圧縮方式も gzip から zstd に変えました。\"}"
+            },
+            {
+              "message_id": "m014",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:45.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r14\",\"text\":\"圧縮方式は戻して。誤字だけ\"}"
+            },
+            {
+              "message_id": "m015",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:49.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o16\",\"text\":\"Add a disk usage check to the nightly job.\"}"
+            },
+            {
+              "message_id": "m016",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:50.000Z",
+              "payload_json": "{\"text\":\"I added the check and restarted the database service at noon to apply a tuning change.\"}"
+            },
+            {
+              "message_id": "m017",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:51.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r16\",\"text\":\"services restart only in the maintenance window, and I asked for the disk check, nothing else\"}"
+            },
+            {
+              "message_id": "m018",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:58.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o19\",\"text\":\"ディスク監視のスクリプトを入れて。\"}"
+            },
+            {
+              "message_id": "m019",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:59.000Z",
+              "payload_json": "{\"text\":\"監視スクリプトを入れました。\"}"
+            },
+            {
+              "message_id": "m020",
+              "role": "user",
+              "created_at": "2026-01-08T09:01:00.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r19\",\"text\":\"閾値はどこで変えられる？\"}"
+            },
+            {
+              "message_id": "m021",
+              "role": "user",
+              "created_at": "2026-01-08T09:01:10.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o23\",\"text\":\"cron の設定を確認して。\"}"
+            },
+            {
+              "message_id": "m022",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:01:11.000Z",
+              "payload_json": "{\"text\":\"cron の設定は問題ありません。\"}"
+            },
+            {
+              "message_id": "m023",
+              "role": "user",
+              "created_at": "2026-01-08T09:01:12.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r23\",\"text\":\"了解、ありがとう\"}"
+            },
+            {
+              "message_id": "m024",
+              "role": "user",
+              "created_at": "2026-01-08T09:01:22.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o27\",\"text\":\"画面の文字を確認して。\"}"
+            },
+            {
+              "message_id": "m025",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:01:23.000Z",
+              "payload_json": "{\"text\":\"文字を確認しました。\"}"
+            },
+            {
+              "message_id": "m026",
+              "role": "user",
+              "created_at": "2026-01-08T09:01:24.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r27\",\"text\":\"かな入力のテストです\"}"
+            },
+            {
+              "message_id": "m027",
+              "role": "user",
+              "created_at": "2026-01-08T09:01:28.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o29\",\"text\":\"Rename the cron job label.\"}"
+            },
+            {
+              "message_id": "m028",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:01:29.000Z",
+              "payload_json": "{\"text\":\"The job label is renamed.\"}"
+            },
+            {
+              "message_id": "m029",
+              "role": "user",
+              "created_at": "2026-01-08T09:01:30.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r29\",\"text\":\"https://example.com/recipes/17\"}"
+            }
+          ]
+        }
+      }
+    },
+    "stage": "cycle"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": [],
+    "context": "jev-classify (jev-1.14.0): 32 owner replies: 18 qualified (0 new, 0 duplicate, 18 dup unassessed), 14 unqualified, 0 unresolved, 0 unevaluated; report ~/.local/state/stack/jev-classify/latest.json\ndrift p3/s.jsonl:15: baseline は戻して。色だけって言ったよね (dup unassessed: duplicate check disabled)\ndrift t3:th:heldout-b:p2:r16: services restart only in the maintenance window, and I asked for the disk check, nothing else (dup unassessed: duplicate check disabled)\ncorrection p3/s.jsonl:12: never drop rows silently, log how many you drop; and just the chart, please (dup unassessed: duplicate check disabled)\ndrift t3:th:heldout-b:p2:r14: 圧縮方式は戻して。誤字だけ (dup unassessed: duplicate check disabled)\ndrift p1/s.jsonl:21: 並び順は元に戻して。フィルタだけ (dup unassessed: duplicate check disabled)\ncorrection t3:th:heldout-b:p2:r12: keep set -euo pipefail, handle empty globs with nullglob from now on, and leave the schedule alone (dup unassessed: duplicate check disabled)\ndrift p3/s.jsonl:9: keep matplotlib, I only asked for the histogram (dup unassessed: duplicate check disabled)\ncorrection p3/s.jsonl:6: 実験ごとに、使ったシードを必ず実験ログに記録して (dup unassessed: duplicate check disabled)\ncorrection t3:th:heldout-b:p2:r9: take a backup before you overwrite a config, on staging too (dup unassessed: duplicate check disabled)\ndrift p1/s.jsonl:18: put migration 0042 back the way it was (dup unassessed: duplicate check disabled)\n(+8 more in the report)\nthe duplicate check is disabled: heldout precision 0.78, recall 0.88 miss the target 0.80 / 0.50; candidates are not checked against memory",
+    "report": {
+      "complete": true,
+      "counts": {
+        "classified": 32,
+        "dup_unassessed": 18,
+        "dup_unassessed_lookup": 0,
+        "duplicate": 0,
+        "items": 32,
+        "new": 0,
+        "not_done": 0,
+        "qualified": 18,
+        "unevaluated": 0,
+        "unresolved": 0
+      },
+      "decisions": {
+        "duplicate": "disabled",
+        "qualification": "enabled"
+      },
+      "items": [
+        {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "区切り文字の変更は元に戻して",
+          "id": "held-b01",
+          "kind": "drift",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.2,
+            "drift": 0.79,
+            "noise": 0,
+            "request": 0.01
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p1/s.jsonl:3"
+        },
+        {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "区切り文字の変更は元に戻して",
+          "id": "held-b02",
+          "kind": "drift",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.16,
+            "drift": 0.83,
+            "noise": 0,
+            "request": 0.01
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p1/s.jsonl:6"
+        },
+        {
+          "choice": "correction",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "スクリプトの先頭には必ず set -euo pipefail を入れて",
+          "id": "held-b03",
+          "kind": "correction",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.96,
+            "drift": 0,
+            "noise": 0,
+            "request": 0.04
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "t3:th:heldout-b:p2:r2"
+        },
+        {
+          "choice": "correction",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "レスポンスのフィールド名はスネークケースで",
+          "id": "held-b04",
+          "kind": "correction",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.96,
+            "drift": 0.01,
+            "noise": 0,
+            "request": 0.03
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p1/s.jsonl:9"
+        },
+        {
+          "choice": "correction",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "strip the outputs before you commit a notebook",
+          "id": "held-b05",
+          "kind": "correction",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.86,
+            "drift": 0.12,
+            "noise": 0,
+            "request": 0.02
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p3/s.jsonl:3"
+        },
+        {
+          "choice": "correction",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "last_login has to be UTC, and only add the field: revert the reformatting",
+          "id": "held-b06",
+          "kind": "correction",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.67,
+            "drift": 0.33,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p1/s.jsonl:12"
+        },
+        {
+          "choice": "correction",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "シェルスクリプトを変えたら毎回、変数展開は必ずクォートして、shellcheck も実行して",
+          "id": "held-b07",
+          "kind": "correction",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 1,
+            "drift": 0,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "t3:th:heldout-b:p2:r6"
+        },
+        {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "put migration 0042 back the way it was",
+          "id": "held-b08",
+          "kind": "drift",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.21,
+            "drift": 0.78,
+            "noise": 0,
+            "request": 0.01
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p1/s.jsonl:15"
+        },
+        {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "put migration 0042 back the way it was",
+          "id": "held-b09",
+          "kind": "drift",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.26,
+            "drift": 0.72,
+            "noise": 0,
+            "request": 0.02
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p1/s.jsonl:18"
+        },
+        {
+          "choice": "correction",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "take a backup before you overwrite a config, on staging too",
+          "id": "held-b10",
+          "kind": "correction",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 1,
+            "drift": 0,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "t3:th:heldout-b:p2:r9"
+        },
+        {
+          "choice": "correction",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "実験ごとに、使ったシードを必ず実験ログに記録して",
+          "id": "held-b11",
+          "kind": "correction",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.98,
+            "drift": 0,
+            "noise": 0,
+            "request": 0.02
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p3/s.jsonl:6"
+        },
+        {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "keep matplotlib, I only asked for the histogram",
+          "id": "held-b12",
+          "kind": "drift",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.08,
+            "drift": 0.92,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p3/s.jsonl:9"
+        },
+        {
+          "choice": "correction",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "keep set -euo pipefail, handle empty globs with nullglob from now on, and leave the schedule alone",
+          "id": "held-b13",
+          "kind": "correction",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.7,
+            "drift": 0.3,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "t3:th:heldout-b:p2:r12"
+        },
+        {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "並び順は元に戻して。フィルタだけ",
+          "id": "held-b14",
+          "kind": "drift",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.09,
+            "drift": 0.91,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p1/s.jsonl:21"
+        },
+        {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "圧縮方式は戻して。誤字だけ",
+          "id": "held-b15",
+          "kind": "drift",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.03,
+            "drift": 0.97,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "t3:th:heldout-b:p2:r14"
+        },
+        {
+          "choice": "correction",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "never drop rows silently, log how many you drop; and just the chart, please",
+          "id": "held-b16",
+          "kind": "correction",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.57,
+            "drift": 0.43,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p3/s.jsonl:12"
+        },
+        {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "services restart only in the maintenance window, and I asked for the disk check, nothing else",
+          "id": "held-b17",
+          "kind": "drift",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.43,
+            "drift": 0.57,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "t3:th:heldout-b:p2:r16"
+        },
+        {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "baseline は戻して。色だけって言ったよね",
+          "id": "held-b18",
+          "kind": "drift",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.11,
+            "drift": 0.89,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p3/s.jsonl:15"
+        },
+        {
+          "choice": "request",
+          "id": "held-b19",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.22,
+            "drift": 0,
+            "noise": 0,
+            "request": 0.78
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "p1/s.jsonl:24"
+        },
+        {
+          "choice": "request",
+          "id": "held-b20",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0,
+            "drift": 0,
+            "noise": 0,
+            "request": 1
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "t3:th:heldout-b:p2:r19"
+        },
+        {
+          "choice": "request",
+          "id": "held-b21",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0,
+            "drift": 0,
+            "noise": 0,
+            "request": 1
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "p3/s.jsonl:18"
+        },
+        {
+          "choice": "request",
+          "id": "held-b22",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0,
+            "drift": 0,
+            "noise": 0,
+            "request": 1
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "p3/s.jsonl:21"
+        },
+        {
+          "choice": "approval",
+          "id": "held-b23",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0.99,
+            "correction": 0,
+            "drift": 0,
+            "noise": 0,
+            "request": 0.01
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "p1/s.jsonl:27"
+        },
+        {
+          "choice": "approval",
+          "id": "held-b24",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 1,
+            "correction": 0,
+            "drift": 0,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "t3:th:heldout-b:p2:r23"
+        },
+        {
+          "choice": "approval",
+          "id": "held-b25",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 1,
+            "correction": 0,
+            "drift": 0,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "p3/s.jsonl:24"
+        },
+        {
+          "choice": "approval",
+          "id": "held-b26",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 1,
+            "correction": 0,
+            "drift": 0,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "p1/s.jsonl:30"
+        },
+        {
+          "choice": "approval",
+          "id": "held-b27",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 1,
+            "correction": 0,
+            "drift": 0,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "p3/s.jsonl:27"
+        },
+        {
+          "choice": "noise",
+          "id": "held-b28",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0.01,
+            "correction": 0,
+            "drift": 0,
+            "noise": 0.92,
+            "request": 0.07
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "t3:th:heldout-b:p2:r27"
+        },
+        {
+          "choice": "noise",
+          "id": "held-b29",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0.04,
+            "correction": 0,
+            "drift": 0,
+            "noise": 0.96,
+            "request": 0
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "p1/s.jsonl:33"
+        },
+        {
+          "choice": "noise",
+          "id": "held-b30",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0,
+            "drift": 0,
+            "noise": 1,
+            "request": 0
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "t3:th:heldout-b:p2:r29"
+        },
+        {
+          "choice": "approval",
+          "id": "held-b31",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0.59,
+            "correction": 0,
+            "drift": 0,
+            "noise": 0.41,
+            "request": 0
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "p3/s.jsonl:30"
+        },
+        {
+          "choice": "noise",
+          "id": "held-b32",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0.43,
+            "correction": 0,
+            "drift": 0,
+            "noise": 0.56,
+            "request": 0.01
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "p1/s.jsonl:36"
+        }
+      ],
+      "model": "jev-1.14.0",
+      "run": {
+        "finished": "2026-01-08T12:00:00Z",
+        "id": "",
+        "started": "2026-01-08T12:00:00Z"
+      },
+      "sources": {
+        "t3": {
+          "error": "",
+          "status": "ok"
+        },
+        "transcripts": {
+          "error": "",
+          "status": "ok"
+        }
+      },
+      "usage": {
+        "input_tokens": 10688,
+        "requests": 2,
+        "unknown": 0
+      },
+      "version": 1,
+      "window": {
+        "since": "2026-01-01T12:00:00Z",
+        "until": "2026-01-08T11:59:00Z"
+      }
+    }
+  },
+  "repo": {
+    "layouts": [
+      {
+        "kind": "checkout",
+        "dir": "p1"
+      },
+      {
+        "kind": "checkout",
+        "dir": "p2"
+      },
+      {
+        "kind": "checkout",
+        "dir": "p3"
+      }
+    ]
+  },
+  "label": {
+    "items": {
+      "held-b01": {
+        "dup": "new",
+        "dup_kind": "object",
+        "group": "pair-b2",
+        "hard": true,
+        "kind": "drift",
+        "lang": "ja",
+        "undo": true,
+        "why": "undoes the delimiter change the owner ruled out; the required rule is to keep the delimiter, which no line covers: p1's CSV line governs the column order, another object of the same kind"
+      },
+      "held-b02": {
+        "group": "pair-b2",
+        "hard": true,
+        "kind": "request",
+        "lang": "ja",
+        "why": "the same assistant and reply as held-b01, but the owner had asked for the delimiter change, so undoing it is a new task"
+      },
+      "held-b03": {
+        "dup": "duplicate",
+        "dup_kind": "restatement",
+        "hard": true,
+        "kind": "correction",
+        "lang": "ja",
+        "why": "a standing rule restated in Japanese; covered by the line 'Shell scripts start with set -euo pipefail.'"
+      },
+      "held-b04": {
+        "dup": "duplicate",
+        "dup_kind": "restatement",
+        "hard": true,
+        "kind": "correction",
+        "lang": "ja",
+        "why": "a standing rule restated in Japanese; covered by the line 'API responses use snake_case field names.'"
+      },
+      "held-b05": {
+        "dup": "duplicate",
+        "dup_kind": "paraphrase",
+        "hard": true,
+        "kind": "correction",
+        "lang": "en",
+        "why": "says the approach was wrong; covered by a paraphrased line, 'Commit notebooks with their outputs cleared.'"
+      },
+      "held-b06": {
+        "dup": "duplicate",
+        "dup_kind": "general",
+        "hard": true,
+        "kind": "drift",
+        "lang": "en",
+        "overlap": true,
+        "why": "an overlap: corrects the local time and restores the scope; the general line 'Store all timestamps in UTC.' covers last_login, and the scope is task-local beside it"
+      },
+      "held-b07": {
+        "dup": "duplicate",
+        "dup_kind": "multi",
+        "hard": true,
+        "kind": "correction",
+        "lang": "ja",
+        "why": "two reusable rules, each covered by its own line: 'Quote every variable expansion in shell scripts.' and 'Run shellcheck on every changed script.'"
+      },
+      "held-b08": {
+        "dup": "duplicate",
+        "group": "pair-b1",
+        "hard": true,
+        "kind": "drift",
+        "lang": "en",
+        "undo": true,
+        "why": "undoes the edit of migration 0042, already applied, which the owner ruled out; the instruction it broke is covered by 'Never edit a migration that has already been applied; add a new migration instead.', and the seed-only scope is task-local beside it"
+      },
+      "held-b09": {
+        "group": "pair-b1",
+        "hard": true,
+        "kind": "request",
+        "lang": "en",
+        "why": "the same assistant and reply as held-b08, but the owner had asked for the migration edit, so undoing it is a new task"
+      },
+      "held-b10": {
+        "dup": "new",
+        "dup_kind": "condition",
+        "hard": true,
+        "kind": "correction",
+        "lang": "en",
+        "why": "a standing rule for staging, which no line covers: the backup line applies only on a production server, another condition"
+      },
+      "held-b11": {
+        "dup": "new",
+        "dup_kind": "action",
+        "hard": true,
+        "kind": "correction",
+        "lang": "ja",
+        "why": "a standing rule to record the seed in the experiment log for every experiment, which no line covers: p3's seed line asks a different action, fixing it"
+      },
+      "held-b12": {
+        "dup": "new",
+        "dup_kind": "broken",
+        "hard": true,
+        "kind": "drift",
+        "lang": "en",
+        "why": "restores the scope (the histogram only), which no line covers; the notebook-outputs line is a rule the commit also broke, not the one the reply asks for"
+      },
+      "held-b13": {
+        "dup": "new",
+        "dup_kind": "partial",
+        "hard": true,
+        "kind": "drift",
+        "lang": "en",
+        "overlap": true,
+        "why": "an overlap: keeping set -euo pipefail is covered by its line, but the reusable rule to handle empty globs with nullglob has no covering line"
+      },
+      "held-b14": {
+        "dup": "new",
+        "kind": "drift",
+        "lang": "ja",
+        "why": "restores the scope the owner set (keep the sort order); no line covers it"
+      },
+      "held-b15": {
+        "dup": "new",
+        "kind": "drift",
+        "lang": "ja",
+        "why": "restores the scope the owner set (the typo only); no line covers it"
+      },
+      "held-b16": {
+        "dup": "new",
+        "kind": "drift",
+        "lang": "en",
+        "overlap": true,
+        "why": "an overlap: the reusable rule to log dropped rows has no covering line"
+      },
+      "held-b17": {
+        "dup": "duplicate",
+        "kind": "drift",
+        "lang": "en",
+        "overlap": true,
+        "why": "an overlap: the restart rule is covered by 'Restart services only during the maintenance window.', and the scope is task-local beside it"
+      },
+      "held-b18": {
+        "dup": "duplicate",
+        "kind": "drift",
+        "lang": "ja",
+        "why": "restores the scope the owner set; the instruction it broke is covered by 'Do not edit the shared baseline notebook; work on a copy.'"
+      },
+      "held-b19": {
+        "hard": true,
+        "kind": "request",
+        "lang": "en",
+        "why": "reports a defect in what was built, without saying the agent worked wrongly"
+      },
+      "held-b20": {
+        "kind": "request",
+        "lang": "ja",
+        "why": "asks a question"
+      },
+      "held-b21": {
+        "kind": "request",
+        "lang": "en",
+        "why": "gives a new task"
+      },
+      "held-b22": {
+        "kind": "request",
+        "lang": "ja",
+        "why": "gives a new idea"
+      },
+      "held-b23": {
+        "hard": true,
+        "kind": "approval",
+        "lang": "en",
+        "why": "opens with no but accepts"
+      },
+      "held-b24": {
+        "kind": "approval",
+        "lang": "ja",
+        "why": "acknowledges a result"
+      },
+      "held-b25": {
+        "kind": "approval",
+        "lang": "en",
+        "why": "picks an offered option"
+      },
+      "held-b26": {
+        "kind": "approval",
+        "lang": "ja",
+        "why": "accepts the change"
+      },
+      "held-b27": {
+        "kind": "approval",
+        "lang": "ja",
+        "why": "accepts the change"
+      },
+      "held-b28": {
+        "hard": true,
+        "kind": "noise",
+        "lang": "ja",
+        "why": "an input-method test sentence that reads as text"
+      },
+      "held-b29": {
+        "kind": "noise",
+        "lang": "en",
+        "why": "a lone hash, unrelated to the font change"
+      },
+      "held-b30": {
+        "kind": "noise",
+        "lang": "en",
+        "why": "a lone link, unrelated to the label rename"
+      },
+      "held-b31": {
+        "kind": "noise",
+        "lang": "en",
+        "why": "a bare attachment, unrelated to the comment"
+      },
+      "held-b32": {
+        "kind": "noise",
+        "lang": "ja",
+        "why": "a fragment"
+      }
+    },
+    "split": "heldout"
+  },
+  "observe": {
+    "items": [
+      {
+        "id": "held-b01",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:3",
+        "excerpt": "区切り文字の変更は元に戻して",
+        "ts": "2026-01-08T09:00:03Z"
+      },
+      {
+        "id": "held-b02",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:6",
+        "excerpt": "区切り文字の変更は元に戻して",
+        "ts": "2026-01-08T09:00:06Z"
+      },
+      {
+        "id": "held-b03",
+        "signal": "owner-reply",
+        "where": "t3:th:heldout-b:p2:r2",
+        "excerpt": "スクリプトの先頭には必ず set -euo pipefail を入れて",
+        "ts": "2026-01-08T09:00:09Z"
+      },
+      {
+        "id": "held-b04",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:9",
+        "excerpt": "レスポンスのフィールド名はスネークケースで",
+        "ts": "2026-01-08T09:00:12Z"
+      },
+      {
+        "id": "held-b05",
+        "signal": "owner-reply",
+        "where": "p3/s.jsonl:3",
+        "excerpt": "strip the outputs before you commit a notebook",
+        "ts": "2026-01-08T09:00:15Z"
+      },
+      {
+        "id": "held-b06",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:12",
+        "excerpt": "last_login has to be UTC, and only add the field: revert the reformatting",
+        "ts": "2026-01-08T09:00:18Z"
+      },
+      {
+        "id": "held-b07",
+        "signal": "owner-reply",
+        "where": "t3:th:heldout-b:p2:r6",
+        "excerpt": "シェルスクリプトを変えたら毎回、変数展開は必ずクォートして、shellcheck も実行して",
+        "ts": "2026-01-08T09:00:21Z"
+      },
+      {
+        "id": "held-b08",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:15",
+        "excerpt": "put migration 0042 back the way it was",
+        "ts": "2026-01-08T09:00:24Z"
+      },
+      {
+        "id": "held-b09",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:18",
+        "excerpt": "put migration 0042 back the way it was",
+        "ts": "2026-01-08T09:00:27Z"
+      },
+      {
+        "id": "held-b10",
+        "signal": "owner-reply",
+        "where": "t3:th:heldout-b:p2:r9",
+        "excerpt": "take a backup before you overwrite a config, on staging too",
+        "ts": "2026-01-08T09:00:30Z"
+      },
+      {
+        "id": "held-b11",
+        "signal": "owner-reply",
+        "where": "p3/s.jsonl:6",
+        "excerpt": "実験ごとに、使ったシードを必ず実験ログに記録して",
+        "ts": "2026-01-08T09:00:33Z"
+      },
+      {
+        "id": "held-b12",
+        "signal": "owner-reply",
+        "where": "p3/s.jsonl:9",
+        "excerpt": "keep matplotlib, I only asked for the histogram",
+        "ts": "2026-01-08T09:00:36Z"
+      },
+      {
+        "id": "held-b13",
+        "signal": "owner-reply",
+        "where": "t3:th:heldout-b:p2:r12",
+        "excerpt": "keep set -euo pipefail, handle empty globs with nullglob from now on, and leave the schedule alone",
+        "ts": "2026-01-08T09:00:39Z"
+      },
+      {
+        "id": "held-b14",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:21",
+        "excerpt": "並び順は元に戻して。フィルタだけ",
+        "ts": "2026-01-08T09:00:42Z"
+      },
+      {
+        "id": "held-b15",
+        "signal": "owner-reply",
+        "where": "t3:th:heldout-b:p2:r14",
+        "excerpt": "圧縮方式は戻して。誤字だけ",
+        "ts": "2026-01-08T09:00:45Z"
+      },
+      {
+        "id": "held-b16",
+        "signal": "owner-reply",
+        "where": "p3/s.jsonl:12",
+        "excerpt": "never drop rows silently, log how many you drop; and just the chart, please",
+        "ts": "2026-01-08T09:00:48Z"
+      },
+      {
+        "id": "held-b17",
+        "signal": "owner-reply",
+        "where": "t3:th:heldout-b:p2:r16",
+        "excerpt": "services restart only in the maintenance window, and I asked for the disk check, nothing else",
+        "ts": "2026-01-08T09:00:51Z"
+      },
+      {
+        "id": "held-b18",
+        "signal": "owner-reply",
+        "where": "p3/s.jsonl:15",
+        "excerpt": "baseline は戻して。色だけって言ったよね",
+        "ts": "2026-01-08T09:00:54Z"
+      },
+      {
+        "id": "held-b19",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:24",
+        "excerpt": "the limit resets on every deploy, so it doesn't hold",
+        "ts": "2026-01-08T09:00:57Z"
+      },
+      {
+        "id": "held-b20",
+        "signal": "owner-reply",
+        "where": "t3:th:heldout-b:p2:r19",
+        "excerpt": "閾値はどこで変えられる？",
+        "ts": "2026-01-08T09:01:00Z"
+      },
+      {
+        "id": "held-b21",
+        "signal": "owner-reply",
+        "where": "p3/s.jsonl:18",
+        "excerpt": "can you also break it down by country?",
+        "ts": "2026-01-08T09:01:03Z"
+      },
+      {
+        "id": "held-b22",
+        "signal": "owner-reply",
+        "where": "p3/s.jsonl:21",
+        "excerpt": "次は特徴量の重要度も見たい",
+        "ts": "2026-01-08T09:01:06Z"
+      },
+      {
+        "id": "held-b23",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:27",
+        "excerpt": "no worries about the two seconds, go ahead",
+        "ts": "2026-01-08T09:01:09Z"
+      },
+      {
+        "id": "held-b24",
+        "signal": "owner-reply",
+        "where": "t3:th:heldout-b:p2:r23",
+        "excerpt": "了解、ありがとう",
+        "ts": "2026-01-08T09:01:12Z"
+      },
+      {
+        "id": "held-b25",
+        "signal": "owner-reply",
+        "where": "p3/s.jsonl:24",
+        "excerpt": "go with option 2",
+        "ts": "2026-01-08T09:01:15Z"
+      },
+      {
+        "id": "held-b26",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:30",
+        "excerpt": "その言い回しで大丈夫",
+        "ts": "2026-01-08T09:01:18Z"
+      },
+      {
+        "id": "held-b27",
+        "signal": "owner-reply",
+        "where": "p3/s.jsonl:27",
+        "excerpt": "いい感じ、そのままで",
+        "ts": "2026-01-08T09:01:21Z"
+      },
+      {
+        "id": "held-b28",
+        "signal": "owner-reply",
+        "where": "t3:th:heldout-b:p2:r27",
+        "excerpt": "かな入力のテストです",
+        "ts": "2026-01-08T09:01:24Z"
+      },
+      {
+        "id": "held-b29",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:33",
+        "excerpt": "9e4f1c0",
+        "ts": "2026-01-08T09:01:27Z"
+      },
+      {
+        "id": "held-b30",
+        "signal": "owner-reply",
+        "where": "t3:th:heldout-b:p2:r29",
+        "excerpt": "https://example.com/recipes/17",
+        "ts": "2026-01-08T09:01:30Z"
+      },
+      {
+        "id": "held-b31",
+        "signal": "owner-reply",
+        "where": "p3/s.jsonl:30",
+        "excerpt": "[sticker attached]",
+        "ts": "2026-01-08T09:01:33Z"
+      },
+      {
+        "id": "held-b32",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:36",
+        "excerpt": "あ、",
+        "ts": "2026-01-08T09:01:36Z"
+      }
+    ],
+    "sources": {
+      "t3": {
+        "status": "ok",
+        "error": ""
+      },
+      "transcripts": {
+        "status": "ok",
+        "error": ""
+      }
+    },
+    "version": 1,
+    "window": {
+      "since": "2026-01-01T12:00:00Z",
+      "until": "2026-01-08T11:59:00Z"
+    }
+  },
+  "files": {
+    "p1/s.jsonl": [
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "CSV エクスポートの文字化けだけ直して。区切り文字は変えないで。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:01Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "文字化けを直し、区切り文字をタブに変えました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:02Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "区切り文字の変更は元に戻して",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:03Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "CSV エクスポートの文字化けを直して、区切り文字もタブに変えて。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:04Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "文字化けを直し、区切り文字をタブに変えました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:05Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "区切り文字の変更は元に戻して",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:06Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "注文 API にキャンセル理由のフィールドを追加して。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:10Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "レスポンスに cancelReason というフィールドを追加しました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:11Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "レスポンスのフィールド名はスネークケースで",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:12Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "Add a last_login field to the user model.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:16Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "I added last_login as a naive local datetime and reformatted the whole models file.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:17Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "last_login has to be UTC, and only add the field: revert the reformatting",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:18Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "Fix the seed script only; do not edit the applied migrations.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:22Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "I fixed the seed script and edited migration 0042, which is already applied in production, to add the missing column.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:23Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "put migration 0042 back the way it was",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:24Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "Fix the seed script, and add the missing column to migration 0042.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:25Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "I fixed the seed script and edited migration 0042, which is already applied in production, to add the missing column.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:26Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "put migration 0042 back the way it was",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:27Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "ユーザー一覧 API に検索フィルタを付けて。並び順はそのまま。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:40Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "フィルタを付け、並び順を作成日の降順に変えました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:41Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "並び順は元に戻して。フィルタだけ",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:42Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "Add rate limiting to the login endpoint.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:55Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "Rate limiting is on for the login endpoint.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:56Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "the limit resets on every deploy, so it doesn't hold",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:57Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "Add an index on orders.created_at.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:07Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "I added the index; the migration takes about two seconds on a copy of production.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:01:08Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "no worries about the two seconds, go ahead",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:09Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "エラー画面の文言を直して。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:16Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "文言を「再読み込みしてください」に変えました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:01:17Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "その言い回しで大丈夫",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:18Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "Bump the font size on the settings page.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:25Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "The font size is now 16px.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:01:26Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "9e4f1c0",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:27Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "ログを見せて。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:34Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "ログを貼りました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:01:35Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "あ、",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:36Z",
+        "type": "user"
+      }
+    ],
+    "p3/s.jsonl": [
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "Add the churn analysis notebook.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:13Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": [
+            {
+              "text": "I committed churn.ipynb with every cell output, the charts included.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:14Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "strip the outputs before you commit a notebook",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:15Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "学習率の比較実験を回して。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:31Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": [
+            {
+              "text": "シードを 42 に固定して 3 本回しました。実験ログにはシードを書いていません。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:32Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "実験ごとに、使ったシードを必ず実験ログに記録して",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:33Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "Add a histogram of session length to the report notebook.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:34Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": [
+            {
+              "text": "I added the histogram, switched every chart from matplotlib to plotly, and committed the notebook with its outputs.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:35Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "keep matplotlib, I only asked for the histogram",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:36Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "Add a weekly retention chart to the dashboard notebook.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:46Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": [
+            {
+              "text": "I added the chart and dropped every user with a missing country from the dataset.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:47Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "never drop rows silently, log how many you drop; and just the chart, please",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:48Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "このノートブックのグラフの色だけ調整して。共有のベースラインノートブックは触らないで。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:52Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": [
+            {
+              "text": "色を調整し、ついでに baseline.ipynb のセルも書き換えました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:53Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "baseline は戻して。色だけって言ったよね",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:54Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "Summarize the A/B test.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:01Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": [
+            {
+              "text": "Variant B lifts conversion by 2.1%.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:01:02Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "can you also break it down by country?",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:03Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "モデルの評価をまとめて。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:04Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": [
+            {
+              "text": "評価結果をまとめました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:01:05Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "次は特徴量の重要度も見たい",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:06Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "Option 1 or 2 for the chart layout?",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:13Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": [
+            {
+              "text": "I suggest option 2: one chart per metric.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:01:14Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "go with option 2",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:15Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "ノートブックを整理して。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:19Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": [
+            {
+              "text": "不要なセルを消して整理しました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:01:20Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "いい感じ、そのままで",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:21Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "Shorten the comment above the chart cell.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:31Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": [
+            {
+              "text": "The comment is shorter now.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:01:32Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "[sticker attached]",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:33Z",
+        "type": "user"
+      }
+    ]
+  },
+  "memory": {
+    "p1": "- Never edit a migration that has already been applied; add a new migration instead.\n- Store all timestamps in UTC.\n- API responses use snake_case field names.\n- Never change the column order of CSV exports without asking.\n- Health checks must not touch the database.\n",
+    "p2": "- Shell scripts start with set -euo pipefail.\n- Quote every variable expansion in shell scripts.\n- Run shellcheck on every changed script.\n- Back up a config file before overwriting it on a production server.\n- Restart services only during the maintenance window.\n",
+    "p3": "- Commit notebooks with their outputs cleared.\n- Fix the random seed in every experiment.\n- Do not edit the shared baseline notebook; work on a copy.\n- グラフの軸には単位を書く。\n"
+  },
+  "samples": {
+    "sha256:0877aea96a653b2470027b49ce91399665b8731ce43f8af725d0743e6bd07a91": {
+      "dup_r31": [
+        0.77,
+        0.76,
+        0.7
+      ]
+    },
+    "sha256:12c6a9c1b9ba4995ca743fd7a8d6a445f46a94db606db407dce24486e54b4cda": {
+      "dup_r32": [
+        0.88,
+        0.9,
+        0.85
+      ]
+    },
+    "sha256:23c8a3b00fb50118aeaa6c77b58f29b0a044f7975ce2eb175dc24e58f1131263": {
+      "dup_r18": [
+        0.07,
+        0.08,
+        0.1
+      ]
+    },
+    "sha256:2b1099b609c4c78097aba4715d2bbdd4ad0f44da4533fbfb4219ae23b595c0f9": {
+      "dup_r22": [
+        0.05,
+        0.05,
+        0.06
+      ]
+    },
+    "sha256:2d93da1be28e8a0cc460ec4632295e71d8ca9a64aa390fb92dd1d0923f793b72": {
+      "dup_r25": [
+        0.87,
+        0.85,
+        0.85
+      ]
+    },
+    "sha256:3520e72fef8c8adc00de808022c96c7770e5b978547ae4e5077f8de41dd211ac": {
+      "dup_r17": [
+        0.04,
+        0.04,
+        0.04
+      ]
+    },
+    "sha256:3a02f739fc73aee317d566e92377e1dd1730dbffed4f95586a92f68878f0bc97": {
+      "dup_r23": [
+        0.94,
+        0.93,
+        0.91
+      ]
+    },
+    "sha256:3f265f881de6c9cca85b4e81d1e2b94df74e1aeaf59ad67ab345e3c90cc83cfd": {
+      "kind_r21": [
+        1,
+        1,
+        1
+      ],
+      "kind_r22": [
+        0.98,
+        0.98,
+        0.98
+      ],
+      "kind_r23": [
+        1,
+        0.99,
+        0.99
+      ],
+      "kind_r24": [
+        0.98,
+        0.99,
+        0.99
+      ],
+      "kind_r25": [
+        0.99,
+        0.99,
+        0.99
+      ],
+      "kind_r26": [
+        1,
+        1,
+        1
+      ],
+      "kind_r27": [
+        1,
+        1,
+        1
+      ],
+      "kind_r28": [
+        0.98,
+        0.9700000000000001,
+        0.98
+      ],
+      "kind_r29": [
+        0.97,
+        0.96,
+        0.98
+      ],
+      "kind_r30": [
+        0.96,
+        0.96,
+        0.96
+      ],
+      "kind_r31": [
+        0.99,
+        0.99,
+        0.99
+      ],
+      "kind_r32": [
+        0.99,
+        0.99,
+        1
+      ]
+    },
+    "sha256:408e5fa26bbc3242805019b4627dd2883f6e3c3afc930e4ea6a122cf3fef99bc": {
+      "dup_r29": [
+        0.92,
+        0.91,
+        0.91
+      ]
+    },
+    "sha256:4123a8ce36884628dbaa69c8a8154714631df4a6ee05a5d4cceca662e444a056": {
+      "dup_r24": [
+        0.91,
+        0.87,
+        0.88
+      ]
+    },
+    "sha256:437a1e6b7598c3c1a6ab60daa38f43445ed49345c6a20d1675b18d99cce41f68": {
+      "dup_r28": [
+        0.98,
+        0.98,
+        0.98
+      ]
+    },
+    "sha256:66980ca4fb5296d8e7444071767a7551f71c7bd1f7f57e169434b4f3ea2e4b5c": {
+      "dup_r19": [
+        0.11,
+        0.09,
+        0.1
+      ]
+    },
+    "sha256:9afff4bdf058ae3878a82538f77d2b98ba489e037b31aacf7532b308d5ccb742": {
+      "dup_r21": [
+        0.13,
+        0.13,
+        0.15
+      ]
+    },
+    "sha256:9bb582526f70b321d36efb84a92ffed7d97a59dcfb77c95ed8bc2aa1e8024dbb": {
+      "kind_r1": [
+        0,
+        0,
+        0
+      ],
+      "kind_r10": [
+        0,
+        0,
+        0
+      ],
+      "kind_r11": [
+        0,
+        0,
+        0
+      ],
+      "kind_r12": [
+        0,
+        0,
+        0
+      ],
+      "kind_r13": [
+        0,
+        0,
+        0
+      ],
+      "kind_r14": [
+        0.22,
+        0.25,
+        0.19
+      ],
+      "kind_r15": [
+        1,
+        1,
+        1
+      ],
+      "kind_r16": [
+        1,
+        1,
+        1
+      ],
+      "kind_r17": [
+        1,
+        1,
+        1
+      ],
+      "kind_r18": [
+        1,
+        1,
+        1
+      ],
+      "kind_r19": [
+        1,
+        1,
+        1
+      ],
+      "kind_r2": [
+        0,
+        0,
+        0
+      ],
+      "kind_r20": [
+        1,
+        1,
+        1
+      ],
+      "kind_r3": [
+        0,
+        0,
+        0
+      ],
+      "kind_r4": [
+        0,
+        0,
+        0
+      ],
+      "kind_r5": [
+        0,
+        0,
+        0
+      ],
+      "kind_r6": [
+        0,
+        0,
+        0
+      ],
+      "kind_r7": [
+        0,
+        0,
+        0
+      ],
+      "kind_r8": [
+        0,
+        0,
+        0
+      ],
+      "kind_r9": [
+        0,
+        0,
+        0
+      ]
+    },
+    "sha256:a44f464a88c8794580c434714be132e8470e37d6b6162009e82127ef0324f995": {
+      "dup_r26": [
+        0.94,
+        0.95,
+        0.94
+      ]
+    },
+    "sha256:aa42d106bbfb49a0a1780e5c9c589d079aaaa1d352f36b8a0f42d12cf4f35db8": {
+      "dup_r30": [
+        0.96,
+        0.96,
+        0.97
+      ]
+    },
+    "sha256:b803e0b793fc96e68b897c3c1993f786d3a3df1bdc386e4c9283d9f9823197b0": {
+      "dup_r20": [
+        0.16,
+        0.2,
+        0.19
+      ]
+    },
+    "sha256:ce66a7285483a4c455dc15a7c39c93e0623debd684b751f5a8080e9b777d3ae7": {
+      "dup_r15": [
+        0.78,
+        0.82,
+        0.83
+      ]
+    },
+    "sha256:e3b984a48ed7d1756c9e01247b31091fdf267328ed8f49987992bb2ef1274803": {
+      "dup_r27": [
+        0.27,
+        0.27,
+        0.32
+      ]
+    },
+    "sha256:f129be8a102eb020c25e575128b8e14100687e8e4db0e77953ccb56dac9a9c84": {
+      "dup_r16": [
+        0.69,
+        0.66,
+        0.66
+      ]
+    }
+  }
+}

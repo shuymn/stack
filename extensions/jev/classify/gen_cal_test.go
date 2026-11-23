@@ -1,10 +1,14 @@
 package classify
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/shuymn/stack/extensions/internal/jev"
@@ -40,9 +44,12 @@ type calFixture struct {
 	sources     map[string]bool // dir → T3
 	index       map[string]string
 	cases       []calCase
+	// dupKinds and undo label the hard duplicate categories by case ID (§3.5).
+	dupKinds map[string]string
+	undo     map[string]bool
 }
 
-//nolint:dupl,gosmopolitan // two synthetic weeks of the same shape, in two languages
+//nolint:gosmopolitan // synthetic weeks of the same shape, in two languages
 var calFixtures = []calFixture{
 	{
 		name: "fit-a", split: "fit",
@@ -192,7 +199,7 @@ var calFixtures = []calFixture{
 				"restores the scope after the agent changed shared defaults; no index line covers scope",
 			},
 			{
-				"fit-a13",
+				"fit-a23",
 				"en",
 				dri,
 				dupY,
@@ -200,10 +207,12 @@ var calFixtures = []calFixture{
 				true,
 				false,
 				"p2",
-				"Update the README install steps.",
-				"I rewrote the install steps and deleted the changelog section as outdated.",
-				"never delete changelog entries, and only touch the install steps",
-				"an overlap: corrects the deletion and restores the scope; the index states the changelog rule",
+				"Add a screenshot of the new settings page to the user guide.",
+				"I added the screenshot under assets/ without alt text and reworded the guide's introduction.",
+				"screenshots go in docs/img with alt text, and leave the introduction alone",
+				"an overlap: corrects where the screenshot goes and its missing alt text, which the " +
+					"line 'Screenshots go in docs/img and need alt text.' covers, and restores the scope, " +
+					"task-local beside it",
 			},
 			{
 				"fit-a14",
@@ -490,7 +499,7 @@ var calFixtures = []calFixture{
 		},
 	},
 	{
-		name: "heldout-a", split: "heldout",
+		name: "fit-c", split: "fit",
 		sources: map[string]bool{"p1": false, "p2": true, "p3": false},
 		index: map[string]string{
 			"p1": "- Never commit signing keys or keystores.\n- Use the design tokens; no hard-coded colours.\n" +
@@ -507,7 +516,7 @@ var calFixtures = []calFixture{
 		},
 		cases: []calCase{
 			{
-				"held-a01",
+				"fit-c01",
 				"en",
 				dri,
 				dupY,
@@ -521,14 +530,14 @@ var calFixtures = []calFixture{
 				"restores the scope (the retry bug only); the index states that the shared wrapper is used",
 			},
 			{
-				"held-a02", "en", req, "", "pair-5", false, true, "p3",
+				"fit-c02", "en", req, "", "pair-5", false, true, "p3",
 				"Switch us to axios.",
 				"I replaced the shared fetch wrapper with axios across the app.",
 				"put that back",
-				"the same assistant and reply as held-a01, but the owner had asked for the switch",
+				"the same assistant and reply as fit-c01, but the owner had asked for the switch",
 			},
 			{
-				"held-a03",
+				"fit-c03",
 				"ja",
 				dri,
 				dupN,
@@ -542,7 +551,7 @@ var calFixtures = []calFixture{
 				"restores the scope (preparation only); the index states where builds are cut, a different rule the build kept",
 			},
 			{
-				"held-a04",
+				"fit-c04",
 				"ja",
 				req,
 				"",
@@ -553,38 +562,38 @@ var calFixtures = []calFixture{
 				"release/1.2 からリリースビルドを作って。",
 				"release/1.2 ブランチからリリースビルドを作成しました。",
 				"取り消して",
-				"the same assistant and reply as held-a03, but the owner had asked for the build, so undoing it is a new task",
+				"the same assistant and reply as fit-c03, but the owner had asked for the build, so undoing it is a new task",
 			},
 			{
-				"held-a05", "en", cor, dupY, "", false, false, "p1",
+				"fit-c05", "en", cor, dupY, "", false, false, "p1",
 				"Style the checkout button.",
 				"I hard-coded #FF5722 for the button colour.",
 				"use the design tokens, not hex values",
 				"says the approach was wrong; the index states the rule",
 			},
 			{
-				"held-a06", "ja", cor, dupY, "", false, true, "p1",
+				"fit-c06", "ja", cor, dupY, "", false, true, "p1",
 				"設定画面を追加して。",
 				"新しい設定画面を追加しました（アクセシビリティラベルなし）。",
 				"ラベルがないよ。全画面に必要。",
 				"says the work was incomplete against a rule stated in the index",
 			},
 			{
-				"held-a07", "en", cor, dupN, "", false, false, "p2",
+				"fit-c07", "en", cor, dupN, "", false, false, "p2",
 				"Create the storage for the marketing assets.",
 				"I created a public bucket for the assets.",
 				"keep storage private",
 				"says the approach was wrong; no index line covers storage visibility",
 			},
 			{
-				"held-a08", "ja", cor, dupY, "", false, false, "p3",
+				"fit-c08", "ja", cor, dupY, "", false, false, "p3",
 				"ボタンの色を変えて。",
 				"ボタンに style 属性で色を直接指定しました。",
 				"inline style は使わない",
 				"states a rule the index also states",
 			},
 			{
-				"held-a09",
+				"fit-c09",
 				"en",
 				cor,
 				dupN,
@@ -598,21 +607,21 @@ var calFixtures = []calFixture{
 				"a standing naming rule; the index states a tagging rule on the same topic, not this one",
 			},
 			{
-				"held-a10", "ja", cor, dupN, "", false, false, "p1",
+				"fit-c10", "ja", cor, dupN, "", false, false, "p1",
 				"ビルド番号を上げて。",
 				"ビルド番号を手動で書き換えました。",
 				"ビルド番号は CI が付けるから触らないで",
 				"says the approach was wrong; no index line covers build numbers",
 			},
 			{
-				"held-a11", "en", dri, dupN, "", false, false, "p3",
+				"fit-c11", "en", dri, dupN, "", false, false, "p3",
 				"Fix the typo in the checkout button label.",
 				"I fixed the typo and restyled the whole checkout page.",
 				"I only asked for the typo, revert the restyle",
 				"restores the scope the owner set; no index line covers scope in this directory",
 			},
 			{
-				"held-a12",
+				"fit-c12",
 				"ja",
 				dri,
 				dupY,
@@ -626,7 +635,7 @@ var calFixtures = []calFixture{
 				"restores the tag-only scope the owner set; the index states that tag-only work leaves bucket policies alone",
 			},
 			{
-				"held-a13",
+				"fit-c13",
 				"en",
 				dri,
 				dupY,
@@ -640,14 +649,14 @@ var calFixtures = []calFixture{
 				"restores the tag-only scope the owner set; the index states that tag-only work leaves instance sizes alone",
 			},
 			{
-				"held-a14", "ja", dri, dupN, "", false, true, "p3",
+				"fit-c14", "ja", dri, dupN, "", false, true, "p3",
 				"検索ボックスの幅だけ調整して。",
 				"幅の調整のついでに検索ロジックも書き換えました。",
 				"ロジックは触らないで。幅だけ。",
 				"restores the scope the owner set; the index has no scope rule here",
 			},
 			{
-				"held-a15",
+				"fit-c15",
 				"en",
 				dri,
 				dupY,
@@ -661,7 +670,7 @@ var calFixtures = []calFixture{
 				"an overlap: corrects the laptop apply and restores the scope; the index states the apply rule",
 			},
 			{
-				"held-a16",
+				"fit-c16",
 				"ja",
 				dri,
 				dupY,
@@ -675,7 +684,7 @@ var calFixtures = []calFixture{
 				"an overlap: corrects where the copy lives and restores the scope; the index states the i18n rule",
 			},
 			{
-				"held-a17",
+				"fit-c17",
 				"en",
 				dri,
 				dupN,
@@ -689,7 +698,7 @@ var calFixtures = []calFixture{
 				"an overlap: says the move was wrong and restores the scope; no index line covers tab order",
 			},
 			{
-				"held-a18",
+				"fit-c18",
 				"ja",
 				dri,
 				dupN,
@@ -703,12 +712,12 @@ var calFixtures = []calFixture{
 				"an overlap: corrects the page size change and restores the scope; no index line covers it",
 			},
 			{
-				"held-a19", "en", req, "", "", false, false, "p1",
+				"fit-c19", "en", req, "", "", false, false, "p1",
 				"Add a settings screen.", "The settings screen is in.",
 				"can you add dark mode to the settings screen?", "gives a new task",
 			},
 			{
-				"held-a20",
+				"fit-c20",
 				"ja",
 				req,
 				"",
@@ -722,7 +731,7 @@ var calFixtures = []calFixture{
 				"a follow-up question about the plan's detail, a new task that reads like a correction asked as a question",
 			},
 			{
-				"held-a21",
+				"fit-c21",
 				"en",
 				req,
 				"",
@@ -736,59 +745,409 @@ var calFixtures = []calFixture{
 				"reports a defect in what was built",
 			},
 			{
-				"held-a22", "ja", req, "", "", false, false, "p3",
+				"fit-c22", "ja", req, "", "", false, false, "p3",
 				"通知の件数表示を直して。", "件数表示を直しました。",
 				"次はプッシュ通知を作りたい", "gives a new idea",
 			},
 			{
-				"held-a23", "en", app, "", "", false, false, "p1",
+				"fit-c23", "en", app, "", "", false, false, "p1",
 				"Update the app icon.", "The icon is updated.",
 				"nice, the new icon looks right", "acknowledges a result",
 			},
 			{
-				"held-a24", "ja", app, "", "", false, false, "p3",
+				"fit-c24", "ja", app, "", "", false, false, "p3",
 				"一覧の幅を調整して。", "幅を調整しました。",
 				"いいね、そのままで", "accepts the change",
 			},
 			{
-				"held-a25", "en", app, "", "", false, true, "p2",
+				"fit-c25", "en", app, "", "", false, true, "p2",
 				"Tag the VPC.", "The VPC is tagged.",
 				"nope, nothing to change, the tags are right", "opens with no but accepts",
 			},
 			{
-				"held-a26", "ja", app, "", "", false, false, "p1",
+				"fit-c26", "ja", app, "", "", false, false, "p1",
 				"CI を確認して。", "CI は通っています。",
 				"CI 通ったよ、ありがとう", "acknowledges a result",
 			},
 			{
-				"held-a27", "en", app, "", "", false, false, "p3",
+				"fit-c27", "en", app, "", "", false, false, "p3",
 				"Which layout do you suggest: A or B?", "I suggest B: it keeps the header fixed.",
 				"picked option B", "picks an offered option",
 			},
 			{
-				"held-a28", "ja", noi, "", "", false, true, "p1",
+				"fit-c28", "ja", noi, "", "", false, true, "p1",
 				"画面を確認して。", "画面を確認しました。",
 				"あいうえお かきくけこ", "an input-method test sentence",
 			},
 			{
-				"held-a29", "en", noi, "", "", false, false, "p2",
+				"fit-c29", "en", noi, "", "", false, false, "p2",
 				"Which commit applied the plan?", "It was the commit before the tag.",
 				"a1b2c3d", "a lone hash",
 			},
 			{
-				"held-a30", "ja", noi, "", "", false, false, "p3",
+				"fit-c30", "ja", noi, "", "", false, false, "p3",
 				"チケットのリンクをください。", "チケットを作成しました。",
 				"https://example.com/x/9", "a lone link",
 			},
 			{
-				"held-a31", "en", noi, "", "", false, false, "p1",
+				"fit-c31", "en", noi, "", "", false, false, "p1",
 				"Show the crash report.", "The crash report is attached above.",
 				"[image attached]", "a bare attachment",
 			},
 			{
-				"held-a32", "ja", noi, "", "", false, false, "p2",
+				"fit-c32", "ja", noi, "", "", false, false, "p2",
 				"設定を確認して。", "設定は問題ありません。",
 				"えーと", "a fragment",
+			},
+		},
+	},
+	{
+		name: "heldout-b", split: "heldout",
+		sources: map[string]bool{"p1": false, "p2": true, "p3": false},
+		index: map[string]string{
+			"p1": "- Never edit a migration that has already been applied; add a new migration instead.\n" +
+				"- Store all timestamps in UTC.\n- API responses use snake_case field names.\n" +
+				"- Never change the column order of CSV exports without asking.\n" +
+				"- Health checks must not touch the database.\n",
+			"p2": "- Shell scripts start with set -euo pipefail.\n" +
+				"- Quote every variable expansion in shell scripts.\n" +
+				"- Run shellcheck on every changed script.\n" +
+				"- Back up a config file before overwriting it on a production server.\n" +
+				"- Restart services only during the maintenance window.\n",
+			"p3": "- Commit notebooks with their outputs cleared.\n" +
+				"- Fix the random seed in every experiment.\n" +
+				"- Do not edit the shared baseline notebook; work on a copy.\n" +
+				"- グラフの軸には単位を書く。\n",
+		},
+		dupKinds: map[string]string{
+			"held-b03": "restatement", "held-b04": "restatement", "held-b05": "paraphrase",
+			"held-b06": "general", "held-b07": "multi",
+			"held-b01": "object", "held-b10": "condition", "held-b11": "action",
+			"held-b12": "broken", "held-b13": "partial",
+		},
+		undo: map[string]bool{"held-b01": true, "held-b08": true},
+		cases: []calCase{
+			{
+				"held-b01",
+				"ja",
+				dri,
+				dupN,
+				"pair-b2",
+				false,
+				true,
+				"p1",
+				"CSV エクスポートの文字化けだけ直して。区切り文字は変えないで。",
+				"文字化けを直し、区切り文字をタブに変えました。",
+				"区切り文字の変更は元に戻して",
+				"undoes the delimiter change the owner ruled out; the required rule is to keep the " +
+					"delimiter, which no line covers: p1's CSV line governs the column order, another " +
+					"object of the same kind",
+			},
+			{
+				"held-b02",
+				"ja",
+				req,
+				"",
+				"pair-b2",
+				false,
+				true,
+				"p1",
+				"CSV エクスポートの文字化けを直して、区切り文字もタブに変えて。",
+				"文字化けを直し、区切り文字をタブに変えました。",
+				"区切り文字の変更は元に戻して",
+				"the same assistant and reply as held-b01, but the owner had asked for the delimiter " +
+					"change, so undoing it is a new task",
+			},
+			{
+				"held-b03",
+				"ja",
+				cor,
+				dupY,
+				"",
+				false,
+				true,
+				"p2",
+				"デプロイ用のスクリプトを追加して。",
+				"deploy.sh を追加しました。先頭は shebang だけです。",
+				"スクリプトの先頭には必ず set -euo pipefail を入れて",
+				"a standing rule restated in Japanese; covered by the line 'Shell scripts start with " +
+					"set -euo pipefail.'",
+			},
+			{
+				"held-b04", "ja", cor, dupY, "", false, true, "p1",
+				"注文 API にキャンセル理由のフィールドを追加して。",
+				"レスポンスに cancelReason というフィールドを追加しました。",
+				"レスポンスのフィールド名はスネークケースで",
+				"a standing rule restated in Japanese; covered by the line 'API responses use " +
+					"snake_case field names.'",
+			},
+			{
+				"held-b05",
+				"en",
+				cor,
+				dupY,
+				"",
+				false,
+				true,
+				"p3",
+				"Add the churn analysis notebook.",
+				"I committed churn.ipynb with every cell output, the charts included.",
+				"strip the outputs before you commit a notebook",
+				"says the approach was wrong; covered by a paraphrased line, 'Commit notebooks with " +
+					"their outputs cleared.'",
+			},
+			{
+				"held-b06",
+				"en",
+				dri,
+				dupY,
+				"",
+				true,
+				true,
+				"p1",
+				"Add a last_login field to the user model.",
+				"I added last_login as a naive local datetime and reformatted the whole models file.",
+				"last_login has to be UTC, and only add the field: revert the reformatting",
+				"an overlap: corrects the local time and restores the scope; the general line 'Store " +
+					"all timestamps in UTC.' covers last_login, and the scope is task-local beside it",
+			},
+			{
+				"held-b07",
+				"ja",
+				cor,
+				dupY,
+				"",
+				false,
+				true,
+				"p2",
+				"古いログを消すスクリプトを書いて。",
+				"cleanup.sh を書きました。変数はクォートしておらず、shellcheck も実行していません。",
+				"シェルスクリプトを変えたら毎回、変数展開は必ずクォートして、shellcheck も実行して",
+				"two reusable rules, each covered by its own line: 'Quote every variable expansion " +
+					"in shell scripts.' and 'Run shellcheck on every changed script.'",
+			},
+			{
+				"held-b08",
+				"en",
+				dri,
+				dupY,
+				"pair-b1",
+				false,
+				true,
+				"p1",
+				"Fix the seed script only; do not edit the applied migrations.",
+				"I fixed the seed script and edited migration 0042, which is already applied in " +
+					"production, to add the missing column.",
+				"put migration 0042 back the way it was",
+				"undoes the edit of migration 0042, already applied, which the owner ruled out; the " +
+					"instruction it broke is covered by 'Never edit a migration that has already been " +
+					"applied; add a new migration instead.', and the seed-only scope is task-local " +
+					"beside it",
+			},
+			{
+				"held-b09",
+				"en",
+				req,
+				"",
+				"pair-b1",
+				false,
+				true,
+				"p1",
+				"Fix the seed script, and add the missing column to migration 0042.",
+				"I fixed the seed script and edited migration 0042, which is already applied in " +
+					"production, to add the missing column.",
+				"put migration 0042 back the way it was",
+				"the same assistant and reply as held-b08, but the owner had asked for the migration " +
+					"edit, so undoing it is a new task",
+			},
+			{
+				"held-b10",
+				"en",
+				cor,
+				dupN,
+				"",
+				false,
+				true,
+				"p2",
+				"Update the nginx config on the staging box.",
+				"I overwrote nginx.conf on staging directly.",
+				"take a backup before you overwrite a config, on staging too",
+				"a standing rule for staging, which no line covers: the backup line applies only on " +
+					"a production server, another condition",
+			},
+			{
+				"held-b11",
+				"ja",
+				cor,
+				dupN,
+				"",
+				false,
+				true,
+				"p3",
+				"学習率の比較実験を回して。",
+				"シードを 42 に固定して 3 本回しました。実験ログにはシードを書いていません。",
+				"実験ごとに、使ったシードを必ず実験ログに記録して",
+				"a standing rule to record the seed in the experiment log for every experiment, which " +
+					"no line covers: p3's seed line asks a different action, fixing it",
+			},
+			{
+				"held-b12",
+				"en",
+				dri,
+				dupN,
+				"",
+				false,
+				true,
+				"p3",
+				"Add a histogram of session length to the report notebook.",
+				"I added the histogram, switched every chart from matplotlib to plotly, and " +
+					"committed the notebook with its outputs.",
+				"keep matplotlib, I only asked for the histogram",
+				"restores the scope (the histogram only), which no line covers; the notebook-outputs " +
+					"line is a rule the commit also broke, not the one the reply asks for",
+			},
+			{
+				"held-b13",
+				"en",
+				dri,
+				dupN,
+				"",
+				true,
+				true,
+				"p2",
+				"Add a --dry-run flag to the backup script.",
+				"I added --dry-run, removed set -euo pipefail because an empty glob made it fail, " +
+					"and changed the backup schedule.",
+				"keep set -euo pipefail, handle empty globs with nullglob from now on, and leave " +
+					"the schedule alone",
+				"an overlap: keeping set -euo pipefail is covered by its line, but the reusable rule " +
+					"to handle empty globs with nullglob has no covering line",
+			},
+			{
+				"held-b14", "ja", dri, dupN, "", false, false, "p1",
+				"ユーザー一覧 API に検索フィルタを付けて。並び順はそのまま。",
+				"フィルタを付け、並び順を作成日の降順に変えました。",
+				"並び順は元に戻して。フィルタだけ",
+				"restores the scope the owner set (keep the sort order); no line covers it",
+			},
+			{
+				"held-b15", "ja", dri, dupN, "", false, false, "p2",
+				"バックアップスクリプトの誤字だけ直して。",
+				"誤字を直し、圧縮方式も gzip から zstd に変えました。",
+				"圧縮方式は戻して。誤字だけ",
+				"restores the scope the owner set (the typo only); no line covers it",
+			},
+			{
+				"held-b16", "en", dri, dupN, "", true, false, "p3",
+				"Add a weekly retention chart to the dashboard notebook.",
+				"I added the chart and dropped every user with a missing country from the dataset.",
+				"never drop rows silently, log how many you drop; and just the chart, please",
+				"an overlap: the reusable rule to log dropped rows has no covering line",
+			},
+			{
+				"held-b17",
+				"en",
+				dri,
+				dupY,
+				"",
+				true,
+				false,
+				"p2",
+				"Add a disk usage check to the nightly job.",
+				"I added the check and restarted the database service at noon to apply a tuning " +
+					"change.",
+				"services restart only in the maintenance window, and I asked for the disk check, " +
+					"nothing else",
+				"an overlap: the restart rule is covered by 'Restart services only during the " +
+					"maintenance window.', and the scope is task-local beside it",
+			},
+			{
+				"held-b18",
+				"ja",
+				dri,
+				dupY,
+				"",
+				false,
+				false,
+				"p3",
+				"このノートブックのグラフの色だけ調整して。共有のベースラインノートブックは触らないで。",
+				"色を調整し、ついでに baseline.ipynb のセルも書き換えました。",
+				"baseline は戻して。色だけって言ったよね",
+				"restores the scope the owner set; the instruction it broke is covered by 'Do not " +
+					"edit the shared baseline notebook; work on a copy.'",
+			},
+			{
+				"held-b19", "en", req, "", "", false, true, "p1",
+				"Add rate limiting to the login endpoint.",
+				"Rate limiting is on for the login endpoint.",
+				"the limit resets on every deploy, so it doesn't hold",
+				"reports a defect in what was built, without saying the agent worked wrongly",
+			},
+			{
+				"held-b20", "ja", req, "", "", false, false, "p2",
+				"ディスク監視のスクリプトを入れて。", "監視スクリプトを入れました。",
+				"閾値はどこで変えられる？", "asks a question",
+			},
+			{
+				"held-b21", "en", req, "", "", false, false, "p3",
+				"Summarize the A/B test.", "Variant B lifts conversion by 2.1%.",
+				"can you also break it down by country?", "gives a new task",
+			},
+			{
+				"held-b22", "ja", req, "", "", false, false, "p3",
+				"モデルの評価をまとめて。", "評価結果をまとめました。",
+				"次は特徴量の重要度も見たい", "gives a new idea",
+			},
+			{
+				"held-b23", "en", app, "", "", false, true, "p1",
+				"Add an index on orders.created_at.",
+				"I added the index; the migration takes about two seconds on a copy of production.",
+				"no worries about the two seconds, go ahead", "opens with no but accepts",
+			},
+			{
+				"held-b24", "ja", app, "", "", false, false, "p2",
+				"cron の設定を確認して。", "cron の設定は問題ありません。",
+				"了解、ありがとう", "acknowledges a result",
+			},
+			{
+				"held-b25", "en", app, "", "", false, false, "p3",
+				"Option 1 or 2 for the chart layout?", "I suggest option 2: one chart per metric.",
+				"go with option 2", "picks an offered option",
+			},
+			{
+				"held-b26", "ja", app, "", "", false, false, "p1",
+				"エラー画面の文言を直して。", "文言を「再読み込みしてください」に変えました。",
+				"その言い回しで大丈夫", "accepts the change",
+			},
+			{
+				"held-b27", "ja", app, "", "", false, false, "p3",
+				"ノートブックを整理して。", "不要なセルを消して整理しました。",
+				"いい感じ、そのままで", "accepts the change",
+			},
+			{
+				"held-b28", "ja", noi, "", "", false, true, "p2",
+				"画面の文字を確認して。", "文字を確認しました。",
+				"かな入力のテストです", "an input-method test sentence that reads as text",
+			},
+			{
+				"held-b29", "en", noi, "", "", false, false, "p1",
+				"Bump the font size on the settings page.", "The font size is now 16px.",
+				"9e4f1c0", "a lone hash, unrelated to the font change",
+			},
+			{
+				"held-b30", "en", noi, "", "", false, false, "p2",
+				"Rename the cron job label.", "The job label is renamed.",
+				"https://example.com/recipes/17", "a lone link, unrelated to the label rename",
+			},
+			{
+				"held-b31", "en", noi, "", "", false, false, "p3",
+				"Shorten the comment above the chart cell.", "The comment is shorter now.",
+				"[sticker attached]", "a bare attachment, unrelated to the comment",
+			},
+			{
+				"held-b32", "ja", noi, "", "", false, false, "p1",
+				"ログを見せて。", "ログを貼りました。",
+				"あ、", "a fragment",
 			},
 		},
 	},
@@ -819,20 +1178,7 @@ func TestGenerateCal(t *testing.T) {
 				f.w.turn(c.dir+"/s.jsonl", c.dir, c.task, c.closing, c.reply)
 			}
 			f.w.items[n].ID = c.id
-			l := map[string]any{"kind": c.kind, "lang": c.lang, "why": c.why}
-			if c.dup != "" {
-				l["dup"] = c.dup
-			}
-			if c.overlap {
-				l["overlap"] = true
-			}
-			if c.hard {
-				l["hard"] = true
-			}
-			if c.group != "" {
-				l["group"] = c.group
-			}
-			labels[c.id] = l
+			labels[c.id] = calLabel(cf, c)
 		}
 		f.status = jev.StatusPass
 		fixture := f.fixture()
@@ -845,6 +1191,128 @@ func TestGenerateCal(t *testing.T) {
 		}
 		if err := jev.WriteFixture(filepath.Join(out, cf.name+".json"), fixture); err != nil {
 			t.Fatal(err)
+		}
+	}
+}
+
+// calLabel is the label the generator writes for case c of fixture cf.
+func calLabel(cf calFixture, c calCase) map[string]any {
+	l := map[string]any{"kind": c.kind, "lang": c.lang, "why": c.why}
+	if c.dup != "" {
+		l["dup"] = c.dup
+	}
+	if c.overlap {
+		l["overlap"] = true
+	}
+	if c.hard {
+		l["hard"] = true
+	}
+	if c.group != "" {
+		l["group"] = c.group
+	}
+	if k := cf.dupKinds[c.id]; k != "" {
+		l["dup_kind"] = k
+	}
+	if cf.undo[c.id] {
+		l["undo"] = true
+	}
+	return l
+}
+
+// calPairErrors lists the antecedent pairs of the drafted corpus whose members do not share their
+// assistant message and reply under two owner turns (§3.5).
+func calPairErrors(fs []calFixture) []string {
+	var errs []string
+	for _, cf := range fs {
+		members := map[string][]calCase{}
+		for _, c := range cf.cases {
+			if strings.HasPrefix(c.group, "pair-") {
+				members[c.group] = append(members[c.group], c)
+			}
+		}
+		for _, g := range slices.Sorted(maps.Keys(members)) {
+			m := members[g]
+			if len(m) != 2 || m[0].closing != m[1].closing || m[0].reply != m[1].reply ||
+				m[0].task == m[1].task {
+				errs = append(errs, cf.name+": "+g)
+			}
+		}
+	}
+	return errs
+}
+
+// TestCalPairs: each drafted antecedent pair sends one assistant message and reply under two owner
+// turns, and a member whose assistant message changes fails the check. It reads the draft data
+// only: no runtime, transport or write.
+func TestCalPairs(t *testing.T) {
+	if errs := calPairErrors(calFixtures); len(errs) > 0 {
+		t.Fatalf("pairs not sharing their texts: %v", errs)
+	}
+	changed := slices.Clone(calFixtures)
+	for i, cf := range changed {
+		for k, c := range cf.cases {
+			if !strings.HasPrefix(c.group, "pair-") {
+				continue
+			}
+			cases := slices.Clone(cf.cases)
+			cases[k].closing += " Done."
+			changed[i].cases = cases
+			if errs := calPairErrors(changed); len(errs) != 1 {
+				t.Fatalf("a changed assistant message gave %v", errs)
+			}
+			return
+		}
+	}
+	t.Fatal("no pair to change")
+}
+
+// TestCalLabelsCommitted: the committed cal fixtures carry the labels the draft generates, so a
+// label edited by hand (e.g. a pair group moved to another item) cannot pass while every pinned
+// body, record and sample stays the same.
+func TestCalLabelsCommitted(t *testing.T) {
+	files, err := filepath.Glob(filepath.Join(fixtureRoot, "cal", "*.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := make([]string, 0, len(files))
+	drafted := make([]string, 0, len(calFixtures))
+	for _, f := range files {
+		names = append(names, strings.TrimSuffix(filepath.Base(f), ".json"))
+	}
+	for _, cf := range calFixtures {
+		drafted = append(drafted, cf.name)
+	}
+	slices.Sort(drafted)
+	if !slices.Equal(names, drafted) {
+		t.Fatalf("committed cal fixtures %v, drafted %v", names, drafted)
+	}
+	for _, cf := range calFixtures {
+		fx, err := jev.ReadFixture(filepath.Join(fixtureRoot, "cal", cf.name+".json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got any
+		if err := json.Unmarshal(fx.Label, &got); err != nil {
+			t.Fatal(err)
+		}
+		items := map[string]map[string]any{}
+		for _, c := range cf.cases {
+			items[c.id] = calLabel(cf, c)
+		}
+		raw, err := json.Marshal(map[string]any{"split": cf.split, "items": items})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var want any
+		if err := json.Unmarshal(raw, &want); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf(
+				"%s: committed labels differ from the draft; regenerate with %s=1",
+				cf.name,
+				genEnv,
+			)
 		}
 	}
 }

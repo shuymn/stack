@@ -1,0 +1,219 @@
+{
+  "synthetic": "records written by hand: each reply's kind_ and dup_ answer is assigned in the fixture's generator and keyed by the body hash the runtime sends; fixed fixtures check behaviour and are never recorded live (jev-calibrate records the cal cases)",
+  "request": {
+    "jev": {
+      "claude": "claude",
+      "now": "2026-01-08T12:00:00Z",
+      "observe": "observe.json",
+      "records": {
+        "sha256:fc55e009af3aa2eec4be5c66280e37eaf5b038dd09d2a17a008fbc997215d6dc": {
+          "answer": {
+            "answers": {
+              "kind_r2": {
+                "choice": "correction",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.9,
+                  "drift": 0.024999999999999994,
+                  "noise": 0.024999999999999994,
+                  "request": 0.024999999999999994
+                },
+                "type": "choice"
+              }
+            },
+            "model": "jev-1.14.0",
+            "usage": {
+              "input_tokens": 10,
+              "output_tokens": 1
+            }
+          }
+        }
+      },
+      "t3": {}
+    },
+    "stage": "cycle"
+  },
+  "expect": {
+    "status": "warn"
+  },
+  "want": {
+    "findings": [
+      {
+        "kind": "jev-error"
+      }
+    ],
+    "context": "jev-classify (jev-1.14.0): 2 owner replies: 1 qualified (0 new, 0 duplicate, 1 dup unassessed), 0 unqualified, 0 unresolved, 1 unevaluated; report ~/.local/state/stack/jev-classify/latest.json\ncorrection p/s.jsonl:3: fix a (dup unassessed: duplicate check disabled)\nunevaluated: 1 (malformed answer 1)\nthe duplicate check is disabled: disabled in this test build; candidates are not checked against memory\ncomplete: false: 1 items not done (malformed answer 1)\njev-classify: Jev returned missing or wrongly typed answer for kind_ requests: the Jev API may have changed; check its docs and status",
+    "report": {
+      "complete": false,
+      "sources": {
+        "t3": {
+          "status": "ok",
+          "error": ""
+        },
+        "transcripts": {
+          "status": "ok",
+          "error": ""
+        }
+      },
+      "counts": {
+        "items": 2,
+        "classified": 1,
+        "unresolved": 0,
+        "unevaluated": 1,
+        "qualified": 1,
+        "duplicate": 0,
+        "new": 0,
+        "dup_unassessed": 1,
+        "dup_unassessed_lookup": 0,
+        "not_done": 1
+      },
+      "items": [
+        {
+          "id": "it01",
+          "where": "p/s.jsonl:3",
+          "status": "classified",
+          "reason": "",
+          "opener": "owner",
+          "qualified": true,
+          "kind": "correction",
+          "excerpt": "fix a",
+          "duplicate": "unassessed",
+          "dup_reason": "duplicate check disabled"
+        },
+        {
+          "id": "it02",
+          "where": "p/s.jsonl:6",
+          "status": "unevaluated",
+          "reason": "malformed answer",
+          "opener": "owner",
+          "qualified": false,
+          "kind": "",
+          "excerpt": "",
+          "duplicate": "",
+          "dup_reason": ""
+        }
+      ]
+    }
+  },
+  "repo": {
+    "layouts": [
+      {
+        "kind": "checkout",
+        "dir": "repo"
+      }
+    ]
+  },
+  "observe": {
+    "items": [
+      {
+        "id": "it01",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:3",
+        "excerpt": "fix a",
+        "ts": "2026-01-08T09:00:03Z"
+      },
+      {
+        "id": "it02",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:6",
+        "excerpt": "fix b",
+        "ts": "2026-01-08T09:00:06Z"
+      }
+    ],
+    "sources": {
+      "t3": {
+        "status": "ok",
+        "error": ""
+      },
+      "transcripts": {
+        "status": "ok",
+        "error": ""
+      }
+    },
+    "version": 1,
+    "window": {
+      "since": "2026-01-01T12:00:00Z",
+      "until": "2026-01-08T11:59:00Z"
+    }
+  },
+  "files": {
+    "p/s.jsonl": [
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "Task A",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:01Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "text": "closing A",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:02Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "fix a",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:03Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "Task B",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:04Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "text": "closing B",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:05Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "fix b",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:06Z",
+        "type": "user"
+      }
+    ]
+  },
+  "build": "no-duplicate"
+}

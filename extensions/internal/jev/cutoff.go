@@ -214,10 +214,25 @@ type Table struct {
 	Accepted *Acceptance `json:"accepted,omitempty"`
 }
 
-// EndToEnd scores the report's listed items against the labelled ones on heldout, with the
+// End-to-end lists (§3.5 Activation): which list is scored follows the duplicate decision's own
+// gate.
+const (
+	// ListNew is the qualified items whose dup_ score is below the duplicate cutoff, scored
+	// against the items labelled correcting and new.
+	ListNew = "new"
+	// ListQualified is every qualified item, scored against the items labelled correcting, with
+	// recall also on those labelled new.
+	ListQualified = "qualified"
+)
+
+// EndToEnd scores the list the report would show against the labelled items on heldout, with the
 // cutoffs that passed their own gates, before the end-to-end gate sets qualification's enabled
 // bit (§3.5 Activation).
+//
+//nolint:tagliatelle // the cutoff table uses snake_case keys.
 type EndToEnd struct {
+	// List is ListNew or ListQualified.
+	List      string  `json:"list"`
 	TP        int     `json:"tp"`
 	FP        int     `json:"fp"`
 	FN        int     `json:"fn"`
@@ -225,15 +240,33 @@ type EndToEnd struct {
 	Recall    float64 `json:"recall"`
 	// Support is the number of items labelled as the list's target.
 	Support int `json:"support"`
-	// Passed reports precision ≥ 0.8 and recall ≥ 0.5.
+	// NewSupport and NewRecall, written whenever List is ListQualified (a 0 included) and left
+	// out with ListNew, are the items labelled new and the listed share of them.
+	NewSupport *int     `json:"new_support,omitempty"`
+	NewRecall  *float64 `json:"new_recall,omitempty"`
+	// Passed reports precision ≥ 0.8 and recall ≥ 0.5, and with ListQualified new recall ≥ 0.5.
 	Passed bool `json:"passed"`
-	// Scored is false when a decision failed its own gate, so nothing is listed: every
+	// Scored is false when qualification failed its own gate, so nothing is listed: every
 	// labelled item is a miss, its support kept.
 	Scored bool `json:"scored"`
 }
 
+// Equal compares the figures by value, the pointer fields by what they point at.
+func (e EndToEnd) Equal(o EndToEnd) bool {
+	a, b := e, o
+	a.NewSupport, a.NewRecall, b.NewSupport, b.NewRecall = nil, nil, nil, nil
+	return a == b && equalPtr(e.NewSupport, o.NewSupport) && equalPtr(e.NewRecall, o.NewRecall)
+}
+
+func equalPtr[T comparable](a, b *T) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
 // Acceptance is the owner's acceptance of an end-to-end result. It holds only while its pin, its
-// heldout hash and its figures all match the current ones.
+// heldout hash and its figures, their list included, all match the current ones.
 type Acceptance struct {
 	Pin     string `json:"pin"`
 	Heldout string `json:"heldout"`
@@ -245,7 +278,7 @@ type Acceptance struct {
 // Holds reports that the acceptance still applies: the same pin, heldout inputs and figures.
 func (a *Acceptance) Holds(heldout string, figures EndToEnd) bool {
 	return a != nil && a.Reason != "" && a.Pin == Pin && a.Heldout == heldout &&
-		a.Figures == figures
+		a.Figures.Equal(figures)
 }
 
 // ParseTable decodes a cutoff table; it must name the pin.

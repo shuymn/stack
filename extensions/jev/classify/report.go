@@ -259,9 +259,15 @@ func (r *Report) contextLines(ds map[string]jev.Decision) []string {
 	for _, d := range []struct{ key, label string }{
 		{Qualification, "qualification"}, {Duplicate, "the duplicate check"},
 	} {
-		if !enabled(ds[d.key]) {
-			lines = append(lines, fmt.Sprintf("%s is disabled: %s", d.label, ds[d.key].Reason))
+		if enabled(ds[d.key]) {
+			continue
 		}
+		l := fmt.Sprintf("%s is disabled: %s", d.label, ds[d.key].Reason)
+		// With qualification on, the list holds candidates no index was asked about.
+		if d.key == Duplicate && enabled(ds[Qualification]) {
+			l += "; candidates are not checked against memory"
+		}
+		lines = append(lines, l)
 	}
 	if !r.Complete {
 		lines = append(lines, fmt.Sprintf("complete: false: %d items not done (%s)", c.NotDone,

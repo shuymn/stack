@@ -57,16 +57,18 @@ func loadFixtures(t *testing.T) []clsFixture {
 }
 
 // decisions are those of the build a fixture runs under: a cal fixture's is the committed table
-// it was recorded with, a fixed fixture's a test build.
+// it was recorded with, a fixed fixture's a test build. An unknown build name has none.
 func (c clsFixture) decisions() map[string]jev.Decision {
 	switch {
 	case !c.fixed():
 		return Decisions()
-	case c.f.Build == "no-qualification":
-		return ParseTestCutoffs(Duplicate + "=" + testCutoffValue)
+	case c.f.Build != "":
+		if cutoffs, ok := testBuilds[c.f.Build]; ok {
+			return ParseTestCutoffs(cutoffs)
+		}
+		return nil
 	}
-	return ParseTestCutoffs(Qualification + "=" + testCutoffValue + "," + Duplicate + "=" +
-		testCutoffValue)
+	return ParseTestCutoffs(defaultTestCutoffs)
 }
 
 // materialize builds a fixture's disk inputs in a fresh fixture repository root and returns the
@@ -139,14 +141,14 @@ func replay(t *testing.T, path, root string, env []string) replayResult {
 }
 
 // env is extra with the PATH entry for the build a fixture runs under: the committed-cutoff build
-// for a cal fixture, the no-qualification build where a fixed fixture names it.
+// for a cal fixture, the named test build where a fixed fixture names one.
 func (c clsFixture) env(extra ...string) []string {
 	env := slices.Clone(extra)
 	switch {
 	case !c.fixed():
 		env = append(env, binPath(built.committed))
-	case c.f.Build == "no-qualification":
-		env = append(env, binPath(built.noQual))
+	case c.f.Build != "":
+		env = append(env, binPath(built.builds[c.f.Build]))
 	}
 	return env
 }
@@ -341,6 +343,9 @@ func checkFixture(t *testing.T, c clsFixture) {
 	}
 	if c.fixed() && c.f.Synthetic == "" {
 		t.Fatal("a fixed fixture says why its records are written by hand")
+	}
+	if _, ok := testBuilds[c.f.Build]; c.f.Build != "" && !ok {
+		t.Fatalf("unknown build %q", c.f.Build)
 	}
 	root, _ := materialize(t, c.f)
 	for _, env := range []struct {

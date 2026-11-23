@@ -26,7 +26,8 @@ type Fixture struct {
 	Files   map[string]json.RawMessage `json:"files,omitempty"`
 	Memory  map[string]string          `json:"memory,omitempty"`
 	// Build names the test build a fixed classify fixture runs under when the default one (both
-	// decisions enabled at the test cutoff) does not fit: "no-qualification".
+	// decisions enabled at the test cutoff) does not fit: "no-qualification", "no-duplicate" or
+	// "no-decisions".
 	Build string `json:"build,omitempty"`
 	// Samples maps a body hash to each question's three scores (nil for an unscored attempt).
 	Samples map[string]map[string][]*float64 `json:"samples,omitempty"`

@@ -48,7 +48,30 @@ type ItemLabel struct {
 	Lang  string `json:"lang"`
 	Hard  bool   `json:"hard,omitempty"`
 	Group string `json:"group,omitempty"`
-	Why   string `json:"why"`
+	// DupKind names a hard duplicate category: a positive one on a duplicate item, a negative
+	// one on a new item; it implies Hard (§3.5).
+	DupKind string `json:"dup_kind,omitempty"` //nolint:tagliatelle // the label's snake_case key
+	// Undo marks a reply that only undoes or stops a change.
+	Undo bool   `json:"undo,omitempty"`
+	Why  string `json:"why"`
+}
+
+// The dup_kind categories (§3.5): the positive ones of a duplicate item, the negative ones of a
+// new item.
+var (
+	positiveDupKinds = []string{"restatement", "paraphrase", "general", "multi"}
+	negativeDupKinds = []string{"object", "condition", "action", "broken", "partial"}
+)
+
+// heldoutOnlyDupKinds are the categories no fit case has: heldout-b is their first measure.
+var heldoutOnlyDupKinds = []string{"multi", "partial"}
+
+// heldoutDupKinds are the held-out quotas of each dup_kind.
+//
+//nolint:mnd // the §3.5 quotas
+var heldoutDupKinds = map[string]int{
+	"restatement": 2, "paraphrase": 1, "general": 1, "multi": 1,
+	"object": 1, "condition": 1, "action": 1, "broken": 1, "partial": 1,
 }
 
 // Correcting reports a qualification positive: a correction, a drift or an overlap.
@@ -109,14 +132,24 @@ type classCounts struct {
 	correction, drift, overlap, dup, newc int
 	approval, request, noise              int
 	langCorrecting, langOthers            map[string]int
+	langDup, langNew                      map[string]int
 	hard, total                           int
+	// dupKinds counts each dup_kind; undoDup the duplicate items marked undo; overlapNeg the
+	// overlaps carrying a negative dup_kind.
+	dupKinds            map[string]int
+	undoDup, overlapNeg int
 }
+
+// pairMember is one member of an antecedent pair: its fixture, language and kind.
+type pairMember struct{ path, lang, kind string }
 
 // CheckClassifyCorpus checks §3.5's corpus rules: per split the item counts, the language
 // balance of each side of the heldout, the share of hard items, every item with a hand-written
-// why, every group in one split, and at least 4 antecedent pairs.
+// why, every dup_kind matching its item's dup and implying hard, the heldout dup_kind and undo
+// quotas, every group in one split, at least 4 antecedent pairs and the heldout's 2, one en and
+// one ja.
 //
-//nolint:gocyclo // one check per count of §3.5
+//nolint:gocyclo,cyclop,funlen,maintidx // one check per count of §3.5
 func CheckClassifyCorpus(cases []ClassifyCase) error {
 	var errs []error
 	fail := func(format string, a ...any) {
@@ -125,7 +158,8 @@ func CheckClassifyCorpus(cases []ClassifyCase) error {
 	by := map[string]*classCounts{}
 	groups := map[string]string{}
 	seen := map[string]bool{}
-	pairs := map[string]int{}
+	// pairs holds each antecedent pair's members across the whole corpus.
+	pairs := map[string][]pairMember{}
 	for _, c := range cases {
 		sp := c.Label.Split
 		if sp != SplitFit && sp != SplitHeldout {
@@ -134,7 +168,10 @@ func CheckClassifyCorpus(cases []ClassifyCase) error {
 		}
 		cc := by[sp]
 		if cc == nil {
-			cc = &classCounts{langCorrecting: map[string]int{}, langOthers: map[string]int{}}
+			cc = &classCounts{
+				langCorrecting: map[string]int{}, langOthers: map[string]int{},
+				langDup: map[string]int{}, langNew: map[string]int{}, dupKinds: map[string]int{},
+			}
 			by[sp] = cc
 		}
 		for id, l := range c.Label.Items {
@@ -160,7 +197,26 @@ func CheckClassifyCorpus(cases []ClassifyCase) error {
 				}
 				groups[l.Group] = sp
 				if strings.HasPrefix(l.Group, "pair-") {
-					pairs[l.Group]++
+					pairs[l.Group] = append(pairs[l.Group], pairMember{c.Path, l.Lang, l.Kind})
+				}
+			}
+			if l.DupKind != "" {
+				pos := slices.Contains(positiveDupKinds, l.DupKind)
+				neg := slices.Contains(negativeDupKinds, l.DupKind)
+				switch {
+				case !pos && !neg:
+					fail("%s: case %s: unknown dup_kind %q", c.Path, id, l.DupKind)
+				case pos && l.Dup != classify.DupDuplicate || neg && l.Dup != classify.DupNew:
+					fail("%s: case %s: dup_kind %s does not match dup %q", c.Path, id, l.DupKind,
+						l.Dup)
+				case !l.Hard:
+					fail("%s: case %s: dup_kind %s on an item not hard", c.Path, id, l.DupKind)
+				case sp == SplitFit && slices.Contains(heldoutOnlyDupKinds, l.DupKind):
+					fail("%s: case %s: dup_kind %s is held-out only", c.Path, id, l.DupKind)
+				}
+				cc.dupKinds[l.DupKind]++
+				if neg && l.Overlap {
+					cc.overlapNeg++
 				}
 			}
 			cc.total++
@@ -178,8 +234,13 @@ func CheckClassifyCorpus(cases []ClassifyCase) error {
 				}
 				if l.Dup == classify.DupDuplicate {
 					cc.dup++
+					cc.langDup[l.Lang]++
+					if l.Undo {
+						cc.undoDup++
+					}
 				} else {
 					cc.newc++
+					cc.langNew[l.Lang]++
 				}
 				cc.langCorrecting[l.Lang]++
 				continue
@@ -227,6 +288,50 @@ func CheckClassifyCorpus(cases []ClassifyCase) error {
 		held.langOthers["en"] != 8 || held.langOthers["ja"] != 8 {
 		fail("heldout languages: correcting %v, others %v; want 8 + 8 each", held.langCorrecting,
 			held.langOthers)
+	}
+	if held.langDup["en"] != 4 || held.langDup["ja"] != 4 || held.langNew["en"] != 4 ||
+		held.langNew["ja"] != 4 {
+		fail("heldout languages: duplicate %v, new %v; want 4 + 4 each", held.langDup,
+			held.langNew)
+	}
+	for _, k := range slices.Concat(positiveDupKinds, negativeDupKinds) {
+		if held.dupKinds[k] < heldoutDupKinds[k] {
+			fail("heldout has %d dup_kind %s items, want at least %d", held.dupKinds[k], k,
+				heldoutDupKinds[k])
+		}
+	}
+	if held.undoDup == 0 {
+		fail("heldout has no duplicate item marked undo, want at least 1")
+	}
+	if held.overlapNeg == 0 {
+		fail("heldout has no overlap among its hard negatives, want at least 1")
+	}
+	heldPairs := map[string]int{}
+	for _, g := range slices.Sorted(maps.Keys(pairs)) {
+		var kinds []string
+		langs, fixtures := map[string]bool{}, map[string]bool{}
+		for _, m := range pairs[g] {
+			kinds = append(kinds, m.kind)
+			langs[m.lang], fixtures[m.path] = true, true
+		}
+		slices.Sort(kinds)
+		if !slices.Equal(kinds, []string{classify.LabelDrift, classify.LabelRequest}) {
+			fail("antecedent pair %s has members %v, want one drift and one request", g, kinds)
+		}
+		// A pair shares its assistant message and reply: both members live in one week.
+		if len(fixtures) != 1 {
+			fail("antecedent pair %s spans %d fixtures, want one", g, len(fixtures))
+		}
+		lang := strings.Join(slices.Sorted(maps.Keys(langs)), "+")
+		if len(langs) != 1 {
+			fail("antecedent pair %s mixes languages %s", g, lang)
+		}
+		if groups[g] == SplitHeldout {
+			heldPairs[lang]++
+		}
+	}
+	if len(heldPairs) != 2 || heldPairs["en"] != 1 || heldPairs["ja"] != 1 {
+		fail("heldout antecedent pairs by language %v, want one en and one ja", heldPairs)
 	}
 	for sp, cc := range map[string]*classCounts{SplitFit: fit, SplitHeldout: held} {
 		if 5*cc.hard < 2*cc.total {
@@ -499,16 +604,23 @@ func eligible(d jev.Decision) *float64 {
 	return d.Cutoff
 }
 
-// endToEnd scores, on heldout, the items the report would list (qualified at the qualification
-// cutoff, then `new` below the duplicate cutoff, from the first answers) against the items
-// labelled correcting and `new`; a missing score is a miss (§3.5 Activation). Only the cutoffs of
-// decisions that passed their own gates count: with either disabled the runtime lists nothing.
-// lang, when set, scores only the items in that language.
+// endToEnd scores, on heldout, the list the report would show, from the first answers with the
+// cutoffs of decisions that passed their own gates (§3.5 Activation). The duplicate decision's gate
+// picks the list: `new` (qualified, with a dup_ score below its cutoff, against the items labelled
+// correcting and new) or `qualified` (every qualified item, against the items labelled
+// correcting, with recall also on those labelled new). Qualification's gate decides whether
+// anything is listed: failed, nothing is, every labelled item is a miss and the support is kept.
+// A missing kind_ or dup_ score is a miss; a dup_ score at the cutoff is `duplicate`. lang, when
+// set, scores only the items in that language.
+//
+//nolint:gocognit // one pass over the labelled items, then the figures
 func endToEnd(data []*caseData, qual, dup jev.Decision, lang string) jev.EndToEnd {
-	var e jev.EndToEnd
 	qc, dc := eligible(qual), eligible(dup)
-	// Unscored, nothing is listed: every labelled item is a miss and the support is kept.
-	e.Scored = qc != nil && dc != nil
+	e := jev.EndToEnd{List: jev.ListNew, Scored: qc != nil}
+	if dc == nil {
+		e.List = jev.ListQualified
+	}
+	newSupport, newListed := 0, 0
 	for _, d := range data {
 		if d.c.Label.Split != SplitHeldout {
 			continue
@@ -517,33 +629,52 @@ func endToEnd(data []*caseData, qual, dup jev.Decision, lang string) jev.EndToEn
 			if lang != "" && l.Lang != lang {
 				continue
 			}
-			want := l.Correcting() && l.Dup == classify.DupNew
+			isNew := l.Correcting() && l.Dup == classify.DupNew
+			want := isNew
+			if e.List == jev.ListQualified {
+				want = l.Correcting()
+			}
 			listed := false
 			if ks := d.kindScores(id); e.Scored && len(ks) > 0 && hit(ks[0], *qc) {
-				if ds := d.dupScores(id); len(ds) > 0 && ds[0] != nil {
-					listed = !jev.Hit(*ds[0], *dc)
+				listed = true
+				if e.List == jev.ListNew {
+					ds := d.dupScores(id)
+					listed = len(ds) > 0 && ds[0] != nil && !jev.Hit(*ds[0], *dc)
 				}
 			}
 			switch {
+			case want && listed:
+				e.TP++
 			case want:
-				e.Support++
-				if listed {
-					e.TP++
-				} else {
-					e.FN++
-				}
+				e.FN++
 			case listed:
 				e.FP++
+			}
+			if isNew {
+				newSupport++
+				if listed {
+					newListed++
+				}
 			}
 		}
 	}
 	if e.TP+e.FP > 0 {
 		e.Precision = float64(e.TP) / float64(e.TP+e.FP)
 	}
-	if e.TP+e.FN > 0 {
-		e.Recall = float64(e.TP) / float64(e.TP+e.FN)
+	// Every target item is a hit or a miss.
+	e.Support = e.TP + e.FN
+	if e.Support > 0 {
+		e.Recall = float64(e.TP) / float64(e.Support)
 	}
 	e.Passed = e.TP > 0 && e.Precision >= ClassifyTarget && e.Recall >= minRecall
+	if e.List == jev.ListQualified {
+		recall := 0.0
+		if newSupport > 0 {
+			recall = float64(newListed) / float64(newSupport)
+		}
+		e.NewSupport, e.NewRecall = &newSupport, &recall
+		e.Passed = e.Passed && recall >= minRecall
+	}
 	return e
 }
 
@@ -708,10 +839,11 @@ func RunClassify(ctx context.Context, o ClassifyOptions) error {
 	return jev.WriteTable(o.Table, table)
 }
 
-// activate builds the table from the two fitted decisions and the end-to-end score: qualification
-// stays enabled only when the end-to-end list passes too, or the owner's acceptance holds for
-// these heldout inputs and figures (§3.5 Activation). review reports qualification disabled by
-// the end-to-end gate.
+// activate builds the table from the two fitted decisions and the end-to-end score (§3.5
+// Activation): qualification ships enabled exactly when it passed its own gate and either the
+// scored list passes or the owner's acceptance holds for these heldout inputs and figures. The
+// acceptance applies only in that case. A qualification failing its own gate keeps its own
+// reason; one disabled by the end-to-end gate gets its reason and review is true.
 func activate(
 	qual, dup jev.Decision, e2e jev.EndToEnd, accepted *jev.Acceptance, hash string,
 ) (jev.Table, bool) {
@@ -720,28 +852,32 @@ func activate(
 		Decisions: map[string]jev.Decision{classify.Qualification: qual, classify.Duplicate: dup},
 		EndToEnd:  &e2e,
 	}
-	if !qual.Enabled || e2e.Passed {
-		return table, false
-	}
-	if accepted.Holds(hash, e2e) {
+	own := qual.Enabled
+	holds := own && !e2e.Passed && accepted.Holds(hash, e2e)
+	if holds {
 		table.Accepted = accepted
-		return table, false
 	}
-	qual.Enabled = false
-	qual.Reason = fmt.Sprintf(
-		"end-to-end `new` list on heldout: precision %.2f, recall %.2f, "+
-			"support %d miss the target %.2f / 0.50; REVIEW",
-		e2e.Precision,
-		e2e.Recall,
-		e2e.Support,
-		ClassifyTarget,
-	)
-	if !e2e.Scored {
-		qual.Reason = "the duplicate decision failed its own gate, so the `new` list is empty; " +
-			"REVIEW"
+	qual.Enabled = own && (e2e.Passed || holds)
+	review := own && !qual.Enabled
+	if review {
+		newRecall := ""
+		if e2e.NewRecall != nil {
+			newRecall = fmt.Sprintf(", new recall %.2f", *e2e.NewRecall)
+		}
+		qual.Reason = fmt.Sprintf(
+			"end-to-end `%s` list on heldout: precision %.2f, recall %.2f%s, "+
+				"support %d miss the target %.2f / %.2f; REVIEW",
+			e2e.List,
+			e2e.Precision,
+			e2e.Recall,
+			newRecall,
+			e2e.Support,
+			ClassifyTarget,
+			minRecall,
+		)
 	}
 	table.Decisions[classify.Qualification] = qual
-	return table, true
+	return table, review
 }
 
 // UnionCutoff is the qualification cutoff the record union is rebuilt at: the fitted one, whether
@@ -802,7 +938,8 @@ func VerifyClassify(
 			return fmt.Errorf("%w: %s: refit %s, committed %s", errPinned, name, got, committed)
 		}
 	}
-	if t.EndToEnd == nil || *t.EndToEnd != e2e || (t.Accepted != nil) != (want.Accepted != nil) {
+	if t.EndToEnd == nil || !t.EndToEnd.Equal(e2e) ||
+		(t.Accepted != nil) != (want.Accepted != nil) {
 		return fmt.Errorf("%w: end to end: recomputed %+v, committed %+v (accepted %v)",
 			errPinned, e2e, t.EndToEnd, want.Accepted != nil)
 	}
@@ -943,8 +1080,11 @@ func reportClassify(
 		if d.Reason != "" {
 			_, _ = fmt.Fprintf(w, "  reason: %s\n", d.Reason)
 		}
-		if d.Cutoff == nil {
+		switch {
+		case d.Cutoff == nil:
 			_, _ = fmt.Fprintf(w, "  REVIEW: no cutoff passes the margin test\n")
+		case !d.Enabled && (name != classify.Qualification || !review):
+			_, _ = fmt.Fprintf(w, "  REVIEW: %s fails its own gate\n", name)
 		}
 		if d.Fit != nil {
 			_, _ = fmt.Fprintf(
@@ -961,12 +1101,16 @@ func reportClassify(
 			_, _ = fmt.Fprintf(w, "  flips across calls at %.2f: %s\n", *at,
 				flipText(classifyFlips(data, name, *at)))
 		}
+		if name == classify.Duplicate {
+			dupCases(w, data, d.Cutoff)
+		}
 	}
 	if e := t.EndToEnd; e != nil {
 		_, _ = fmt.Fprintf(
 			w,
-			"end to end (heldout, cutoffs that passed their own gates): scored %v, TP %d FP %d FN %d, "+
-				"precision %.2f, recall %.2f, support %d, passed %v\n",
+			"end to end (heldout, `%s` list, cutoffs that passed their own gates): scored %v, "+
+				"TP %d FP %d FN %d, precision %.2f, recall %.2f, support %d%s, passed %v\n",
+			e.List,
 			e.Scored,
 			e.TP,
 			e.FP,
@@ -974,6 +1118,7 @@ func reportClassify(
 			e.Precision,
 			e.Recall,
 			e.Support,
+			newText(*e),
 			e.Passed,
 		)
 		// Reported, not a gate: an aggregate can pass with one language missed.
@@ -981,7 +1126,7 @@ func reportClassify(
 			x := byLang[lang]
 			_, _ = fmt.Fprintf(
 				w,
-				"  %s: TP %d FP %d FN %d, precision %.2f, recall %.2f, support %d\n",
+				"  %s: TP %d FP %d FN %d, precision %.2f, recall %.2f, support %d%s\n",
 				lang,
 				x.TP,
 				x.FP,
@@ -989,6 +1134,7 @@ func reportClassify(
 				x.Precision,
 				x.Recall,
 				x.Support,
+				newText(x),
 			)
 		}
 	}
@@ -1024,4 +1170,60 @@ func classifyFlips(data []*caseData, decision string, cutoff float64) map[string
 		}
 	}
 	return out
+}
+
+// newText is the new-item figures of a `qualified` list, empty for a `new` one.
+func newText(e jev.EndToEnd) string {
+	if e.NewSupport == nil || e.NewRecall == nil {
+		return ""
+	}
+	return fmt.Sprintf(", new support %d, new recall %.2f", *e.NewSupport, *e.NewRecall)
+}
+
+// dupCases prints O1's per-case held-out duplicate outcomes: for each held-out correcting item its
+// ID, expected label, dup_kind and undo, and its three attempts at the fitted cutoff (duplicate,
+// new or missing), or, when no cutoff fits, its three scores labelled as scores.
+func dupCases(w io.Writer, data []*caseData, cutoff *float64) {
+	if cutoff != nil {
+		_, _ = fmt.Fprintf(w, "  heldout cases at %.2f:\n", *cutoff)
+	} else {
+		_, _ = fmt.Fprintf(w, "  heldout cases, no cutoff fits (scores):\n")
+	}
+	for _, d := range data {
+		if d.c.Label.Split != SplitHeldout {
+			continue
+		}
+		for _, id := range slices.Sorted(maps.Keys(d.c.Label.Items)) {
+			l := d.c.Label.Items[id]
+			if !l.Correcting() {
+				continue
+			}
+			ss := d.dupScores(id)
+			if len(ss) == 0 {
+				ss = make([]*float64, Attempts)
+			}
+			parts := make([]string, 0, len(ss))
+			for _, p := range ss {
+				switch {
+				case p == nil:
+					parts = append(parts, "missing")
+				case cutoff == nil:
+					parts = append(parts, fmt.Sprintf("%.2f", *p))
+				case jev.Hit(*p, *cutoff):
+					parts = append(parts, classify.DupDuplicate)
+				default:
+					parts = append(parts, classify.DupNew)
+				}
+			}
+			kind, label := l.DupKind, ""
+			if kind == "" {
+				kind = "-"
+			}
+			if cutoff == nil {
+				label = "scores "
+			}
+			_, _ = fmt.Fprintf(w, "    %s: expected %s, dup_kind %s, undo %v: %s%s\n", id, l.Dup,
+				kind, l.Undo, label, strings.Join(parts, ", "))
+		}
+	}
 }

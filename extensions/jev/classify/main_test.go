@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -21,20 +22,33 @@ import (
 	"github.com/shuymn/stack/internal/gittest"
 )
 
-// testCutoffValue is the cutoff the test build injects for both decisions (§3.5).
-const testCutoffValue = "0.5"
+// testCutoffValue is the cutoff the test build injects for both decisions (§3.5), and
+// defaultTestCutoffs the default fixed-fixture build's cutoffs: both decisions at it.
+const (
+	testCutoffValue    = "0.5"
+	defaultTestCutoffs = Qualification + "=" + testCutoffValue + "," + Duplicate + "=" +
+		testCutoffValue
+)
 
 // built holds the binaries TestMain builds: stack and a test build of stack-jev-classify whose
 // endpoint is spy.server and whose cutoffs are the test cutoffs; committed/ holds one with the
-// committed cutoff table.
+// committed cutoff table, and builds the directory of each named test build.
 var built struct {
-	dir, stack, classify, committed, noQual string
-	err                                     error
+	dir, stack, classify, committed string
+	builds                          map[string]string
+	err                             error
+}
+
+// testBuilds are the named test builds a fixed fixture may run under, by their test cutoffs: the
+// default one (both decisions at the test cutoff) is the unnamed build.
+var testBuilds = map[string]string{
+	"no-qualification": Duplicate + "=" + testCutoffValue,
+	"no-duplicate":     Qualification + "=" + testCutoffValue,
+	"no-decisions":     "none",
 }
 
 // binPath is the PATH entry that puts the build a fixture names before the default one: the
-// committed-cutoff build for cal fixtures, the no-qualification build where a fixed fixture asks
-// for it.
+// committed-cutoff build for cal fixtures, a named test build where a fixed fixture asks for it.
 func binPath(dir string) string {
 	return "PATH=" + dir + string(os.PathListSeparator) + built.dir +
 		string(os.PathListSeparator) + os.Getenv("PATH")
@@ -85,23 +99,25 @@ func buildBinaries() func() {
 	built.stack = filepath.Join(dir, "stack"+exe)
 	built.classify = filepath.Join(dir, "stack-jev-classify"+exe)
 	built.committed = filepath.Join(dir, "committed")
-	built.noQual = filepath.Join(dir, "no-qualification")
 	committedBin := filepath.Join(built.committed, "stack-jev-classify"+exe)
-	noQualBin := filepath.Join(built.noQual, "stack-jev-classify"+exe)
 	endpoint := "-X github.com/shuymn/stack/extensions/internal/jev.endpoint=" + spy.server.URL
 	cutoffs := " -X github.com/shuymn/stack/extensions/jev/classify.testCutoffs="
-	ldflags := endpoint + cutoffs + Qualification + "=" + testCutoffValue + "," + Duplicate + "=" +
-		testCutoffValue
+	ldflags := endpoint + cutoffs + defaultTestCutoffs
 	env := gittest.CleanEnv(os.Environ())
-	for _, c := range [][]string{
+	cmds := [][]string{
 		{"build", "-o", built.stack, "../../../cmd/stack"},
 		{"build", "-ldflags", ldflags, "-o", built.classify, "./cmd/stack-jev-classify"},
 		{"build", "-ldflags", endpoint, "-o", committedBin, "./cmd/stack-jev-classify"},
-		{
-			"build", "-ldflags", endpoint + cutoffs + Duplicate + "=" + testCutoffValue, "-o",
-			noQualBin, "./cmd/stack-jev-classify",
-		},
-	} {
+	}
+	built.builds = map[string]string{}
+	for _, name := range slices.Sorted(maps.Keys(testBuilds)) {
+		built.builds[name] = filepath.Join(dir, name)
+		cmds = append(cmds, []string{
+			"build", "-ldflags", endpoint + cutoffs + testBuilds[name], "-o",
+			filepath.Join(built.builds[name], "stack-jev-classify"+exe), "./cmd/stack-jev-classify",
+		})
+	}
+	for _, c := range cmds {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		cmd := exec.CommandContext(ctx, "go", c...)
 		cmd.Env = env

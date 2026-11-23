@@ -26,7 +26,6 @@ func TestDecision(t *testing.T) {
 	}{
 		{"just below the cutoff", mk(0.25, 0.2499), false, LabelCorrection},
 		{"at the cutoff", mk(0.25, 0.25), true, LabelCorrection},
-		{"above the cutoff", mk(0.3, 0.3), true, LabelCorrection},
 		{"drift larger", mk(0.1, 0.45), true, LabelDrift},
 		{"equal labels are a correction", mk(0.3, 0.3), true, LabelCorrection},
 		{"an overlap that neither label reaches alone", mk(0.3, 0.25), true, LabelCorrection},

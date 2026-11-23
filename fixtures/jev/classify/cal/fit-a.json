@@ -5,48 +5,63 @@
       "now": "2026-01-08T12:00:00Z",
       "observe": "observe.json",
       "records": {
-        "sha256:02ccb743d6ec0833ef27757ef1d9071cf1acafcfc40ea1c982453fc63d070aac": {
+        "sha256:023c0a909eef0cd2c60f5b5b1c627bd040a4aa2bf56b3c3753d4b2b451cbdc78": {
           "answer": {
             "model": "jev-1.14.0",
             "answers": {
-              "dup_r11": {
+              "dup_r13": {
                 "type": "noul",
-                "noul": 0.19
+                "noul": 0.2
               }
             },
             "usage": {
-              "input_tokens": 476,
+              "input_tokens": 803,
               "output_tokens": 23
             }
           }
         },
-        "sha256:0714a470a28eb819591036515be3a0579eeb7279d71dbbb92fbc3b2f0c2c8ae8": {
+        "sha256:0de970dc3ab4367de48bd709e6a3dbbe70e18c13fe5eb26b2243292e32626e52": {
           "answer": {
             "model": "jev-1.14.0",
             "answers": {
-              "dup_r22": {
+              "dup_r20": {
                 "type": "noul",
-                "noul": 0.81
+                "noul": 0.82
               }
             },
             "usage": {
-              "input_tokens": 482,
+              "input_tokens": 784,
               "output_tokens": 23
             }
           }
         },
-        "sha256:27ecf17f5237589e30e2c253931cca8bcb5c1e0cfcabc86a49a336787d8a843f": {
+        "sha256:23b2524f6543f86524ce52d7f574d377778e3601f00ce6feaab9290e559fdeea": {
           "answer": {
             "model": "jev-1.14.0",
             "answers": {
-              "dup_r8": {
+              "dup_r15": {
                 "type": "noul",
-                "noul": 0.95
+                "noul": 0.09
               }
             },
             "usage": {
-              "input_tokens": 515,
-              "output_tokens": 22
+              "input_tokens": 810,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:26e201386939b17aa10185120f2a155b603d7b39867223bb97b95514f125661d": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r14": {
+                "type": "noul",
+                "noul": 0.68
+              }
+            },
+            "usage": {
+              "input_tokens": 790,
+              "output_tokens": 23
             }
           }
         },
@@ -56,66 +71,126 @@
             "answers": {
               "kind_r21": {
                 "type": "choice",
-                "choice": "correction",
-                "confidence": 0.22,
+                "choice": "request",
+                "confidence": 0.25,
                 "probabilities": {
                   "approval": 0.0,
-                  "correction": 0.38,
-                  "drift": 0.28,
+                  "correction": 0.31,
+                  "drift": 0.29,
                   "noise": 0.0,
-                  "request": 0.34
+                  "request": 0.4
                 }
               },
               "kind_r22": {
                 "type": "choice",
                 "choice": "drift",
-                "confidence": 0.81,
+                "confidence": 0.76,
                 "probabilities": {
                   "approval": 0.0,
-                  "correction": 0.1,
-                  "drift": 0.85,
+                  "correction": 0.13,
+                  "drift": 0.81,
                   "noise": 0.0,
-                  "request": 0.05
+                  "request": 0.06
                 }
               }
             },
             "usage": {
               "input_tokens": 874,
-              "output_tokens": 116
+              "output_tokens": 114
             }
           }
         },
-        "sha256:5984a3fa26e220441a05b85ed7e154b084e938859a4d92eeec0512be108cdfa2": {
+        "sha256:364bf300c8f59ec9cd92db9ea933479b282fa14d536804c2c47e3f0a5b06b35f": {
           "answer": {
             "model": "jev-1.14.0",
             "answers": {
-              "dup_r18": {
+              "dup_r19": {
                 "type": "noul",
-                "noul": 0.97
+                "noul": 0.81
               }
             },
             "usage": {
-              "input_tokens": 478,
+              "input_tokens": 770,
               "output_tokens": 23
             }
           }
         },
-        "sha256:77d7c91dd0ba6e7ef34e91f080a7bb63a5b57d1165abbc06e198557346d811ab": {
+        "sha256:4ef7a27d1dfaa9063b0bd78e73b7360018370e570325863eaa60022a3ff5394e": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r12": {
+                "type": "noul",
+                "noul": 0.71
+              }
+            },
+            "usage": {
+              "input_tokens": 796,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:6b16755a12d01d3351b486b947437b0c63c47c5bd134a2630ff031ca8e98296a": {
           "answer": {
             "model": "jev-1.14.0",
             "answers": {
               "dup_r10": {
                 "type": "noul",
-                "noul": 0.92
+                "noul": 0.28
               }
             },
             "usage": {
-              "input_tokens": 446,
+              "input_tokens": 778,
               "output_tokens": 23
             }
           }
         },
-        "sha256:8d9a0a4a8c0a8621e8b32993b1a78c8c7d98d4f3898d0f78e0b8e4d4911d43fe": {
+        "sha256:7a0a02d6b7ae07c14f8f34c2297c208699ea2335ee4d1af95c113c8a0334d5fd": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r18": {
+                "type": "noul",
+                "noul": 0.95
+              }
+            },
+            "usage": {
+              "input_tokens": 794,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:7e7d9a96d73408b2cdac50bdbffae980b43829926a774654ef7c7d585b7ec233": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r9": {
+                "type": "noul",
+                "noul": 0.1
+              }
+            },
+            "usage": {
+              "input_tokens": 841,
+              "output_tokens": 22
+            }
+          }
+        },
+        "sha256:99ae4ac355d0594b967a4689e14c9786e7d65f7f2ca581f69fb5961464e01912": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r22": {
+                "type": "noul",
+                "noul": 0.85
+              }
+            },
+            "usage": {
+              "input_tokens": 798,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:9e550330c27f682ed002077788688495876e8904e91f5afd2eb20edea2cf6509": {
           "answer": {
             "model": "jev-1.14.0",
             "answers": {
@@ -125,54 +200,24 @@
               }
             },
             "usage": {
-              "input_tokens": 472,
+              "input_tokens": 788,
               "output_tokens": 23
             }
           }
         },
-        "sha256:8ef9d2a8f747505e9608f286b858f466443163e960961b76855e0684a2503236": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r20": {
-                "type": "noul",
-                "noul": 0.91
-              }
-            },
-            "usage": {
-              "input_tokens": 468,
-              "output_tokens": 23
-            }
-          }
-        },
-        "sha256:b42a63ea0fef215ad45d60d62a8a6c79950e7e33fff719da53c20003d00be256": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r12": {
-                "type": "noul",
-                "noul": 0.97
-              }
-            },
-            "usage": {
-              "input_tokens": 480,
-              "output_tokens": 23
-            }
-          }
-        },
-        "sha256:c1ab6d8775a3b1b53ac3b0b4c83852343550d14e52f5cdd1f7cba0c30de6e729": {
+        "sha256:ab708f44eb028a346f8367c8178324f9a11afc51a496ddcdc112c536fbac6313": {
           "answer": {
             "model": "jev-1.14.0",
             "answers": {
               "kind_r1": {
                 "type": "choice",
                 "choice": "noise",
-                "confidence": 0.92,
+                "confidence": 0.91,
                 "probabilities": {
                   "approval": 0.03,
                   "correction": 0.0,
-                  "drift": 0.0,
-                  "noise": 0.94,
+                  "drift": 0.01,
+                  "noise": 0.93,
                   "request": 0.03
                 }
               },
@@ -191,35 +236,35 @@
               "kind_r3": {
                 "type": "choice",
                 "choice": "noise",
-                "confidence": 0.79,
+                "confidence": 0.85,
                 "probabilities": {
-                  "approval": 0.1,
+                  "approval": 0.07,
                   "correction": 0.02,
                   "drift": 0.01,
-                  "noise": 0.83,
-                  "request": 0.04
+                  "noise": 0.88,
+                  "request": 0.02
                 }
               },
               "kind_r4": {
                 "type": "choice",
                 "choice": "request",
-                "confidence": 0.47,
+                "confidence": 0.49,
                 "probabilities": {
                   "approval": 0.0,
-                  "correction": 0.42,
-                  "drift": 0.0,
+                  "correction": 0.4,
+                  "drift": 0.01,
                   "noise": 0.0,
-                  "request": 0.58
+                  "request": 0.59
                 }
               },
               "kind_r5": {
                 "type": "choice",
                 "choice": "approval",
-                "confidence": 0.98,
+                "confidence": 0.96,
                 "probabilities": {
-                  "approval": 0.98,
+                  "approval": 0.97,
                   "correction": 0.02,
-                  "drift": 0.0,
+                  "drift": 0.01,
                   "noise": 0.0,
                   "request": 0.0
                 }
@@ -251,11 +296,11 @@
               "kind_r8": {
                 "type": "choice",
                 "choice": "drift",
-                "confidence": 0.79,
+                "confidence": 0.84,
                 "probabilities": {
                   "approval": 0.0,
-                  "correction": 0.17,
-                  "drift": 0.83,
+                  "correction": 0.13,
+                  "drift": 0.87,
                   "noise": 0.0,
                   "request": 0.0
                 }
@@ -263,11 +308,11 @@
               "kind_r9": {
                 "type": "choice",
                 "choice": "drift",
-                "confidence": 0.52,
+                "confidence": 0.62,
                 "probabilities": {
                   "approval": 0.0,
-                  "correction": 0.38,
-                  "drift": 0.62,
+                  "correction": 0.3,
+                  "drift": 0.7,
                   "noise": 0.0,
                   "request": 0.0
                 }
@@ -275,11 +320,11 @@
               "kind_r10": {
                 "type": "choice",
                 "choice": "correction",
-                "confidence": 0.5,
+                "confidence": 0.73,
                 "probabilities": {
                   "approval": 0.0,
-                  "correction": 0.6,
-                  "drift": 0.4,
+                  "correction": 0.78,
+                  "drift": 0.22,
                   "noise": 0.0,
                   "request": 0.0
                 }
@@ -311,11 +356,11 @@
               "kind_r13": {
                 "type": "choice",
                 "choice": "drift",
-                "confidence": 0.91,
+                "confidence": 0.92,
                 "probabilities": {
                   "approval": 0.0,
-                  "correction": 0.07,
-                  "drift": 0.93,
+                  "correction": 0.06,
+                  "drift": 0.94,
                   "noise": 0.0,
                   "request": 0.0
                 }
@@ -323,11 +368,11 @@
               "kind_r14": {
                 "type": "choice",
                 "choice": "drift",
-                "confidence": 0.4,
+                "confidence": 0.34,
                 "probabilities": {
                   "approval": 0.0,
-                  "correction": 0.25,
-                  "drift": 0.52,
+                  "correction": 0.3,
+                  "drift": 0.47,
                   "noise": 0.0,
                   "request": 0.23
                 }
@@ -346,14 +391,14 @@
               },
               "kind_r16": {
                 "type": "choice",
-                "choice": "request",
-                "confidence": 0.47,
+                "choice": "correction",
+                "confidence": 0.44,
                 "probabilities": {
                   "approval": 0.0,
-                  "correction": 0.38,
-                  "drift": 0.04,
+                  "correction": 0.55,
+                  "drift": 0.03,
                   "noise": 0.0,
-                  "request": 0.58
+                  "request": 0.42
                 }
               },
               "kind_r17": {
@@ -371,11 +416,11 @@
               "kind_r18": {
                 "type": "choice",
                 "choice": "correction",
-                "confidence": 0.94,
+                "confidence": 0.92,
                 "probabilities": {
                   "approval": 0.0,
-                  "correction": 0.95,
-                  "drift": 0.04,
+                  "correction": 0.94,
+                  "drift": 0.05,
                   "noise": 0.0,
                   "request": 0.01
                 }
@@ -383,135 +428,90 @@
               "kind_r19": {
                 "type": "choice",
                 "choice": "drift",
-                "confidence": 0.39,
+                "confidence": 0.31,
                 "probabilities": {
                   "approval": 0.02,
-                  "correction": 0.39,
-                  "drift": 0.51,
+                  "correction": 0.41,
+                  "drift": 0.45,
                   "noise": 0.0,
-                  "request": 0.08
+                  "request": 0.12
                 }
               },
               "kind_r20": {
                 "type": "choice",
                 "choice": "drift",
-                "confidence": 0.82,
+                "confidence": 0.77,
                 "probabilities": {
                   "approval": 0.0,
-                  "correction": 0.13,
-                  "drift": 0.86,
+                  "correction": 0.16,
+                  "drift": 0.82,
                   "noise": 0.0,
-                  "request": 0.01
+                  "request": 0.02
                 }
               }
             },
             "usage": {
-              "input_tokens": 6461,
-              "output_tokens": 1110
+              "input_tokens": 6477,
+              "output_tokens": 1112
             }
           }
         },
-        "sha256:c859f9c7bde7520f4e89ab04c82368f5baede8b193030d65e270eaf74c9e36dd": {
+        "sha256:ae0fdf41fdab3e6fe82411501ec7724cfbef399213152fa5a22394f0a96a32c7": {
           "answer": {
             "model": "jev-1.14.0",
             "answers": {
-              "dup_r19": {
+              "dup_r11": {
                 "type": "noul",
-                "noul": 0.87
+                "noul": 0.16
               }
             },
             "usage": {
-              "input_tokens": 454,
+              "input_tokens": 792,
               "output_tokens": 23
             }
           }
         },
-        "sha256:cede99ee6ed153929e7207987df195200de695c6ebd58bbb7c046b4027a78326": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r14": {
-                "type": "noul",
-                "noul": 0.93
-              }
-            },
-            "usage": {
-              "input_tokens": 474,
-              "output_tokens": 23
-            }
-          }
-        },
-        "sha256:d38c7bb12cf220bfa6cc47df7bb4f3a1d4b8d5d22c12ba0b3cb9c3e6808b2c78": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r9": {
-                "type": "noul",
-                "noul": 0.23
-              }
-            },
-            "usage": {
-              "input_tokens": 525,
-              "output_tokens": 22
-            }
-          }
-        },
-        "sha256:dad3eea68c2cf9d0a7f05230eabcdd8f5aa80afec97cb8c2a4b712abcd1b6280": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r17": {
-                "type": "noul",
-                "noul": 0.96
-              }
-            },
-            "usage": {
-              "input_tokens": 497,
-              "output_tokens": 23
-            }
-          }
-        },
-        "sha256:dd37ac70d246600999df441c7a93a419a86ca52c4a812f8560e3c77613ef3694": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r15": {
-                "type": "noul",
-                "noul": 0.12
-              }
-            },
-            "usage": {
-              "input_tokens": 494,
-              "output_tokens": 23
-            }
-          }
-        },
-        "sha256:debcf116890ecb0503348332acbac4254a791dacc6779c583a912e4f5b5851d3": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r13": {
-                "type": "noul",
-                "noul": 0.45
-              }
-            },
-            "usage": {
-              "input_tokens": 487,
-              "output_tokens": 23
-            }
-          }
-        },
-        "sha256:fd01fcf14c88c63f4b896954005b6cca9d65badc14e66345a099d53f6f3a2d35": {
+        "sha256:df5749045dd3e427fa8fd07e6f73e7f0258b6f5f9050e6a17cd3536797906b73": {
           "answer": {
             "model": "jev-1.14.0",
             "answers": {
               "dup_r21": {
                 "type": "noul",
-                "noul": 0.7
+                "noul": 0.82
               }
             },
             "usage": {
-              "input_tokens": 476,
+              "input_tokens": 792,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:ea350c6ea398c5774e4c8e190bfe28734c21da5668c4c6d3d01d2799eb62efc7": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r8": {
+                "type": "noul",
+                "noul": 0.81
+              }
+            },
+            "usage": {
+              "input_tokens": 831,
+              "output_tokens": 22
+            }
+          }
+        },
+        "sha256:fffa8226efebeca8519fef3bda2de0d99e3e2eab49ef490815f1ec6eecab728f": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r17": {
+                "type": "noul",
+                "noul": 0.93
+              }
+            },
+            "usage": {
+              "input_tokens": 813,
               "output_tokens": 23
             }
           }
@@ -561,19 +561,19 @@
               "message_id": "m006",
               "role": "user",
               "created_at": "2026-01-08T09:00:37.000Z",
-              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o12\",\"text\":\"Update the README install steps.\"}"
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o12\",\"text\":\"Add a screenshot of the new settings page to the user guide.\"}"
             },
             {
               "message_id": "m007",
               "role": "assistant",
               "created_at": "2026-01-08T09:00:38.000Z",
-              "payload_json": "{\"text\":\"I rewrote the install steps and deleted the changelog section as outdated.\"}"
+              "payload_json": "{\"text\":\"I added the screenshot under assets/ without alt text and reworded the guide's introduction.\"}"
             },
             {
               "message_id": "m008",
               "role": "user",
               "created_at": "2026-01-08T09:00:39.000Z",
-              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r12\",\"text\":\"never delete changelog entries, and only touch the install steps\"}"
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r12\",\"text\":\"screenshots go in docs/img with alt text, and leave the introduction alone\"}"
             },
             {
               "message_id": "m009",
@@ -640,200 +640,414 @@
   },
   "want": {
     "findings": [],
-    "context": "jev-classify (jev-1.14.0): 22 owner replies: 0 qualified (0 new, 0 duplicate, 0 dup unassessed), 0 unqualified, 0 unresolved, 22 unevaluated; report ~/.local/state/stack/jev-classify/latest.json\nunevaluated: 22 (classification disabled 22)\nqualification is disabled: the duplicate decision failed its own gate, so the `new` list is empty; REVIEW\nthe duplicate check is disabled: heldout precision 0.77, recall 1.00 miss the target 0.80 / 0.50",
+    "context": "jev-classify (jev-1.14.0): 22 owner replies: 15 qualified (0 new, 0 duplicate, 15 dup unassessed), 7 unqualified, 0 unresolved, 0 unevaluated; report ~/.local/state/stack/jev-classify/latest.json\ndrift p1/s.jsonl:33: それは違う。vendor は触らないで、Go のバージョンだけ (dup unassessed: duplicate check disabled)\ndrift p1/s.jsonl:30: ステータスコードは触らないで。それは間違い、メッセージだけ (dup unassessed: duplicate check disabled)\ncorrection t3:th:fit-a:p2:r12: screenshots go in docs/img with alt text, and leave the introduction alone (dup unassessed: duplicate check disabled)\ndrift p1/s.jsonl:27: just the webhook retry, put the timeouts back (dup unassessed: duplicate check disabled)\ndrift p3/s.jsonl:3: 文言だけって言ったでしょ、レイアウトは戻して (dup unassessed: duplicate check disabled)\ndrift p1/s.jsonl:24: I asked for the null pointer fix only; undo the refactor (dup unassessed: duplicate check disabled)\ndrift p1/s.jsonl:21: that PR is way too big, split it (dup unassessed: duplicate check disabled)\ncorrection p1/s.jsonl:18: 絵文字は使わないで (dup unassessed: duplicate check disabled)\ncorrection p1/s.jsonl:15: write tests in table-driven style please (dup unassessed: duplicate check disabled)\ncorrection p1/s.jsonl:12: vendor は触らないでって言ったよね？ (dup unassessed: duplicate check disabled)\n(+5 more in the report)\nthe duplicate check is disabled: heldout precision 0.78, recall 0.88 miss the target 0.80 / 0.50; candidates are not checked against memory",
     "report": {
       "complete": true,
       "counts": {
-        "classified": 0,
-        "dup_unassessed": 0,
+        "classified": 22,
+        "dup_unassessed": 15,
         "dup_unassessed_lookup": 0,
         "duplicate": 0,
         "items": 22,
         "new": 0,
         "not_done": 0,
-        "qualified": 0,
-        "unevaluated": 22,
+        "qualified": 15,
+        "unevaluated": 0,
         "unresolved": 0
       },
       "decisions": {
         "duplicate": "disabled",
-        "qualification": "disabled"
+        "qualification": "enabled"
       },
       "items": [
         {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "revert that",
           "id": "fit-a01",
+          "kind": "drift",
           "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.13,
+            "drift": 0.81,
+            "noise": 0,
+            "request": 0.06
+          },
+          "qualified": true,
+          "status": "classified",
           "where": "p1/s.jsonl:3"
         },
         {
+          "choice": "request",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "revert that",
           "id": "fit-a02",
+          "kind": "correction",
           "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.31,
+            "drift": 0.29,
+            "noise": 0,
+            "request": 0.4
+          },
+          "qualified": true,
+          "status": "classified",
           "where": "p1/s.jsonl:6"
         },
         {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "戻して",
           "id": "fit-a03",
+          "kind": "drift",
           "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.16,
+            "drift": 0.82,
+            "noise": 0,
+            "request": 0.02
+          },
+          "qualified": true,
+          "status": "classified",
           "where": "t3:th:fit-a:p2:r2"
         },
         {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "戻して",
           "id": "fit-a04",
+          "kind": "drift",
           "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
+          "probabilities": {
+            "approval": 0.02,
+            "correction": 0.41,
+            "drift": 0.45,
+            "noise": 0,
+            "request": 0.12
+          },
+          "qualified": true,
+          "status": "classified",
           "where": "t3:th:fit-a:p2:r3"
         },
         {
+          "choice": "correction",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "no, you have to run scripts/test, not just the unit tests",
           "id": "fit-a05",
+          "kind": "correction",
           "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.94,
+            "drift": 0.05,
+            "noise": 0,
+            "request": 0.01
+          },
+          "qualified": true,
+          "status": "classified",
           "where": "p1/s.jsonl:9"
         },
         {
+          "choice": "correction",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "vendor は触らないでって言ったよね？",
           "id": "fit-a06",
+          "kind": "correction",
           "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.86,
+            "drift": 0.13,
+            "noise": 0,
+            "request": 0.01
+          },
+          "qualified": true,
+          "status": "classified",
           "where": "p1/s.jsonl:12"
         },
         {
+          "choice": "correction",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "write tests in table-driven style please",
           "id": "fit-a07",
+          "kind": "correction",
           "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.55,
+            "drift": 0.03,
+            "noise": 0,
+            "request": 0.42
+          },
+          "qualified": true,
+          "status": "classified",
           "where": "p1/s.jsonl:15"
         },
         {
+          "choice": "correction",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "絵文字は使わないで",
           "id": "fit-a08",
+          "kind": "correction",
           "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.78,
+            "drift": 0.21,
+            "noise": 0,
+            "request": 0.01
+          },
+          "qualified": true,
+          "status": "classified",
           "where": "p1/s.jsonl:18"
         },
         {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "that PR is way too big, split it",
           "id": "fit-a09",
+          "kind": "drift",
           "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.3,
+            "drift": 0.47,
+            "noise": 0,
+            "request": 0.23
+          },
+          "qualified": true,
+          "status": "classified",
           "where": "p1/s.jsonl:21"
         },
         {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "I asked for the null pointer fix only; undo the refactor",
           "id": "fit-a10",
+          "kind": "drift",
           "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.06,
+            "drift": 0.94,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
           "where": "p1/s.jsonl:24"
         },
         {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "文言だけって言ったでしょ、レイアウトは戻して",
           "id": "fit-a11",
+          "kind": "drift",
           "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.09,
+            "drift": 0.91,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
           "where": "p3/s.jsonl:3"
         },
         {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "just the webhook retry, put the timeouts back",
           "id": "fit-a12",
+          "kind": "drift",
           "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.03,
+            "drift": 0.97,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
           "where": "p1/s.jsonl:27"
         },
         {
-          "id": "fit-a13",
+          "choice": "correction",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "screenshots go in docs/img with alt text, and leave the introduction alone",
+          "id": "fit-a23",
+          "kind": "correction",
           "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.78,
+            "drift": 0.22,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
           "where": "t3:th:fit-a:p2:r12"
         },
         {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "ステータスコードは触らないで。それは間違い、メッセージだけ",
           "id": "fit-a14",
+          "kind": "drift",
           "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.3,
+            "drift": 0.7,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
           "where": "p1/s.jsonl:30"
         },
         {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "それは違う。vendor は触らないで、Go のバージョンだけ",
           "id": "fit-a15",
+          "kind": "drift",
           "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.13,
+            "drift": 0.87,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
           "where": "p1/s.jsonl:33"
         },
         {
+          "choice": "approval",
           "id": "fit-a16",
           "opener": "owner",
+          "probabilities": {
+            "approval": 1,
+            "correction": 0,
+            "drift": 0,
+            "noise": 0,
+            "request": 0
+          },
           "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
+          "status": "classified",
           "where": "p1/s.jsonl:36"
         },
         {
+          "choice": "approval",
           "id": "fit-a17",
           "opener": "owner",
+          "probabilities": {
+            "approval": 1,
+            "correction": 0,
+            "drift": 0,
+            "noise": 0,
+            "request": 0
+          },
           "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
+          "status": "classified",
           "where": "t3:th:fit-a:p2:r16"
         },
         {
+          "choice": "approval",
           "id": "fit-a18",
           "opener": "owner",
+          "probabilities": {
+            "approval": 0.97,
+            "correction": 0.02,
+            "drift": 0.01,
+            "noise": 0,
+            "request": 0
+          },
           "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
+          "status": "classified",
           "where": "p1/s.jsonl:39"
         },
         {
+          "choice": "request",
           "id": "fit-a19",
           "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.4,
+            "drift": 0.01,
+            "noise": 0,
+            "request": 0.59
+          },
           "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
+          "status": "classified",
           "where": "p1/s.jsonl:42"
         },
         {
+          "choice": "noise",
           "id": "fit-a20",
           "opener": "owner",
+          "probabilities": {
+            "approval": 0.07,
+            "correction": 0.02,
+            "drift": 0.01,
+            "noise": 0.88,
+            "request": 0.02
+          },
           "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
+          "status": "classified",
           "where": "t3:th:fit-a:p2:r19"
         },
         {
+          "choice": "noise",
           "id": "fit-a21",
           "opener": "owner",
+          "probabilities": {
+            "approval": 0.03,
+            "correction": 0,
+            "drift": 0.01,
+            "noise": 0.95,
+            "request": 0.01
+          },
           "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
+          "status": "classified",
           "where": "p1/s.jsonl:45"
         },
         {
+          "choice": "noise",
           "id": "fit-a22",
           "opener": "owner",
+          "probabilities": {
+            "approval": 0.03,
+            "correction": 0,
+            "drift": 0.01,
+            "noise": 0.93,
+            "request": 0.03
+          },
           "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
+          "status": "classified",
           "where": "t3:th:fit-a:p2:r21"
         }
       ],
@@ -854,8 +1068,8 @@
         }
       },
       "usage": {
-        "input_tokens": 0,
-        "requests": 0,
+        "input_tokens": 7351,
+        "requests": 2,
         "unknown": 0
       },
       "version": 1,
@@ -965,13 +1179,6 @@
         "lang": "en",
         "why": "restores the scope after the agent changed shared defaults; no index line covers scope"
       },
-      "fit-a13": {
-        "dup": "duplicate",
-        "kind": "drift",
-        "lang": "en",
-        "overlap": true,
-        "why": "an overlap: corrects the deletion and restores the scope; the index states the changelog rule"
-      },
       "fit-a14": {
         "dup": "new",
         "hard": true,
@@ -1025,6 +1232,13 @@
         "kind": "noise",
         "lang": "ja",
         "why": "a lone link"
+      },
+      "fit-a23": {
+        "dup": "duplicate",
+        "kind": "drift",
+        "lang": "en",
+        "overlap": true,
+        "why": "an overlap: corrects where the screenshot goes and its missing alt text, which the line 'Screenshots go in docs/img and need alt text.' covers, and restores the scope, task-local beside it"
       }
     },
     "split": "fit"
@@ -1116,10 +1330,10 @@
         "ts": "2026-01-08T09:00:36Z"
       },
       {
-        "id": "fit-a13",
+        "id": "fit-a23",
         "signal": "owner-reply",
         "where": "t3:th:fit-a:p2:r12",
-        "excerpt": "never delete changelog entries, and only touch the install steps",
+        "excerpt": "screenshots go in docs/img with alt text, and leave the introduction alone",
         "ts": "2026-01-08T09:00:39Z"
       },
       {
@@ -1806,77 +2020,98 @@
     "p3": "- 依頼された範囲だけを変更する。ついでの書き換えはしない。\n- Keep components small.\n- Use the shared date formatter.\n"
   },
   "samples": {
-    "sha256:02ccb743d6ec0833ef27757ef1d9071cf1acafcfc40ea1c982453fc63d070aac": {
-      "dup_r11": [
-        0.19,
-        0.18,
-        0.14
+    "sha256:023c0a909eef0cd2c60f5b5b1c627bd040a4aa2bf56b3c3753d4b2b451cbdc78": {
+      "dup_r13": [
+        0.2,
+        0.22,
+        0.23
       ]
     },
-    "sha256:0714a470a28eb819591036515be3a0579eeb7279d71dbbb92fbc3b2f0c2c8ae8": {
-      "dup_r22": [
-        0.81,
+    "sha256:0de970dc3ab4367de48bd709e6a3dbbe70e18c13fe5eb26b2243292e32626e52": {
+      "dup_r20": [
         0.82,
-        0.87
+        0.91,
+        0.84
       ]
     },
-    "sha256:27ecf17f5237589e30e2c253931cca8bcb5c1e0cfcabc86a49a336787d8a843f": {
-      "dup_r8": [
-        0.95,
-        0.96,
-        0.96
+    "sha256:23b2524f6543f86524ce52d7f574d377778e3601f00ce6feaab9290e559fdeea": {
+      "dup_r15": [
+        0.09,
+        0.09,
+        0.07
+      ]
+    },
+    "sha256:26e201386939b17aa10185120f2a155b603d7b39867223bb97b95514f125661d": {
+      "dup_r14": [
+        0.68,
+        0.69,
+        0.66
       ]
     },
     "sha256:2ed7ed142ec26a6e11df42c7b4f0bba69d96652dec8325a11b4a85c82e5cd314": {
       "kind_r21": [
-        0.66,
-        0.64,
-        0.61
+        0.6,
+        0.51,
+        0.6000000000000001
       ],
       "kind_r22": [
+        0.9400000000000001,
         0.95,
-        0.94,
+        0.95
+      ]
+    },
+    "sha256:364bf300c8f59ec9cd92db9ea933479b282fa14d536804c2c47e3f0a5b06b35f": {
+      "dup_r19": [
+        0.81,
+        0.75,
+        0.75
+      ]
+    },
+    "sha256:4ef7a27d1dfaa9063b0bd78e73b7360018370e570325863eaa60022a3ff5394e": {
+      "dup_r12": [
+        0.71,
+        0.76,
+        0.69
+      ]
+    },
+    "sha256:6b16755a12d01d3351b486b947437b0c63c47c5bd134a2630ff031ca8e98296a": {
+      "dup_r10": [
+        0.28,
+        0.31,
+        0.28
+      ]
+    },
+    "sha256:7a0a02d6b7ae07c14f8f34c2297c208699ea2335ee4d1af95c113c8a0334d5fd": {
+      "dup_r18": [
+        0.95,
+        0.95,
         0.94
       ]
     },
-    "sha256:5984a3fa26e220441a05b85ed7e154b084e938859a4d92eeec0512be108cdfa2": {
-      "dup_r18": [
-        0.97,
-        0.97,
-        0.97
+    "sha256:7e7d9a96d73408b2cdac50bdbffae980b43829926a774654ef7c7d585b7ec233": {
+      "dup_r9": [
+        0.1,
+        0.11,
+        0.1
       ]
     },
-    "sha256:77d7c91dd0ba6e7ef34e91f080a7bb63a5b57d1165abbc06e198557346d811ab": {
-      "dup_r10": [
-        0.92,
-        0.46,
-        0.88
+    "sha256:99ae4ac355d0594b967a4689e14c9786e7d65f7f2ca581f69fb5961464e01912": {
+      "dup_r22": [
+        0.85,
+        0.82,
+        0.84
       ]
     },
-    "sha256:8d9a0a4a8c0a8621e8b32993b1a78c8c7d98d4f3898d0f78e0b8e4d4911d43fe": {
+    "sha256:9e550330c27f682ed002077788688495876e8904e91f5afd2eb20edea2cf6509": {
       "dup_r16": [
         0.06,
         0.06,
-        0.06
+        0.05
       ]
     },
-    "sha256:8ef9d2a8f747505e9608f286b858f466443163e960961b76855e0684a2503236": {
-      "dup_r20": [
-        0.91,
-        0.89,
-        0.89
-      ]
-    },
-    "sha256:b42a63ea0fef215ad45d60d62a8a6c79950e7e33fff719da53c20003d00be256": {
-      "dup_r12": [
-        0.97,
-        0.96,
-        0.96
-      ]
-    },
-    "sha256:c1ab6d8775a3b1b53ac3b0b4c83852343550d14e52f5cdd1f7cba0c30de6e729": {
+    "sha256:ab708f44eb028a346f8367c8178324f9a11afc51a496ddcdc112c536fbac6313": {
       "kind_r1": [
-        0,
+        0.01,
         0,
         0
       ],
@@ -1902,8 +2137,8 @@
       ],
       "kind_r14": [
         0.77,
-        0.75,
-        0.78
+        0.78,
+        0.77
       ],
       "kind_r15": [
         0.99,
@@ -1911,9 +2146,9 @@
         0.99
       ],
       "kind_r16": [
-        0.42,
-        0.43000000000000005,
-        0.42000000000000004
+        0.5800000000000001,
+        0.52,
+        0.49
       ],
       "kind_r17": [
         0.99,
@@ -1926,34 +2161,34 @@
         0.99
       ],
       "kind_r19": [
-        0.9,
-        0.87,
-        0.88
+        0.86,
+        0.86,
+        0.86
       ],
       "kind_r2": [
         0.01,
         0.01,
-        0.01
+        0.02
       ],
       "kind_r20": [
-        0.99,
-        0.9700000000000001,
-        0.97
+        0.98,
+        0.98,
+        0.98
       ],
       "kind_r3": [
         0.03,
-        0.03,
-        0.03
+        0.04,
+        0.02
       ],
       "kind_r4": [
-        0.42,
-        0.31,
-        0.42
+        0.41000000000000003,
+        0.39,
+        0.39
       ],
       "kind_r5": [
+        0.03,
         0.02,
-        0.02,
-        0.02
+        0.03
       ],
       "kind_r6": [
         0,
@@ -1976,53 +2211,32 @@
         1
       ]
     },
-    "sha256:c859f9c7bde7520f4e89ab04c82368f5baede8b193030d65e270eaf74c9e36dd": {
-      "dup_r19": [
-        0.87,
-        0.89,
-        0.93
-      ]
-    },
-    "sha256:cede99ee6ed153929e7207987df195200de695c6ebd58bbb7c046b4027a78326": {
-      "dup_r14": [
-        0.93,
-        0.91,
-        0.94
-      ]
-    },
-    "sha256:d38c7bb12cf220bfa6cc47df7bb4f3a1d4b8d5d22c12ba0b3cb9c3e6808b2c78": {
-      "dup_r9": [
-        0.23,
-        0.17,
-        0.19
-      ]
-    },
-    "sha256:dad3eea68c2cf9d0a7f05230eabcdd8f5aa80afec97cb8c2a4b712abcd1b6280": {
-      "dup_r17": [
-        0.96,
-        0.96,
-        0.96
-      ]
-    },
-    "sha256:dd37ac70d246600999df441c7a93a419a86ca52c4a812f8560e3c77613ef3694": {
-      "dup_r15": [
-        0.12,
+    "sha256:ae0fdf41fdab3e6fe82411501ec7724cfbef399213152fa5a22394f0a96a32c7": {
+      "dup_r11": [
+        0.16,
         0.13,
-        0.12
+        0.13
       ]
     },
-    "sha256:debcf116890ecb0503348332acbac4254a791dacc6779c583a912e4f5b5851d3": {
-      "dup_r13": [
-        0.45,
-        0.53,
-        0.32
-      ]
-    },
-    "sha256:fd01fcf14c88c63f4b896954005b6cca9d65badc14e66345a099d53f6f3a2d35": {
+    "sha256:df5749045dd3e427fa8fd07e6f73e7f0258b6f5f9050e6a17cd3536797906b73": {
       "dup_r21": [
-        0.7,
-        0.66,
-        0.64
+        0.82,
+        0.82,
+        0.81
+      ]
+    },
+    "sha256:ea350c6ea398c5774e4c8e190bfe28734c21da5668c4c6d3d01d2799eb62efc7": {
+      "dup_r8": [
+        0.81,
+        0.82,
+        0.8
+      ]
+    },
+    "sha256:fffa8226efebeca8519fef3bda2de0d99e3e2eab49ef490815f1ec6eecab728f": {
+      "dup_r17": [
+        0.93,
+        0.92,
+        0.93
       ]
     }
   }
