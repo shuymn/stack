@@ -495,7 +495,7 @@ belongs to the legacy `attention-budget.py`, retired by Phase 3, and is not a ca
    `[safety]` of `config.toml` and compare custom `secrets` paths, a custom `private_terms` file and an explicit
    `deny_pencil_generate = false` (the table stays in `config.toml` while the core still reads it); (b) install
    `stack-public` and check it resolves both in an interactive shell and on the `launchd` job's `PATH`
-   (`docs/design/phase3-cycle.md` §3.6); (c) only then reinstall `stack-improve`.
+   (`shuymn/dotfiles` `nix/home/profiles/dev.nix`, `docs/design/phase3-cycle.md` §3.6); (c) only then reinstall `stack-improve`.
 8. **feat(ext): add stack-guard** — `extensions/guard`, `safety.toml` reader, `stack-guard (<rule>): ` reasons,
    depguard allow list (§4.5). The core hook is unchanged, so both deny. Done when C16–C17 pass.
 9. dotfiles **feat(claude): wire stack-guard and stack-public** — install both binaries, add the `stack-guard`

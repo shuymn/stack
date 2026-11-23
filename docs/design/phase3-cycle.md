@@ -292,7 +292,7 @@ never see a partial file):
 The deadline is checked again right before the write starts; past it, observe answers `latest-not-written`
 without writing. A local write already started (temp file, sync, rename) runs to completion: it is not
 interruptible, and the 20-s reserve covers it. `version` is this file's schema; timestamps are RFC 3339 UTC in whole seconds (`until` is the start time cut to the
-second), so `jq`'s `fromdateiso8601` reads them (§3.6). Last writer wins: two overlapping observe runs (a manual one
+second), so the cycle wrapper's freshness check (§3.6) reads them with `jq`'s `fromdateiso8601`. Last writer wins: two overlapping observe runs (a manual one
 and the job) can leave the older window as the file; improve's freshness bound (§3.4 step 6) still holds, so this is
 accepted. When writing `latest.json` fails, observe answers `warn` with the finding `latest-not-written`, and the
 job (§3.6) does not run improve: a file from an earlier run in the same second would otherwise pass its freshness
@@ -526,95 +526,34 @@ reason, patch, check_hits, codex_high, codex_runs`; `repo` is `<owner>/<name>`, 
 
 | Path | Writer | Readers | Lifetime |
 |---|---|---|---|
-| `~/.local/state/stack/cycle/last.json` | `scripts/stack-cycle` (validated, temp + rename) | statusline, owner (`jq -r '.results[].context'`) | replaced only by a valid aggregate |
-| `~/.local/state/stack/cycle/last-error` | `scripts/stack-cycle` (temp + rename) | statusline, owner | written on a failed run, removed on a valid one; only the job runs the wrapper, so its presence means the latest run failed |
-| `~/.local/state/stack/observe/latest.json` | `stack-observe` | `stack-improve`, owner | overwritten each observe run |
+| `~/.local/state/stack/cycle/` | the cycle wrapper (§3.6) | statusline (§3.7), owner | files, formats and lifetimes: `shuymn/dotfiles` `docs/stack-cycle.md` |
+| `~/.local/state/stack/observe/latest.json` | `stack-observe` | `stack-improve`, the cycle wrapper, owner | overwritten each observe run |
 | `~/.local/state/stack/improve/YYYY-Www` | `stack-improve` | `stack-improve`, owner | one per week; `patch` ≤ 256 KiB, the other fields (title, body, check hits, Codex findings) are small but not capped; never pruned automatically |
 | `~/.local/state/stack/improve/lock` | `stack-improve` | `stack-improve` | permanent empty file; the lock lives only while a run holds it |
 | `~/.local/state/stack/improve/work/<W>/` | `stack-improve` | — | removed at the end of the run; a leftover of an abnormal end is reported, never removed by a run (§3.4 step 8) |
 | `~/.config/stack/improve.toml` | owner | `stack-improve` | owner-managed opt-in |
 
-`phase2-core.md` §2.1 already reserves the improve stamp path.
+`phase2-core.md` §2.1 reserves the improve stamp path and the `cycle/` directory, where `stack` writes nothing.
 
-### 3.6 launchd wiring (dotfiles)
+### 3.6 The cycle wrapper (dotfiles)
 
-`launchd.agents.stack-cycle` in `nix/home/profiles/dev.nix` replaces `kaizen-cycle` in the same commit; cutover step
-2 (§6) checks on the machine that the old job is unloaded. `StartCalendarInterval` 06:00, `ProcessType =
-Background`, `LowPriorityIO`, log `~/Library/Logs/stack-cycle.log`, `PATH` = the directory holding `stack` and the
-extensions, the Home Manager profile (`jq`, `chezmoi`), the mise shims (`claude`, `codex`, `gh`) and the system
-directories (`sqlite3`, `git`). Program: `/bin/sh <store copy of scripts/stack-cycle>`:
+The daily `launchd` job `stack-cycle` (with its `PATH`, in `nix/home/profiles/dev.nix`) and the wrapper script
+`scripts/stack-cycle` it runs belong to `shuymn/dotfiles`; its `docs/stack-cycle.md` states the order of the
+`stack run cycle --ext <name>` calls, what makes a run valid and the files a run writes. What the wrapper relies on from this repository is `stack run cycle` itself and
+`observe/latest.json` (§3.3):
 
-```sh
-#!/bin/sh
-# Run observe, then improve, from the dotfiles checkout; keep the last valid result for the statusline.
-set -u
-out=$HOME/.local/state/stack/cycle
-latest=$HOME/.local/state/stack/observe/latest.json
-obs="" imp="" all=""
-fail() {
-  printf 'stack-cycle: %s\n' "$1" >&2
-  rm -f ${obs:+"$obs"} ${imp:+"$imp"} ${all:+"$all"}
-  if e=$(mktemp "$out/.error.XXXXXX"); then
-    { date -u +%Y-%m-%dT%H:%M:%SZ && printf '%s\n' "$1"; } >"$e" && mv -f "$e" "$out/last-error" || rm -f "$e"
-  fi
-  exit 2
-}
-# valid NAME FILE CODE: exit 0 and exactly one cycle object with one self-answered result for NAME
-valid() {
-  [ "$3" -eq 0 ] && jq -e -s --arg n "$1" 'length == 1 and (.[0] | .stage == "cycle"
-      and (.status | IN("pass", "warn")) and (.results | type == "array" and length == 1)
-      and (.results[0] | .name == $n and .error == "" and (.status | IN("pass", "warn"))
-           and (.findings | type == "array")))' "$2" >/dev/null 2>&1
-}
-mkdir -p "$out" || { printf 'stack-cycle: cannot create %s\n' "$out" >&2; exit 2; }
-src=$(chezmoi source-path) || fail "chezmoi source-path failed"
-[ -n "$src" ] || fail "chezmoi source-path printed nothing"
-root=$(dirname "$src") && cd "$root" || fail "cannot enter the dotfiles checkout"
-start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-obs=$(mktemp "$out/.observe.XXXXXX") || fail "mktemp failed"
-stack run cycle --ext observe >"$obs"; code=$?
-valid observe "$obs" "$code" || fail "observe: exit $code without a valid result"
-jq -e '[.results[].findings[]? | objects | select(.kind? == "latest-not-written")] | length == 0' "$obs" \
-  >/dev/null || fail "observe could not write latest.json"
-jq -e --arg s "$start" '.version == 1 and (.window.until | fromdateiso8601) >= ($s | fromdateiso8601)' \
-  "$latest" >/dev/null 2>&1 || fail "observe did not write a fresh latest.json"
-imp=$(mktemp "$out/.improve.XXXXXX") || fail "mktemp failed"
-stack run cycle --ext improve >"$imp"; code=$?
-valid improve "$imp" "$code" || fail "improve: exit $code without a valid result"
-all=$(mktemp "$out/.last.XXXXXX") || fail "mktemp failed"
-jq -s '{stage: "cycle", status: (if any(.[]; .status == "warn") then "warn" else "pass" end),
-        results: [.[].results[]], skipped: []}' "$obs" "$imp" >"$all" || fail "cannot merge the results"
-mv -f "$all" "$out/last.json" || fail "cannot replace last.json"
-rm -f "$obs" "$imp"
-rm -f "$out/last-error" || fail "cannot remove last-error"
-exit 0
-```
+- `stack run cycle --ext <name>` runs only the named extension, so `[stages].cycle` is unused by the job, and gives
+  each call its own 30-min stage (§3.9). It prints one aggregate on stdout; an extension not found on `PATH` is
+  listed under `skipped` with no result, a crashed one is a `warn` result with `error` set, and a failure of core
+  itself exits 2 with no output (`internal/cli/run.go:74-93`, `internal/cli/cli.go:27`,
+  `internal/ext/ext.go:217-232,289-310`).
+- `stack run cycle` works on every OS; only the job is macOS-specific.
 
-A run is valid only when both calls exit 0 and each prints exactly one `cycle` object whose status is `pass` or
-`warn` and whose only result is the expected extension, answered by itself (no synthetic `error`, a `pass`/`warn`
-status, a findings array), and observe has written a `latest.json` whose window ends at or after the job started.
-Improve runs only after a valid observe. Anything else, including core exit 2 (no output), an extension missing
-from `PATH` (core lists it under `skipped`), a crashed extension, an observe `latest-not-written` finding, or a
-stale `latest.json`, keeps the previous
-`last.json`, replaces `last-error` atomically and exits 2. A valid run merges the two results into one `cycle`
-object, replaces `last.json`, removes `last-error` and exits 0. Running the stages by name (`--ext`) leaves
-`[stages].cycle` unused by the job; `stack run cycle` itself works on every OS, and only this job is macOS-specific.
+### 3.7 Statusline (dotfiles)
 
-### 3.7 Statusline
-
-`comp_cycle` replaces `comp_kaizen` (`statusline.sh.tmpl:151-175`) and reads `~/.local/state/stack/cycle/`:
-
-- `last.json` absent: `last-error` present → `cycle ✗`; the Home Manager `stack-cycle` agent plist exists → `cycle
-  never` (the job is installed, no run has succeeded); else nothing (cycle not set up);
-- `jq` cannot read `.status` as a string, or `.results` is not an array → `cycle ?`;
-- `.status` other than `pass` → `cycle <status> <N>`, `N` = total `findings` entries over `.results` (findings
-  listed, not changes counted: observe lists at most 20 `replay-change` findings, its `context` has the total);
-- `last-error` present → `✗` appended: the shown result is the previous valid run, the latest failed (a valid run
-  removes `last-error`, so no time comparison is needed);
-- file mtime (`date -r <file> +%s`, BSD and GNU) older than 36 h → `stale <d>d` appended (or alone when `pass`).
-
-Shown in red; nothing when `pass`, fresh and without `last-error`. Tests move to `tests/test_statusline.py` with
-fixture files.
+`comp_cycle` in `shuymn/dotfiles` replaces `comp_kaizen` and shows the cycle segment from the wrapper's files only
+when the owner needs to act; its states are in `docs/stack-cycle.md` there. Its tests are `tests/test_statusline.py`
+in that repository.
 
 ### 3.8 How a proposal reaches the owner
 
@@ -627,8 +566,8 @@ statusline, with the patch, or the branch, OID, title and body, in the stamp.
 ### 3.9 Time budget
 
 Core gives each `stack run` stage call one 30-min deadline (`internal/ext/ext.go:48`) and kills only the direct
-child at expiry (`phase2-core.md` §2.2). The job (§3.6) therefore makes two calls, `--ext observe` then `--ext
-improve`, so each extension has a stage of its own, and each extension sets its own absolute deadline on a
+child at expiry (`phase2-core.md` §2.2). The job (§3.6) therefore makes one call per extension (`--ext observe`,
+then `--ext improve`), so each extension has a stage of its own, and each extension sets its own absolute deadline on a
 monotonic clock when it starts, before core's, reserves its cleanup and response time, and cuts every child timeout
 to fit.
 
@@ -889,7 +828,7 @@ I7); no remote write without enough time (I14); one run at a time (I5); a Codex 
 | I15 | Improve shall answer `pass` and call no model unless the target is a public GitHub repository equal to `origin`, and shall stop when the user settings add working directories. | `improve.TestTarget` | `PRIVATE`/`INTERNAL` → pass, no claude; name mismatch → pass; a look-alike host or two `remote.origin.url` values → pass, no claude, no push; `additionalDirectories` set → warn, no claude |
 | I16 | If the Codex check reports a HIGH finding, exits non-zero, times out, or leaves a missing or invalid verdict, improve shall not push and not create a PR. | `improve.TestCodexGate` (real git, fake `codex`, fake `gh`) | the same pinned candidate in each of the five cases → `proposal:codex-high` or `proposal:codex`, patch in the stamp; the bare remote has no `improve/` ref and the `gh` log has no `pr create` |
 | D1 | `stack-private-terms` shall write the terms the legacy generator wrote, without importing `public-check`; `probe/build` shall keep excluding private strings without it. | `tests/test_stack_private_terms.py`, `tests/test_kaizen_probe.py` `BuildTest` | fixture host.toml with generic, role and owner values; hand-kept list; `.t3` fragments; term set equal to the legacy output for the same fixture; with `public-check` removed from the test checkout, a dummy private term in the test `HOME`'s generated terms file and in one filler item → that item excluded, the build passes, and no built file contains the term |
-| D2 | `comp_cycle` shall render each state of §3.7. | `tests/test_statusline.py` | absent; absent + plist → `cycle never`; absent + `last-error` → `cycle ✗`; unreadable; `.status` null (`{}`); warn with N; stale; `last-error` present with a valid `last.json` → `✗` appended; fresh pass → nothing |
+| D2 | `comp_cycle` shall render each state that `shuymn/dotfiles` `docs/stack-cycle.md` lists (§3.7). | `tests/test_statusline.py` | absent; absent + plist → `cycle never`; absent + `last-error` → `cycle ✗`; unreadable; `.status` null (`{}`); warn with N; stale; `last-error` present with a valid `last.json` → `✗` appended; fresh pass → nothing |
 | D3 | `scripts/stack-cycle` shall run improve only after a valid observe with a fresh `latest.json`, replace `last.json` atomically only when both calls are valid, keep the previous one otherwise, remove `last-error` on success and replace it atomically on failure. | `tests/test_stack_cycle.py` (fake `stack`, `chezmoi`) | both valid → merged `last.json` with exactly two results, exit 0, no `last-error`; each of: non-zero exit with valid JSON, empty output, two JSON objects, `{}`, `stage` not `cycle`, `status` `block`, the extension only in `skipped`, a synthetic `error`, a result status outside pass/warn, findings not an array → previous file kept, `last-error` written, exit 2; observe invalid, `latest.json` not rewritten (window before the job start), or an observe finding `{"kind":"latest-not-written",…}` with a same-second old `latest.json` → improve not run; `chezmoi source-path` failing or empty, unwritable state directory → exit 2 without running `stack`; the fake improve `stack` writes half its output and blocks on a FIFO, the test reads `last.json` (old bytes exactly) and `last-error` (absent or complete), then releases it; the same for a `last-error` write blocked half-way (old `last-error` or none, never partial) |
 
 ## 9. Owner Decisions
