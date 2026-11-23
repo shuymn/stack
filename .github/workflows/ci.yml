@@ -63,8 +63,8 @@ jobs:
         run: ./stack.exe --version
 
   # The PowerShell oracle (docs/design/powershell-guard.md §3, C11): the recognizer against the
-  # runner's PowerShell engines (5.1 and 7 on Windows, 7 on Linux). Not required: `check` does not
-  # need it. It fails on any fail or inconclusive verdict, including a missing engine.
+  # runner's PowerShell engines (5.1 and 7 on Windows, 7 on Linux and macOS). Not required: `check`
+  # does not need it. It fails on any fail or inconclusive verdict, including a missing engine.
   powershell-oracle:
     name: PowerShell oracle (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -76,6 +76,7 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
+          - macos-latest
           - windows-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
