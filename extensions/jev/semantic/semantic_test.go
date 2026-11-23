@@ -453,7 +453,8 @@ func TestFailures(t *testing.T) {
 	const keyAction = "verify the Jev API key in TYPESAFE_API_KEY if set and non-blank, " +
 		"otherwise in ~/.config/stack/jev/key"
 	// The ledger's 100 ms wait is for a ledger that does not answer; a loaded runner can take
-	// longer to append, which would drop the line and add a stderr line these cases check.
+	// longer to append, and an expired wait adds a stderr line and can drop the line these cases
+	// check.
 	defer func(w time.Duration) { ledgerWait = w }(ledgerWait)
 	ledgerWait = 30 * time.Second
 	r := stateRepo(t)
