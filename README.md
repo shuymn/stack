@@ -35,17 +35,19 @@ placeholder cutoffs disable both decisions, so nothing is sent until `jev-calibr
 (`extensions/jev/semantic/cutoffs.json`); reinstall after `jev-calibrate` changes them.
 
 The Jev extensions and `jev-calibrate` take the key from `TYPESAFE_API_KEY`, or else from `~/.config/stack/jev/key`.
-They read the file only when it is a regular file (or a symlink to one) that you own with no group or other permission
-bits (the command below makes it `0600`), at most 4 KiB, holding a non-blank key; otherwise the stage reports `jev-error` and
-`jev-calibrate` exits 2. On Windows no mode or owner is checked. Removing the file (and leaving the
-variable unset) opts out. To write it, type or paste the key at the silent prompt and press Enter; nothing is
-written on EOF or empty input:
+They read the file only when it is a regular file (or a symlink to one) that you own with no group or other
+permission bits (the command below makes it `0600`), at most 4 KiB, holding a non-blank key; otherwise the stage
+reports `jev-error` and `jev-calibrate` exits 2. On Unix only the file's mode and owner are checked, not ACLs or its
+parent directories; on Windows no mode or owner is checked. Removing the file (and leaving the variable unset) opts
+out. To write it, type or paste the key at the silent prompt and press Enter; nothing is written on EOF or empty
+input:
 
 ```sh
-(umask 077; mkdir -p ~/.config/stack/jev && IFS= read -rs k && [ -n "$k" ] && f=~/.config/stack/jev/key && touch "$f" && chmod 600 "$f" && printf '%s\n' "$k" > "$f")
+(umask 077; mkdir -p ~/.config/stack/jev &&
+  IFS= read -rs k && [ -n "$k" ] &&
+  f=~/.config/stack/jev/key && touch "$f" && chmod 600 "$f" &&
+  printf '%s\n' "$k" > "$f")
 ```
-
-stack checks the file's mode and owner only, not ACLs or its parent directories.
 
 `stack-guard` treats the file as a secret. File tools resolve their paths against the working directory, and `Read`
 and `NotebookRead` also follow symlinks, so they are denied on the file by its resolved path or through a symlink; a
