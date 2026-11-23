@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -139,7 +140,7 @@ func realDB(t *testing.T, statements ...string) (string, string) {
 	t.Helper()
 	bin, err := exec.LookPath("sqlite3")
 	if err != nil {
-		if os.Getenv("CI") == "true" {
+		if os.Getenv("CI") == "true" && runtime.GOOS != "windows" { // the design names ubuntu and macOS only
 			t.Fatalf("sqlite3 not found on a CI runner: %v", err)
 		}
 		t.Skip("sqlite3 not found")
