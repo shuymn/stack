@@ -330,7 +330,7 @@ except on its own errors.
   - *Which kit (live merge):* `<slug>` and the `dir` the extension counted come from one entry of the request's
     `kits`: a kit recorded in the merging session's `.kits` whose dir `<kit root>/<slug>` exists, under the
     `[kit].root` of the config that `stack pr merge` run loaded, resolved as `docs/design/phase2-core.md` §2.1
-    states (`internal/cli/prmerge.go:73-92`, `internal/cli/run.go:281-306`).
+    states (`internal/cli/prmerge.go:73-92`, `internal/cli/run.go:281-307`).
   - *How a consumer finds that dir:* it resolves the current config the same way, on the premise that `[kit].root`
     is not edited from the start of `pr merge` until the consumer has resolved the dir. It does not reuse a dir seen
     in earlier output (`kit open`, a compact restore), which may predate a root change, and never assumes the

@@ -279,7 +279,7 @@ board and `entry` parts still run as they apply. One unreadable part never stops
 marker, so it has an `orchestration-state` block and still asks for `state.md`; `stack-audit-due` hashes the missing
 `state.md` as `absent` (`docs/design/core-stages.md` §4.7).
 
-**Attention items** (`internal/kit/render.go:175-242`). Accepted shape: one JSON object whose `items` is an array of
+**Attention items** (`internal/kit/render.go:175-243`). Accepted shape: one JSON object whose `items` is an array of
 objects, each with a string `role` and a string `rule`; other fields are ignored, and the keys `items`, `role` and
 `rule` match in any letter case (Go's JSON decoding). For a repeated key the last value in file order wins, but a
 type error in an earlier value still rejects the file or element even when a later value is usable; an `items`
