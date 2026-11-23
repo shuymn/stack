@@ -144,7 +144,7 @@ needed the summary, or if `stack` gained its own scheduled runner. (a) changes n
 
 | Side effect | Why it does not harm the purpose |
 |---|---|
-| Ignored items get no marker in the restore, and compaction reports nothing about them (§4) | valid state and valid items still render; `kit open` reports the loss on stderr (§4), the one moment the orchestrator can fix the file, and the stated shape lets a loss seen after compaction be diagnosed |
+| Ignored items get no marker in the restore; which entry point reports them is §4 | valid state and valid items still render; the report of §4 comes when the orchestrator can fix the file, and the stated shape lets a loss seen after compaction be diagnosed |
 | Freezing the `.kits` format | it is already what both readers depend on; a future change gets a read command (§3.3) instead of a silent break |
 | Lockless `.kits` readers see no fresh snapshot: a read racing a session's first `kit open` or last `kit close` can see either side, so the ask-owner hook may show or skip the checklist for that one question | the effect is one reminder more or less on one question |
 | Steward's caller lookup through `.kits` is best-effort: when two sessions list the slug, or one closes it while steward reads, steward can pick the other session's transcript | `.kits` records kits, not callers, so no reader can do better from it; the companion PR (§8) requires steward to name the session it inspected on every lookup, or say it could not establish the caller, so an on-track line is not mistaken for an audit of the right session |
