@@ -1779,78 +1779,105 @@ func TestVerdictNestedUndecided(t *testing.T) {
 }
 
 // TestMergeDeclared covers the declaration update of -update-oracle and -update-oracle-changes:
-// new commands are added, a changed or removed declaration is a difference that is written only
-// with rewrite, and a run that is not both engines' or that misses evidence writes nothing.
+// new commands are added, a changed (even only in its rejecting engines) or removed declaration
+// is a difference that is written only with rewrite, a hand-written dynamicUnix is kept, and a
+// run that is not both engines' or that misses evidence writes nothing.
 func TestMergeDeclared(t *testing.T) {
 	keys := []string{"5.1", "7"}
 	ob := func(calls ...string) observation { return observation{calls: calls} }
-	kept := declared{Cmd: "a", Calls: []string{"a"}, DynamicUnix: []string{"*.md"}}
-	changed := declared{Cmd: "b", Calls: []string{"b"}}
-	removed := declared{Cmd: "gone", Calls: []string{"gone"}}
-	corpus := []string{"a", "b", "new && x"}
-	obs := [][]observation{
-		{ob("a"), ob("b", "c"), {rejects: true}},
-		{ob("a"), ob("b", "c"), ob("new", "x")},
+	rejects := observation{rejects: true}
+	tests := []struct {
+		name    string
+		corpus  []string
+		old     []declared
+		obs     [][]observation // per engine of keys, per corpus command
+		changes []string
+		want    string // the JSON written with rewrite
+		plain   bool   // no difference: written without rewrite too
+	}{
+		{
+			name:   "new commands only",
+			corpus: []string{"a", "new; x"},
+			old:    []declared{{Cmd: "a", Calls: []string{"a"}, DynamicUnix: []string{"*.md"}}},
+			obs:    [][]observation{{ob("a"), rejects}, {ob("a"), ob("new", "x")}},
+			want: `[{"cmd":"a","calls":["a"],"dynamicUnix":["*.md"]},` +
+				`{"cmd":"new; x","calls":["new","x"],"rejects":["5.1"]}]`,
+			plain: true,
+		},
+		{
+			name:   "calls changed, dynamicUnix kept",
+			corpus: []string{"b"},
+			old:    []declared{{Cmd: "b", Calls: []string{"b"}, DynamicUnix: []string{"*.md"}}},
+			obs:    [][]observation{{ob("b", "c")}, {ob("b", "c")}},
+			changes: []string{
+				`changed {"cmd":"b","calls":["b"],"dynamicUnix":["*.md"]}` + "\n" +
+					`   to {"cmd":"b","calls":["b","c"],"dynamicUnix":["*.md"]}`,
+			},
+			want: `[{"cmd":"b","calls":["b","c"],"dynamicUnix":["*.md"]}]`,
+		},
+		{
+			name:   "rejecting engines changed only",
+			corpus: []string{"r"},
+			old:    []declared{{Cmd: "r", Calls: []string{"r"}}},
+			obs:    [][]observation{{rejects}, {ob("r")}},
+			changes: []string{
+				`changed {"cmd":"r","calls":["r"]}` + "\n" +
+					`   to {"cmd":"r","calls":["r"],"rejects":["5.1"]}`,
+			},
+			want: `[{"cmd":"r","calls":["r"],"rejects":["5.1"]}]`,
+		},
+		{
+			name:   "command removed only",
+			corpus: []string{"a"},
+			old: []declared{
+				{Cmd: "a", Calls: []string{"a"}},
+				{Cmd: "gone", Calls: []string{"gone"}},
+			},
+			obs:     [][]observation{{ob("a")}, {ob("a")}},
+			changes: []string{`removed {"cmd":"gone","calls":["gone"]}`},
+			want:    `[{"cmd":"a","calls":["a"]}]`,
+		},
+		{
+			name:   "undocumented rejection by 7",
+			corpus: []string{"x"},
+			obs:    [][]observation{{rejects}, {{rejects: true, calls: []string{"x"}}}},
+			want:   `[{"cmd":"x","calls":[],"rejects":["5.1","7"]}]`,
+			plain:  true,
+		},
 	}
-	want := []declared{
-		kept,
-		{Cmd: "b", Calls: []string{"b", "c"}},
-		{Cmd: "new && x", Calls: []string{"new", "x"}, Rejects: []string{"5.1"}},
-	}
-	wantChanges := []string{
-		`changed {"cmd":"b","calls":["b"]}` + "\n" + `   to {"cmd":"b","calls":["b","c"]}`,
-		`removed {"cmd":"gone","calls":["gone"]}`,
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, rewrite := range []bool{false, true} {
+				got, changes, err := mergeDeclared(keys, tt.corpus, tt.old, tt.obs, rewrite)
+				if !slices.Equal(changes, tt.changes) {
+					t.Errorf("rewrite %v: changes %q, want %q", rewrite, changes, tt.changes)
+				}
+				if !rewrite && !tt.plain {
+					if err == nil || got != nil {
+						t.Errorf("without rewrite: got %+v, err %v; want an error and nothing "+
+							"to write", got, err)
+					}
+					continue
+				}
+				if err != nil {
+					t.Fatalf("rewrite %v: %v", rewrite, err)
+				}
+				b, err := json.Marshal(got)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(b) != tt.want {
+					t.Errorf("rewrite %v: got %s, want %s", rewrite, b, tt.want)
+				}
+			}
+		})
 	}
 
-	t.Run("new commands only", func(t *testing.T) {
-		got, changes, err := mergeDeclared(keys, []string{"a", "new && x"},
-			[]declared{kept}, [][]observation{
-				{obs[0][0], obs[0][2]},
-				{obs[1][0], obs[1][2]},
-			}, false)
-		if err != nil || len(changes) != 0 {
-			t.Fatalf("err %v, changes %q", err, changes)
-		}
-		if w := []declared{want[0], want[2]}; !slices.EqualFunc(got, w, sameDeclaredUnix) {
-			t.Errorf("got %+v, want %+v", got, w)
-		}
-	})
-	t.Run("changes without rewrite", func(t *testing.T) {
-		got, changes, err := mergeDeclared(keys, corpus,
-			[]declared{kept, changed, removed}, obs, false)
-		if err == nil || got != nil {
-			t.Errorf("got %+v, err %v; want an error and nothing to write", got, err)
-		}
-		if !slices.Equal(changes, wantChanges) {
-			t.Errorf("changes %q, want %q", changes, wantChanges)
-		}
-	})
-	t.Run("changes with rewrite", func(t *testing.T) {
-		got, changes, err := mergeDeclared(keys, corpus,
-			[]declared{kept, changed, removed}, obs, true)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !slices.EqualFunc(got, want, sameDeclaredUnix) {
-			t.Errorf("got %+v, want %+v", got, want)
-		}
-		if !slices.Equal(changes, wantChanges) {
-			t.Errorf("changes %q, want %q", changes, wantChanges)
-		}
-	})
-	t.Run("undocumented rejection by 7", func(t *testing.T) {
-		got, _, err := mergeDeclared(keys, []string{"x"}, nil, [][]observation{
-			{{rejects: true}}, {{rejects: true, calls: []string{"x"}}},
-		}, false)
-		w := []declared{{Cmd: "x", Calls: []string{}, Rejects: keys}}
-		if err != nil || !slices.EqualFunc(got, w, sameDeclaredUnix) {
-			t.Errorf("got %+v, err %v; want %+v", got, err, w)
-		}
-	})
+	corpus := []string{"a"}
 	for name, obs := range map[string][][]observation{
-		"one engine":           {obs[1]},
-		"engine without a run": {obs[0], nil},
-		"missing evidence":     {obs[0], {ob("a"), {missing: []string{"x"}}, ob("new", "x")}},
+		"one engine":           {{ob("a")}},
+		"engine without a run": {{ob("a")}, nil},
+		"missing evidence":     {{ob("a")}, {{missing: []string{"x"}}}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if got, _, err := mergeDeclared(keys[:len(obs)], corpus, nil, obs, true); err == nil {
@@ -1858,8 +1885,4 @@ func TestMergeDeclared(t *testing.T) {
 			}
 		})
 	}
-}
-
-func sameDeclaredUnix(a, b declared) bool {
-	return sameDeclared(a, b) && slices.Equal(a.DynamicUnix, b.DynamicUnix)
 }
