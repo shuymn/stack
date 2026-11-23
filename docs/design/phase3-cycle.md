@@ -29,8 +29,10 @@ and C21 there); `gh_model` (§3.2) is unchanged.
    worktree, a verified single commit, `stack check public`, a read-only Codex check, one open PR at a time, at
    most one model attempt per ISO week (the recorded cost is observed, not capped).
 4. **Never block.** The `cycle` stage has no caller to stop. Both extensions answer `pass` or `warn`, never `block`.
-   `stack run cycle` then exits 0 when every result is `pass`/`warn`, 1 when another configured extension blocks,
-   and 2 when core itself fails (`internal/cli/run.go:60-84`); the wrapper (§3.6) handles each.
+   Core turns any `block` at `cycle` into a `warn` with a synthetic finding (`internal/ext/ext.go:65-67,379-396`),
+   so a live `stack run cycle` exits 0 whatever its extensions answer and 2 when core itself fails; exit 1 comes
+   only from `--replay` when the aggregate differs from the fixture's `expect` (`internal/cli/run.go:59-93`). The
+   wrapper (§3.6) handles each.
 5. **macOS is the runtime, every OS compiles.** The extensions are Go in this module, built and tested on all three
    CI runners like core. They read what they find; a missing source on Linux or Windows is a source status, not a
    crash. Scheduling (`launchd`) stays macOS only (`docs/architecture.md` §1).
@@ -39,15 +41,16 @@ and C21 there); `gh_model` (§3.2) is unchanged.
 
 ```text
 launchd (macOS, daily 06:00)
-  └─ scripts/stack-cycle (dotfiles)    cd <dotfiles checkout>; two stages in turn; validate; rename to last.json
+  └─ scripts/stack-cycle (dotfiles)    cd <dotfiles checkout>; three stages in turn; validate; rename to last.json
        ├─ stack run cycle --ext observe  own 30-min stage
        │    └─ stack-observe            7-day window → ~/.local/state/stack/observe/latest.json + warn findings
        │                                (wrapper checks the result and a fresh latest.json before going on)
+       ├─ stack run cycle --ext jev-classify  own 30-min stage; report-only (phase4-jev.md), not part of validity
        └─ stack run cycle --ext improve  own 30-min stage
             └─ stack-improve            off until ~/.config/stack/improve.toml enables it; run lock; ISO-week stamp;
                                         public evidence → worktree + claude -p → pinned OID → checks + Codex
                                         → push improve/<YYYY-Www> → gh pr create
-(jev-classify, Phase 4, is placed by Phase 4; the job names its extensions with --ext, §4.8)
+(the job names its extensions with --ext, §4.8; order and validity: shuymn/dotfiles docs/stack-cycle.md)
 statusline ← ~/.local/state/stack/cycle/last.json        owner ← PR on GitHub, `make apply` after merge
 ```
 
@@ -565,7 +568,7 @@ statusline, with the patch, or the branch, OID, title and body, in the stamp.
 
 ### 3.9 Time budget
 
-Core gives each `stack run` stage call one 30-min deadline (`internal/ext/ext.go:48`) and kills only the direct
+Core gives each `stack run` stage call one 30-min deadline (`internal/ext/ext.go:50`) and kills only the direct
 child at expiry (`phase2-core.md` §2.2). The job (§3.6) therefore makes one call per extension (`--ext observe`,
 then `--ext improve`), so each extension has a stage of its own, and each extension sets its own absolute deadline on a
 monotonic clock when it starts, before core's, reserves its cleanup and response time, and cuts every child timeout
