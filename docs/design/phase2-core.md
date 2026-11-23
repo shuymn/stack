@@ -8,12 +8,15 @@ is a follow-up in `shuymn/dotfiles` (§7).
 Legacy sources are cited by their deployed path (`~/.claude/...`, deployed from `shuymn/dotfiles:home/dot_claude/`,
 byte-identical today) and `dotfiles:scripts/kaizen/public-check`.
 
-`docs/design/core-stages.md` (architecture v11) supersedes parts of this design: §4.1.1's size note, §4.2 step 2's
-"No extensions run", §4.3's rules other than raw-merge, §4.4 step 1 (merge messages are checked only by the extensions
+`docs/design/core-stages.md` (architecture v11) supersedes parts of this design: §4.3's rules other than raw-merge, §4.4 step 1 (merge messages are checked only by the extensions
 listed in the new `[merge].message_checks`, default `[]`), §4.5, §4.6, §4.7's stages, request fields and
 `block` handling (a `block` at `entry` or `cycle` becomes `warn` with exit 0, and replay fixtures expecting `block`
-there move to `warn`), the `[safety]` table and the matching C10–C12, C14–C15, C19 (its extension assertion only),
+there move to `warn`), the `[safety]` table and the matching C10–C12, C14–C15,
 C26 (its message clause) and C27; the list is in that design's §4.10.
+
+§4.1, §4.1.1 and §4.2 are also the contract for programs and agents outside this repository that read kit files,
+`sessions/<id>.kits` or the restored text; `docs/design/kit-contracts.md` §2 lists where each such contract is
+stated.
 
 ## 0. Principles
 
@@ -93,6 +96,7 @@ outside the kit dir is no longer followed (legacy read it) and renders as an unr
 | Kit root | `[kit].root`, default `~/.local/state/stack/kits`; a relative root is resolved against the config file's directory, as handover paths are, so `kit open` and compact name the same dir from any cwd; kit dir `<root>/<slug>` |
 | Session kits | `~/.local/state/stack/sessions/<id>.kits` + `<id>.lock`; no config key, no GC (files are tiny) |
 | Improve stamp | `~/.local/state/stack/improve/YYYY-Www` (Phase 3; not used in core) |
+| Cycle summary | `~/.local/state/stack/cycle/` is reserved for the owner's scheduled-cycle wrapper in `shuymn/dotfiles` (`scripts/stack-cycle`), which owns its files and their format; `stack` writes nothing there |
 
 - `Expand(p)`: only `~`, `~/…`, `~\…` expand with `Home`; `~user` is left verbatim.
   Config values use this form only. Shell words carry whether their leading `~` was unquoted (§4.3): only an unquoted
@@ -221,28 +225,92 @@ error. Hook commands always exit `0`.
 - `close`: removes the slug from `<id>.kits` (idempotent; deletes the file when empty); never touches the kit dir.
   Without `STACK_SESSION_ID`: exit 2 (there is no record to change).
 - After a successful `open`, `cli` runs the `entry` stage (§4.7) with `prompt = ""`, `range = ""` and appends each
-  result's `context`; `block` there is shown, not enforced. `kit open` is the only path that runs entry extensions
-  implicitly; `stack run entry` runs them explicitly.
+  result's `context`; `block` there is shown, not enforced. The stage also runs at compaction (§4.2 step 2) and
+  explicitly through `stack run entry`.
 - **Concurrency.** Every access to `<id>.kits`, read or write, holds an exclusive OS lock on `<id>.lock`
   (`gofrs/flock`, `TryLockContext` polling every 25 ms). The OS releases it when the holder exits, so there is no
   time-based stale reclaim; the lock file itself is never deleted. `open`/`close` wait up to 5 s; on timeout they
   exit 1 with `stack: <id>.kits is locked by another process` and change nothing (`open` then prints no context either,
-  so the caller retries the whole command). A write goes to a temp file in the same dir, its handle is closed, and it is
-  `os.Rename`d over the old file. Go documents `os.Rename` as atomic only on Unix; on Windows a rename fails while
-  another handle is open, which the lock rules out because readers hold it too and close their handle before
-  unlocking. Different ids never share a file or lock.
+  so the caller retries the whole command). A write goes to a uniquely named temp file in the sessions dir, its
+  handle is closed, and it is renamed over the old file through an `os.Root` on that dir (`Root.Rename`); an emptied
+  list is removed (`Root.Remove`). A rename is atomic on Unix; on Windows a rename or remove can fail while another
+  handle to the file is open, which the lock rules out among `stack`'s own readers, since they hold it too and close
+  their handle before unlocking (lockless outside readers: below). Different ids never share a file or lock. No
+  command retries by itself: a failure is reported, and rerunning the command succeeds once the conflict is gone.
+- **Read-only format for external readers.** Programs that cannot run `stack` (a Claude Code hook, an agent limited
+  to file tools) may read `<id>.kits` directly; the format below is stable, and changing it is a breaking change.
+  - *Path:* `~/.local/state/stack/sessions/<id>.kits`, `<id>` the session id (`^[A-Za-z0-9_-]{1,128}$`, §2.1)
+    lower-cased; neither `[kit].root` nor an XDG variable moves it.
+  - *Content:* UTF-8, one slug per line. `stack` writes only valid slugs (§2.1), de-duplicated, each line ending in
+    LF, in the order they were added (a slug closed and opened again goes last). `stack` reads each line with
+    surrounding whitespace trimmed (so CRLF and a final line without LF read the same) and skips blank lines,
+    invalid slugs and repeats; a reader does the same.
+  - *Meaning:* the file exists only while it lists a slug (an emptied list deletes it), so a non-empty file means at
+    least one slug is recorded for that id. A recorded slug means that `kit open` recorded it and no `kit close`
+    removed it. It is not yet a restorable kit: compaction and the `kits` request field take only recorded slugs
+    whose dir `<kit root>/<slug>` exists (§2.1). It says nothing about whether the session still runs or whether
+    another session has the same kit open, and the file names no dir.
+  - *Lockless reads:* a reader never creates, locks, renames or deletes anything in the sessions dir and ignores
+    `<id>.lock` and the `<id>.kits.*.tmp` files of a write in progress. On Unix it sees the whole old or the whole
+    new list (the write is a rename), with no freshness bound: a read racing the first `open` or the last `close`
+    can see either side, so a check of "does this session have a kit" can go either way in that window. On Windows a
+    reader holding the file open can make a concurrent `open`'s rename or a last `close`'s remove fail (exit 2): the
+    failed `open` records nothing but may already have created the kit dir, and the failed `close` leaves the slug
+    recorded; the caller reruns the command, which succeeds once the reader has closed the file. A reader that only needs presence checks metadata (exists, non-empty)
+    and never opens the file; a reader of the content opens, reads and closes it at once.
 
 #### 4.1.1 Kit context renderer (shared with compact restore)
 
-In order, each in a tagged block with its absolute path: `NORTH.md`, `state.md` (one-line size note over 3,000
-bytes, `orchestration-context.py:187`), kit items from `<kit>/attention/items.json` (roles `orchestrator`/`all`;
-malformed file = block omitted), the handover file selected by `[handover]` (§2.1; a relative path is resolved against the
-config file's directory), and the board (`<kit>/bin/board`
-via `ResolveExecutable`, cwd = kit dir, stdout minus a leading repeat of the state files, failures as a
-`[board exit N: …]` marker; `orchestration-context.py:193-212`). A new kit (no `state.md`) prints the kit path and
-"write state.md here". A file that cannot be read becomes `[unreadable: <path>]` and the other blocks still render.
-`kit open` output is uncapped except the board's stdout, which keeps the runner's 1 MiB cap (§2.2) and
-is followed by `[board output truncated]` when cut; compact restore applies the budget of §4.2.
+**Format.** A block is `<tag path="<absolute path>">`, LF, the body, LF, `</tag>`; the path is Go-quoted
+(`strconv.Quote`: `"` and `\` escaped, so a Windows path shows doubled backslashes). A marker is one bare line in
+brackets. Blocks and markers are separated by one blank line, and the whole text ends with LF. A body is the file or
+output text with invalid UTF-8 replaced by U+FFFD and surrounding whitespace trimmed; state files and board output
+also have CRLF turned into LF. The items body is built from the rules themselves (below), not trimmed.
+
+**Parts of one kit**, in order (`internal/kit/render.go:84-128`):
+
+| Part | Rendered as | Absent | Unreadable |
+|---|---|---|---|
+| `NORTH.md` | `<orchestration-state path=".../NORTH.md">` | nothing | `[unreadable: <path>]` |
+| `state.md` | `<orchestration-state path=".../state.md">` | `[new kit: <kit dir>; write state.md here]` | `[unreadable: <path>]` |
+| `attention/items.json` | `<orchestrator-attention-items path=".../attention/items.json">`, one `- ` prefix per rendered rule | nothing | `[unreadable: <path>]` |
+| handover file of the first active `[handover]` entry (§2.1; `HERDR_ENV` active only when exactly `1`; a relative path against the config file's directory) | `<orchestration-handover path="<file>">` | nothing (no active entry) | `[unreadable: <path>]` |
+| `bin/board`, found by `ResolveExecutable`, run with cwd = kit dir (`orchestration-context.py:193-212`) | `<orchestration-board path="<executable>">` holding stdout minus a leading repeat of the state files, then `[board output truncated]`, `[board output incomplete: its pipes outlived it]` as they apply, and `[board exit N: <last stderr line or "no output">]` when it exits non-zero or leaves no output after that removal (also with exit 0); `[board failed: …]` or `[board timed out]` instead of output | nothing | `[unreadable: <path>]`, `[board not runnable on this OS: <path>]`, or `[board skipped: deadline]` once the deadline has passed |
+
+Both state files use the tag `orchestration-state`; a reader tells them apart by `path`. Kit files are opened
+through an `os.Root` on the kit dir: a symlink leaving the kit, or a dangling one, is unreadable, not absent. A kit
+dir that cannot be opened renders `[unreadable: <kit dir>]` in place of its state and items parts; the handover,
+board and `entry` parts still run as they apply. One unreadable part never stops the others.
+**`NORTH.md` only:** a kit with `NORTH.md` and no `state.md` renders the `NORTH.md` block, then the `[new kit: …]`
+marker, so it has an `orchestration-state` block and still asks for `state.md`; `stack-audit-due` hashes the missing
+`state.md` as `absent` (`docs/design/core-stages.md` §4.7).
+
+**Attention items** (`internal/kit/render.go:161-201`). Accepted shape: one JSON object whose `items` is an array of
+objects, each with a string `role` and a string `rule`; other fields are ignored, and the keys `items`, `role` and
+`rule` match in any letter case (Go's JSON decoding):
+
+```json
+{"items": [{"role": "orchestrator", "rule": "After compaction, re-read the hiden reference of the step in progress before continuing it."}]}
+```
+
+An item is rendered when its `role` value is exactly `orchestrator` or `all` (case-sensitive) and its `rule` is a
+string: `- ` followed by the rule verbatim (not trimmed; a rule holding newlines keeps them, under its one `- `
+prefix; an empty rule renders as `- `), one per item in file order, joined by LF. Items for other roles (for example
+`worker`) may stay in the file; `stack` renders them nowhere. Silently ignored today, with no marker and no stderr:
+a file that is not a JSON object whose `items` is an array (invalid JSON, a top-level array, `null` or other
+non-object value, an `items` that is missing, `null` or not an array: no block); an element that is not an object
+(`null` included), or whose `rule` or `role` is missing, `null` or not a string (that element skipped); a file with
+no rendered item (no block). A `kit open` warning for the malformed cases is a planned follow-up
+(`docs/design/kit-contracts.md` §4).
+
+**`kit open`** writes to stdout, as plain text: the parts above in that order (state files, items, handover,
+board), then each `entry` result as it completes (§4.7, `docs/design/core-stages.md` §4.3): an
+`<extension-context path="<executable>">` block holding the trimmed context, its first line the warn marker
+`[extension <name>: warn: <reason>]` when the result warned; a result without context is that marker alone; a
+passing result without context shows nothing. When the entry request cannot be built, the line
+`[entry extensions skipped: <reason>]` replaces the results. The output has no total budget: the board's stdout
+keeps the runner's 1 MiB cap (§2.2) and each extension response the protocol's 1 MiB cap (§4.7). Compact restore
+renders the same parts within the budget of §4.2, in the order and with the differences of §4.2 steps 6–7.
 
 ### 4.2 `stack hook claude session-start`
 
@@ -260,8 +328,8 @@ Stdin: SessionStart payload. Env: `CLAUDE_ENV_FILE`.
    whose dir exists. If the lock is not acquired, the kit part is omitted (`[kits omitted: .kits locked]`) and the
    worker part below is still restored. Independently, if the session is a worker (step 3), restore the worker body (frontmatter
    stripped, CRLF-tolerant) and the original brief (`orchestration-context.py:276-300`). A broken transcript
-   loses only the brief; an unreadable kit loses only its blocks (`orchestration-context.py:288-300`). No extensions
-   run. Boards run after everything else is placed (step 5), each only while its block can still fit; one that cannot
+   loses only the brief; an unreadable kit loses only its blocks (`orchestration-context.py:288-300`). The `entry`
+   stage runs last, when at least one kit was restored and time is left (`docs/design/core-stages.md` §4.3). Boards run after everything else is placed (step 5), each only while its block can still fit; one that cannot
    is not launched and leaves `[board omitted: context limit: <path>]` when that fits. One deadline of 40 s covers all
    boards (`orchestration-context.py:47`); once it passes, no further board is launched and each remaining one gets
    `[board skipped: deadline]`. A board's leading repeat of the state of any restored kit is dropped, as legacy did.
@@ -276,17 +344,47 @@ Stdin: SessionStart payload. Env: `CLAUDE_ENV_FILE`.
    array yields `""`. A malformed line ends the read with no brief.
 5. **Budget: 9,500 chars** (`orchestration-context.py:43`), counting everything emitted: block tags, path headers
    and markers included. Chars are UTF-16 code units, the string length Claude Code compares with its 10,000-char
-   hook output limit; cuts fall on code-point boundaries. Before any text is placed, the brief reserves
-   `[brief omitted: context limit]`, a `.kits` failure its marker, and every `NORTH.md`/`state.md` block of every kit
-   `[state omitted: context limit: <path>]` (bare kit markers such as `[new kit: …]` reserve themselves), so no kit or
-   brief disappears silently; a reserved marker is replaced only by a longer rendering. Then, in priority order: (1) the worker rules body, whole when it fits, else cut at its tail with `[...cut N chars]` (legacy puts rules first);
-   (2) the brief, verbatim if it fits in the remainder, else cut at its tail and ended with `[...cut N chars]`;
-   (3) kits: first, per kit in `.kits` order, the block header and the first 600 chars of each of its
-   `NORTH.md`/`state.md` blocks, so with several kits every kit keeps its start; then, again in `.kits` order, the
-   rest of those blocks and the items blocks, each capped at 4,500 chars as legacy; (4) the handover block, which
-   appears once per compact, not per kit, and the board blocks. Display order is rules, brief, then per kit its state,
-   items and board blocks, then the handover. A block that does not fit is cut with the same marker, or keeps its
-   omitted marker when not even its tags fit. A later pass never shrinks text an earlier pass placed.
+   hook output limit; cuts fall on code-point boundaries. Before any text is placed, in this order and each only
+   while it still fits, the brief reserves `[brief omitted: context limit]`, a `.kits` failure its marker, and every
+   `NORTH.md`/`state.md` block of every kit, in `.kits` order, `[state omitted: context limit: <path>]` (bare kit
+   markers such as `[new kit: …]` reserve themselves); a reserved marker is replaced only by a longer rendering. So
+   no brief or kit disappears silently while the markers fit; with enough kits whose paths are long, the markers
+   alone use up the budget, and the kits after that point leave no text at all, while the earlier ones keep their
+   markers. Then, in priority order: (1) the worker rules body, whole when it fits, else cut at its tail with
+   `[...cut N chars]` (legacy puts rules first); (2) the brief, verbatim if it fits in the remainder, else cut at its
+   tail and ended with `[...cut N chars]`; (3) kits: first, per kit in `.kits` order, the block header and up to the
+   first 600 chars of each of its `NORTH.md`/`state.md` blocks, as far as room is left, so with several kits each
+   kit keeps its start while room allows; then, again in `.kits` order, the rest of those blocks and the items
+   blocks, each body capped at 4,500 chars as legacy (the cut marker comes on top); (4) the handover block, which
+   appears once per compact, not per kit, and the board blocks; (5) the `entry` results, each body capped at 4,500
+   chars, with no reservation (`docs/design/core-stages.md` §4.3). A block that does not fit is cut with the same
+   marker, or keeps its omitted marker when not even its tags fit. A later pass never shrinks text an earlier pass
+   placed.
+6. **Output** (`internal/session/session.go:77-200`). Only `compact` prints, and only when something was placed:
+   one JSON line `{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"<text>"}}`. The text
+   holds the placed pieces separated by blank lines and ends with LF. Display order: (1) for a worker, the line
+   `A compaction summarized this conversation; the verbatim worker rules and, when available, your original brief
+   follow.`, a blank line and `<worker-rules path="<body file>">` (`[unreadable: <body file>]` after that line when
+   the body cannot be read); (2) `<original-brief>`, which has no `path`; (3) per kit in `.kits` order its state and
+   items parts (§4.1.1) and its board; (4) the `entry` results as `kit open` shows them
+   (`docs/design/core-stages.md` §4.3); (5) the handover, only when at least one kit was restored. Tags and kit
+   markers are those of §4.1.1. Markers of the restore: `[kits omitted: .kits locked]`, `[kits omitted: .kits
+   unreadable]`; `[<part> omitted: context limit: <path>]` with `<part>` one of `state`, `items`, `board`,
+   `handover`, `worker rules`; `[brief omitted: context limit]`; `[...cut N chars]` closing a cut body inside its
+   tags, or closing a cut entry result that is a bare warn marker; `[entry skipped: deadline]`,
+   `[entry extensions skipped: <reason>]` (an invalid name in `[stages].entry`) and
+   `[entry context omitted: context limit: <name>]`. Any other source prints nothing (step 1).
+7. **Entry points compared.** The one statement of which text each entry point can emit:
+
+   | Text | `stack kit open <slug>` (stdout) | SessionStart `compact` (`additionalContext`) | Other SessionStart sources |
+   |---|---|---|---|
+   | State and items parts, `[new kit: …]`, `[unreadable: …]` (§4.1.1) | the opened kit | each restorable kit in `.kits` order, within the budget | nothing |
+   | `<orchestration-handover>` | when an entry is active | once, after the `entry` results, when at least one kit was restored | nothing |
+   | `<orchestration-board>` and board markers | yes | yes, while its block can fit (else `[board omitted: …]`) | nothing |
+   | `<extension-context>`, warn markers, `[entry extensions skipped: …]` | each `entry` result | each `entry` result, room permitting | nothing |
+   | Worker line, `<worker-rules>`, `<original-brief>` | never | for a detected worker | nothing |
+   | `[kits omitted: …]`, `[… omitted: context limit…]`, `[...cut N chars]`, `[entry skipped: deadline]` | never | as they apply | nothing |
+   | Size | no total budget; 1 MiB caps per board output and per extension response (§4.1.1) | 9,500 UTF-16 units in all (step 5) | — |
 
 Settings wiring (dotfiles): `SessionStart`, no matcher, exec form (argv, no shell) of the pinned Claude Code
 version, `timeout: 60`, failure-continue (`onFailure: "continue"` where that version supports it) so a launch failure
@@ -577,7 +675,7 @@ Each PR passes `scripts/test` on Linux/macOS and `go vet` + `go test -race` + bu
 6. **feat: add kit open and close** — `internal/kit` (store, lock, renderer, board), `stack kit open/close`. Done
    when: C16–C17 pass.
 7. **feat: add session-start hook** — `internal/session`, `stack hook claude session-start`. Done when: C18–C20 pass;
-   C19's "no extension on compact" uses a fake `stack-<name>` on `PATH` that logs any call (PR 8 reruns it).
+   C19's extension assertion uses a fake `stack-<name>` on `PATH` that logs any call.
 8. **feat: add extension protocol and run** — `internal/ext`, `stack run`, entry stage after `kit open`. Done when:
    C21–C22 pass.
 9. **feat: add checked-head pr merge** — `internal/github`, `internal/merge`, `stack pr merge`. Done when: C23–C26
@@ -674,7 +772,7 @@ those callers.
 | C16 | `kit open` shall record the slug once per session id and `kit close` shall remove it, with same-id updates serialised. | `kit.TestStore`, `kit.TestStoreProcesses`, `cli.TestKitOpenClose` | invalid slugs (`demo.`, `con.txt`, `..`) exit 2; separate processes opening `a` and `b` under one id → both listed; a writer against a contending reader and interleaved open/close keep the list consistent; lock held by another process past the timeout → exit 1 with reason, file unchanged; different ids independent; no `STACK_SESSION_ID` → context on stdout, warning on stderr, exit 0, no file |
 | C17 | The renderer shall select the handover by `[handover]` order and render unreadable parts as markers. | `kit.TestRender` | T3 beats herdr; `HERDR_ENV=0` → none, `=1` → herdr; out-of-kit symlink → marker; board `.cmd` on Windows → marker |
 | C18 | For every source, when `CLAUDE_ENV_FILE` is provided, session-start shall append the export line; it shall print nothing except on compact. | `session.TestExport` | sources incl. `fork`; sourcing the file yields the id; stdout empty; `CLAUDE_ENV_FILE` unset → nothing written, exit 0, and a compact worker payload still restores the worker part |
-| C19 | When source is `compact`, session-start shall render the kits of that id only, without extensions. | `session.TestCompact` | resume→compact (same id) restores; fork→compact (new id) restores nothing; close then compact → absent; `.kits` lock held → kits omitted, worker part still restored; fake `stack-<name>` on `PATH` never invoked |
+| C19 | When source is `compact`, session-start shall render the kits of that id only, and run no extension other than the `entry` stage, which runs as `docs/design/core-stages.md` §4.3 and C4 state. | `session.TestCompact`, `session.TestCompactEntry` | resume→compact (same id) restores; fork→compact (new id) restores nothing; close then compact → absent; `.kits` lock held → kits omitted, worker part still restored; entry: invoked once with the restored kits, not invoked without a restored kit (`TestCompactEntry`); a fake `stack-<name>` on `PATH` with `[stages].entry` empty never invoked (no test yet) |
 | C20 | For a detected worker, compact shall restore body and brief within the 9,500-char budget in the stated priority. | `session.TestWorker`, `session.TestMultiKitReservation`, `session.TestReservedMarkers`, `session.TestBudgetUTF16` | each signal alone; string, block-array, tool_result-first and CRLF transcripts; rules whole and long brief verbatim with kits cut; a brief alone over 9,500 chars → rules whole, brief cut with marker, total incl. tags and markers ≤ 9,500; a rules body alone over 9,500 → rules cut with marker, then only the brief and kit omitted markers, total ≤ 9,500; broken transcript keeps kits; unreadable kit keeps brief; several kits (`NORTH.md` and `state.md`) → each file keeps its header and first 600 chars when they fit, else its omitted marker naming its path; `.kits locked` and brief markers survive a long brief or rules; budget counted in UTF-16 units |
 | C21 | `ext` shall skip missing extensions, warn on unrunnable/timeout/WaitDelay/truncated/malformed output, reject non-component names, and aggregate block > warn > pass. | `ext.TestRun*` (proctest) | valid JSON then hang → warn; JSON and exit per case; mixed statuses; `--ext ../x` → exit 2; Windows: only `stack-x.cmd` on PATH → warn not runnable; a `.cmd` earlier on PATH than `stack-x.exe` → the `.exe` runs |
 | C22 | `--replay` shall send the fixture request, compare `expect`, and reject a stage mismatch. | `cli.TestRunReplay` | match → expected status; status mismatch → 1; stage mismatch → 2; fake's stdin log equals the fixture request |
