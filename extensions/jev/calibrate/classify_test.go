@@ -43,6 +43,34 @@ func copyClassify(t *testing.T) string {
 	return dst
 }
 
+// copyDir copies a calibration directory (cal fixtures and table) into a temporary one.
+func copyDir(t *testing.T, src string) string {
+	t.Helper()
+	dst := t.TempDir()
+	err := filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err //nolint:wrapcheck // a test helper
+		}
+		out := filepath.Join(dst, rel)
+		if d.IsDir() {
+			return os.MkdirAll(out, 0o700)
+		}
+		data, err := os.ReadFile(path) //nolint:gosec // a test temp dir
+		if err != nil {
+			return err //nolint:wrapcheck // a test helper
+		}
+		return os.WriteFile(out, data, 0o600) //nolint:gosec // a temp copy
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dst
+}
+
 // itemKey identifies an item by what is sent for it.
 func itemKey(owner, reply string) string { return owner + "\x00" + reply }
 
@@ -530,10 +558,12 @@ func TestClassifyCorpus(t *testing.T) {
 //
 //nolint:gocyclo,maintidx // one run, then each of its effects checked in turn
 func TestClassify(t *testing.T) {
+	t.Parallel()
 	probe := copyClassify(t)
 	labels := labelIndex(t, probe)
 
 	t.Run("records the kind_ bodies and the dup_ union, refits and refreshes", func(t *testing.T) {
+		t.Parallel()
 		dir := copyClassify(t)
 		// A fit noise reply qualifies: its dup_ body joins the union, the heldout figures stay.
 		noiseReply := replies(t, dir, SplitFit, func(l ItemLabel) bool {
@@ -648,11 +678,12 @@ func TestClassify(t *testing.T) {
 	}
 	// failQual makes qualification fail its own gate on heldout: every heldout item that is not
 	// correcting qualifies too (precision 0.50).
+	heldOthers := replies(t, probe, SplitHeldout, func(l ItemLabel) bool {
+		return !l.Correcting()
+	})
 	failQual := func() map[string]bool {
 		m := map[string]bool{}
-		for _, r := range replies(t, probe, SplitHeldout, func(l ItemLabel) bool {
-			return !l.Correcting()
-		}) {
+		for _, r := range heldOthers {
 			m[r] = true
 		}
 		return m
@@ -661,6 +692,7 @@ func TestClassify(t *testing.T) {
 	t.Run(
 		"each combination of the own gates fills end_to_end as the table states",
 		func(t *testing.T) {
+			t.Parallel()
 			for _, tc := range []struct {
 				name           string
 				fake           func() *labelJev
@@ -700,6 +732,7 @@ func TestClassify(t *testing.T) {
 				},
 			} {
 				t.Run(tc.name, func(t *testing.T) {
+					t.Parallel()
 					dir := copyClassify(t)
 					out, err := runClassify(t, dir, tc.fake())
 					if err != nil {
@@ -761,6 +794,7 @@ func TestClassify(t *testing.T) {
 		}
 	}
 	t.Run("known corrections alone fail with the duplicate decision passing", func(t *testing.T) {
+		t.Parallel()
 		dir := copyClassify(t)
 		out, err := runClassify(t, dir, knownOnly(nil)())
 		if err != nil {
@@ -786,6 +820,7 @@ func TestClassify(t *testing.T) {
 	})
 
 	t.Run("known corrections alone fail with the duplicate decision disabled", func(t *testing.T) {
+		t.Parallel()
 		dir := copyClassify(t)
 		fake := knownOnly(failDup())
 		out, err := runClassify(t, dir, fake())
@@ -821,7 +856,7 @@ func TestClassify(t *testing.T) {
 			t.Fatal(err)
 		}
 		hash := HeldoutHash(cases)
-		accept := func(mut func(a *jev.Acceptance)) (bool, jev.Table) {
+		accept := func(t *testing.T, dir string, mut func(a *jev.Acceptance)) (bool, jev.Table) {
 			t.Helper()
 			fig := *readTable(t, dir).EndToEnd
 			a := &jev.Acceptance{
@@ -839,7 +874,7 @@ func TestClassify(t *testing.T) {
 			got := readTable(t, dir)
 			return got.Decisions[classify.Qualification].Enabled, got
 		}
-		on, got := accept(func(*jev.Acceptance) {})
+		on, got := accept(t, dir, func(*jev.Acceptance) {})
 		if !on || got.Accepted == nil || got.Decisions[classify.Duplicate].Enabled {
 			t.Fatalf("a matching acceptance did not enable qualification: %+v", got)
 		}
@@ -852,13 +887,17 @@ func TestClassify(t *testing.T) {
 			"a changed new recall": func(a *jev.Acceptance) { r := 0.25; a.Figures.NewRecall = &r },
 			"no reason":            func(a *jev.Acceptance) { a.Reason = "" },
 		} {
-			if on, _ := accept(mut); on {
-				t.Fatalf("%s did not void the acceptance", name)
-			}
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+				if on, _ := accept(t, copyDir(t, dir), mut); on {
+					t.Fatalf("%s did not void the acceptance", name)
+				}
+			})
 		}
 	})
 
 	t.Run("an acceptance never enables a qualification failing its own gate", func(t *testing.T) {
+		t.Parallel()
 		dir := copyClassify(t)
 		fake := func() *labelJev {
 			return &labelJev{labels: labels, qualify: failQual(), dupScore: failDup()}
@@ -898,9 +937,7 @@ func TestClassify(t *testing.T) {
 		return m
 	}
 	t.Run("the own gate counts every attempt, the list the first answers", func(t *testing.T) {
-		heldOthers := replies(t, probe, SplitHeldout, func(l ItemLabel) bool {
-			return !l.Correcting()
-		})
+		t.Parallel()
 		for _, tc := range []struct {
 			name      string
 			low, high []string
@@ -925,6 +962,7 @@ func TestClassify(t *testing.T) {
 			},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
 				dir := copyClassify(t)
 				out, err := runClassify(t, dir, &labelJev{
 					labels: labels, firstLow: firstLow(tc.low), firstOnly: firstLow(tc.high),
@@ -946,6 +984,7 @@ func TestClassify(t *testing.T) {
 	})
 
 	t.Run("a new recall of exactly 0.50 passes", func(t *testing.T) {
+		t.Parallel()
 		dir := copyClassify(t)
 		// Qualification misses 4 of the 8 heldout new items on every call.
 		miss := map[string]bool{}
@@ -999,6 +1038,7 @@ func TestClassify(t *testing.T) {
 	})
 
 	t.Run("a missing dup_ score is a miss and one at the cutoff is duplicate", func(t *testing.T) {
+		t.Parallel()
 		dir := copyClassify(t)
 		news := replies(t, dir, SplitHeldout, func(l ItemLabel) bool {
 			return l.Correcting() && l.Dup == classify.DupNew && l.DupKind == ""
@@ -1037,6 +1077,7 @@ func TestClassify(t *testing.T) {
 	})
 
 	t.Run("with no cutoff the per-case lines give scores", func(t *testing.T) {
+		t.Parallel()
 		dir := copyClassify(t)
 		// Every fit duplicate scores low: no cutoff passes the margin test.
 		low := map[string]float64{}
@@ -1066,6 +1107,7 @@ func TestClassify(t *testing.T) {
 	})
 
 	t.Run("a kind_ body answered 413 still records its correcting items' dup_", func(t *testing.T) {
+		t.Parallel()
 		dir := copyClassify(t)
 		big := replies(t, dir, SplitFit, ItemLabel.Correcting)[0]
 		f := &labelJev{labels: labels, tooLarge: map[string]bool{big: true}}
@@ -1105,6 +1147,7 @@ func TestClassify(t *testing.T) {
 	})
 
 	t.Run("an unreadable report fails before anything is written", func(t *testing.T) {
+		t.Parallel()
 		dir := copyClassify(t)
 		cases, err := LoadClassify(dir)
 		if err != nil {
@@ -1134,6 +1177,7 @@ func TestClassify(t *testing.T) {
 	})
 
 	t.Run("a missing score on a true new item is a miss", func(t *testing.T) {
+		t.Parallel()
 		dir := copyClassify(t)
 		// Two English heldout new items lose their kind_ answers; Japanese keeps all four.
 		miss := map[string]bool{}
@@ -1161,6 +1205,7 @@ func TestClassify(t *testing.T) {
 	})
 
 	t.Run("a corpus one case short is refused before any request", func(t *testing.T) {
+		t.Parallel()
 		dir := copyClassify(t)
 		cases, err := LoadClassify(dir)
 		if err != nil {

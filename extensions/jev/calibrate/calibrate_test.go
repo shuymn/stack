@@ -198,6 +198,7 @@ func (f *fakeJev) Send(_ context.Context, b jev.Batch) jev.Outcome {
 
 //nolint:gocyclo // one run, then each of its effects checked in turn
 func TestCalibrate(t *testing.T) {
+	t.Parallel()
 	dir := copyFixtures(t)
 	cases, err := Load(t.Context(), dir, proc.Exec{}, cleanEnv())
 	if err != nil {
@@ -299,6 +300,7 @@ func TestCalibrate(t *testing.T) {
 // TestBuilders checks that jev-calibrate's own repository builder gives the bodies of the tests'
 // gittest repositories, whose dates differ, for every fixture.
 func TestBuilders(t *testing.T) {
+	t.Parallel()
 	cases, err := Load(t.Context(), fixtures, proc.Exec{}, cleanEnv())
 	if err != nil {
 		t.Fatal(err)
@@ -489,6 +491,7 @@ func TestRefreshReplays(t *testing.T) {
 // TestRecalibrateFailure: when a calibrated case's refetch has no replayable first outcome, a
 // re-calibration writes neither the new table nor any fixture, and says a rerun is needed.
 func TestRecalibrateFailure(t *testing.T) {
+	t.Parallel()
 	dir := copyFixtures(t)
 	cases, err := Load(t.Context(), dir, proc.Exec{}, cleanEnv())
 	if err != nil {
@@ -529,6 +532,7 @@ func TestRecalibrateFailure(t *testing.T) {
 
 // TestUnansweredSample: a question a valid answer leaves out is sampled as null, not 0.
 func TestUnansweredSample(t *testing.T) {
+	t.Parallel()
 	cases, err := Load(t.Context(), fixtures, proc.Exec{}, cleanEnv())
 	if err != nil {
 		t.Fatal(err)
