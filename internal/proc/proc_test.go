@@ -210,11 +210,7 @@ func TestRunTimeoutGrandchildHoldsPipe(t *testing.T) {
 	const deadline = 15 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), deadline)
 	defer cancel()
-	ended := make(chan time.Time, 1)
-	go func() {
-		<-ctx.Done()
-		ended <- time.Now()
-	}()
+	end, _ := ctx.Deadline()
 
 	res, err := proc.Exec{WaitDelay: testWaitDelay}.Run(ctx, proc.Cmd{Name: fake})
 	returned := time.Now()
@@ -228,13 +224,13 @@ func TestRunTimeoutGrandchildHoldsPipe(t *testing.T) {
 	if !res.TimedOut {
 		t.Fatalf("result = %+v, want TimedOut", res)
 	}
-	// The grandchild starts after the context does, so it outlives the context's end by at
-	// least grandchildLife-deadline: a Run that returned only when the grandchild exited would
-	// take that long after the end. WaitDelay is far below it, so scheduling delay cannot flip
-	// the check.
-	if took, limit := returned.Sub(<-ended), grandchildLife-deadline; took >= limit {
+	// The grandchild starts after the context does, so it outlives the context's deadline by
+	// at least grandchildLife-deadline: a Run that returned only when the grandchild exited
+	// would return that long after the deadline. WaitDelay is far below it, so scheduling
+	// delay cannot flip the check.
+	if took, limit := returned.Sub(end), grandchildLife-deadline; took >= limit {
 		t.Fatalf(
-			"returned %s after the context ended, want within WaitDelay %s, before the "+
+			"returned %s after the context's deadline, want within WaitDelay %s, before the "+
 				"grandchild exits (%s)",
 			took,
 			testWaitDelay,
