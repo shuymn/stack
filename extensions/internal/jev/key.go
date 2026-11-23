@@ -5,13 +5,12 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 )
 
 // KeyDisplay is the key file as diagnostics name it, independent of the home directory.
-var KeyDisplay = path.Join("~", ".config", "stack", "jev", "key")
+var KeyDisplay = filepath.ToSlash(KeyPath("~"))
 
 // KeyPath is the key file under home: .config/stack/jev/key.
 func KeyPath(home string) string {

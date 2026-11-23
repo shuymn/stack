@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/shuymn/stack/extensions/internal/jev"
 )
 
 func noEnv(string) string { return "" }
@@ -23,7 +25,7 @@ func TestRunWithoutKey(t *testing.T) {
 // diagnostic is reported as is.
 func TestRunUnusableKeyFile(t *testing.T) {
 	home := t.TempDir()
-	p := filepath.Join(home, ".config", "stack", "jev", "key")
+	p := jev.KeyPath(home)
 	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 		t.Fatal(err)
 	}
