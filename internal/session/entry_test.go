@@ -289,9 +289,12 @@ func TestCompactEntryDeadline(t *testing.T) {
 
 		ctx, _ := f.start(compactIn(testID))
 		// Killed at the deadline, the extension's pipes are reaped within the allowance, so the
-		// stage ends at the cut-off; the slack covers the kill and the scheduler.
-		if late := time.Since(cut); late > 500*time.Millisecond {
-			t.Fatalf("hook returned %s after the cut-off", late)
+		// stage ends at the cut-off. A deadline at the cut-off itself, without the allowance,
+		// would end the stage no earlier than the allowance after it: that is the limit, and
+		// the kill and the scheduler have the rest.
+		if late := time.Since(cut); late >= proc.DefaultWaitDelay {
+			t.Fatalf("hook returned %s after the cut-off, want under %s", late,
+				proc.DefaultWaitDelay)
 		}
 		mustContain(t, ctx, "DEMO STATE", "[extension first: warn: timed out",
 			"[extension second: warn: not started")
