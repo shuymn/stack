@@ -6,21 +6,6 @@
       "now": "2026-01-08T12:00:00Z",
       "observe": "observe.json",
       "records": {
-        "sha256:2dd8efcfbf25501ba0f0cd642d78df29f626ea063992b203f3f0a28db9dc0a6f": {
-          "answer": {
-            "answers": {
-              "dup_r1": {
-                "noul": 0.9,
-                "type": "noul"
-              }
-            },
-            "model": "jev-1.14.0",
-            "usage": {
-              "input_tokens": 10,
-              "output_tokens": 1
-            }
-          }
-        },
         "sha256:4da7995dff469405a37283399ae4cfe0dcf1e6ae680d783d97126d2e7f24b7e5": {
           "answer": {
             "answers": {
@@ -35,6 +20,21 @@
                   "request": 0.024999999999999994
                 },
                 "type": "choice"
+              }
+            },
+            "model": "jev-1.14.0",
+            "usage": {
+              "input_tokens": 10,
+              "output_tokens": 1
+            }
+          }
+        },
+        "sha256:ddd0dd51481ddc37221f831b7d40737994324aed1027c83ed61bd52a41bf4cca": {
+          "answer": {
+            "answers": {
+              "dup_r1": {
+                "noul": 0.9,
+                "type": "noul"
               }
             },
             "model": "jev-1.14.0",
