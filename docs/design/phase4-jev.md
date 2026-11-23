@@ -470,8 +470,8 @@ done and why. A dropped run's context is the drop notice and its warnings only.
 **Cycle wiring (dotfiles).** The supported path, scheduled or manual, is a dedicated call in the cycle job,
 `stack run cycle --ext jev-classify` (`docs/design/phase3-cycle.md` §4.8), made right after a valid observe with a
 fresh `latest.json` and before improve, so the report depends on observe alone and is produced whatever improve
-does. Phase 3's rules for publishing `last.json` (observe and improve both valid) stay: when they hold, the merged
-`last.json` lists the results in call order, observe, `jev-classify`, improve, and its status is `warn` when any is.
+does. The job publishes `last.json` only when observe and improve are both valid (`shuymn/dotfiles`
+`docs/stack-cycle.md`); then the merged `last.json` lists the results in call order, observe, `jev-classify`, improve, and its status is `warn` when any is.
 Classify's own outcome never fails the job: missing → `skipped`; self-answered → merged; exit ≠ 0 or invalid output
 → a merged `warn` result named `jev-classify` with the fixed error `invalid output`; a synthetic `error` → a merged
 `warn` result keeping core's error text. The dotfiles wrapper test (`tests/test_stack_cycle.py`, a fake `stack` on
