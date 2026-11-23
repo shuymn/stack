@@ -55,7 +55,7 @@ Every `jev-*` reads stdin to EOF first. Then:
 | `stage` is not the extension's own | `pass` (as `extensions/public/stage.go:95`) | none |
 | Live request (no `jev` field) and no key (see Key below) | `pass`, no context or writes | none |
 | Live request (no `jev` field), no usable `TYPESAFE_API_KEY`, so the lookup falls back to an unusable key file (see Key below) | `warn`, finding `jev-error` (`detail`: the fixed cause) and a context line giving the cause and fix. No key content or ledger line. | none |
-| Nothing to ask (outbound: empty `range` or a diff with no files, since both questions need the diff; entry: no kit or no candidate; cycle: no `owner-reply` item) | `pass`, no context (cycle: writes its empty report, §3.2) | none |
+| Nothing to ask (outbound: empty `range` or a diff with no files, since both questions need the diff; entry: no kit or no candidate; cycle: no `owner-reply` item) | `pass`; no context, except cycle, which writes its empty report and names any coverage gap (a failed observe source, a disabled decision) in its context, §3.2 | none |
 | Preparation fails (semantic: a git command exits non-zero or its output is cut) | `warn`, finding `jev-error` naming the command and exit | none |
 | Preparation reaches the work deadline (a slow git) | the questions are unassessed (`preparation deadline`) | none |
 | Connection or TLS failure, timeout, HTTP 429, HTTP 500 or higher (including 529), HTTP 413, or HTTP 400 naming `max_tokens_exceeded` | Questions are unassessed; one stderr line per cause, `jev: <n> requests skipped: <cause>`. | no retry or re-split |
@@ -238,16 +238,17 @@ provenance:
 - `path:line` (Claude transcripts), split on the last `:`. Lines are numbered as observe numbers them: from 1,
   newline-terminated, a line over 16 MiB skipped but counted, a final unterminated line not counted
   (`extensions/observe/transcripts.go:214-254`). A *prompt* is a user record whose content is a string and that is
-  not meta, a compaction summary, a tool result or a typed command (observe's `typedText`,
-  `extensions/observe/transcripts.go:525-540`); it is an *owner turn* when its origin is `human`, as observe counts
-  owners (`transcripts.go:360-372`). Any other user record is a *tool result*. An assistant record is *text* when it
-  has `text` blocks, else a *tool call*.
+  not meta, a compaction summary or a tool result; it is an *owner turn* when it also passes observe's typed-command
+  filter (`typedText`, `extensions/observe/transcripts.go:525-540`) and its origin is `human`, as observe counts
+  owners (`transcripts.go:360-372`). A task notification, a typed command or a prompt of another origin stays a
+  prompt. Any other user record is a *tool result*. An assistant record is *text* when it has `text` blocks, else a
+  *tool call*.
 - `t3:<thread>:<message>`. Thread IDs contain `:` (205 of the week's 674 locators), and T3 message IDs can too
   (owner-created rows observed are colon-free UUIDs; 7 server-created user rows are not), so no split point is
   assumed. One `sqlite3 -readonly -json` query per run reads the user rows in observe's window (observe's own
-  bounds, `sources.go:114-121`); classify forms each row's locator in Go exactly as observe does, `t3:` + `thread_id`
-  + `:` + `jsonScalar(payload.id)` (a string as is, a number in shortest decimal, `null` as empty,
-  `sources.go:124-135`), and matches it to the item: 674 of 674 matched once; two rows forming one locator make the
+  bounds, `sources.go:114-121`); classify forms each row's locator in Go with observe's own function, `t3:` +
+  `thread_id` + `:` + `jsonScalar(payload.id)` (a string as is, a number in shortest decimal, `null` as empty,
+  `sources.go:124-135`; moved to a package both import, so producer and consumer cannot drift), and matches it to the item: 674 of 674 matched once; two rows forming one locator make the
   item `unresolved` (`ambiguous locator`). One query per matched thread then reads that thread's rows ordered by
   `created_at`, then `message_id`. A user row is an *owner turn* only under observe's rule (`createdBy` `user`,
   `creationSource` `web` or `mobile`, no `idleCompaction`, not a `/compact` command, `sources.go:84-90`); another
@@ -258,8 +259,9 @@ provenance:
 
 *Turn boundary*, the same for both, walking back from the reply:
 
-1. Until the first assistant record (text or tool call), prompts and owner turns are passed over: the owner wrote
-   twice in a row, and each reply is an item of its own.
+1. Until the first assistant record (text or tool call), only tool results and owner turns are passed over (the
+   owner wrote twice in a row, and each reply is an item of its own). Any other prompt met there ends the walk:
+   `unresolved` (`intervening prompt`), since the reply may answer the turn that prompt opened, not the older one.
 2. From that record, the walk collects the turn back to its opener, the nearest prompt or owner turn. `assistant` is
    the turn's closing message: its last run of text records, back to the nearest tool call or tool result. A turn
    with no text record is `unresolved` (`no assistant text`); the walk never crosses the opener into an older turn.
@@ -269,8 +271,11 @@ provenance:
 Outcomes: a missing file, database, thread or record → `unresolved` (`source gone`); the per-run locator query
 failing → every T3 item `unresolved` (`sqlite3 failed`); a thread query failing → that thread's items only; the cwd
 query failing → T3 items still classified, their duplicate check `unassessed` (`cwd unknown`); transcripts are
-unaffected by T3. The week: 929 resolved, 3 `no assistant text` (tool-only turns), 81 with `owner: ""`; closing
-messages median 1.3 KiB, largest 18 KiB; owner turns median 95 B, largest 6.6 KiB.
+unaffected by T3. The week: 921 resolved; 8 `intervening prompt` (4 per source) and 3 `no assistant text` (turns
+of tool calls and thinking only); 78 with `owner: ""` (42 T3 turns with no row before them that opens a turn, 36
+transcript turns opened by a task notification or another non-owner prompt); closing messages median 1.3 KiB,
+largest 18 KiB; owner turns median 95 B, largest 6.6 KiB. Anything the walk cannot attribute is `unresolved` with
+its reason, never attached to another turn.
 
 *Classification.* Units are the resolved items `{id, owner, assistant, reply}`, newest first by observe's `ts`
 (ties in observe's item order); a deadline cut thus loses the oldest replies. The sent `id` is `r<n>`, the item's
@@ -311,31 +316,38 @@ qualification decision disabled (§3.5) no request is sent and every resolved it
 *Duplicates.* Claude Code keeps auto memory in `<config>/projects/<project>/memory/`, `MEMORY.md` its index;
 `<project>` is derived from the Git repository, so worktrees and subdirectories share it, and outside a repository
 from the project root (https://code.claude.com/docs/en/memory "Storage location"). Classify assesses only the
-memory location it can establish:
+memory location it can verify cheaply, and reports every other case as `unassessed` with its reason:
 
-1. *Settings.* `<config>` is `$CLAUDE_CONFIG_DIR`, else `.claude` under `os.UserHomeDir()`, as the router's
+1. *Layout.* Git runs in the cwd with the repository-location variables dropped (`proc.DropRepoVars`), and only
+   two layouts are recognised from `git rev-parse --show-toplevel` (`top`): an ordinary checkout, whose `top/.git`
+   is a directory, its own main checkout; and a linked worktree, whose `top/.git` is a file `gitdir:
+   <common>/worktrees/<name>` where `<common>` is a directory named `.git`, that entry's `gitdir` file points back
+   to `top/.git`, and the main checkout is the parent of `<common>`. A cwd outside any repository (git reports none)
+   is its own main checkout. Anything else (a submodule, a separate Git directory, a gitfile pointing at another
+   checkout's `.git`, a worktree not registered back, a removed main checkout) → `unassessed` (`unsupported
+   layout`); a removed cwd → `unassessed` (`cwd gone`).
+2. *Settings.* `<config>` is `$CLAUDE_CONFIG_DIR`, else `.claude` under `os.UserHomeDir()`, as the router's
    candidates (§3.2). `autoMemoryDirectory` is honoured only from `<config>/settings.json`, absolute or starting
-   `~/` (`~` the home directory), naming the directory that holds `MEMORY.md`. A repository can set it in
-   `.claude/settings.json` or `.claude/settings.local.json` of its checkout (`git rev-parse --show-toplevel`, else
-   the cwd), which Claude Code honours only under workspace trust and its read-boundary setting, neither visible to
-   classify; a checkout setting it makes the item `unassessed` (`project memory override`). A relative value, or a
-   malformed or unreadable settings file → `unassessed` (`settings unreadable`). Managed (policy) settings,
-   `--settings` files and `CLAUDE_CODE_PROJECT_DIR_NAME` belong to the writing session and are invisible here (§8).
-2. *Root.* With git run in the cwd and the repository-location variables dropped (`proc.DropRepoVars`), the root
-   is the parent of `--path-format=absolute --git-common-dir` when that directory is named `.git` and the parent is
-   a working tree whose own `--git-common-dir` is that same directory (a main checkout; a linked worktree resolves
-   to it). Anything else (a submodule, a separate Git directory, even one named `.git`, a removed main checkout) →
-   `unassessed` (`unsupported layout`). A cwd outside any repository is its own root; a removed cwd →
-   `unassessed` (`cwd gone`). `<project>` is the root's path with every non-`[A-Za-z0-9]` byte replaced by `-`
-   (**assumption**, observed).
-3. *Index.* Only with the root verified: no project directory yet, or one without `MEMORY.md` or with an empty one
-   → `new` (`no memory yet`), no request; an unreadable index → `unassessed` (`index unreadable`).
+   `~/` (`~` the home directory), naming the directory that holds `MEMORY.md`. A repository can also set it in
+   `.claude/settings.json` or `.claude/settings.local.json`, which Claude Code reads at the launch directory, the
+   checkout and, for a linked worktree's local settings, the main checkout (as Phase 3 found,
+   `docs/design/phase3-cycle.md` §3.4 "Settings sources"), and honours only under workspace trust and its
+   read-boundary setting, neither visible to classify. So either file setting it in the item's cwd, `top` or the
+   main checkout → `unassessed` (`project memory override`). A relative value, or a malformed or unreadable
+   settings file among those read → `unassessed` (`settings unreadable`). Managed (policy) settings, `--settings`
+   files and `CLAUDE_CODE_PROJECT_DIR_NAME` belong to the writing session and are invisible here (§8).
+3. *Index.* Otherwise the directory is `<config>/projects/<project>/memory/`, `<project>` the main checkout's path
+   with every non-`[A-Za-z0-9]` byte replaced by `-` (**assumption**, observed). No project directory yet, or one
+   without `MEMORY.md` or with an empty one → `new` (`no memory yet`), no request; an unreadable index →
+   `unassessed` (`index unreadable`).
 
 The week's 932 items: 692 under a directory with an index, 171 under one without, 69 with no project directory yet,
-none with the cwd gone. The index sent is what Claude Code loads at session start, its first 200 lines or 25 KB,
+none with the cwd gone, an override or an unsupported layout. The index sent is what Claude Code loads at session start, its first 200 lines or 25 KB,
 whichever comes first (a session can read further on demand). The observed indexes are small (22, median 270 B,
 largest 2.5 KB). Each qualified item is its own `dup_` request, so a body depends on one reply alone: state
-`{memory_index, assistant, reply}` with the whole closing message, so a reply such as "not that" has its object;
+`{memory_index, owner, assistant, reply}`, each text whole as in `kind_`: the closing message gives a reply such as
+"not that" its object, and the opening owner turn the scope a drift reply restores, which decides which index line
+it repeats;
 one `noul` question `dup_r<n>`, instructions "Does a line of `memory_index` already state what reply `r<n>` asks of
 the agent?", criteria true "a line states the way of working the reply corrects, or the scope or goal it restores,
 in any language or wording", false "no line does; a line that only shares its topic or states a different rule does
@@ -354,10 +366,11 @@ checked and the oldest `unevaluated` (`deadline`); at most one group's qualified
 unknown until classification has run. Qualified items whose duplicate check is `unassessed`, for any reason, are
 never dropped: they are counted and listed.
 
-*Volume.* Every resolved reply is sent: no prefilter or cap. §1 rules out narrowing what is sent, the savings are a
+*Volume.* Every resolved reply is sent, unless it is too large for one request, qualification is disabled
+(§3.5), or the deadline comes first: no prefilter or cap. §1 rules out narrowing what is sent, the savings are a
 few cents a month, and a bare link, hash or one-word reply can be a correction of an earlier choice. The observed
-week packs into 53 `kind_` requests (the 809-byte question fills the 16 KiB question budget before the state's
-48 KiB in 27 of them). The `dup_` count depends on what qualifies; as a sizing scenario only, the hand-labelled
+week packs into about 53 `kind_` requests (the 809-byte question fills the 16 KiB question budget before the state's
+48 KiB in about half of them). The `dup_` count depends on what qualifies; as a sizing scenario only, the hand-labelled
 share (15–21%) gives 140–200 requests, an upper side since a `no memory yet` item needs none. Together ≈ 1.2M input
 tokens (§3.6), well inside the 5-min budget. A week that outgrows it reaches the deadline as above; if O4 or O6
 shows that, the first step is raising classify's own budget within the cycle's 30 min, the next reusing a label from
@@ -381,27 +394,33 @@ no owner reply included, so an older report never stands for the current week:
 its reply's `excerpt` (≤ 160 characters, as observe cuts it), so every candidate past the context's ten is readable
 in the report. `sources` copies observe's status of its `transcripts` and `t3` sources. `decisions` says which are
 `enabled` or `disabled`. `reason` explains `unresolved` and `unevaluated`, `dup_reason` an `unassessed` or a lookup
-`new`. **`complete`** is one predicate about the run, not about the week's sources: true when classify did all the
-work its input allowed, that is both decisions are enabled, no item is `unevaluated`, and no qualified item is
-`unassessed` for `transient`, `deadline`, `malformed answer` or `too large`. Coverage is reported beside it, never
-folded in: `sources` (an observe source that failed), `counts.unresolved`, and `counts.dup_unassessed_lookup` (a
-removed worktree, a project override, an unsupported layout), so a healthy run over a week with removed worktrees or
-a T3 outage is `complete: true` with its gaps visible. An empty week is `complete: true` whatever its sources; an
-all-unresolved week likewise, with `counts.unresolved` equal to `counts.items`.
+`new`.
 
-*Publication.* The report is written to a temp file in its directory, synced, and renamed over the old one while
-holding `latest.lock` through `gofrs/flock`, as improve's run lock (`extensions/improve/improve.go:284-293`),
-released by the kernel if the process dies. Acquisition is bounded: `TryLockContext` retried until the deadline's
-reserve is spent; still busy → `warn` `latest-not-written` (`report lock busy`). Under the lock the existing report
-is read, and it is replaced only when its `window.until` is earlier than this run's, or equal with its
-`run.started` not later; otherwise this run's report is dropped with a context line and `pass`, since a newer
-report already stands. A failed rename leaves the old file whole and answers `warn` `latest-not-written`. On
-Windows `os.Rename` replaces the file, but Go promises no atomicity there; the Windows-machine check (§7) covers it.
+**`complete`** is defined per item, over the work that item required. An item is *done* when it is `unresolved`;
+`unevaluated` for `classification disabled`; `classified` and unqualified; or qualified with a duplicate outcome,
+`duplicate`, `new`, or `unassessed` for a lookup reason (`cwd gone`, `cwd unknown`, `unsupported layout`,
+`project memory override`, `settings unreadable`, `index unreadable`) or `duplicate check disabled`. It is not done
+when `unevaluated` for any other reason or `unassessed` for `transient`, `deadline`, `malformed answer` or
+`too large`. `complete` is true when every item is done, so an empty week is complete, and a removed worktree, a
+failed observe source or a disabled decision never makes a healthy run look incomplete. Those are coverage, shown
+beside it: `sources`, `decisions`, `counts.unresolved` and `counts.dup_unassessed_lookup`, and named in the context
+of every run, an empty week included (§3.1).
+
+*Publication.* The report is first written to a temp file in its directory and synced; then classify takes
+`latest.lock` through `gofrs/flock`, as improve's run lock (`extensions/improve/improve.go:284-293`), released by
+the kernel if the process dies. Acquisition has its own cutoff, the work deadline plus half the finalisation
+reserve (§3.1: 10 s of classify's 20 s), retried with `TryLockContext` until then, leaving the other half for the
+compare, the rename and the response. Still busy at the cutoff → the temp file is removed and the run answers
+`warn` `latest-not-written` (`report lock busy`). Under the lock the existing report is read, and it is replaced
+only when its `window.until` is earlier than this run's, or equal with its `run.started` not later; otherwise this
+run's report is dropped with a context line and `pass`, since a newer report already stands. A failed rename leaves
+the old file whole and answers `warn` `latest-not-written`. On Windows `os.Rename` replaces the file, but Go
+promises no atomicity there; the Windows-machine check (§7) covers it.
 
 *Context.* The counts; `new` qualified items, newest first, then qualified items whose duplicate check is
 `unassessed`, each marked `(dup unassessed: <reason>)`; up to 10 lines in all, each `<kind> <where>: <excerpt>`, then
-`(+k more in the report)`; the unresolved and unevaluated counts; any failed observe source; any disabled decision;
-and `complete: false` with its cause.
+`(+k more in the report)`; the unresolved and unevaluated counts; and, in every run, an empty week included, any
+failed observe source, any disabled decision, and `complete: false` with the items not done and why.
 
 **Cycle wiring (dotfiles).** The supported path, scheduled or manual, is a dedicated call in the cycle job,
 `stack run cycle --ext jev-classify` (`docs/design/phase3-cycle.md` §4.8), made right after a valid observe with a
@@ -566,31 +585,41 @@ runtime sends.
 **Activation.** The two decisions passing their own gates is not enough, since they can pass while the report
 lists nothing new: if qualification finds the 8 held-out duplicates and misses the 8 held-out `new` items, its
 precision is 1.0 and recall 0.5, the duplicate decision can pass too, and the `new` list is empty. So on `heldout`
-calibrate also scores the report end to end, the items the shipped cutoffs list as qualified and `new` from the
-first answers against the items labelled correcting and `new`, with precision, recall and support (a missing score
-is a miss). Classify ships its qualification decision enabled only when that list reaches precision 0.8 and recall
-0.5 as well; otherwise it ships disabled (§3.2: sources read, report written, items `unevaluated`,
-`classification disabled`), flagged `REVIEW`, unless the owner accepts the measured figures in the cutoff table
-(`accepted`: the figures and the owner's one-line reason), which calibrate keeps until the figures change.
+calibrate also scores the report end to end, before it sets any enabled bit: with the provisional cutoffs (those
+that passed their own gates), the items listed as qualified and `new` from the first answers against the items
+labelled correcting and `new`, with precision, recall and support (a missing score is a miss). Classify ships its
+qualification decision enabled only when that list also reaches precision 0.8 and recall 0.5; otherwise it ships
+disabled (§3.2: sources read, report written, items `unevaluated`, `classification disabled`), flagged `REVIEW`,
+unless the owner accepts the result in the cutoff table (`accepted`: the pin, a hash of the `heldout` fixtures'
+cases and records, the figures, and the owner's one-line reason). The acceptance holds only while all three match;
+any change to the pin, the evaluation inputs or the figures voids it.
 
 The `fixed` classify fixtures are matched per item by ID, on `where`, `status`, `reason`, `qualified`, `kind`,
 `excerpt`, `duplicate` and `dup_reason`, and on status, finding kinds, `complete`, `sources`, `counts` and the
 context (lines, order and markers), so a dropped or swapped row fails. They are:
 
-- resolution: both locator forms, with a T3 thread ID holding `:`; a tool result between the assistant text and
-  the reply; two owner turns in a row after a turn with text; a tool-only turn followed by two owner replies (both
-  `no assistant text`, the older turn's text not borrowed); a server-created row opening a turn (`owner: ""`) and
-  one between two owner turns; a reply edited since observe (`record changed`); a thread absent from `jev.t3`;
+- resolution, each asserting the exact `owner` and `assistant`: both locator forms, with a T3 thread ID holding
+  `:` and numeric and `null` payload IDs whose expected locators come from observe's `jsonScalar`; a tool result
+  between the assistant text and the reply; two owner turns in a row after a turn with text; a tool-only turn
+  followed by two owner replies (both `no assistant text`, the older turn's text not borrowed); a server-created
+  row opening a turn (`owner: ""`); a finished assistant turn, then a server-created prompt, then the owner's reply
+  before any answer (`intervening prompt`, not the older turn); a reply edited since observe (`record changed`); a
+  thread absent from `jev.t3`;
 - decisions: a known `duplicate`; a known `new` whose `dup_` record, deleted alone, fails the fixture; an approval;
-  the antecedent pair, whose bodies differ only in `owner`, with the scope rule at the end of a 6 KiB owner turn,
-  and a duplicate whose referent sits at the start of a long closing message;
-- memory: an index in the repository's project directory with a decoy at the cwd's; a project
-  `.claude/settings.json` setting `autoMemoryDirectory` with a decoy index there (`project memory override`); a
-  separate Git directory named `.git` (`unsupported layout`); a directory without `MEMORY.md` and a root with no
-  project directory (both `new`, no request); a removed cwd (`cwd gone`);
+  the antecedent pair, whose bodies differ only in `owner`, with the scope rule at the end of a 6 KiB owner turn;
+  a duplicate pair where only the opening instruction differs, so the same reply restores a scope one index line
+  states (`duplicate`) or one it does not (`new`); and a duplicate whose referent sits at the start of a long
+  closing message;
+- memory, each with a decoy index where a wrong lookup would land: an index in the main checkout's project
+  directory with a decoy at a linked worktree's; a checkout `.claude/settings.json` setting `autoMemoryDirectory`;
+  a linked worktree whose main checkout's `.claude/settings.local.json` sets it (both `project memory override`); a
+  separate Git directory named `.git`, and a gitfile pointing at another checkout's `.git` (both `unsupported
+  layout`); a directory without `MEMORY.md` and a main checkout with no project directory (both `new`, no
+  request); a removed cwd (`cwd gone`);
 - failures and shape: a `kind_` batch rejected for size; a missing `kind_` answer (`warn`); 12 qualified candidates
   (10 context lines, `(+2 more in the report)`, all 12 excerpts in the report); an empty healthy week; an empty
-  week with observe's T3 source failed (`complete: true`, `sources.t3` failed); an all-unresolved week.
+  week with observe's T3 source failed (`complete: true`, `sources.t3` failed); an empty week with qualification
+  disabled and a failed source (`complete: true`, both gaps in the context); an all-unresolved week.
 
 Replay uses the recorded transport. **Model
 bump:** one PR changes the pin, re-records, refits, and reports old vs new on `heldout` (precision, recall, support,
@@ -604,7 +633,7 @@ From the published price, the §2 sizing estimate and §3.1 packing. Estimates, 
 |---|---|---|---|---|
 | semantic | 20 KiB PR | ⌈diff bytes / (48 KiB − texts)⌉ ≈ 1 | ≈ $0.0003; a 112 KiB PR ≈ 3 requests ≈ $0.0012 | 10 s / 120 s shared |
 | router (when built) | one kit of 2–13 KB, 12 candidates (≈ 6 KiB question) | 1 per kit | ≈ $0.0002–0.0006 | 4 s / 10 s (≥ 1 s at compaction) |
-| classify | the observed week: 932 replies, 929 resolved; units ≈ 2.0 MiB (owner turn, closing message, reply, all whole), `kind_` questions 809 B each | 53 `kind_` (27 closed by the 16 KiB question budget) + one `dup_` per qualified item needing a check, 140–200 as a sizing scenario (§3.2) → ≈ 190–250 | `kind_` ≈ 2.8 MiB + `dup_` ≈ 0.5–0.7 MiB ≈ 1.2M tokens ≈ $0.05 | 5 min / 30 min |
+| classify | the observed week: 932 replies, 921 resolved; units ≈ 2.0 MiB (owner turn, closing message, reply, all whole), `kind_` questions 809 B each | ≈ 53 `kind_` (about half closed by the 16 KiB question budget) + one `dup_` per qualified item needing a check, 140–200 as a sizing scenario (§3.2) → ≈ 190–250 | `kind_` ≈ 2.8 MiB + `dup_` ≈ 0.5–0.7 MiB ≈ 1.2M tokens ≈ $0.05 | 5 min / 30 min |
 
 Classify's requests at 4 in flight are about 14 `kind_` rounds and 35–50 small `dup_` rounds, under a minute at §2's
 assumed latency; resolution is one scan of the week's transcripts (138 MiB observed), one locator query, one cwd
@@ -623,7 +652,7 @@ of it, uncapped; O6 reports what the ledger saw against the number of runs.
 | Client (3.3) | **one package `extensions/internal/jev` (chosen)** | one error, packing, record and cutoff contract | a shared change touches three binaries | high |
 | Router question (§3.2) | `choice` with `none` | One question per kit covers a single active step or a wait | References that apply together can split the probability below the 0.50 floor | Revisit per-candidate `noul` if calibration disables the decision for low recall |
 | Router output (§3.2) | A pointer | A reference can reach 10 KB, beyond core's 4,500-unit entry block limit | The agent must read the reference | Revisit if agents ignore the pointers |
-| Classify volume (§3.2) | **send every resolved reply, newest first; the deadline leaves the oldest `unevaluated` (chosen)** | no reply dropped unread; the observed week costs ≈ $0.045 and well under the budget | approvals and noise (≈ 30% of a sample) are paid for | high; flips toward reusing labels of an earlier complete run if runs hit the deadline |
+| Classify volume (§3.2) | **send every resolved reply, newest first; the deadline leaves the oldest `unevaluated` (chosen)** | no reply dropped unread; the observed week costs ≈ $0.05 and well under the budget | approvals and noise (≈ 30% of a sample) are paid for | high; flips toward reusing labels of an earlier complete run if runs hit the deadline |
 | | a deterministic prefilter (short, ID- or link-only replies) | a few cents a month | drops input before sending, which §1 rules out; a bare link, hash or "not that" can be a correction | — |
 | | a per-run item cap | a bounded run | the cut is arbitrary and repeats daily | — |
 | Classify labels (§3.2) | **five: `correction`, `drift`, `approval`, `request`, `noise` (chosen)** | the majority (questions, requests) has a label of its own instead of filling `other` | a larger question per item (809 B) | high; flips if calibration shows `request` absorbing corrections |
@@ -645,6 +674,10 @@ of it, uncapped; O6 reports what the ledger saw against the number of runs.
 | Classify replay of T3 (§3.4) | **rows in the fixture, read in place of `sqlite3` (chosen)** | runs on every OS; the parser is the live one | the SQL is tested apart (C9) | high |
 | | a fake `sqlite3` on `PATH` in the replay test | the subprocess path runs too | a test binary per OS in a fixture-driven test; the fake still cannot check the SQL | — |
 | | a database built with the real `sqlite3` | the SQL runs end to end | skips where `sqlite3` is absent | — |
+| Turn walk (§3.2) | **pass over only tool results and the reply's own consecutive owner messages; any other prompt → `unresolved` (`intervening prompt`) (chosen)** | a reply is never attached to a turn it may not answer; one rule for both readers | 8 of the week's 932 replies go unclassified | high; flips if `intervening prompt` grows large in O4 |
+| | pass over every prompt until assistant output | resolves those 8 | a reply sent after a server prompt and before its answer borrows the older turn silently | — |
+| Memory layout (§3.2) | **recognise only an ordinary checkout and a registered linked worktree; anything else `unassessed` (chosen)** | two cheap checks on files; a wrong index never decides `duplicate` | submodules and separate Git directories get no duplicate check (none in the week) | high |
+| | derive the root from `--git-common-dir` for any layout | covers every layout | a gitfile or separate metadata named `.git` can point the lookup at another checkout's index | — |
 | Report lock (§3.2) | **`gofrs/flock`, as improve, bounded acquisition (chosen)** | released by the kernel on death; no stale-lock rule for a paused writer to slip through | one dependency already in the module | high |
 | | an exclusive lock file with a stale age | no dependency | a writer paused past the age resumes after another has published, and an older report can win; a crash blocks runs until the age passes | — |
 | Memory override (§3.2) | **`autoMemoryDirectory` from user settings only; a checkout setting it → `unassessed` (chosen)** | never scores an index Claude Code would ignore; no trust or read-boundary state to reconstruct | a repository's legitimate override gets no duplicate check | high; flips if classify can read Claude Code's trust state |
@@ -687,13 +720,13 @@ of it, uncapped; O6 reports what the ledger saw against the number of runs.
 | C1 | Each built extension shall follow §3.1’s key precedence, opt-out and key-error contract after reading stdin to EOF. Replay shall skip key lookup and reject `jev: null` without a live call. | P1 | `jev.TestOptOut` per binary (classify: a fresh observe file with resolvable items and an endpoint spy that fails the test on any request; no report, ledger line or context), `jev.TestKey*`, `semantic.TestKeyFile` |
 | C2 | The client shall apply §3.1’s request-level and question-level failure rules, including partial HTTP 400 bodies, and shall omit response body contents from output. | P9 | `jev.TestClientErrors` (`httptest`, slow body) |
 | C3 | Packing shall use the budget 48 KiB less the fixed fields, split an oversize unit into ordered parts measured in their complete encoded state, keep questions ≤ 16 KiB, send input that fits whole even under a 1 KiB budget, mark questions unassessed only when splitting is needed and the budget is under 1 KiB or the smallest part cannot fit, and lose no unit. In unit-question mode (§3.1) it shall never split, encode each unit's fields in order, ask each unit question only on the request carrying its unit, close a request at whichever budget its next unit would pass first, and give every unit exactly one disposition (packed once, or unpacked as too large). The router packs one kit and uses packing only to measure it. | §3.1 | `jev.TestPack` (25 KiB texts with a small diff; a file over the budget; budgets just above and below 1 KiB, with a small diff that fits whole below it; escaped runes and `part k of n` framing at the boundary; captured bodies reassemble every unit), `jev.TestPackUnits` (units filling the question budget first, then the state budget first, each exactly at and one byte past it; a 60 KiB unit; the exact multiset of bodies and the unit-to-question membership of each; semantic's plans unchanged) |
-| C4 | Each extension shall stop at its work deadline, report the rest unassessed (classify: `complete: false`), answer within its reserve, and keep the response under 512 KiB with `jev-omitted`; core's synthetic `warn` under a shorter parent deadline is a separate outcome. | §3.1 | `<ext>.TestBudget`: slow git → no request, questions unassessed (`preparation deadline`, classified by the deadline before the exit code), answer by 10 s, with a child holding its pipe open so a longer pipe wait fails; slow HTTP → answered batches kept, rest unassessed; many-batch result accepted by core; shortened core deadline; classify, with items given oldest first so order is not inherited: a deadline in preparation after one source was read (nothing sent; items already `unresolved` keep their reason, every other item, read or not, `unevaluated`, `preparation deadline`); during a later `kind_` group with a recent `new` item already checked (it stays `new` and listed, the older items `unevaluated`); during a group's `dup_` requests (its qualified items `unassessed`, `deadline`, listed); each with `complete: false` and the file written within the reserve |
+| C4 | Each extension shall stop at its work deadline, report the rest unassessed (classify: `complete: false`), answer within its reserve, and keep the response under 512 KiB with `jev-omitted`; core's synthetic `warn` under a shorter parent deadline is a separate outcome. | §3.1 | `<ext>.TestBudget`: slow git → no request, questions unassessed (`preparation deadline`, classified by the deadline before the exit code), answer by 10 s, with a child holding its pipe open so a longer pipe wait fails; slow HTTP → answered batches kept, rest unassessed; many-batch result accepted by core; shortened core deadline; classify, with items given oldest first so order is not inherited: a deadline in preparation after one source was read (nothing sent; items already `unresolved` keep their reason, every other item, read or not, `unevaluated`, `preparation deadline`); during a later `kind_` group with a recent `new` item already checked (it stays `new` and listed, the older items `unevaluated`); during a group's `dup_` requests (its qualified items `unassessed`, `deadline`, listed); each with `complete: false` and the file written within the reserve; the report lock released just before its cutoff (published before the process deadline) and held past it (`latest-not-written`, `report lock busy`, answered before the process deadline) |
 | C5 | Invalid stdin → `warn`; another stage, nothing to ask (empty range, a range whose diff has no files, no kits or no router candidate, no items) → `pass` with no request; results assemble in unit order under out-of-order completion. | §3.1 | `<ext>.TestNothingToAsk`, `jev.TestOrder` |
 | C6 | `jev-semantic` shall build identical bodies under config variants (system, global, `GIT_CONFIG_PARAMETERS`, repository-local `diff.suppressBlankEmpty`, `diff.noprefix`, `diff.relative`, `diff.indentHeuristic` on a patch whose hunks move, `core.abbrev`, `diff.orderFile`), ask `unsupported_claim` only when the whole PR fits, and answer `warn` before any request on a git failure. | P2, P3 | `semantic.TestState` (synthetic repository) |
 | C7 | A probability just below, at and above the cutoff shall decide pass, hit, hit; a disabled decision never flags; never `block`. Classify's decision shall qualify on the summed probability at the cutoff, take the larger label as kind and `correction` on a tie, send no `kind_` request when qualification is disabled and no `dup_` request when the duplicate decision is, and still write the report. | P2–P4, P6 | `semantic.TestDecision`, `classify.TestDecision` (sum just below, at and above; equal labels; each decision disabled) |
 | C8 | When built, the router shall follow §3.2’s candidate, state and decision rules. Its output shall satisfy the UTF-16 budget with astral characters, preserve whole paths and report unassessed kits as specified there. | P5 | `router.TestCandidates`, `router.TestState`, `router.TestContext` |
-| C9 | `jev-classify` shall resolve both locator forms as §3.2 states (T3 locators formed as observe forms them, observe's line numbering and owner provenance, the turn boundary, the excerpt and timestamp check, and each query failure's outcome), report each unresolved item with its reason; send items newest first under `r<n>` IDs, so generated metadata carries no path or observe ID; find the memory directory only as §3.2 establishes it; run each group's `dup_` requests after its `kind_` requests, each with one qualified reply and no unqualified one; write the report under the lock only over an older one; and build the context as §3.2 states. | P6 | `classify.TestResolve` (asserting the exact `owner` and `assistant` of each item, in both readers: a rewritten line; a compaction summary and a tool result before the reply; two owner turns in a row after a turn with text; a tool-only turn followed by two owner replies, both `no assistant text`; a server-created row opening a turn, `owner` `""`, and one between two owner turns; a source starting mid-turn; a missing file; the locator query, a thread query and the cwd query each failing), `classify.TestT3` (fake `sqlite3`: argv, failure, timeout), `classify.TestT3RealSQLite` (the real SQL on a database built with the real `sqlite3`: thread and message IDs holding `:`; two rows forming one locator, `ambiguous locator`; a numeric and a `null` payload `id` formatted as observe's `jsonScalar`; a deleted thread; a missing message in an existing thread; an intervening owner row; tied `created_at`; both cwd sources. The authoritative job is `ubuntu-latest`, whose image lists SQLite; `macos-latest` uses the system `sqlite3`; the test logs `sqlite3 --version`, and with `CI=true` on those OSes fails rather than skipping), `classify.TestMemoryDir` (repository, linked worktree, subdirectory, non-repository cwd; submodule, separate Git directory and one named `.git` → `unsupported layout`; removed cwd; no project directory → `new`; user `autoMemoryDirectory` absolute, with `~/`, relative → `unassessed`; a checkout `.claude/settings.json` or `.claude/settings.local.json` setting it → `project memory override` with a decoy index there; malformed user settings; `CLAUDE_CONFIG_DIR`; inherited `GIT_DIR`; a decoy index at the cwd's encoding; the encoding on fixed POSIX and Windows paths), `classify.TestState` (oldest-first input sent newest first; IDs; the same bodies under two roots; an embedded path in a reply sent as written), `classify.TestPhases` (fake endpoint over two groups: the exact sequence of attempted bodies, each `dup_` after its group's `kind_` requests, one `{assistant, reply}` per body, no unqualified item, no body attempted twice), `classify.TestContext` (order, markers, the 10-line bound, `(+k more…)` with every candidate's excerpt in the report; `complete` and coverage for an empty healthy week, an empty week with a failed source, an all-unresolved week, a removed worktree), `classify.TestPublish` (replacement; a failed rename keeps the old file whole and answers `latest-not-written`; two runs contending inside compare-and-rename; two runs finishing in reverse order, for different windows and for the same window, keep the newer; the lock held past the bound → `latest-not-written`; a lock left by a killed process does not block; an empty week replaces an older report), `classify.TestRun` (missing and stale observe file → `pass`, no write; malformed, unknown `version` and a `window.until` 6 min ahead → `warn`; a week with `new` items → `pass`, no hit finding; a paused write leaves the old file whole) |
-| C10 | Calibration shall apply §3.5’s fit, eligibility, corpus and reporting rules. Changing only held-out scores shall leave the fitted cutoff unchanged and may disable the decision. When built, the router shall count distinct kits by ground truth and score wrong choices under §3.5’s false-positive and recall rules. For classify it shall check the corpus counts, splits, groups and languages, record `kind_` bodies and the `dup_` union, and enable qualification only when the end-to-end `new` list on `heldout` meets its target or the owner's acceptance is recorded. | P7 | `jev.TestCutoff`, `jev.TestCorpus`, `calibrate.TestReport`, `calibrate.TestClassify` (a corpus one case short in each count; a first answer qualifying an unlabelled item records its `dup_` body; a missing score on a true `new` item is a miss; qualification finding all 8 held-out duplicates and missing all 8 `new` items, with both decisions passing their own gates, ships qualification disabled; the same with a recorded acceptance ships it enabled), `router.TestSamples` (when built) |
+| C9 | `jev-classify` shall resolve both locator forms as §3.2 states (T3 locators formed as observe forms them, observe's line numbering and owner provenance, the turn boundary, the excerpt and timestamp check, and each query failure's outcome), report each unresolved item with its reason; send items newest first under `r<n>` IDs, so generated metadata carries no path or observe ID; find the memory directory only as §3.2 establishes it; run each group's `dup_` requests after its `kind_` requests, each with one qualified reply and no unqualified one; write the report under the lock only over an older one; and build the context as §3.2 states. | P6 | `classify.TestResolve` (asserting the exact `owner` and `assistant` of each item, in both readers: a rewritten line; a compaction summary and a tool result before the reply; two owner turns in a row after a turn with text; a tool-only turn followed by two owner replies, both `no assistant text`; a server-created row opening a turn, `owner` `""`; a finished turn, then a server-created prompt, then the reply, `intervening prompt`; a task notification before the reply, `intervening prompt`; a source starting mid-turn; a missing file; the locator query, a thread query and the cwd query each failing), `classify.TestT3` (fake `sqlite3`: argv, failure, timeout), `classify.TestT3RealSQLite` (the real SQL on a database built with the real `sqlite3`: thread and message IDs holding `:`; two rows forming one locator, `ambiguous locator`; a numeric and a `null` payload `id`, the expected locators computed by observe's `jsonScalar` as oracle; a deleted thread; a missing message in an existing thread; an intervening owner row; tied `created_at`; both cwd sources. The authoritative job is `ubuntu-latest`, whose image lists SQLite; `macos-latest` uses the system `sqlite3`; the test logs `sqlite3 --version`, and with `CI=true` on those OSes fails rather than skipping), `classify.TestMemoryDir` (ordinary checkout, registered linked worktree, subdirectory, non-repository cwd; submodule, separate Git directory and one named `.git`, a gitfile pointing at another checkout's `.git`, a worktree not registered back → `unsupported layout`; removed cwd; no project directory → `new`; user `autoMemoryDirectory` absolute, with `~/`, relative → `unassessed`; either settings file setting it in the cwd, the checkout or the main checkout → `project memory override`, each with a decoy index where it points; malformed user settings; `CLAUDE_CONFIG_DIR`; inherited `GIT_DIR`; a decoy index at the cwd's encoding; the encoding on fixed POSIX and Windows paths), `classify.TestState` (oldest-first input sent newest first; IDs; the same bodies under two roots; an embedded path in a reply sent as written), `classify.TestPhases` (fake endpoint over two groups, order within a phase free: the exact multiset of attempted bodies per phase, group 1 `kind_`, group 1 `dup_`, group 2 `kind_`, group 2 `dup_`, each phase starting only after the previous one's requests all returned; one `{owner, assistant, reply}` per `dup_` body; no unqualified item; no body attempted twice), `classify.TestContext` (order, markers, the 10-line bound, `(+k more…)` with every candidate's excerpt in the report; `complete` and coverage for an empty healthy week, an empty week with a failed source, an all-unresolved week, a removed worktree), `classify.TestPublish` (replacement; a failed rename keeps the old file whole and answers `latest-not-written`; two runs contending inside compare-and-rename; two runs finishing in reverse order, for different windows and for the same window, keep the newer; the lock held past the bound → `latest-not-written`; a lock left by a killed process does not block; an empty week replaces an older report), `classify.TestRun` (missing and stale observe file → `pass`, no write; malformed, unknown `version` and a `window.until` 6 min ahead → `warn`; a week with `new` items → `pass`, no hit finding; a paused write leaves the old file whole) |
+| C10 | Calibration shall apply §3.5’s fit, eligibility, corpus and reporting rules. Changing only held-out scores shall leave the fitted cutoff unchanged and may disable the decision. When built, the router shall count distinct kits by ground truth and score wrong choices under §3.5’s false-positive and recall rules. For classify it shall check the corpus counts, splits, groups and languages, record `kind_` bodies and the `dup_` union, and enable qualification only when the end-to-end `new` list on `heldout` meets its target, scored with the provisional cutoffs, or a matching owner acceptance is recorded. | P7 | `jev.TestCutoff`, `jev.TestCorpus`, `calibrate.TestReport`, `calibrate.TestClassify` (a corpus one case short in each count; a first answer qualifying an unlabelled item records its `dup_` body; a missing score on a true `new` item is a miss; qualification finding all 8 held-out duplicates and missing all 8 `new` items, with both decisions passing their own gates, ships qualification disabled; the same with a recorded acceptance ships it enabled, and a changed pin, `heldout` hash or figure voids that acceptance; the end-to-end score uses the provisional cutoffs, before any enabled bit is set), `router.TestSamples` (when built) |
 | C11 | Every answer record and cutoff table shall name the pin, and every status record shall match a rebuilt body hash; cutoffs refitted from `samples` shall equal the committed ones; changing the root dir or clock keeps every key, and changing state, a question or the pin changes it. | P7, §3.4 | `jev.TestFixturesPinned` |
 | C12 | Every `fixed` fixture and every recorded `cal` fixture (a pending one has no `expect` yet) shall, through `replay-test`, give exactly one self-answered result with empty `error`, its `expect` status, its `want` (`cal`: exact findings and context, classify: the artifact too; `fixed`: §3.5 matching, classify's including `complete` and the context), and no `jev-unrecorded` or `jev-error` unless wanted; once with the key unset and once with a dummy key and a test endpoint that fails the test on any request; a hit fixture with its records deleted shall fail the `want` assertion. The mixed fixture keeps the hit and reports the rejected batch's questions unassessed with no `jev-error`, and its live counterpart against a fake endpoint sends exactly one request per planned body. | P2–P9, P6 | `<ext>.TestFixtures`, `semantic.TestMixedLive` |
 | C13 | No package under `cmd/` or `internal/` shall import `extensions/`, and the jev packages shall import no `internal/` package outside test helpers. | owner decision | existing `depguard` rules |
