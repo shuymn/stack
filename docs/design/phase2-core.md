@@ -300,8 +300,7 @@ prefix; an empty rule renders as `- `), one per item in file order, joined by LF
 not a JSON object whose `items` is an array (invalid JSON, a top-level array, `null` or other non-object value, an
 `items` that is missing, `null` or not an array: no block); an element that is not an object (`null` included), or
 whose `rule` or `role` is missing, `null` or not a string (that element skipped); a file with no rendered item (no
-block). For the malformed cases, the file and the element ones, `kit open` writes one warning line to stderr, in the
-formats of `docs/design/kit-contracts.md` §4; compaction writes none.
+block). Which entry point reports the malformed cases, and how, is stated in `docs/design/kit-contracts.md` §4.
 
 **`kit open`** writes to stdout, as plain text: the parts above in that order (state files, items, handover,
 board), then each `entry` result as it completes (§4.7, `docs/design/core-stages.md` §4.3): an
