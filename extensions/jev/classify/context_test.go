@@ -14,9 +14,12 @@ func ctxLines(r result) []string { return strings.Split(r.resp.Context, "\n") }
 
 // TestContext is C9's context and coverage: order, markers, the 10-line bound with every
 // candidate's excerpt in the report, and complete with the coverage lines for an empty healthy
-// week, an empty week with a failed source, an all-unresolved week and a removed worktree.
+// week, an empty week with a failed source, an all-unresolved week and a removed worktree; with
+// the duplicate check disabled, every candidate marked and the disabled line with its suffix (a
+// week with candidates, an empty one), without it when both decisions are disabled, and a failed
+// kind_ request still not done.
 //
-//nolint:gocyclo // one subtest per claim
+//nolint:gocyclo,maintidx // one subtest per claim
 func TestContext(t *testing.T) {
 	t.Run("12 candidates give 10 lines and a marker, all 12 in the report", func(t *testing.T) {
 		w := newWorld(t)
@@ -138,6 +141,83 @@ func TestContext(t *testing.T) {
 			t.Fatalf("context %q report %+v", r.resp.Context, r.report.Counts)
 		}
 	})
+
+	const dupOff = "the duplicate check is disabled: disabled in this test build"
+	const suffix = "; candidates are not checked against memory"
+	noDup := ParseTestCutoffs(Qualification + "=0.5")
+
+	t.Run(
+		"with the duplicate check disabled every candidate is listed unchecked",
+		func(t *testing.T) {
+			w := newWorld(t)
+			w.mkdir("work")
+			w.turn("p/s.jsonl", "work", "task", "done", "fix known")
+			w.turn("p/s.jsonl", "work", "task", "done", "fix new")
+			w.write()
+			w.memory("work", "- fix known\n")
+			f := &fake{p: byPrefix}
+			r := w.run(t, Env{Transport: f, Decisions: noDup}, w.request())
+			want := []string{
+				name + " (" + jev.Pin + "): 2 owner replies: 2 qualified (0 new, 0 duplicate, 2 dup " +
+					"unassessed), 0 unqualified, 0 unresolved, 0 unevaluated; report " + reportDisplay,
+				"correction p/s.jsonl:6: fix new (dup unassessed: duplicate check disabled)",
+				"correction p/s.jsonl:3: fix known (dup unassessed: duplicate check disabled)",
+				dupOff + suffix,
+			}
+			if got := ctxLines(r); !slices.Equal(got, want) {
+				t.Fatalf("lines\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+			}
+			for _, b := range f.sent() {
+				if strings.Contains(string(b), `"memory_index"`) {
+					t.Fatalf("a dup_ request was sent: %s", b)
+				}
+			}
+			if !r.report.Complete || r.report.Counts.DupUnassessed != 2 {
+				t.Fatalf("%+v complete %v", r.report.Counts, r.report.Complete)
+			}
+		},
+	)
+
+	for _, tc := range []struct {
+		name string
+		ds   map[string]jev.Decision
+		want []string
+	}{
+		{"an empty week with the duplicate check disabled", noDup, []string{dupOff + suffix}},
+		{
+			"an empty week with both decisions disabled", ParseTestCutoffs("none"),
+			[]string{"qualification is disabled: disabled in this test build", dupOff},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := newWorld(t)
+			w.write()
+			r := w.run(t, Env{Transport: &fake{p: byPrefix}, Decisions: tc.ds}, w.request())
+			if got := ctxLines(r)[1:]; !slices.Equal(got, tc.want) || !r.report.Complete {
+				t.Fatalf("lines %q, want %q (complete %v)", got, tc.want, r.report.Complete)
+			}
+		})
+	}
+
+	t.Run(
+		"with the duplicate check disabled a failed kind_ request is not done",
+		func(t *testing.T) {
+			w := newWorld(t)
+			w.turn("p/s.jsonl", "work", "task", "done", "fix alpha")
+			w.write()
+			p := byPrefix
+			p.drop = func(string) bool { return true }
+			r := w.run(t, Env{Transport: &fake{p: p}, Decisions: noDup}, w.request())
+			if r.report.Complete ||
+				!strings.Contains(
+					r.resp.Context,
+					dupOff+suffix+"\ncomplete: false: 1 items not done "+
+						"(malformed answer 1)",
+				) {
+				t.Fatalf("context %q", r.resp.Context)
+			}
+		},
+	)
 
 	t.Run("an incomplete run names the items not done and why", func(t *testing.T) {
 		w := newWorld(t)

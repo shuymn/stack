@@ -570,6 +570,29 @@ func TestGenerateFixtures(t *testing.T) {
 		f.write(out)
 	}
 
+	{ // the duplicate check disabled: a reply the index states and a newer new one, both unchecked
+		f := fresh("dec-no-duplicate")
+		f.build = "no-duplicate"
+		f.memory["repo"] = index
+		f.reply("repo", "Refactor the parser", "I answered in English and ran the build.",
+			"fix: reply in Japanese", corr())
+		f.reply("repo", "Refactor the parser", "I indented the Makefile with spaces.",
+			"fix: use tabs in Makefiles", newc())
+		f.want.Context = lines(header(2, 2, 0, 0, 2, 0, 0, 0),
+			"correction p/s.jsonl:6: fix: use tabs in Makefiles (dup unassessed: duplicate check "+
+				"disabled)",
+			"correction p/s.jsonl:3: fix: reply in Japanese (dup unassessed: duplicate check "+
+				"disabled)",
+			"the duplicate check is disabled: disabled in this test build; candidates are not "+
+				"checked against memory")
+		f.report(true, okSources, counts(2, 2, 0, 0, 2, 0, 0, 2, 0, 0),
+			q("it01", "p/s.jsonl:3", "fix: reply in Japanese", LabelCorrection, DupUnassessed,
+				ReasonDupDisabled),
+			q("it02", "p/s.jsonl:6", "fix: use tabs in Makefiles", LabelCorrection, DupUnassessed,
+				ReasonDupDisabled))
+		f.write(out)
+	}
+
 	{ // the index of the main checkout, a decoy at the linked worktree's
 		f := fresh("mem-main-vs-worktree")
 		f.layouts = append(f.layouts, LayoutSpec{Kind: LayoutWorktree, Dir: "wt", Of: "repo"})
@@ -734,6 +757,47 @@ func TestGenerateFixtures(t *testing.T) {
 		f.report(true, map[string]*ObserveSource{
 			"transcripts": {Status: "timeout", Error: "deadline passed"}, "t3": {Status: "ok"},
 		}, counts(0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+		f.write(out)
+	}
+	{ // an empty week with both decisions disabled: the duplicate line ends at its reason
+		f := fresh("shape-empty-no-decisions")
+		f.build = "no-decisions"
+		f.want.Context = lines(header(0, 0, 0, 0, 0, 0, 0, 0),
+			"qualification is disabled: disabled in this test build",
+			"the duplicate check is disabled: disabled in this test build")
+		f.report(true, okSources, counts(0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+		f.write(out)
+	}
+	{ // an empty week with the duplicate check disabled: its line keeps the suffix
+		f := fresh("shape-empty-no-duplicate")
+		f.build = "no-duplicate"
+		f.want.Context = lines(header(0, 0, 0, 0, 0, 0, 0, 0),
+			"the duplicate check is disabled: disabled in this test build; candidates are not "+
+				"checked against memory")
+		f.report(true, okSources, counts(0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+		f.write(out)
+	}
+	{ // the duplicate check disabled and a kind_ answer missing: those items are not done
+		f := fresh("shape-no-duplicate-missing-answer")
+		f.build = "no-duplicate"
+		f.rec.drop = func(q string) bool { return q == "kind_r1" }
+		f.reply("repo", "Task A", "closing A", "fix a", corr())
+		f.reply("repo", "Task B", "closing B", "fix b", corr())
+		f.status = jev.StatusWarn
+		f.want.Findings = kindsOf(jev.KindError)
+		f.want.Context = lines(
+			header(2, 1, 0, 0, 1, 0, 0, 1),
+			"correction p/s.jsonl:3: fix a (dup unassessed: duplicate check disabled)",
+			"unevaluated: 1 (malformed answer 1)",
+			"the duplicate check is disabled: disabled in this test build; candidates are not "+
+				"checked against memory",
+			"complete: false: 1 items not done (malformed answer 1)",
+			"jev-classify: Jev returned missing or wrongly typed answer for kind_ requests: the Jev "+
+				"API may have changed; check its docs and status",
+		)
+		f.report(false, okSources, counts(2, 1, 1, 0, 1, 0, 0, 1, 0, 1),
+			q("it01", "p/s.jsonl:3", "fix a", LabelCorrection, DupUnassessed, ReasonDupDisabled),
+			ue("it02", "p/s.jsonl:6", ReasonMalformed))
 		f.write(out)
 	}
 	{ // an all-unresolved week

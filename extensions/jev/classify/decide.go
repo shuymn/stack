@@ -20,8 +20,8 @@ const (
 var cutoffsJSON []byte
 
 // testCutoffs, set only by test builds (`-ldflags -X`), replaces the table: e.g.
-// "qualification=0.5,duplicate=0.5"; a decision it leaves out is disabled. It is never
-// configuration.
+// "qualification=0.5,duplicate=0.5"; a decision it leaves out is disabled, and "none" disables
+// both. It is never configuration.
 var testCutoffs = ""
 
 // Decisions returns the decisions this binary ships: the test cutoffs of a test build, else the
@@ -45,7 +45,7 @@ func Decisions() map[string]jev.Decision {
 	return ds
 }
 
-// ParseTestCutoffs reads "name=cutoff,…"; decisions it does not name are disabled.
+// ParseTestCutoffs reads "name=cutoff,…" or "none"; decisions it does not name are disabled.
 func ParseTestCutoffs(s string) map[string]jev.Decision {
 	ds := map[string]jev.Decision{
 		Qualification: {Reason: "disabled in this test build"},
@@ -54,7 +54,7 @@ func ParseTestCutoffs(s string) map[string]jev.Decision {
 	for kv := range strings.SplitSeq(s, ",") {
 		k, v, _ := strings.Cut(kv, "=")
 		c, err := strconv.ParseFloat(v, 64)
-		if k == "" {
+		if k == "" || k == "none" {
 			continue
 		}
 		if err != nil {
