@@ -155,15 +155,11 @@ re-reading the reference after compaction. The router targets a missed re-read o
 state. Both `kit open` and compaction provide kit state without a prompt. Observe's window-wide `reference-unread`
 signal cannot establish whether the reference was read before that step.
 
-**Prerequisite.** Restore this rule from each kit's `attention/items.json`:
-
-```json
-{"items": [{"role": "orchestrator", "rule": "After compaction, re-read the hiden reference of the step in progress before continuing it."}]}
-```
-
-hiden's kit convention puts it there (a `shuymn/dotfiles` change to the hiden skill, tracked outside Phase 4). It
-counts only for a kit whose restore output shows it in its `orchestrator-attention-items` block; a kit with no file,
-another shape (a top-level array, `text` for `rule`) or no such item does not count. **Trigger:** two distinct
+**Prerequisite.** Each kit restores an orchestrator rule to re-read the hiden reference of the step in progress
+after compaction, as an item of its `attention/items.json` in the format of
+[`phase2-core.md` §4.1.1](phase2-core.md#411-kit-context-renderer-shared-with-compact-restore); hiden's kit
+convention puts it there and words it. It counts only for a kit whose restore output shows it in its
+`orchestrator-attention-items` block; a kit whose file renders no such item does not count. **Trigger:** two distinct
 cases, recorded in two separate retrospectives, of a step run after compaction in such a kit whose rule lives in that
 step's hiden reference, where that reference was not read between the compact boundary and the step's first action (a read after that
 action still counts as a miss), and where the kit state at the boundary names that step in progress (a miss the
@@ -456,7 +452,8 @@ and Linux run them in `scripts/test`; Windows CI runs `go vet`, `go test -race` 
 (`.github/workflows/ci.yml:40-55`). Real-key checks are owner steps:
 
 **O1** each PR: `jev-calibrate`; committed cutoffs equal its output; unstable list read. **O2** the §3.2 caller on
-a scratch PR deleting an assertion → warn, on a clean change → pass. **O3** (when built) `kit open demo` with a state
+a scratch PR deleting an assertion → warn, on a clean change → pass, and on a scratch PR whose base gained a test
+after the branch point (base and head diverged) → no finding that the test was deleted. **O3** (when built) `kit open demo` with a state
 reviewing a PR → pointer to `review.md`; `/compact` → restored when room is left. **O4** (after #56) `stack run cycle --ext jev-classify` after
 a real observe run with T3 and Claude replies; spot-check outcomes. **O5** `TYPESAFE_API_KEY=invalid` with input at
 each stage with a built extension (entry once the router is built) → `warn` 401; network off → unassessed. **O6** after a week: `usage.jsonl` totals, unknown usage,
