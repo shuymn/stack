@@ -327,10 +327,13 @@ Stdin: SessionStart payload. Env: `CLAUDE_ENV_FILE`.
    worker part below is still restored. Independently, if the session is a worker (step 3), restore the worker body (frontmatter
    stripped, CRLF-tolerant) and the original brief (`orchestration-context.py:276-300`). A broken transcript
    loses only the brief; an unreadable kit loses only its blocks (`orchestration-context.py:288-300`). The `entry`
-   stage runs last, when at least one kit was restored and time is left (`docs/design/core-stages.md` §4.3). Boards run after everything else is placed (step 5), each only while its block can still fit; one that cannot
-   is not launched and leaves `[board omitted: context limit: <path>]` when that fits. One deadline of 40 s covers all
-   boards (`orchestration-context.py:47`); once it passes, no further board is launched and each remaining one gets
-   `[board skipped: deadline]`. A board's leading repeat of the state of any restored kit is dropped, as legacy did.
+   stage runs last, when at least one kit was restored and time is left (`docs/design/core-stages.md` §4.3). Boards
+   run in `.kits` order after the handover is budgeted and before the `entry` results (step 5). A kit without
+   `bin/board` yields nothing, and a board that cannot be resolved or run on this OS yields its §4.1.1 marker. A
+   runnable board whose block cannot fit is not launched and leaves `[board omitted: context limit: <path>]`. One
+   deadline of 40 s covers all boards (`orchestration-context.py:47`); once it passes, a runnable board that clears
+   the space check is not launched and leaves `[board skipped: deadline]`. Each marker appears only when it fits. A
+   board's leading repeat of the state of any restored kit is dropped, as legacy did.
 3. **Worker detection** (`docs/architecture.md:57`), any of: a line of the first prompt starts with `[worker].marker`;
    `cwd` passes `IsAgentWorktree`; `agent_type` in `[worker].agent_types`. `agent_type` is an auxiliary signal: it is
    present when the session itself runs as that agent (`claude --agent …`); in-process subagents are not assumed to
