@@ -50,11 +50,11 @@ Every `jev-*` reads stdin to EOF first. Then:
 | Stdin is not one JSON object with a string `stage` | `warn`, finding `jev-error` "invalid request", context the same line | none |
 | `stage` is not the extension's own | `pass` (as `extensions/public/stage.go:95`) | none |
 | Live request (no `jev` field) and no key (see Key below) | `pass`, no context or writes | none |
-| Live request (no `jev` field) and an unusable key file (see Key below) | `warn`, finding `jev-error` and a context line giving the cause and fix. No key content or ledger line. | none |
+| Live request (no `jev` field), no usable `TYPESAFE_API_KEY`, so the lookup falls back to an unusable key file (see Key below) | `warn`, finding `jev-error` (`detail`: the fixed cause) and a context line giving the cause and fix. No key content or ledger line. | none |
 | Nothing to ask (outbound: empty `range` or a diff with no files, since both questions need the diff; entry: no kit or no candidate; cycle: no `owner-reply` item) | `pass`, no context | none |
 | Preparation fails (semantic: a git command exits non-zero or its output is cut) | `warn`, finding `jev-error` naming the command and exit | none |
 | Preparation reaches the work deadline (a slow git) | the questions are unassessed (`preparation deadline`) | none |
-| Connection or TLS failure, timeout, HTTP 429, HTTP 500 or higher (including 529), HTTP 413, or HTTP 400 naming `max_tokens_exceeded` | Questions are unassessed; one stderr line `jev: <n> requests skipped: <cause>`. | no retry or re-split |
+| Connection or TLS failure, timeout, HTTP 429, HTTP 500 or higher (including 529), HTTP 413, or HTTP 400 naming `max_tokens_exceeded` | Questions are unassessed; one stderr line per cause, `jev: <n> requests skipped: <cause>`. | no retry or re-split |
 | Other non-200, invalid §2 response envelope, model mismatch, or response over 1 MiB | `warn` with `jev-error`, the fixed cause or HTTP status, and the action. For 401 or 403, check the key source described below. | redirects are never followed |
 | Missing or malformed answer, including a probability outside finite [0, 1] | `warn` with `jev-error` for that question. Valid answers still decide. | — |
 
@@ -441,7 +441,7 @@ saw.
 | C13 | No package under `cmd/` or `internal/` shall import `extensions/`, and the jev packages shall import no `internal/` package outside test helpers. | owner decision | existing `depguard` rules |
 | C14 | Each live attempt shall try to record its outcome under §3.3’s ledger contract. Replay shall write no ledger line. | P10 | `jev.TestLedger` |
 | C15 | A live `stack run outbound --ext public --ext jev-semantic --range <r>` with built binaries and a test endpoint answering a hit shall exit 0 with both named results (`public: pass`, semantic `warn`) on clean texts, and exit 1 with `public: block` and the semantic result on a texts hit. | P4 | `semantic.TestExitCodes` (non-replay) |
-| C16 | When built, with built `stack` and `stack-jev-router`, a temporary home, test cutoffs, a test endpoint answering a pointer, no handover and a 9,500-unit restore filled by multiple blocks, `stack hook claude session-start` on a `compact` payload shall produce each of the four §3.2 placement outcomes ([core entry placement](core-stages.md#43-entry-at-compaction)) in a separate case. In each case, removing the entry contribution from decoded `additionalContext` shall yield the same restore as `entry = []`. | P5 | `router.TestCompaction` (non-replay) |
+| C16 | When built, with built `stack` and `stack-jev-router`, a temporary home, test cutoffs, a test endpoint answering a pointer, no handover and the 9,500-unit restore budget filled by several blocks (worker rules, kits' `NORTH.md`, `state.md` and items), `stack hook claude session-start` on a `compact` payload shall produce each of the four §3.2 placement outcomes ([core entry placement](core-stages.md#43-entry-at-compaction)) in a separate case. In each case, removing the entry contribution from decoded `additionalContext` shall yield the same restore as `entry = []`. | P5 | `router.TestCompaction` (non-replay) |
 
 ## 7. Test plan
 

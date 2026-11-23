@@ -183,7 +183,7 @@ message_checks = []                   # outbound extensions pr merge requires fo
 ```
 
 Extensions keep their own settings beside it: `~/.config/stack/safety.toml` (`stack-guard`, `stack-public`; the
-`[safety]` keys `secrets`, `private_terms` and `deny_pencil_generate`. See the
+top-level keys `secrets`, `private_terms` and `deny_pencil_generate`. See the
 [built-in secret entries](design/core-stages.md#46-configstacksafetytoml)), `~/.config/stack/improve.toml`
 and `~/.config/stack/audit-due.toml`. A missing `safety.toml` or key gives its default. A broken `safety.toml` means
 the default rules apply (custom entries are not kept until it is fixed), so a typo never turns a deny off:
