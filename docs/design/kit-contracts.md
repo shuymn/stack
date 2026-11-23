@@ -107,18 +107,11 @@ creation.
 | **(b) The target may supply it (chosen)** | the repository whose files are edited owns their rules; an edit takes effect at the next run; existing configurations without the key see no change, except that one holding both `paths` and `Paths` always uses `paths` | an optional field in improve's repository contract and one new error that only that field can reach; the embedded file stays until a later decision | drop the key | one `stack` PR (field, read, tests, I7 extended) and one dotfiles PR (copy the initial guide to a path outside the editable globs, set the key, update `AGENTS.md:45`) |
 | (c) Point the model at a file in the worktree by name | no config | the model may not read it; nothing checks it | easy | small |
 
-Decided: (b). `.stack/improve.toml` has an optional `writing = "<path>"`, a repository-relative path read at the
-base commit; `git ls-tree` at the base commit must show it, and `.stack/improve.toml` itself, as a regular-file blob
-(mode `100644` or `100755`), so a symlink (`120000`), whose blob is the link target's name, is never read as config or
-guide. With the key absent, the embedded guide is used and the prompt does not change. With the key set, that file
-replaces the embedded guide; a path that `paths` matches (improve could rewrite its own rules), a symlink, a tree, a
-missing path or a failed lookup or read is `warn` and stop. The contract and its claims are in `phase3-cycle.md`
-§3.4 step 3 and I7. The initial guide is a copy of the embedded one, which stays as the fallback. The order is safe
-either way: a `stack-improve` without the key ignores it, so dotfiles can set the key first; a configuration that
-already holds an unrelated `writing` key would give it this meaning.
-
-Status: the `stack` side is done (#78); the dotfiles PR (copy the guide outside the editable globs, set the key,
-update `AGENTS.md:45`) is pending.
+Decided: (b), an optional `writing` key in `.stack/improve.toml`; its rules and claims are in `phase3-cycle.md`
+§3.4 step 3 and I7. Rollout: dotfiles copies the embedded guide to a path outside its editable globs, sets the key
+and updates `AGENTS.md:45`; the embedded guide stays as the fallback. The order is safe either way: a
+`stack-improve` without the key ignores it, so dotfiles can set the key first; a configuration that already holds an
+unrelated `writing` key would give it this meaning.
 
 With the embedded fallback the `writing` key is additive: no prompt of an existing configuration without the key
 changes, and its errors need the key, so it is a method choice. The regular-file rule is not additive: a
