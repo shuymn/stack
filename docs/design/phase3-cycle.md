@@ -343,7 +343,7 @@ step's timeout is cut to what the deadline leaves after the reserve and the late
    `**` at the end of a pattern matches at least one segment (`skills/**` never matches a file named `skills`); in
    the middle it matches zero or more. Keys match exactly; a key in another case (`Paths`, `Writing`) is unknown and
    ignored. A repository file is read at the base commit only when `git --literal-pathspecs ls-tree -z --full-tree
-   <base_oid> -- <path>` (inherited `GIT_*_PATHSPECS` dropped, so a name such as `:(glob)x` is a file name), parsed
+   <base_oid> -- <path>` (a name such as `:(glob)x` is a file name; this call alone drops an inherited `GIT_GLOB_PATHSPECS` or `GIT_ICASE_PATHSPECS`, which git refuses next to the flag), parsed
    record by record (mode, type, oid, path), shows it as a regular-file blob (mode `100644` or `100755`); its content
    is `git cat-file blob <oid>`. A symlink (`120000`, whose blob is the target's name), a directory or a submodule is
    `warn` and stop, as is a failed lookup or read. `.stack/improve.toml` absent → `pass` "`<repo>` has no
