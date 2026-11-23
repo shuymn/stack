@@ -50,7 +50,9 @@ The parts, tags and markers are stated in `phase2-core.md` §4.1.1, the compact 
 and which entry point emits what in §4.2 step 7, the single place hiden points to. The contract states the budget as
 the allocator delivers it, including the case where markers alone fill the budget and later kits leave no text,
 rather than a guarantee the code does not keep. A `NORTH.md`-only kit keeps its state block at both entry points
-(checked on the built CLI), so hiden's `<orchestration-state>` check holds for it.
+when room remains (checked on the built CLI), so hiden's `<orchestration-state>` check holds for it. When the budget
+is used up first, hiden sees a `[state omitted: …]` marker or no text for that kit; its state check then fails
+visibly (there is no state block), which is accepted (§6).
 
 ### 3.3 `sessions/<id>.kits`
 
@@ -65,9 +67,11 @@ dirs.
 ### 3.4 The audit-due line
 
 The line keeps its text: it is matched by its consumer, and its meaning can be stated without changing it. The kit it
-names is defined by the root the merge itself used, because that is the dir the extension counted; a consumer's
-cached dir is right only while the root is unchanged, so the contract allows reuse only then. Rejected: adding the
-kit dir to the line (§6).
+names is defined by the root the merge itself used, because that is the dir the extension counted. The consumer
+resolves the current config, on the premise that the root is not edited while `pr merge` runs; a snapshot of the
+merge's config would guard only against that edit, so none is added. A cached dir is right only while the root is
+unchanged, so the contract allows reuse only then, and a slug without an established dir is reported as unresolved.
+Rejected: adding the kit dir to the line (§6).
 
 ### 3.5 Steward out of `stack`
 
@@ -84,7 +88,7 @@ creation.
 | ID | EARS claim | Test |
 |---|---|---|
 | W1 | When `stack kit open` renders a kit whose `attention/items.json` is readable but is not a JSON object whose `items` is an array, it shall write exactly one line `stack: <path>: attention items ignored: <reason>` to stderr. | `cli.TestKitOpenItemsWarning`, one case each with its reason string: invalid JSON, top-level `null`, `123`, `"x"`, `[]`, `{}` (`items` missing), `{"items": null}`, `{"items": "x"}`; control: no file → no line |
-| W2 | When `items` is an array holding elements that are not objects, or whose `role` or `rule` is missing, `null` or not a string, `stack kit open` shall write exactly one line `stack: <path>: <n> of <m> attention items ignored (first: item <i>: <reason>)` to stderr and still render the valid items. | same test, mixing valid `orchestrator` and `all` items with `[null]`, `3`, an item without `rule`, `{"role": 1, "rule": "x"}`, `{"role": "all", "rule": 2}`: asserts one line, `n`, `m`, the first index and reason, and the surviving bullets in order; `kit.TestItemsDiagnostics` for each reason |
+| W2 | When `items` is an array holding elements that are not objects, or whose `role` or `rule` is missing, `null` or not a string, `stack kit open` shall write exactly one line `stack: <path>: <n> of <m> attention items ignored (first: item <i>: <reason>)` to stderr and still render the valid items. | same test, mixing valid `orchestrator` and `all` items with a `null` element (`{"items": [null, …]}`; a top-level `null` file is W1's), `3`, an item without `rule`, `{"role": 1, "rule": "x"}`, `{"role": "all", "rule": 2}`: asserts one line, `n`, `m`, the first index and reason, and the surviving bullets in order; `kit.TestItemsDiagnostics` for each reason |
 | W3 | While the file is absent or every element is well-formed, `stack kit open` shall write nothing about the items, including for items whose role is neither `orchestrator` nor `all`, an empty `rule`, and an empty `items` array. | same test: a `worker` item (no block, silent), an empty `all` rule (`- `, silent), `{"items": []}` (no block, silent) |
 | W4 | `stack kit open` shall keep its stdout byte-identical and its exit code unchanged in every W1–W3 case. | same test, comparing stdout and the exit code with fixed expectations written for today's renderer, stderr captured separately |
 | W5 | Session-start shall not write any item diagnostic. | `cli.TestSessionStartItems`: `cli.Run` of `hook claude session-start` with a compact payload and a malformed file, with `STACK_DEBUG` unset and set to `1`: no diagnostic on stderr or in `additionalContext` |
@@ -101,18 +105,21 @@ creation.
 | Option | Gains | Loses | Reversibility | Cost |
 |---|---|---|---|---|
 | (a) Keep it embedded | improve's prompt is self-contained; no new config | a generic extension carries one target's rules; edits cross repositories and need a reinstall; the target's editors read another repository | — | none |
-| **(b) The target may supply it (recommended)** | the repository whose files are edited owns their rules; an edit takes effect at the next run; existing targets see no change | an optional field in improve's repository contract and one new error that only that field can reach; the embedded file stays until a later decision | drop the key | one `stack` PR (field, read, tests, I7 extended) and one dotfiles PR (move the file outside the editable globs, set the key, update `AGENTS.md:45`) |
+| **(b) The target may supply it (recommended)** | the repository whose files are edited owns their rules; an edit takes effect at the next run; existing configurations without the key see no change | an optional field in improve's repository contract and one new error that only that field can reach; the embedded file stays until a later decision | drop the key | one `stack` PR (field, read, tests, I7 extended) and one dotfiles PR (copy the initial guide to a path outside the editable globs, set the key, update `AGENTS.md:45`) |
 | (c) Point the model at a file in the worktree by name | no config | the model may not read it; nothing checks it | easy | small |
 
-(b) in detail, as a follow-up: `.stack/improve.toml` gains an optional `writing = "<path>"`, read at the base commit
-as a blob with the same `git ls-tree` blob check as `.stack/improve.toml` itself
-(`extensions/improve/improve.go:358-367`). With the key absent, the embedded guide is used as today. With the key
-set, that file replaces the embedded guide; a path that `paths` matches (improve could rewrite its own rules), a
-missing path or a non-blob is `warn` and stop. The order is safe either way: today's `repoConfig` ignores unknown
-keys, so dotfiles can set the key first.
+(b) in detail, as a follow-up: `.stack/improve.toml` gains an optional `writing = "<path>"`, a repository-relative
+path read at the base commit. `git ls-tree` at the base commit must show it as a regular-file blob (mode `100644` or
+`100755`), stricter than the `" blob "` check `.stack/improve.toml` gets (`extensions/improve/improve.go:358-367`),
+which also passes a symlink (`120000`) and would then read the link target's name as the guide. With the key absent,
+the embedded guide is used as today. With the key set, that file replaces the embedded guide; a path that `paths`
+matches (improve could rewrite its own rules), a symlink, a tree, a missing path or a failed lookup or read is
+`warn` and stop. The initial guide is a copy of the embedded one, which stays as the fallback. The order is safe
+either way: today's `repoConfig` ignores unknown keys, so dotfiles can set the key first; a configuration that
+already holds an unrelated `writing` key would give it this meaning.
 
-Recommendation (b). With the embedded fallback the change is additive: no existing target's prompt changes and the
-new error needs the new key, so it is a method choice. It becomes an owner decision if the embedded default is
+Recommendation (b). With the embedded fallback the change is additive: no prompt of an existing configuration
+without the key changes, and the new error needs the new key, so it is a method choice. It becomes an owner decision if the embedded default is
 dropped (targets without the key would lose the writing section). It would change if a second target wanted the same
 rules (a shared default in `stack-improve` fits that better), or if improve stopped editing agent instructions.
 
@@ -140,8 +147,10 @@ needed the summary, or if `stack` gained its own scheduled runner. (a) changes n
 |---|---|
 | Ignored items stay silent until §4 lands | valid state and valid items still render; a register that was malformed before stays malformed and unannounced, as it was, and the stated shape lets the loss be diagnosed once noticed |
 | Freezing the `.kits` format | it is already what both readers depend on; a future change gets a read command (§3.3) instead of a silent break |
-| Lockless `.kits` readers see no fresh snapshot: a read racing a session's first `kit open` or last `kit close` can see either side, so the ask-owner hook may show or skip the checklist for that one question, and steward may pick another session's transcript when two sessions list the same slug | the hook's effect is one reminder more or less on one question; steward already picks by heuristic and its report names its evidence |
-| On Windows, a reader holding the file open can make `kit open`'s rename or the last `kit close`'s remove fail (exit 2): the open may leave a new empty kit dir and no record, the close leaves the slug recorded; nothing retries | the command reports the failure and changes no other record; rerunning it succeeds; the hook only stats the file and content readers hold it briefly (`phase2-core.md` §4.1) |
+| Lockless `.kits` readers see no fresh snapshot: a read racing a session's first `kit open` or last `kit close` can see either side, so the ask-owner hook may show or skip the checklist for that one question | the effect is one reminder more or less on one question |
+| Steward's caller lookup through `.kits` is best-effort: when two sessions list the slug, or one closes it while steward reads, steward can pick the other session's transcript | `.kits` records kits, not callers, so no reader can do better from it; the companion PR (§8) requires steward to name the session it chose or say it could not establish the caller, so an on-track line is not mistaken for an audit of the right session |
+| On Windows, a reader holding the file open can make `kit open`'s rename or the last `kit close`'s remove fail (exit 2): the open may leave a new empty kit dir and no record, the close leaves the slug recorded; nothing retries | the command reports the failure and changes no other record; rerunning it succeeds once the reader has closed the file; the hook only stats the file and content readers hold it briefly (`phase2-core.md` §4.1) |
+| A compact whose budget is used up before a kit's state block leaves a `[state omitted: …]` marker or no text for that kit, so hiden's `<orchestration-state>` check fails for it | the failure is visible (no state block), and the agent can rerun `stack kit open <slug>`, whose output has no total budget; a larger budget would exceed Claude Code's hook output limit |
 | The due line names a dotfiles agent | it is matched text; its meaning is stated without depending on that agent |
 | A `NORTH.md`-only kit still gets `[new kit: …]` | a prompt to write `state.md` next to the state block, not a failure; `stack-audit-due` hashes the missing file as `absent` |
 | The steward report is no longer accepted in this repository | `stack` never reads it; the companion PR accepts it (§8) |
@@ -159,10 +168,10 @@ needed the summary, or if `stack` gained its own scheduled runner. (a) changes n
 | ID | Acceptance condition | Source | Observable result | Check on the real CLI |
 |---|---|---|---|---|
 | A1 | The accepted `attention/items.json` shape, restored roles and ignored inputs are stated in `stack` and match what `kit open` renders. | #69 item 1 | a valid item rendered; each ignored case without a block | scratch `HOME`, `stack kit open demo` with each case of `phase2-core.md` §4.1.1 |
-| A2 | Every tag and marker hiden inspects, and which entry point emits it, is stated in `stack` and matches both entry points, including the `NORTH.md`-only case. | #69 item 2 | `phase2-core.md` §4.2 step 7 holds | `stack kit open demo` on a `NORTH.md`-only kit; pipe a compact payload for the same session to `stack hook claude session-start`, then the same payload with `"source":"startup"` (no output) |
-| A3 | A reader following `phase2-core.md` §4.1 gets the slugs `stack` restores, less those whose dir is missing. | #69 item 3 | the file lists recorded kits in order; it is gone after the last close | `STACK_SESSION_ID=x stack kit open a`, `… b`, `… close a`, read the file; close `b`, the file is gone |
+| A2 | The tags hiden inspects (`<orchestration-state>`, `<orchestrator-attention-items path=…>`) and the `NORTH.md`-only case are stated in `stack` and match both entry points. | #69 item 2 | both tags at `kit open` and after compaction; nothing on other sources | a kit with `NORTH.md` and an `orchestrator` item: `stack kit open demo`; pipe a compact payload for the same session to `stack hook claude session-start`, then the same payload with `"source":"startup"` (no output); the rest of the §4.2 step 7 matrix is checked by L3 |
+| A3 | A reader following `phase2-core.md` §4.1 gets the recorded slugs, which `stack` filters by dir existence before it restores them. | #69 item 3 | the file lists recorded kits in order, a kit whose dir was removed included, while compaction restores only the others; the file is gone after the last close | `STACK_SESSION_ID=x stack kit open a`, `… b`, remove `b`'s dir, read the file (`a`, `b`), pipe a compact payload for `x` (only `a` restored); `… close a`, `… close b`, the file is gone |
 | A4 | The due line's `<slug>` names the kit dir under the root the merge used. | #69 item 4 | as `core-stages.md` P14 | `core-stages.md` P14 |
-| A5 | `stack` docs carry no steward report format or dispatch rule. | #69 item 5 | `core-stages.md` §4.8 is a pointer only | read `core-stages.md` §4.8 and P14 |
+| A5 | `stack` docs carry no steward report format or dispatch rule. | #69 item 5 | the changed docs only point to `shuymn/dotfiles` for them | read every doc this branch changes (`git diff --name-only origin/main -- docs`) for a report length, a report or evidence format, or when and how steward is started |
 | A6 | Each open question has a recommendation with its condition and whether the owner decides. | #69 open questions | §5 | read §5 |
 
 ### 7.2 Plan layer
@@ -171,7 +180,7 @@ needed the summary, or if `stack` gained its own scheduled runner. (a) changes n
 |---|---|---|---|
 | L1 | The renderer shall render items whose `role` is `orchestrator` or `all` and whose `rule` is a string, in file order, and render no block for a malformed file. | §3.1 | `kit.TestRenderStateAndItems` (roles, a non-string rule, a non-object element), `kit.TestRenderNewKit` (invalid JSON); a top-level array, `null` and a non-array `items` get tests with §4 |
 | L2 | When a kit has `NORTH.md` and no `state.md`, the renderer shall render the `NORTH.md` block and the `[new kit: …]` marker. | §3.2 | built CLI (A2); `kit.TestRender` covers `NORTH.md` with an unreadable `state.md` only; a unit test comes with §4 |
-| L3 | Compact restore shall emit the tags and markers of `phase2-core.md` §4.2 step 6 within 9,500 UTF-16 units, and other sources nothing. | §3.2 | `session.TestWorker` (worker line, `<worker-rules>`, `<original-brief>`), `session.TestCompact` (kits, `<orchestration-board>`, `[kits omitted: .kits locked]`), `session.TestReservedMarkers` and `session.TestMultiKitReservation` (`[state omitted: …]`, `[brief omitted: …]`), `session.TestBudgetUTF16` (`[...cut N chars]`, the total), `session.TestCompactEntry`, `session.TestCompactEntryDeadline`, `session.TestEntryOmittedMarker` (entry blocks, `[entry skipped: deadline]`, `[entry context omitted: …]`), `session.TestExport` (other sources print nothing) |
+| L3 | Compact restore shall emit the tags and markers of `phase2-core.md` §4.2 step 6 within 9,500 UTF-16 units, and other sources nothing. | §3.2 | `session.TestWorker` (worker line, `<worker-rules>`, `<original-brief>`), `session.TestCompact` (kits, `<orchestration-board>`, `[kits omitted: .kits locked]`), `session.TestReservedMarkers` and `session.TestMultiKitReservation` (`[state omitted: …]`, `[brief omitted: …]`), `session.TestBudgetUTF16` (`[...cut N chars]`, the total), `session.TestBoards` (board not launched without room), `session.TestCompactEntry`, `session.TestCompactEntryDeadline`, `session.TestEntryOmittedMarker` (entry blocks, `<orchestration-handover>`, `[entry skipped: deadline]`, `[entry extensions skipped: …]`, `[entry context omitted: …]`), `session.TestExport` (other sources print nothing). No compact test yet for the items block, `[kits omitted: .kits unreadable]`, `[board omitted: …]`, `[board skipped: deadline]`, `[items omitted: …]`, `[handover omitted: …]` or `[worker rules omitted: …]` |
 | L4 | `kit open`/`close` shall write `<id>.kits` as LF-terminated valid slugs, de-duplicated in the order added, through a rename, and delete it when empty; `kit.Store` shall read it trimming each line and skip blank, invalid and repeated lines. | §3.3 | `kit.TestStore`, `kit.TestStoreReadsCRLFAndSkipsInvalidLines`, `kit.TestStoreTempFileIsUnique` |
 | L5 | `stack-audit-due` shall answer a JSON response whose `context` is exactly the due line with the request's slug, which `pr merge` prints after `MERGED`. | §3.4 | `auditdue.TestK`, `auditdue.TestStateUnchanged` (the context), `merge.TestMergedStage` (printing after `MERGED`) |
 | L6 | The `kits` sent to `merged` and `entry` shall name dirs under the configured kit root. | §3.4 | `cli.TestRequestKits` (default root), `cli.TestRelativeKitRoot` and `session.TestRelativeKitRoot` (a relative root) |
@@ -196,8 +205,9 @@ The hiden cleanup in `shuymn/dotfiles` changes, as a consequence of this design 
 - `agents/steward.md`: owns its request and report format (taken out of `core-stages.md` §4.8) and keeps auditing the
   whole state file at any size (#28); its `sessions/*.kits` grep follows `docs/design/phase2-core.md` §4.1 (a
   non-empty file, one slug per line, `<id>` lower-cased in the file name, so matching it to a transcript name relies
-  on lower-case session ids); its acceptance (the one-line on-track report, about 5 lines with file:line evidence
-  otherwise, the background start with only the kit dir) moves to that PR.
+  on lower-case session ids). That lookup is best-effort: when two sessions list the slug, steward names the
+  session it chose, or says it could not establish the caller. Its acceptance, formerly P14 here and from #28, moves
+  to that PR.
 - `hooks/executable_ask-owner-checklist.sh:7-8,17-33`: cite `docs/design/phase2-core.md` §4.1 as the format it relies
   on (presence by metadata only; the file exists only while it lists a slug; the id is lower-cased).
 - `AGENTS.md:45`: follows the §5.1 decision.

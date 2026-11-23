@@ -423,8 +423,7 @@ interface.
 - **State file** `<kit>/audit-due.json` inside each kit (§4.7): the signal belongs to the kit, and the kit dir is
   already the extension-visible place for kit state (`kits[].dir`).
 - **K = 5**, the issue's default. Over the 26 merges of the run #28 cites, with one kit whose state is updated
-  after every merge and a steward run per due line, that is five background audits instead of one, each about one
-  line when on track.
+  after every merge and one audit per due line, that is five due lines (§4.7).
 - **Kit state not updated, by content hash, not mtime.** A hash compares what the steward cares about (content);
   mtime changes on saves without changes, on checkouts and syncs, and has filesystem-dependent resolution, so tests
   would need sleeps. The files are small; hashing costs nothing measurable. Both `NORTH.md` and `state.md` are
