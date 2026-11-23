@@ -153,9 +153,9 @@ state. Both `kit open` and compaction provide kit state without a prompt. Observ
 signal cannot establish whether the reference was read before that step.
 
 **Prerequisite.** A kit counts only when compaction restores, in that kit's `orchestrator-attention-items`
-block, the orchestrator rule to re-read the hiden reference of the step in progress. hiden supplies and words the
-rule; [`phase2-core.md` §4.1.1](phase2-core.md#411-kit-context-renderer-shared-with-compact-restore) defines the
-format. **Trigger:** two distinct
+block, the orchestrator rule to re-read, after compaction, the hiden reference of the step in progress. hiden
+supplies and words the rule; [`phase2-core.md` §4.1.1](phase2-core.md#411-kit-context-renderer-shared-with-compact-restore)
+defines the format. **Trigger:** two distinct
 cases, recorded in two separate retrospectives, of a step run after compaction in such a kit whose rule lives in that
 step's hiden reference, where that reference was not read between the compact boundary and the step's first action (a read after that
 action still counts as a miss), and where the kit state at the boundary names that step in progress (a miss the
