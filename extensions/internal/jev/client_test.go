@@ -301,11 +301,12 @@ func TestClientStatusAtHeaders(t *testing.T) {
 		defer srv.Close()
 		defer close(done)
 		// The body stalls until the context ends: an answer well before that was classified at
-		// the headers, however slow the scheduler.
+		// the headers, however slow the scheduler. start is taken first, so a late reading cannot
+		// shorten the measured time.
 		const stall = 20 * time.Second
+		start := time.Now()
 		ctx, cancel := context.WithTimeout(t.Context(), stall)
 		defer cancel()
-		start := time.Now()
 		o := Live{Endpoint: srv.URL, Key: "k"}.Send(ctx, testBatch(noulQ))
 		if o.Class != Persistent || o.Cause != "HTTP 401" || time.Since(start) >= stall/2 {
 			t.Fatalf("outcome %+v after %v", o, time.Since(start))
