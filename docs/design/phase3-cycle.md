@@ -802,8 +802,8 @@ statusline (`dotfiles:Makefile:80,113`):
 the exact paths with sizes and the owner decides what to delete (§9 D3); nothing is deleted before that:
 - legacy state: `~/.claude/kaizen/` (including `runs/`, `proposals/`, `probe/` results and `private-terms`),
   `~/.local/state/kaizen-apply/` with its backups, `~/.local/state/kaizen-improve/`;
-- the live copy of the retired global items, `~/.claude/attention/items.json` (removable later with `home/.chezmoiremove` entries or by hand, as the owner
-  decides).
+- the live copy of the retired global items, `~/.claude/attention/items.json` (removable later with a
+  `home/.chezmoiremove` entry or by hand, as the owner decides).
 
 ## 7. Test Strategy
 
