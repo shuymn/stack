@@ -183,8 +183,9 @@ All additions follow the evolution rule: new optional request fields, safe to ig
    name is missing (not found on `PATH`) it does nothing more (no `.kits` read, no stage run), so stdout, stderr
    and the exit code are byte-identical to today. When a name is found but not runnable (no execute permission, a
    lookup error) and none is runnable, it prints that name's `warn` marker after the `MERGED` line without reading
-   `.kits` and exits 0, as the runner reports it at every stage (`internal/ext/ext.go:223`). Otherwise the stage's end is 10 s after it starts; the deadline is checked just before the kit lookup is called, and the lookup (its lock wait, then the `.kits`
-   read) is not interrupted once started (`internal/merge/merged.go:59-67`, `internal/kit/store.go:156-170`), and the window then holds the
+   `.kits` and exits 0, as the runner reports it at every stage (`internal/ext/ext.go:223`). Otherwise the stage's end is 10 s after it starts; the deadline is checked just before the kit lookup is called; the lookup's lock wait ends at the earlier of 1 s
+   and the runner's deadline, and the `.kits` read and dir checks after it are synchronous and not interrupted
+   (`internal/merge/merged.go:59-67`, `internal/kit/store.go:156-184`), and the window then holds the
    request encoding, every extension and the reaping of their pipes: the runner gets a deadline that is that end less its pipe-reaping
    allowance (`proc.DefaultWaitDelay`, 2 s, `internal/proc/proc.go:29`), which starts once the killed extension's own wait
    returns (`internal/proc/proc.go:313-335`), so an extension that runs to the deadline and leaves a pipe open to a
@@ -192,7 +193,7 @@ All additions follow the evolution rule: new optional request fields, safe to ig
    unstarted with a `warn`. For each result that is not `pass` or has a non-empty `context`, print to stdout, after
    the `MERGED` line, the `warn` marker `[extension <name>: warn: <reason>]` when it warned, then its trimmed
    `context`. Exit 0 whatever the results, also when stdout is closed and those writes fail. The 10 s sets the stage's
-   deadlines (from the kit lookup to the last reaped pipe), not the completion of its synchronous file I/O; printing its results follows it and is not counted. The bound
+   deadlines, not the completion of its synchronous file I/O; printing its results follows it and is not counted. The bound
    assumes that the caller reads `pr merge`'s stdout and stderr and that the session's `.kits` file is a regular
    file; the operating system's kill and wait latency (milliseconds) is outside it. A manual
    `stack run merged` keeps `stack run`'s request preparation (git discovery, up to 30 s,

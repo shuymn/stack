@@ -329,7 +329,7 @@ Stdin: SessionStart payload. Env: `CLAUDE_ENV_FILE`.
 2. **Compact only.** Take the `<id>.lock` with a 1 s timeout, read `<id>.kits`, release, and render each listed kit
    whose dir exists. If the lock wait times out, the kit part is omitted (`[kits omitted: .kits locked]`) and the
    worker part below is still restored; any other lock or read failure (such as a lock file that cannot be opened)
-   leaves `[kits omitted: .kits unreadable]` the same way (`internal/kit/store.go:156-165`). Distinct from both, when `filepath.Abs` cannot return the kit root built from the configuration, the kit
+   leaves `[kits omitted: .kits unreadable]` the same way (`internal/kit/store.go:156-165,177-184`, `internal/session/session.go:382-388`). Distinct from both, when `filepath.Abs` cannot return the kit root built from the configuration, the kit
    part ends before `.kits` is read, with no marker and no handover (`internal/session/session.go:378-381`); the
    worker part is still restored. `~` expands under `HOME` and a relative `[kit].root` is taken from the config
    file's directory (`internal/paths/paths.go:323-329`); on POSIX, for example, this happens with a relative `HOME`
