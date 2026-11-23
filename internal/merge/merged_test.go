@@ -13,6 +13,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/shuymn/stack/internal/ext"
@@ -221,8 +222,9 @@ func TestMergedStage(t *testing.T) {
 	})
 }
 
-// TestMergedStageDeadline covers C5's deadline: nothing starts after the runner's deadline, and a
-// pipe a grandchild holds open is reaped within the stage's window (20 s in that case).
+// TestMergedStageDeadline covers C5's deadline: nothing starts after the runner's deadline, and
+// with a pipe a grandchild holds open, the first result is written less than the stage's window
+// plus the runner's pipe wait after the MERGED line (20 s plus 2 s in that case).
 func TestMergedStageDeadline(t *testing.T) {
 	t.Parallel()
 	t.Run("a slow first extension", func(t *testing.T) {
@@ -295,42 +297,47 @@ func TestMergedStageDeadline(t *testing.T) {
 	})
 }
 
-// deadlineRunner records the deadline and the time of its one call instead of running anything.
+// deadlineRunner records the deadline of its one call instead of running anything.
 type deadlineRunner struct {
 	proc.Exec
 
-	deadline, called *time.Time
+	deadline *time.Time
 }
 
 func (r deadlineRunner) Run(ctx context.Context, _ proc.Cmd) (proc.Result, error) {
-	*r.called = time.Now()
 	*r.deadline, _ = ctx.Deadline()
 	return proc.Result{Stdout: []byte(`{"status":"pass"}`)}, nil
 }
 
-// TestMergedStageRunnerDeadline covers C5's pipe allowance on the clock: the runner's deadline is
-// the stage's end, 10 s after the window opens, less the runner's pipe wait. The window opens
-// between the two readings around it, so the check holds however slow the scheduler; a deadline
-// at the end itself is past the later bound unless the stage took the whole pipe wait to call the
-// runner.
+// TestMergedStageRunnerDeadline covers C5's window on a fake clock: the deadline is armed once,
+// when the window opens, at its 10 s end less the runner's pipe wait, and the .kits read and the
+// runner both run under it. The .kits read takes a second of fake time, so a timer armed again
+// after it would move the runner's deadline.
 func TestMergedStageRunnerDeadline(t *testing.T) {
 	t.Parallel()
-	var deadline, called time.Time
-	s := MergedStage{
-		Names: []string{"demo"},
-		Ext:   ext.Options{Runner: deadlineRunner{deadline: &deadline, called: &called}},
-		resolve: func([]string) []ext.Plan {
-			return []ext.Plan{{Name: "demo", Path: "demo"}}
-		},
-	}
-	before := time.Now()
-	runMerged(t.Context(), s, io.Discard, "o/r", ext.Merge{})
-	runnerWindow := ext.MergedTimeout - proc.DefaultWaitDelay
-	lo, hi := before.Add(runnerWindow), called.Add(runnerWindow)
-	if deadline.Before(lo) || deadline.After(hi) {
-		t.Fatalf("runner deadline %s after the stage began, want %s less the pipe wait %s",
-			deadline.Sub(before), ext.MergedTimeout, proc.DefaultWaitDelay)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		var kitsDeadline, runnerDeadline time.Time
+		s := MergedStage{
+			Names: []string{"demo"},
+			Kits: func(ctx context.Context) *[]ext.Kit {
+				kitsDeadline, _ = ctx.Deadline()
+				time.Sleep(time.Second)
+				return &testKits
+			},
+			Ext: ext.Options{Runner: deadlineRunner{deadline: &runnerDeadline}},
+			resolve: func([]string) []ext.Plan {
+				return []ext.Plan{{Name: "demo", Path: "demo"}}
+			},
+		}
+		start := time.Now()
+		runMerged(t.Context(), s, io.Discard, "o/r", ext.Merge{})
+		want := start.Add(ext.MergedTimeout - proc.DefaultWaitDelay)
+		if !kitsDeadline.Equal(want) || !runnerDeadline.Equal(want) {
+			t.Fatalf("deadlines after the window opened: .kits %s, runner %s; want %s, the %s "+
+				"window less the pipe wait %s", kitsDeadline.Sub(start), runnerDeadline.Sub(start),
+				want.Sub(start), ext.MergedTimeout, proc.DefaultWaitDelay)
+		}
+	})
 }
 
 // checkMergedRequest checks demo's one request of a direct merge: it is what the run verified, and
