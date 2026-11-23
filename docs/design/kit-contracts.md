@@ -120,8 +120,10 @@ already holds an unrelated `writing` key would give it this meaning.
 Status: the `stack` side is done (#78); the dotfiles PR (copy the guide outside the editable globs, set the key,
 update `AGENTS.md:45`) is pending.
 
-With the embedded fallback the change is additive: no prompt of an existing configuration without the key changes,
-and the new error needs the new key, so it is a method choice. It becomes an owner decision if the embedded default is
+With the embedded fallback the `writing` key is additive: no prompt of an existing configuration without the key
+changes, and its errors need the key, so it is a method choice. The regular-file rule is not additive: a
+`.stack/improve.toml` that is a directory, a gitlink (submodule) or a symlink is `warn` and stop instead of `pass`
+(a directory or gitlink read as absent) or a read of the link target's name. It becomes an owner decision if the embedded default is
 dropped (targets without the key would lose the writing section). It would change if a second target wanted the same
 rules (a shared default in `stack-improve` fits that better), or if improve stopped editing agent instructions.
 

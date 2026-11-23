@@ -341,11 +341,13 @@ step's timeout is cut to what the deadline leaves after the reserve and the late
    writing = "docs/writing.md"   # optional; the writing guide of the prompt (step 9)
    ```
    `**` at the end of a pattern matches at least one segment (`skills/**` never matches a file named `skills`); in
-   the middle it matches zero or more. A repository file is read at the base commit only when `git ls-tree -z
-   --full-tree <base_oid> -- <path>`, parsed record by record (mode, type, oid, path), shows it as a regular-file
-   blob (mode `100644` or `100755`); its content is `git cat-file blob <oid>`. A symlink (`120000`, whose blob is the
-   target's name), a directory or a submodule is `warn` and stop, as is a failed lookup or read. `.stack/improve.toml`
-   absent → `pass` "`<repo>` has no .stack/improve.toml". Invalid → `warn`. Fetch failure → `warn`.
+   the middle it matches zero or more. Keys match exactly; a key in another case (`Paths`, `Writing`) is unknown and
+   ignored. A repository file is read at the base commit only when `git --literal-pathspecs ls-tree -z --full-tree
+   <base_oid> -- <path>` (inherited `GIT_*_PATHSPECS` dropped, so a name such as `:(glob)x` is a file name), parsed
+   record by record (mode, type, oid, path), shows it as a regular-file blob (mode `100644` or `100755`); its content
+   is `git cat-file blob <oid>`. A symlink (`120000`, whose blob is the target's name), a directory or a submodule is
+   `warn` and stop, as is a failed lookup or read. `.stack/improve.toml` absent → `pass` "`<repo>` has no
+   .stack/improve.toml". Invalid → `warn`. Fetch failure → `warn`.
 
    `writing`, when set, is a repository path checked as a `paths` pattern is, with no `.` or `..` segment and no
    backslash; that file replaces the embedded `writing.md` in the prompt. It must lie outside `paths`, so the model
