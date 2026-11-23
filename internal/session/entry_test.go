@@ -3,6 +3,7 @@ package session
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -162,9 +163,9 @@ func TestCompactEntryDeadline(t *testing.T) {
 				begin := time.Now()
 				ctx, _ := f.start(compactIn(testID))
 				// The stage ends 2 s after its check, or when a longer discovery returns; a fresh
-				// timer after discovery would add 2 s to the lookup. The slack covers the kill.
-				if took, limit := time.Since(begin),
-					max(tt.lookup, 2*time.Second)+750*time.Millisecond; took >= limit {
+				// timer after discovery would end it no earlier than 2 s after the lookup. The
+				// limit is that later end, so the kill and the scheduler have the rest.
+				if took, limit := time.Since(begin), tt.lookup+2*time.Second; took >= limit {
 					t.Fatalf("stage took %s, want under %s: its deadline is 2 s after the check",
 						took, limit)
 				}
@@ -204,10 +205,18 @@ func TestCompactEntryDeadline(t *testing.T) {
 				ctx, _ := f.start(compactIn(testID))
 				calls := proctest.Calls(t, demo)
 				if tt.run {
-					// Started: it answered, or a slow start under -race ran into the 1.1 s
-					// deadline, which only a started extension reports as a timeout.
-					if !strings.Contains(ctx, "ENTRY CTX") &&
-						!strings.Contains(ctx, "[extension demo: warn: timed out") {
+					// Past the check: the stage looked the extension up and ran it under the
+					// 1.1 s deadline the check set on the real clock. A loaded machine can use
+					// that up in the lookup or the fake's start; a time-out or a "not started"
+					// still shows the stage ran, and only the check leaves "[entry skipped".
+					ran := []string{
+						"ENTRY CTX",
+						"[extension demo: warn: timed out",
+						"[extension demo: warn: not started: stage deadline",
+					}
+					if !slices.ContainsFunc(ran, func(s string) bool {
+						return strings.Contains(ctx, s)
+					}) {
 						t.Fatalf("entry did not run:\n%s", squash(ctx))
 					}
 					mustLack(t, ctx, "[entry skipped")
