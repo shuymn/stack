@@ -1,0 +1,2029 @@
+{
+  "request": {
+    "jev": {
+      "claude": "claude",
+      "now": "2026-01-08T12:00:00Z",
+      "observe": "observe.json",
+      "records": {
+        "sha256:02ccb743d6ec0833ef27757ef1d9071cf1acafcfc40ea1c982453fc63d070aac": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r11": {
+                "type": "noul",
+                "noul": 0.19
+              }
+            },
+            "usage": {
+              "input_tokens": 476,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:0714a470a28eb819591036515be3a0579eeb7279d71dbbb92fbc3b2f0c2c8ae8": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r22": {
+                "type": "noul",
+                "noul": 0.81
+              }
+            },
+            "usage": {
+              "input_tokens": 482,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:27ecf17f5237589e30e2c253931cca8bcb5c1e0cfcabc86a49a336787d8a843f": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r8": {
+                "type": "noul",
+                "noul": 0.95
+              }
+            },
+            "usage": {
+              "input_tokens": 515,
+              "output_tokens": 22
+            }
+          }
+        },
+        "sha256:2ed7ed142ec26a6e11df42c7b4f0bba69d96652dec8325a11b4a85c82e5cd314": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "kind_r21": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.22,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.38,
+                  "drift": 0.28,
+                  "noise": 0.0,
+                  "request": 0.34
+                }
+              },
+              "kind_r22": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.81,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.1,
+                  "drift": 0.85,
+                  "noise": 0.0,
+                  "request": 0.05
+                }
+              }
+            },
+            "usage": {
+              "input_tokens": 874,
+              "output_tokens": 116
+            }
+          }
+        },
+        "sha256:5984a3fa26e220441a05b85ed7e154b084e938859a4d92eeec0512be108cdfa2": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r18": {
+                "type": "noul",
+                "noul": 0.97
+              }
+            },
+            "usage": {
+              "input_tokens": 478,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:77d7c91dd0ba6e7ef34e91f080a7bb63a5b57d1165abbc06e198557346d811ab": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r10": {
+                "type": "noul",
+                "noul": 0.92
+              }
+            },
+            "usage": {
+              "input_tokens": 446,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:8d9a0a4a8c0a8621e8b32993b1a78c8c7d98d4f3898d0f78e0b8e4d4911d43fe": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r16": {
+                "type": "noul",
+                "noul": 0.06
+              }
+            },
+            "usage": {
+              "input_tokens": 472,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:8ef9d2a8f747505e9608f286b858f466443163e960961b76855e0684a2503236": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r20": {
+                "type": "noul",
+                "noul": 0.91
+              }
+            },
+            "usage": {
+              "input_tokens": 468,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:b42a63ea0fef215ad45d60d62a8a6c79950e7e33fff719da53c20003d00be256": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r12": {
+                "type": "noul",
+                "noul": 0.97
+              }
+            },
+            "usage": {
+              "input_tokens": 480,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:c1ab6d8775a3b1b53ac3b0b4c83852343550d14e52f5cdd1f7cba0c30de6e729": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "kind_r1": {
+                "type": "choice",
+                "choice": "noise",
+                "confidence": 0.92,
+                "probabilities": {
+                  "approval": 0.03,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.94,
+                  "request": 0.03
+                }
+              },
+              "kind_r2": {
+                "type": "choice",
+                "choice": "noise",
+                "confidence": 0.94,
+                "probabilities": {
+                  "approval": 0.03,
+                  "correction": 0.0,
+                  "drift": 0.01,
+                  "noise": 0.95,
+                  "request": 0.01
+                }
+              },
+              "kind_r3": {
+                "type": "choice",
+                "choice": "noise",
+                "confidence": 0.79,
+                "probabilities": {
+                  "approval": 0.1,
+                  "correction": 0.02,
+                  "drift": 0.01,
+                  "noise": 0.83,
+                  "request": 0.04
+                }
+              },
+              "kind_r4": {
+                "type": "choice",
+                "choice": "request",
+                "confidence": 0.47,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.42,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 0.58
+                }
+              },
+              "kind_r5": {
+                "type": "choice",
+                "choice": "approval",
+                "confidence": 0.98,
+                "probabilities": {
+                  "approval": 0.98,
+                  "correction": 0.02,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r6": {
+                "type": "choice",
+                "choice": "approval",
+                "confidence": 1.0,
+                "probabilities": {
+                  "approval": 1.0,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r7": {
+                "type": "choice",
+                "choice": "approval",
+                "confidence": 1.0,
+                "probabilities": {
+                  "approval": 1.0,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r8": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.79,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.17,
+                  "drift": 0.83,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r9": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.52,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.38,
+                  "drift": 0.62,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r10": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.5,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.6,
+                  "drift": 0.4,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r11": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.96,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.03,
+                  "drift": 0.97,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r12": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.89,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.09,
+                  "drift": 0.91,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r13": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.91,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.07,
+                  "drift": 0.93,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r14": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.4,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.25,
+                  "drift": 0.52,
+                  "noise": 0.0,
+                  "request": 0.23
+                }
+              },
+              "kind_r15": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.73,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.78,
+                  "drift": 0.21,
+                  "noise": 0.0,
+                  "request": 0.01
+                }
+              },
+              "kind_r16": {
+                "type": "choice",
+                "choice": "request",
+                "confidence": 0.47,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.38,
+                  "drift": 0.04,
+                  "noise": 0.0,
+                  "request": 0.58
+                }
+              },
+              "kind_r17": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.82,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.86,
+                  "drift": 0.13,
+                  "noise": 0.0,
+                  "request": 0.01
+                }
+              },
+              "kind_r18": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.94,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.95,
+                  "drift": 0.04,
+                  "noise": 0.0,
+                  "request": 0.01
+                }
+              },
+              "kind_r19": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.39,
+                "probabilities": {
+                  "approval": 0.02,
+                  "correction": 0.39,
+                  "drift": 0.51,
+                  "noise": 0.0,
+                  "request": 0.08
+                }
+              },
+              "kind_r20": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.82,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.13,
+                  "drift": 0.86,
+                  "noise": 0.0,
+                  "request": 0.01
+                }
+              }
+            },
+            "usage": {
+              "input_tokens": 6461,
+              "output_tokens": 1110
+            }
+          }
+        },
+        "sha256:c859f9c7bde7520f4e89ab04c82368f5baede8b193030d65e270eaf74c9e36dd": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r19": {
+                "type": "noul",
+                "noul": 0.87
+              }
+            },
+            "usage": {
+              "input_tokens": 454,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:cede99ee6ed153929e7207987df195200de695c6ebd58bbb7c046b4027a78326": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r14": {
+                "type": "noul",
+                "noul": 0.93
+              }
+            },
+            "usage": {
+              "input_tokens": 474,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:d38c7bb12cf220bfa6cc47df7bb4f3a1d4b8d5d22c12ba0b3cb9c3e6808b2c78": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r9": {
+                "type": "noul",
+                "noul": 0.23
+              }
+            },
+            "usage": {
+              "input_tokens": 525,
+              "output_tokens": 22
+            }
+          }
+        },
+        "sha256:dad3eea68c2cf9d0a7f05230eabcdd8f5aa80afec97cb8c2a4b712abcd1b6280": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r17": {
+                "type": "noul",
+                "noul": 0.96
+              }
+            },
+            "usage": {
+              "input_tokens": 497,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:dd37ac70d246600999df441c7a93a419a86ca52c4a812f8560e3c77613ef3694": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r15": {
+                "type": "noul",
+                "noul": 0.12
+              }
+            },
+            "usage": {
+              "input_tokens": 494,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:debcf116890ecb0503348332acbac4254a791dacc6779c583a912e4f5b5851d3": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r13": {
+                "type": "noul",
+                "noul": 0.45
+              }
+            },
+            "usage": {
+              "input_tokens": 487,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:fd01fcf14c88c63f4b896954005b6cca9d65badc14e66345a099d53f6f3a2d35": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r21": {
+                "type": "noul",
+                "noul": 0.7
+              }
+            },
+            "usage": {
+              "input_tokens": 476,
+              "output_tokens": 23
+            }
+          }
+        }
+      },
+      "t3": {
+        "th:fit-a:p2": {
+          "cwd": "p2",
+          "rows": [
+            {
+              "message_id": "m000",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:07.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o2\",\"text\":\"見出しのスタイルは変更しないで、リンク切れだけ直して。\"}"
+            },
+            {
+              "message_id": "m001",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:08.000Z",
+              "payload_json": "{\"text\":\"docs/guide.md の見出しをすべて Title Case に書き換えました。\"}"
+            },
+            {
+              "message_id": "m002",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:09.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r2\",\"text\":\"戻して\"}"
+            },
+            {
+              "message_id": "m003",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:10.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o3\",\"text\":\"見出しを Title Case に統一して。\"}"
+            },
+            {
+              "message_id": "m004",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:11.000Z",
+              "payload_json": "{\"text\":\"docs/guide.md の見出しをすべて Title Case に書き換えました。\"}"
+            },
+            {
+              "message_id": "m005",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:12.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r3\",\"text\":\"戻して\"}"
+            },
+            {
+              "message_id": "m006",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:37.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o12\",\"text\":\"Update the README install steps.\"}"
+            },
+            {
+              "message_id": "m007",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:38.000Z",
+              "payload_json": "{\"text\":\"I rewrote the install steps and deleted the changelog section as outdated.\"}"
+            },
+            {
+              "message_id": "m008",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:39.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r12\",\"text\":\"never delete changelog entries, and only touch the install steps\"}"
+            },
+            {
+              "message_id": "m009",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:49.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o16\",\"text\":\"リンクチェッカーを実行して。\"}"
+            },
+            {
+              "message_id": "m010",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:50.000Z",
+              "payload_json": "{\"text\":\"チェックが完了し、問題はありませんでした。\"}"
+            },
+            {
+              "message_id": "m011",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:51.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r16\",\"text\":\"OK、マージしました\"}"
+            },
+            {
+              "message_id": "m012",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:58.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o19\",\"text\":\"画像の説明を確認して。\"}"
+            },
+            {
+              "message_id": "m013",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:59.000Z",
+              "payload_json": "{\"text\":\"画像の説明を確認しました。\"}"
+            },
+            {
+              "message_id": "m014",
+              "role": "user",
+              "created_at": "2026-01-08T09:01:00.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r19\",\"text\":\"テスト、てすと\"}"
+            },
+            {
+              "message_id": "m015",
+              "role": "user",
+              "created_at": "2026-01-08T09:01:04.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o21\",\"text\":\"PR のリンクをください。\"}"
+            },
+            {
+              "message_id": "m016",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:01:05.000Z",
+              "payload_json": "{\"text\":\"PR を作成しました。\"}"
+            },
+            {
+              "message_id": "m017",
+              "role": "user",
+              "created_at": "2026-01-08T09:01:06.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r21\",\"text\":\"https://example.com/pr/42\"}"
+            }
+          ]
+        }
+      }
+    },
+    "stage": "cycle"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": [],
+    "context": "jev-classify (jev-1.14.0): 22 owner replies: 0 qualified (0 new, 0 duplicate, 0 dup unassessed), 0 unqualified, 0 unresolved, 22 unevaluated; report ~/.local/state/stack/jev-classify/latest.json\nunevaluated: 22 (classification disabled 22)\nqualification is disabled: the duplicate decision failed its own gate, so the `new` list is empty; REVIEW\nthe duplicate check is disabled: heldout precision 0.77, recall 1.00 miss the target 0.80 / 0.50",
+    "report": {
+      "complete": true,
+      "counts": {
+        "classified": 0,
+        "dup_unassessed": 0,
+        "dup_unassessed_lookup": 0,
+        "duplicate": 0,
+        "items": 22,
+        "new": 0,
+        "not_done": 0,
+        "qualified": 0,
+        "unevaluated": 22,
+        "unresolved": 0
+      },
+      "decisions": {
+        "duplicate": "disabled",
+        "qualification": "disabled"
+      },
+      "items": [
+        {
+          "id": "fit-a01",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p1/s.jsonl:3"
+        },
+        {
+          "id": "fit-a02",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p1/s.jsonl:6"
+        },
+        {
+          "id": "fit-a03",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "t3:th:fit-a:p2:r2"
+        },
+        {
+          "id": "fit-a04",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "t3:th:fit-a:p2:r3"
+        },
+        {
+          "id": "fit-a05",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p1/s.jsonl:9"
+        },
+        {
+          "id": "fit-a06",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p1/s.jsonl:12"
+        },
+        {
+          "id": "fit-a07",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p1/s.jsonl:15"
+        },
+        {
+          "id": "fit-a08",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p1/s.jsonl:18"
+        },
+        {
+          "id": "fit-a09",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p1/s.jsonl:21"
+        },
+        {
+          "id": "fit-a10",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p1/s.jsonl:24"
+        },
+        {
+          "id": "fit-a11",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p3/s.jsonl:3"
+        },
+        {
+          "id": "fit-a12",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p1/s.jsonl:27"
+        },
+        {
+          "id": "fit-a13",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "t3:th:fit-a:p2:r12"
+        },
+        {
+          "id": "fit-a14",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p1/s.jsonl:30"
+        },
+        {
+          "id": "fit-a15",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p1/s.jsonl:33"
+        },
+        {
+          "id": "fit-a16",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p1/s.jsonl:36"
+        },
+        {
+          "id": "fit-a17",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "t3:th:fit-a:p2:r16"
+        },
+        {
+          "id": "fit-a18",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p1/s.jsonl:39"
+        },
+        {
+          "id": "fit-a19",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p1/s.jsonl:42"
+        },
+        {
+          "id": "fit-a20",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "t3:th:fit-a:p2:r19"
+        },
+        {
+          "id": "fit-a21",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p1/s.jsonl:45"
+        },
+        {
+          "id": "fit-a22",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "t3:th:fit-a:p2:r21"
+        }
+      ],
+      "model": "jev-1.14.0",
+      "run": {
+        "finished": "2026-01-08T12:00:00Z",
+        "id": "",
+        "started": "2026-01-08T12:00:00Z"
+      },
+      "sources": {
+        "t3": {
+          "error": "",
+          "status": "ok"
+        },
+        "transcripts": {
+          "error": "",
+          "status": "ok"
+        }
+      },
+      "usage": {
+        "input_tokens": 0,
+        "requests": 0,
+        "unknown": 0
+      },
+      "version": 1,
+      "window": {
+        "since": "2026-01-01T12:00:00Z",
+        "until": "2026-01-08T11:59:00Z"
+      }
+    }
+  },
+  "repo": {
+    "layouts": [
+      {
+        "kind": "checkout",
+        "dir": "p1"
+      },
+      {
+        "kind": "checkout",
+        "dir": "p2"
+      },
+      {
+        "kind": "checkout",
+        "dir": "p3"
+      }
+    ]
+  },
+  "label": {
+    "items": {
+      "fit-a01": {
+        "dup": "duplicate",
+        "group": "pair-1",
+        "hard": true,
+        "kind": "drift",
+        "lang": "en",
+        "why": "restores the owner's scope (log format only) after the agent changed rounding; an index line forbids rounding changes"
+      },
+      "fit-a02": {
+        "group": "pair-1",
+        "hard": true,
+        "kind": "request",
+        "lang": "en",
+        "why": "the same assistant and reply as fit-a01, but the owner had asked for the rounding change, so the reply is a new task"
+      },
+      "fit-a03": {
+        "dup": "new",
+        "group": "pair-2",
+        "hard": true,
+        "kind": "drift",
+        "lang": "ja",
+        "why": "restores the scope (links only) after a heading rewrite; the index states a heading style rule, not this scope"
+      },
+      "fit-a04": {
+        "group": "pair-2",
+        "hard": true,
+        "kind": "request",
+        "lang": "ja",
+        "why": "the same assistant and reply as fit-a03, but the owner had asked for the rewrite, so the reply is a new task"
+      },
+      "fit-a05": {
+        "dup": "duplicate",
+        "kind": "correction",
+        "lang": "en",
+        "why": "says the agent's reading of the check was wrong; the index states the rule"
+      },
+      "fit-a06": {
+        "dup": "duplicate",
+        "hard": true,
+        "kind": "correction",
+        "lang": "ja",
+        "why": "a correction asked as a question; the index states the vendor rule"
+      },
+      "fit-a07": {
+        "dup": "new",
+        "hard": true,
+        "kind": "correction",
+        "lang": "en",
+        "why": "a standing rule that never says wrong; no index line covers test style"
+      },
+      "fit-a08": {
+        "dup": "new",
+        "hard": true,
+        "kind": "correction",
+        "lang": "ja",
+        "why": "a correction; the index only states the Conventional Commits format, a different rule on the same topic"
+      },
+      "fit-a09": {
+        "dup": "duplicate",
+        "kind": "correction",
+        "lang": "en",
+        "why": "says the approach was wrong; the index states the size limit"
+      },
+      "fit-a10": {
+        "dup": "new",
+        "kind": "drift",
+        "lang": "en",
+        "why": "restores the scope the owner set; no index line states a scope rule"
+      },
+      "fit-a11": {
+        "dup": "duplicate",
+        "kind": "drift",
+        "lang": "ja",
+        "why": "restores the scope the owner set; the index line states the same scope rule"
+      },
+      "fit-a12": {
+        "dup": "new",
+        "hard": true,
+        "kind": "drift",
+        "lang": "en",
+        "why": "restores the scope after the agent changed shared defaults; no index line covers scope"
+      },
+      "fit-a13": {
+        "dup": "duplicate",
+        "kind": "drift",
+        "lang": "en",
+        "overlap": true,
+        "why": "an overlap: corrects the deletion and restores the scope; the index states the changelog rule"
+      },
+      "fit-a14": {
+        "dup": "new",
+        "hard": true,
+        "kind": "drift",
+        "lang": "ja",
+        "overlap": true,
+        "why": "an overlap: says the change was wrong and restores the scope; no index line covers it"
+      },
+      "fit-a15": {
+        "dup": "duplicate",
+        "hard": true,
+        "kind": "drift",
+        "lang": "ja",
+        "overlap": true,
+        "why": "an overlap: corrects the vendor edit and restores the scope; the index states the vendor rule"
+      },
+      "fit-a16": {
+        "kind": "approval",
+        "lang": "en",
+        "why": "acknowledges a result"
+      },
+      "fit-a17": {
+        "kind": "approval",
+        "lang": "ja",
+        "why": "acknowledges a result"
+      },
+      "fit-a18": {
+        "hard": true,
+        "kind": "approval",
+        "lang": "en",
+        "why": "opens with no but accepts the change"
+      },
+      "fit-a19": {
+        "hard": true,
+        "kind": "request",
+        "lang": "en",
+        "why": "reports a defect in what was built, without saying the agent worked wrongly"
+      },
+      "fit-a20": {
+        "hard": true,
+        "kind": "noise",
+        "lang": "ja",
+        "why": "an input-method test sentence that reads as text"
+      },
+      "fit-a21": {
+        "kind": "noise",
+        "lang": "en",
+        "why": "a lone hash"
+      },
+      "fit-a22": {
+        "kind": "noise",
+        "lang": "ja",
+        "why": "a lone link"
+      }
+    },
+    "split": "fit"
+  },
+  "observe": {
+    "items": [
+      {
+        "id": "fit-a01",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:3",
+        "excerpt": "revert that",
+        "ts": "2026-01-08T09:00:03Z"
+      },
+      {
+        "id": "fit-a02",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:6",
+        "excerpt": "revert that",
+        "ts": "2026-01-08T09:00:06Z"
+      },
+      {
+        "id": "fit-a03",
+        "signal": "owner-reply",
+        "where": "t3:th:fit-a:p2:r2",
+        "excerpt": "戻して",
+        "ts": "2026-01-08T09:00:09Z"
+      },
+      {
+        "id": "fit-a04",
+        "signal": "owner-reply",
+        "where": "t3:th:fit-a:p2:r3",
+        "excerpt": "戻して",
+        "ts": "2026-01-08T09:00:12Z"
+      },
+      {
+        "id": "fit-a05",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:9",
+        "excerpt": "no, you have to run scripts/test, not just the unit tests",
+        "ts": "2026-01-08T09:00:15Z"
+      },
+      {
+        "id": "fit-a06",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:12",
+        "excerpt": "vendor は触らないでって言ったよね？",
+        "ts": "2026-01-08T09:00:18Z"
+      },
+      {
+        "id": "fit-a07",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:15",
+        "excerpt": "write tests in table-driven style please",
+        "ts": "2026-01-08T09:00:21Z"
+      },
+      {
+        "id": "fit-a08",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:18",
+        "excerpt": "絵文字は使わないで",
+        "ts": "2026-01-08T09:00:24Z"
+      },
+      {
+        "id": "fit-a09",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:21",
+        "excerpt": "that PR is way too big, split it",
+        "ts": "2026-01-08T09:00:27Z"
+      },
+      {
+        "id": "fit-a10",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:24",
+        "excerpt": "I asked for the null pointer fix only; undo the refactor",
+        "ts": "2026-01-08T09:00:30Z"
+      },
+      {
+        "id": "fit-a11",
+        "signal": "owner-reply",
+        "where": "p3/s.jsonl:3",
+        "excerpt": "文言だけって言ったでしょ、レイアウトは戻して",
+        "ts": "2026-01-08T09:00:33Z"
+      },
+      {
+        "id": "fit-a12",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:27",
+        "excerpt": "just the webhook retry, put the timeouts back",
+        "ts": "2026-01-08T09:00:36Z"
+      },
+      {
+        "id": "fit-a13",
+        "signal": "owner-reply",
+        "where": "t3:th:fit-a:p2:r12",
+        "excerpt": "never delete changelog entries, and only touch the install steps",
+        "ts": "2026-01-08T09:00:39Z"
+      },
+      {
+        "id": "fit-a14",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:30",
+        "excerpt": "ステータスコードは触らないで。それは間違い、メッセージだけ",
+        "ts": "2026-01-08T09:00:42Z"
+      },
+      {
+        "id": "fit-a15",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:33",
+        "excerpt": "それは違う。vendor は触らないで、Go のバージョンだけ",
+        "ts": "2026-01-08T09:00:45Z"
+      },
+      {
+        "id": "fit-a16",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:36",
+        "excerpt": "ok, merged",
+        "ts": "2026-01-08T09:00:48Z"
+      },
+      {
+        "id": "fit-a17",
+        "signal": "owner-reply",
+        "where": "t3:th:fit-a:p2:r16",
+        "excerpt": "OK、マージしました",
+        "ts": "2026-01-08T09:00:51Z"
+      },
+      {
+        "id": "fit-a18",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:39",
+        "excerpt": "no, that's fine — ship it",
+        "ts": "2026-01-08T09:00:54Z"
+      },
+      {
+        "id": "fit-a19",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:42",
+        "excerpt": "the export still crashes on empty invoices",
+        "ts": "2026-01-08T09:00:57Z"
+      },
+      {
+        "id": "fit-a20",
+        "signal": "owner-reply",
+        "where": "t3:th:fit-a:p2:r19",
+        "excerpt": "テスト、てすと",
+        "ts": "2026-01-08T09:01:00Z"
+      },
+      {
+        "id": "fit-a21",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:45",
+        "excerpt": "3f9c2ab",
+        "ts": "2026-01-08T09:01:03Z"
+      },
+      {
+        "id": "fit-a22",
+        "signal": "owner-reply",
+        "where": "t3:th:fit-a:p2:r21",
+        "excerpt": "https://example.com/pr/42",
+        "ts": "2026-01-08T09:01:06Z"
+      }
+    ],
+    "sources": {
+      "t3": {
+        "status": "ok",
+        "error": ""
+      },
+      "transcripts": {
+        "status": "ok",
+        "error": ""
+      }
+    },
+    "version": 1,
+    "window": {
+      "since": "2026-01-01T12:00:00Z",
+      "until": "2026-01-08T11:59:00Z"
+    }
+  },
+  "files": {
+    "p1/s.jsonl": [
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "Do not change any rounding behaviour; I only want the log format fixed.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:01Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "I changed the invoice total rounding from half-up to banker's rounding in billing/total.go.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:02Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "revert that",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:03Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "Please switch invoice totals to banker's rounding.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:04Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "I changed the invoice total rounding from half-up to banker's rounding in billing/total.go.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:05Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "revert that",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:06Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "Fix the date parsing bug in the importer.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:13Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "I pushed the branch after the unit tests passed.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:14Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "no, you have to run scripts/test, not just the unit tests",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:15Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "ログ出力のバグを直して。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:16Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "vendor/ 内のライブラリのバグを直接修正しました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:17Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "vendor は触らないでって言ったよね？",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:18Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "Add tests for the invoice exporter.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:19Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "I added three tests, each a separate function with copied setup.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:20Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "write tests in table-driven style please",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:21Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "リリースノートの草稿をコミットして。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:22Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "コミットメッセージに絵文字を付けました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:23Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "絵文字は使わないで",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:24Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "Split the exporter into its own package.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:25Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "I opened a PR with 900 changed lines.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:26Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "that PR is way too big, split it",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:27Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "Fix the null pointer in the invoice exporter only.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:28Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "I fixed it, and I also refactored the whole exporter package and renamed three types.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:29Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "I asked for the null pointer fix only; undo the refactor",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:30Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "Add a retry to the webhook sender.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:34Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "I added retries and also changed the timeout defaults for every client.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:35Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "just the webhook retry, put the timeouts back",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:36Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "ログイン API のエラーメッセージだけ直して。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:40Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "メッセージを直して、ステータスコードも 200 に変えました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:41Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "ステータスコードは触らないで。それは間違い、メッセージだけ",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:42Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "CI の Go のバージョンだけ上げて。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:43Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "Go を上げて、ついでに vendor/ の依存を 3 つ更新しました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:44Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "それは違う。vendor は触らないで、Go のバージョンだけ",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:45Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "Run the migration on staging.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:46Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "Migration finished; all checks are green.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:47Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "ok, merged",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:48Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "Use the cached client in the exporter.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:52Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "I switched to the cached client as discussed.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:53Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "no, that's fine — ship it",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:54Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "Add an export for empty invoices.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:55Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "The export for empty invoices is in place.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:56Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "the export still crashes on empty invoices",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:57Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "Show the failing commit.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:01Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "The failing commit is the one before the rebase.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:01:02Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "3f9c2ab",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:03Z",
+        "type": "user"
+      }
+    ],
+    "p3/s.jsonl": [
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "管理画面のボタン文言だけ直して。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:31Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": [
+            {
+              "text": "文言のついでにレイアウトも書き換えました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:32Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "文言だけって言ったでしょ、レイアウトは戻して",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:33Z",
+        "type": "user"
+      }
+    ]
+  },
+  "memory": {
+    "p1": "- Always run scripts/test before pushing.\n- Never edit files under vendor/.\n- Commit messages follow Conventional Commits.\n- 返信は日本語で書く。\n- Keep each PR under 400 changed lines.\n- Do not add new dependencies without asking.\n- Never change money rounding rules without asking.\n",
+    "p2": "- Use sentence case for headings.\n- Screenshots go in docs/img and need alt text.\n- Never rewrite the changelog history.\n- Run the link checker before publishing.\n",
+    "p3": "- 依頼された範囲だけを変更する。ついでの書き換えはしない。\n- Keep components small.\n- Use the shared date formatter.\n"
+  },
+  "samples": {
+    "sha256:02ccb743d6ec0833ef27757ef1d9071cf1acafcfc40ea1c982453fc63d070aac": {
+      "dup_r11": [
+        0.19,
+        0.18,
+        0.14
+      ]
+    },
+    "sha256:0714a470a28eb819591036515be3a0579eeb7279d71dbbb92fbc3b2f0c2c8ae8": {
+      "dup_r22": [
+        0.81,
+        0.82,
+        0.87
+      ]
+    },
+    "sha256:27ecf17f5237589e30e2c253931cca8bcb5c1e0cfcabc86a49a336787d8a843f": {
+      "dup_r8": [
+        0.95,
+        0.96,
+        0.96
+      ]
+    },
+    "sha256:2ed7ed142ec26a6e11df42c7b4f0bba69d96652dec8325a11b4a85c82e5cd314": {
+      "kind_r21": [
+        0.66,
+        0.64,
+        0.61
+      ],
+      "kind_r22": [
+        0.95,
+        0.94,
+        0.94
+      ]
+    },
+    "sha256:5984a3fa26e220441a05b85ed7e154b084e938859a4d92eeec0512be108cdfa2": {
+      "dup_r18": [
+        0.97,
+        0.97,
+        0.97
+      ]
+    },
+    "sha256:77d7c91dd0ba6e7ef34e91f080a7bb63a5b57d1165abbc06e198557346d811ab": {
+      "dup_r10": [
+        0.92,
+        0.46,
+        0.88
+      ]
+    },
+    "sha256:8d9a0a4a8c0a8621e8b32993b1a78c8c7d98d4f3898d0f78e0b8e4d4911d43fe": {
+      "dup_r16": [
+        0.06,
+        0.06,
+        0.06
+      ]
+    },
+    "sha256:8ef9d2a8f747505e9608f286b858f466443163e960961b76855e0684a2503236": {
+      "dup_r20": [
+        0.91,
+        0.89,
+        0.89
+      ]
+    },
+    "sha256:b42a63ea0fef215ad45d60d62a8a6c79950e7e33fff719da53c20003d00be256": {
+      "dup_r12": [
+        0.97,
+        0.96,
+        0.96
+      ]
+    },
+    "sha256:c1ab6d8775a3b1b53ac3b0b4c83852343550d14e52f5cdd1f7cba0c30de6e729": {
+      "kind_r1": [
+        0,
+        0,
+        0
+      ],
+      "kind_r10": [
+        1,
+        1,
+        1
+      ],
+      "kind_r11": [
+        1,
+        1,
+        1
+      ],
+      "kind_r12": [
+        1,
+        1,
+        1
+      ],
+      "kind_r13": [
+        1,
+        1,
+        1
+      ],
+      "kind_r14": [
+        0.77,
+        0.75,
+        0.78
+      ],
+      "kind_r15": [
+        0.99,
+        0.99,
+        0.99
+      ],
+      "kind_r16": [
+        0.42,
+        0.43000000000000005,
+        0.42000000000000004
+      ],
+      "kind_r17": [
+        0.99,
+        0.99,
+        0.99
+      ],
+      "kind_r18": [
+        0.99,
+        0.99,
+        0.99
+      ],
+      "kind_r19": [
+        0.9,
+        0.87,
+        0.88
+      ],
+      "kind_r2": [
+        0.01,
+        0.01,
+        0.01
+      ],
+      "kind_r20": [
+        0.99,
+        0.9700000000000001,
+        0.97
+      ],
+      "kind_r3": [
+        0.03,
+        0.03,
+        0.03
+      ],
+      "kind_r4": [
+        0.42,
+        0.31,
+        0.42
+      ],
+      "kind_r5": [
+        0.02,
+        0.02,
+        0.02
+      ],
+      "kind_r6": [
+        0,
+        0,
+        0
+      ],
+      "kind_r7": [
+        0,
+        0,
+        0
+      ],
+      "kind_r8": [
+        1,
+        1,
+        1
+      ],
+      "kind_r9": [
+        1,
+        1,
+        1
+      ]
+    },
+    "sha256:c859f9c7bde7520f4e89ab04c82368f5baede8b193030d65e270eaf74c9e36dd": {
+      "dup_r19": [
+        0.87,
+        0.89,
+        0.93
+      ]
+    },
+    "sha256:cede99ee6ed153929e7207987df195200de695c6ebd58bbb7c046b4027a78326": {
+      "dup_r14": [
+        0.93,
+        0.91,
+        0.94
+      ]
+    },
+    "sha256:d38c7bb12cf220bfa6cc47df7bb4f3a1d4b8d5d22c12ba0b3cb9c3e6808b2c78": {
+      "dup_r9": [
+        0.23,
+        0.17,
+        0.19
+      ]
+    },
+    "sha256:dad3eea68c2cf9d0a7f05230eabcdd8f5aa80afec97cb8c2a4b712abcd1b6280": {
+      "dup_r17": [
+        0.96,
+        0.96,
+        0.96
+      ]
+    },
+    "sha256:dd37ac70d246600999df441c7a93a419a86ca52c4a812f8560e3c77613ef3694": {
+      "dup_r15": [
+        0.12,
+        0.13,
+        0.12
+      ]
+    },
+    "sha256:debcf116890ecb0503348332acbac4254a791dacc6779c583a912e4f5b5851d3": {
+      "dup_r13": [
+        0.45,
+        0.53,
+        0.32
+      ]
+    },
+    "sha256:fd01fcf14c88c63f4b896954005b6cca9d65badc14e66345a099d53f6f3a2d35": {
+      "dup_r21": [
+        0.7,
+        0.66,
+        0.64
+      ]
+    }
+  }
+}

@@ -1,0 +1,343 @@
+{
+  "synthetic": "records written by hand: each reply's kind_ and dup_ answer is assigned in the fixture's generator and keyed by the body hash the runtime sends; fixed fixtures check behaviour and are never recorded live (jev-calibrate records the cal cases)",
+  "request": {
+    "jev": {
+      "claude": "claude",
+      "now": "2026-01-08T12:00:00Z",
+      "observe": "observe.json",
+      "records": {
+        "sha256:93b76c4b9c2c09c9d7b698d7437bb3653209aab954a40782bdcbb7c7a901ef4b": {
+          "answer": {
+            "answers": {
+              "kind_r1": {
+                "choice": "correction",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.9,
+                  "drift": 0.024999999999999994,
+                  "noise": 0.024999999999999994,
+                  "request": 0.024999999999999994
+                },
+                "type": "choice"
+              },
+              "kind_r2": {
+                "choice": "correction",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.9,
+                  "drift": 0.024999999999999994,
+                  "noise": 0.024999999999999994,
+                  "request": 0.024999999999999994
+                },
+                "type": "choice"
+              },
+              "kind_r3": {
+                "choice": "correction",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.9,
+                  "drift": 0.024999999999999994,
+                  "noise": 0.024999999999999994,
+                  "request": 0.024999999999999994
+                },
+                "type": "choice"
+              },
+              "kind_r4": {
+                "choice": "correction",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.9,
+                  "drift": 0.024999999999999994,
+                  "noise": 0.024999999999999994,
+                  "request": 0.024999999999999994
+                },
+                "type": "choice"
+              }
+            },
+            "model": "jev-1.14.0",
+            "usage": {
+              "input_tokens": 10,
+              "output_tokens": 1
+            }
+          }
+        }
+      },
+      "t3": {
+        "th:a:1": {
+          "cwd": "repo",
+          "rows": [
+            {
+              "message_id": "m000",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:04.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"m:1\",\"text\":\"task B\"}"
+            },
+            {
+              "message_id": "m001",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:05.000Z",
+              "payload_json": "{\"text\":\"closing B\"}"
+            },
+            {
+              "message_id": "m002",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:06.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"m:2\",\"text\":\"fix t3 string\"}"
+            }
+          ]
+        },
+        "th:n": {
+          "cwd": "repo",
+          "rows": [
+            {
+              "message_id": "m000",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:07.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"x\",\"text\":\"task C\"}"
+            },
+            {
+              "message_id": "m001",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:08.000Z",
+              "payload_json": "{\"text\":\"closing C\"}"
+            },
+            {
+              "message_id": "m002",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:09.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":42,\"text\":\"fix numeric\"}"
+            }
+          ]
+        },
+        "th:z": {
+          "cwd": "repo",
+          "rows": [
+            {
+              "message_id": "m000",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:10.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"y\",\"text\":\"task D\"}"
+            },
+            {
+              "message_id": "m001",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:11.000Z",
+              "payload_json": "{\"text\":\"closing D\"}"
+            },
+            {
+              "message_id": "m002",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:12.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":null,\"text\":\"fix null id\"}"
+            }
+          ]
+        }
+      }
+    },
+    "stage": "cycle"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": null,
+    "context": "jev-classify (jev-1.14.0): 4 owner replies: 4 qualified (4 new, 0 duplicate, 0 dup unassessed), 0 unqualified, 0 unresolved, 0 unevaluated; report ~/.local/state/stack/jev-classify/latest.json\ncorrection t3:th:z:: fix null id\ncorrection t3:th:n:42: fix numeric\ncorrection t3:th:a:1:m:2: fix t3 string\ncorrection p/s.jsonl:3: fix tx",
+    "report": {
+      "complete": true,
+      "sources": {
+        "t3": {
+          "status": "ok",
+          "error": ""
+        },
+        "transcripts": {
+          "status": "ok",
+          "error": ""
+        }
+      },
+      "counts": {
+        "items": 4,
+        "classified": 4,
+        "unresolved": 0,
+        "unevaluated": 0,
+        "qualified": 4,
+        "duplicate": 0,
+        "new": 4,
+        "dup_unassessed": 0,
+        "dup_unassessed_lookup": 0,
+        "not_done": 0
+      },
+      "items": [
+        {
+          "id": "it01",
+          "where": "p/s.jsonl:3",
+          "status": "classified",
+          "reason": "",
+          "opener": "owner",
+          "qualified": true,
+          "kind": "correction",
+          "excerpt": "fix tx",
+          "duplicate": "new",
+          "dup_reason": "no memory yet"
+        },
+        {
+          "id": "it02",
+          "where": "t3:th:a:1:m:2",
+          "status": "classified",
+          "reason": "",
+          "opener": "owner",
+          "qualified": true,
+          "kind": "correction",
+          "excerpt": "fix t3 string",
+          "duplicate": "new",
+          "dup_reason": "no memory yet"
+        },
+        {
+          "id": "it03",
+          "where": "t3:th:n:42",
+          "status": "classified",
+          "reason": "",
+          "opener": "owner",
+          "qualified": true,
+          "kind": "correction",
+          "excerpt": "fix numeric",
+          "duplicate": "new",
+          "dup_reason": "no memory yet"
+        },
+        {
+          "id": "it04",
+          "where": "t3:th:z:",
+          "status": "classified",
+          "reason": "",
+          "opener": "owner",
+          "qualified": true,
+          "kind": "correction",
+          "excerpt": "fix null id",
+          "duplicate": "new",
+          "dup_reason": "no memory yet"
+        }
+      ]
+    },
+    "sent": [
+      {
+        "reply": "fix tx",
+        "owner": "task A",
+        "assistant": "closing A"
+      },
+      {
+        "reply": "fix t3 string",
+        "owner": "task B",
+        "assistant": "closing B"
+      },
+      {
+        "reply": "fix numeric",
+        "owner": "task C",
+        "assistant": "closing C"
+      },
+      {
+        "reply": "fix null id",
+        "owner": "task D",
+        "assistant": "closing D"
+      }
+    ]
+  },
+  "repo": {
+    "layouts": [
+      {
+        "kind": "checkout",
+        "dir": "repo"
+      }
+    ]
+  },
+  "observe": {
+    "items": [
+      {
+        "id": "it01",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:3",
+        "excerpt": "fix tx",
+        "ts": "2026-01-08T09:00:03Z"
+      },
+      {
+        "id": "it02",
+        "signal": "owner-reply",
+        "where": "t3:th:a:1:m:2",
+        "excerpt": "fix t3 string",
+        "ts": "2026-01-08T09:00:06Z"
+      },
+      {
+        "id": "it03",
+        "signal": "owner-reply",
+        "where": "t3:th:n:42",
+        "excerpt": "fix numeric",
+        "ts": "2026-01-08T09:00:09Z"
+      },
+      {
+        "id": "it04",
+        "signal": "owner-reply",
+        "where": "t3:th:z:",
+        "excerpt": "fix null id",
+        "ts": "2026-01-08T09:00:12Z"
+      }
+    ],
+    "sources": {
+      "t3": {
+        "status": "ok",
+        "error": ""
+      },
+      "transcripts": {
+        "status": "ok",
+        "error": ""
+      }
+    },
+    "version": 1,
+    "window": {
+      "since": "2026-01-01T12:00:00Z",
+      "until": "2026-01-08T11:59:00Z"
+    }
+  },
+  "files": {
+    "p/s.jsonl": [
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "task A",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:01Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "text": "closing A",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:02Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "fix tx",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:03Z",
+        "type": "user"
+      }
+    ]
+  }
+}

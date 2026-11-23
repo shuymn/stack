@@ -1,5 +1,6 @@
-// Command jev-calibrate records live Jev answers into fixtures/jev/semantic and refits
-// jev-semantic's cutoffs (docs/design/phase4-jev.md §3.5). Run it from the repository
+// Command jev-calibrate records live Jev answers into fixtures/jev/<ext> and refits that
+// extension's cutoffs (docs/design/phase4-jev.md §3.5); --ext picks semantic (the default) or
+// classify. Run it from the repository
 // root with the key (TYPESAFE_API_KEY or the key file); it is not a stage binary. Each planned
 // body is sent three times.
 package main
@@ -35,10 +36,25 @@ func run(
 ) int {
 	fs := flag.NewFlagSet("jev-calibrate", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	fixtures := fs.String("fixtures", "fixtures/jev/semantic", "the semantic fixture directory")
-	table := fs.String("table", "extensions/jev/semantic/cutoffs.json", "the cutoff table to write")
+	ext := fs.String("ext", "semantic", "the extension to calibrate: semantic or classify")
+	fixtures := fs.String("fixtures", "", "the fixture directory (default fixtures/jev/<ext>)")
+	table := fs.String(
+		"table",
+		"",
+		"the cutoff table to write (default extensions/jev/<ext>/cutoffs.json)",
+	)
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
+	}
+	if *ext != "semantic" && *ext != "classify" {
+		_, _ = fmt.Fprintf(stderr, "jev-calibrate: unknown extension %q\n", *ext)
+		return exitUsage
+	}
+	if *fixtures == "" {
+		*fixtures = "fixtures/jev/" + *ext
+	}
+	if *table == "" {
+		*table = "extensions/jev/" + *ext + "/cutoffs.json"
 	}
 	if home == "" {
 		_, _ = fmt.Fprintln(stderr, "jev-calibrate: home directory unknown")
@@ -55,10 +71,17 @@ func run(
 	live := jev.Live{Endpoint: jev.Endpoint(), Key: key, Ledger: &jev.Ledger{
 		Path: jev.LedgerPath(home), Run: jev.RunID(), Extension: "jev-calibrate", Stderr: stderr,
 	}}
-	err = calibrate.Run(ctx, calibrate.Options{
-		Fixtures: *fixtures, Table: *table, Transport: live, Runner: proc.Exec{},
-		Environ: os.Environ(), Stdout: stdout,
-	})
+	if *ext == "classify" {
+		err = calibrate.RunClassify(ctx, calibrate.ClassifyOptions{
+			Fixtures: *fixtures, Table: *table, Transport: live, Runner: proc.Exec{},
+			Environ: os.Environ(), Stdout: stdout,
+		})
+	} else {
+		err = calibrate.Run(ctx, calibrate.Options{
+			Fixtures: *fixtures, Table: *table, Transport: live, Runner: proc.Exec{},
+			Environ: os.Environ(), Stdout: stdout,
+		})
+	}
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "jev-calibrate: %v\n", err)
 		return 1

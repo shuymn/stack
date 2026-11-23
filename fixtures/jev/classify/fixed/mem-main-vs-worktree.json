@@ -1,0 +1,182 @@
+{
+  "synthetic": "records written by hand: each reply's kind_ and dup_ answer is assigned in the fixture's generator and keyed by the body hash the runtime sends; fixed fixtures check behaviour and are never recorded live (jev-calibrate records the cal cases)",
+  "request": {
+    "jev": {
+      "claude": "claude",
+      "now": "2026-01-08T12:00:00Z",
+      "observe": "observe.json",
+      "records": {
+        "sha256:23dacc41a171862e464ff60d739b6580c255ae870c0e212c21169e0efc9948a3": {
+          "answer": {
+            "answers": {
+              "dup_r1": {
+                "noul": 0.9,
+                "type": "noul"
+              }
+            },
+            "model": "jev-1.14.0",
+            "usage": {
+              "input_tokens": 10,
+              "output_tokens": 1
+            }
+          }
+        },
+        "sha256:bbb872fdfb7485cc20aa0db39338eb46c3b0e2c25c37af1998c9cf8e91902eea": {
+          "answer": {
+            "answers": {
+              "kind_r1": {
+                "choice": "correction",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.9,
+                  "drift": 0.024999999999999994,
+                  "noise": 0.024999999999999994,
+                  "request": 0.024999999999999994
+                },
+                "type": "choice"
+              }
+            },
+            "model": "jev-1.14.0",
+            "usage": {
+              "input_tokens": 10,
+              "output_tokens": 1
+            }
+          }
+        }
+      },
+      "t3": {}
+    },
+    "stage": "cycle"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": null,
+    "context": "jev-classify (jev-1.14.0): 1 owner replies: 1 qualified (0 new, 1 duplicate, 0 dup unassessed), 0 unqualified, 0 unresolved, 0 unevaluated; report ~/.local/state/stack/jev-classify/latest.json",
+    "report": {
+      "complete": true,
+      "sources": {
+        "t3": {
+          "status": "ok",
+          "error": ""
+        },
+        "transcripts": {
+          "status": "ok",
+          "error": ""
+        }
+      },
+      "counts": {
+        "items": 1,
+        "classified": 1,
+        "unresolved": 0,
+        "unevaluated": 0,
+        "qualified": 1,
+        "duplicate": 1,
+        "new": 0,
+        "dup_unassessed": 0,
+        "dup_unassessed_lookup": 0,
+        "not_done": 0
+      },
+      "items": [
+        {
+          "id": "it01",
+          "where": "p/s.jsonl:3",
+          "status": "classified",
+          "reason": "",
+          "opener": "owner",
+          "qualified": true,
+          "kind": "correction",
+          "excerpt": "fix: run scripts/test first",
+          "duplicate": "duplicate",
+          "dup_reason": ""
+        }
+      ]
+    }
+  },
+  "repo": {
+    "layouts": [
+      {
+        "kind": "checkout",
+        "dir": "repo"
+      },
+      {
+        "kind": "worktree",
+        "dir": "wt",
+        "of": "repo"
+      }
+    ]
+  },
+  "observe": {
+    "items": [
+      {
+        "id": "it01",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:3",
+        "excerpt": "fix: run scripts/test first",
+        "ts": "2026-01-08T09:00:03Z"
+      }
+    ],
+    "sources": {
+      "t3": {
+        "status": "ok",
+        "error": ""
+      },
+      "transcripts": {
+        "status": "ok",
+        "error": ""
+      }
+    },
+    "version": 1,
+    "window": {
+      "since": "2026-01-01T12:00:00Z",
+      "until": "2026-01-08T11:59:00Z"
+    }
+  },
+  "files": {
+    "p/s.jsonl": [
+      {
+        "cwd": "wt",
+        "message": {
+          "content": "Fix the flaky test",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:01Z",
+        "type": "user"
+      },
+      {
+        "cwd": "wt",
+        "message": {
+          "content": [
+            {
+              "text": "I pushed without running anything.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:02Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "wt",
+        "message": {
+          "content": "fix: run scripts/test first",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:03Z",
+        "type": "user"
+      }
+    ]
+  },
+  "memory": {
+    "repo": "- Always run scripts/test before pushing.\n",
+    "wt": "- Decoy: never run the tests.\n"
+  }
+}

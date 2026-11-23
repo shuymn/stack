@@ -1,0 +1,73 @@
+{
+  "synthetic": "records written by hand: each reply's kind_ and dup_ answer is assigned in the fixture's generator and keyed by the body hash the runtime sends; fixed fixtures check behaviour and are never recorded live (jev-calibrate records the cal cases)",
+  "request": {
+    "jev": {
+      "claude": "claude",
+      "now": "2026-01-08T12:00:00Z",
+      "observe": "observe.json",
+      "records": {},
+      "t3": {}
+    },
+    "stage": "cycle"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": null,
+    "context": "jev-classify (jev-1.14.0): 0 owner replies: 0 qualified (0 new, 0 duplicate, 0 dup unassessed), 0 unqualified, 0 unresolved, 0 unevaluated; report ~/.local/state/stack/jev-classify/latest.json\nobserve source transcripts timeout: deadline passed; its replies are missing from this report\nqualification is disabled: disabled in this test build",
+    "report": {
+      "complete": true,
+      "sources": {
+        "t3": {
+          "status": "ok",
+          "error": ""
+        },
+        "transcripts": {
+          "status": "timeout",
+          "error": "deadline passed"
+        }
+      },
+      "counts": {
+        "items": 0,
+        "classified": 0,
+        "unresolved": 0,
+        "unevaluated": 0,
+        "qualified": 0,
+        "duplicate": 0,
+        "new": 0,
+        "dup_unassessed": 0,
+        "dup_unassessed_lookup": 0,
+        "not_done": 0
+      },
+      "items": null
+    }
+  },
+  "repo": {
+    "layouts": [
+      {
+        "kind": "checkout",
+        "dir": "repo"
+      }
+    ]
+  },
+  "observe": {
+    "items": null,
+    "sources": {
+      "t3": {
+        "status": "ok",
+        "error": ""
+      },
+      "transcripts": {
+        "status": "timeout",
+        "error": "deadline passed"
+      }
+    },
+    "version": 1,
+    "window": {
+      "since": "2026-01-01T12:00:00Z",
+      "until": "2026-01-08T11:59:00Z"
+    }
+  },
+  "build": "no-qualification"
+}

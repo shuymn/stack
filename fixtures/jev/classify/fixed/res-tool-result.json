@@ -1,0 +1,180 @@
+{
+  "synthetic": "records written by hand: each reply's kind_ and dup_ answer is assigned in the fixture's generator and keyed by the body hash the runtime sends; fixed fixtures check behaviour and are never recorded live (jev-calibrate records the cal cases)",
+  "request": {
+    "jev": {
+      "claude": "claude",
+      "now": "2026-01-08T12:00:00Z",
+      "observe": "observe.json",
+      "records": {
+        "sha256:eb544e1fd2ba877f0eb2b055d41f2158dbda4bab5603b0deb45cd72b7a9b14c1": {
+          "answer": {
+            "answers": {
+              "kind_r1": {
+                "choice": "correction",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.9,
+                  "drift": 0.024999999999999994,
+                  "noise": 0.024999999999999994,
+                  "request": 0.024999999999999994
+                },
+                "type": "choice"
+              }
+            },
+            "model": "jev-1.14.0",
+            "usage": {
+              "input_tokens": 10,
+              "output_tokens": 1
+            }
+          }
+        }
+      },
+      "t3": {}
+    },
+    "stage": "cycle"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": null,
+    "context": "jev-classify (jev-1.14.0): 1 owner replies: 1 qualified (1 new, 0 duplicate, 0 dup unassessed), 0 unqualified, 0 unresolved, 0 unevaluated; report ~/.local/state/stack/jev-classify/latest.json\ncorrection p/s.jsonl:4: fix one",
+    "report": {
+      "complete": true,
+      "sources": {
+        "t3": {
+          "status": "ok",
+          "error": ""
+        },
+        "transcripts": {
+          "status": "ok",
+          "error": ""
+        }
+      },
+      "counts": {
+        "items": 1,
+        "classified": 1,
+        "unresolved": 0,
+        "unevaluated": 0,
+        "qualified": 1,
+        "duplicate": 0,
+        "new": 1,
+        "dup_unassessed": 0,
+        "dup_unassessed_lookup": 0,
+        "not_done": 0
+      },
+      "items": [
+        {
+          "id": "it01",
+          "where": "p/s.jsonl:4",
+          "status": "classified",
+          "reason": "",
+          "opener": "owner",
+          "qualified": true,
+          "kind": "correction",
+          "excerpt": "fix one",
+          "duplicate": "new",
+          "dup_reason": "no memory yet"
+        }
+      ]
+    },
+    "sent": [
+      {
+        "reply": "fix one",
+        "owner": "task A",
+        "assistant": "closing A"
+      }
+    ]
+  },
+  "repo": {
+    "layouts": [
+      {
+        "kind": "checkout",
+        "dir": "repo"
+      }
+    ]
+  },
+  "observe": {
+    "items": [
+      {
+        "id": "it01",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:4",
+        "excerpt": "fix one",
+        "ts": "2026-01-08T09:00:04Z"
+      }
+    ],
+    "sources": {
+      "t3": {
+        "status": "ok",
+        "error": ""
+      },
+      "transcripts": {
+        "status": "ok",
+        "error": ""
+      }
+    },
+    "version": 1,
+    "window": {
+      "since": "2026-01-01T12:00:00Z",
+      "until": "2026-01-08T11:59:00Z"
+    }
+  },
+  "files": {
+    "p/s.jsonl": [
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "task A",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:01Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "text": "closing A",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:02Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "content": "ok",
+              "tool_use_id": "tu",
+              "type": "tool_result"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:03Z",
+        "toolUseResult": {},
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "fix one",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:04Z",
+        "type": "user"
+      }
+    ]
+  }
+}

@@ -1,0 +1,1935 @@
+{
+  "request": {
+    "jev": {
+      "claude": "claude",
+      "now": "2026-01-08T12:00:00Z",
+      "observe": "observe.json",
+      "records": {
+        "sha256:08c6f340621238ae61ca57b0961ad9cc01e73a7339c233b4992d031b7b5b4b9d": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r18": {
+                "type": "noul",
+                "noul": 0.98
+              }
+            },
+            "usage": {
+              "input_tokens": 469,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:0cde6bdd970edcee58f8524680bb6619400d3b473af195d47288226b2ab9b0eb": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r9": {
+                "type": "noul",
+                "noul": 0.92
+              }
+            },
+            "usage": {
+              "input_tokens": 493,
+              "output_tokens": 22
+            }
+          }
+        },
+        "sha256:16b0af1ce0f0e066d2a09b2c3c8d26644fa337341e617cf53085950e7d16bebe": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r17": {
+                "type": "noul",
+                "noul": 0.97
+              }
+            },
+            "usage": {
+              "input_tokens": 504,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:3bcae60801a22eb617bf956ce1d0f56016a7040e5a0eeaab7029af0f8bc933a4": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r21": {
+                "type": "noul",
+                "noul": 0.06
+              }
+            },
+            "usage": {
+              "input_tokens": 480,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:4d9e77a544358e5e17589f8f85d2a776a1245258fd4ed293a2aa9a7c67e974b0": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r19": {
+                "type": "noul",
+                "noul": 0.3
+              }
+            },
+            "usage": {
+              "input_tokens": 490,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:543f81ef9433c692dfa1d54f7fe839913d2ed711e1d6a8bd6e9315323fe1dbb8": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r14": {
+                "type": "noul",
+                "noul": 0.26
+              }
+            },
+            "usage": {
+              "input_tokens": 474,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:70cb32c49ac449a35539f4a1667566377ffe1de80c503af6734ed8016e4df4d0": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r12": {
+                "type": "noul",
+                "noul": 0.06
+              }
+            },
+            "usage": {
+              "input_tokens": 501,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:78777a77b341ea7708348373ec492dc244f3aa698c364a84451939476a8c39f0": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r22": {
+                "type": "noul",
+                "noul": 0.18
+              }
+            },
+            "usage": {
+              "input_tokens": 487,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:7d54ad1d5d589cd61b0ad362f229a22022a13aaa43ac6bd11be9345d40316c1a": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r20": {
+                "type": "noul",
+                "noul": 0.64
+              }
+            },
+            "usage": {
+              "input_tokens": 502,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:9256aff38493b9525c58a690b36caf0d56bd202da201aabdfe981196e3b742b0": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "kind_r21": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.27,
+                "probabilities": {
+                  "approval": 0.01,
+                  "correction": 0.42,
+                  "drift": 0.24,
+                  "noise": 0.0,
+                  "request": 0.33
+                }
+              },
+              "kind_r22": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.85,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.09,
+                  "drift": 0.88,
+                  "noise": 0.0,
+                  "request": 0.03
+                }
+              }
+            },
+            "usage": {
+              "input_tokens": 875,
+              "output_tokens": 116
+            }
+          }
+        },
+        "sha256:9ba6652382cea0bfbc91abe9b85158c7d98b1610ae5cfbd1e699252a13c93d97": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r11": {
+                "type": "noul",
+                "noul": 0.39
+              }
+            },
+            "usage": {
+              "input_tokens": 506,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:b31697f4ccbe81ab59cb1aa65036875ee2ba528d03470fe4a04cc8418985558e": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r10": {
+                "type": "noul",
+                "noul": 0.9
+              }
+            },
+            "usage": {
+              "input_tokens": 517,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:b444b2da2c741dc62c87eaaf40ca066fe9c10cf22d850acea1a9b68cfd97ef12": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r8": {
+                "type": "noul",
+                "noul": 0.13
+              }
+            },
+            "usage": {
+              "input_tokens": 478,
+              "output_tokens": 22
+            }
+          }
+        },
+        "sha256:d1b3eebc84d17f3ebe41648475544c395637713281a866bb8d79282fe68c7892": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "kind_r1": {
+                "type": "choice",
+                "choice": "noise",
+                "confidence": 0.98,
+                "probabilities": {
+                  "approval": 0.01,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.98,
+                  "request": 0.01
+                }
+              },
+              "kind_r2": {
+                "type": "choice",
+                "choice": "noise",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.06,
+                  "correction": 0.0,
+                  "drift": 0.01,
+                  "noise": 0.92,
+                  "request": 0.01
+                }
+              },
+              "kind_r3": {
+                "type": "choice",
+                "choice": "noise",
+                "confidence": 0.99,
+                "probabilities": {
+                  "approval": 0.01,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.99,
+                  "request": 0.0
+                }
+              },
+              "kind_r4": {
+                "type": "choice",
+                "choice": "request",
+                "confidence": 0.79,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.01,
+                  "drift": 0.16,
+                  "noise": 0.0,
+                  "request": 0.83
+                }
+              },
+              "kind_r5": {
+                "type": "choice",
+                "choice": "approval",
+                "confidence": 1.0,
+                "probabilities": {
+                  "approval": 1.0,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r6": {
+                "type": "choice",
+                "choice": "approval",
+                "confidence": 1.0,
+                "probabilities": {
+                  "approval": 1.0,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r7": {
+                "type": "choice",
+                "choice": "approval",
+                "confidence": 1.0,
+                "probabilities": {
+                  "approval": 1.0,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r8": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.76,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.81,
+                  "drift": 0.18,
+                  "noise": 0.0,
+                  "request": 0.01
+                }
+              },
+              "kind_r9": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.75,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.2,
+                  "drift": 0.8,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r10": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.86,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.11,
+                  "drift": 0.89,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r11": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.89,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.09,
+                  "drift": 0.91,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r12": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.94,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.05,
+                  "drift": 0.95,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r13": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.95,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.04,
+                  "drift": 0.96,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r14": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.86,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.89,
+                  "drift": 0.03,
+                  "noise": 0.0,
+                  "request": 0.08
+                }
+              },
+              "kind_r15": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.96,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.97,
+                  "drift": 0.03,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r16": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.34,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.47,
+                  "drift": 0.1,
+                  "noise": 0.0,
+                  "request": 0.43
+                }
+              },
+              "kind_r17": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.77,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.82,
+                  "drift": 0.16,
+                  "noise": 0.0,
+                  "request": 0.02
+                }
+              },
+              "kind_r18": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.96,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.97,
+                  "drift": 0.02,
+                  "noise": 0.0,
+                  "request": 0.01
+                }
+              },
+              "kind_r19": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.46,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.57,
+                  "drift": 0.31,
+                  "noise": 0.0,
+                  "request": 0.12
+                }
+              },
+              "kind_r20": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.42,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.39,
+                  "drift": 0.54,
+                  "noise": 0.0,
+                  "request": 0.07
+                }
+              }
+            },
+            "usage": {
+              "input_tokens": 6464,
+              "output_tokens": 1114
+            }
+          }
+        },
+        "sha256:d847480ba935a37a23ff42866ade9f58c2e8b20a176aa06ad365e4b08d8ad73f": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r15": {
+                "type": "noul",
+                "noul": 0.12
+              }
+            },
+            "usage": {
+              "input_tokens": 490,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:eb78fcc453eaed1e691e2afeb85c816af2b0599fb2c37e7334234f92b74f6d5f": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r16": {
+                "type": "noul",
+                "noul": 0.57
+              }
+            },
+            "usage": {
+              "input_tokens": 467,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:f17ee6cffe41e4d3692824ae21e78440b246fdda7e969a28cecbe6d052ab8821": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r13": {
+                "type": "noul",
+                "noul": 0.86
+              }
+            },
+            "usage": {
+              "input_tokens": 439,
+              "output_tokens": 23
+            }
+          }
+        }
+      },
+      "t3": {
+        "th:fit-b:p1": {
+          "cwd": "p1",
+          "rows": [
+            {
+              "message_id": "m000",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:01.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o0\",\"text\":\"Only add the --json flag; leave the rest of the flag parser alone.\"}"
+            },
+            {
+              "message_id": "m001",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:02.000Z",
+              "payload_json": "{\"text\":\"I rewrote the flag parser to use a new library; every existing flag still works.\"}"
+            },
+            {
+              "message_id": "m002",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:03.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r0\",\"text\":\"revert the parser\"}"
+            },
+            {
+              "message_id": "m003",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:04.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o1\",\"text\":\"Replace the flag parser with the new library.\"}"
+            },
+            {
+              "message_id": "m004",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:05.000Z",
+              "payload_json": "{\"text\":\"I rewrote the flag parser to use a new library; every existing flag still works.\"}"
+            },
+            {
+              "message_id": "m005",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:06.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r1\",\"text\":\"revert the parser\"}"
+            },
+            {
+              "message_id": "m006",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:25.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o8\",\"text\":\"Add a helper that formats durations.\"}"
+            },
+            {
+              "message_id": "m007",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:26.000Z",
+              "payload_json": "{\"text\":\"I named the function DoStuff2.\"}"
+            },
+            {
+              "message_id": "m008",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:27.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r8\",\"text\":\"naming: verbs plus the object, please\"}"
+            },
+            {
+              "message_id": "m009",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:31.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o10\",\"text\":\"ヘルプ文言の誤字だけ直して。\"}"
+            },
+            {
+              "message_id": "m010",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:32.000Z",
+              "payload_json": "{\"text\":\"誤字に加えて、コマンド名も変更しました。\"}"
+            },
+            {
+              "message_id": "m011",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:33.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r10\",\"text\":\"コマンド名は戻して。誤字だけ。\"}"
+            },
+            {
+              "message_id": "m012",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:37.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o12\",\"text\":\"run コマンドを exec に改名して。\"}"
+            },
+            {
+              "message_id": "m013",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:38.000Z",
+              "payload_json": "{\"text\":\"改名に加えて、終了コードを 0/1/3 に変えました。\"}"
+            },
+            {
+              "message_id": "m014",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:39.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r12\",\"text\":\"exit code は 0/1/2 のまま。改名だけって言ったでしょ\"}"
+            },
+            {
+              "message_id": "m015",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:43.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o14\",\"text\":\"Add a --quiet flag.\"}"
+            },
+            {
+              "message_id": "m016",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:44.000Z",
+              "payload_json": "{\"text\":\"I added --quiet and put the verbosity level into a package-level variable.\"}"
+            },
+            {
+              "message_id": "m017",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:45.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r14\",\"text\":\"no globals in handlers, pass the level in\"}"
+            },
+            {
+              "message_id": "m018",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:49.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o16\",\"text\":\"Show me option A and B.\"}"
+            },
+            {
+              "message_id": "m019",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:50.000Z",
+              "payload_json": "{\"text\":\"Option B keeps the old flags; option A drops them.\"}"
+            },
+            {
+              "message_id": "m020",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:51.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r16\",\"text\":\"yes, that's what I wanted\"}"
+            },
+            {
+              "message_id": "m021",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:55.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o18\",\"text\":\"フラグの説明を更新して。\"}"
+            },
+            {
+              "message_id": "m022",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:56.000Z",
+              "payload_json": "{\"text\":\"README を更新しました。\"}"
+            },
+            {
+              "message_id": "m023",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:57.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r18\",\"text\":\"CI が落ちてるけど原因わかる？\"}"
+            },
+            {
+              "message_id": "m024",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:58.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o19\",\"text\":\"Check the build output.\"}"
+            },
+            {
+              "message_id": "m025",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:59.000Z",
+              "payload_json": "{\"text\":\"The build output looks fine.\"}"
+            },
+            {
+              "message_id": "m026",
+              "role": "user",
+              "created_at": "2026-01-08T09:01:00.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r19\",\"text\":\"asdf test\"}"
+            },
+            {
+              "message_id": "m027",
+              "role": "user",
+              "created_at": "2026-01-08T09:01:04.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o21\",\"text\":\"Where is the failing log?\"}"
+            },
+            {
+              "message_id": "m028",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:01:05.000Z",
+              "payload_json": "{\"text\":\"The log is in the CI artifacts.\"}"
+            },
+            {
+              "message_id": "m029",
+              "role": "user",
+              "created_at": "2026-01-08T09:01:06.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r21\",\"text\":\"https://example.com/log/881\"}"
+            }
+          ]
+        },
+        "th:fit-b:p3": {
+          "cwd": "p3",
+          "rows": [
+            {
+              "message_id": "m000",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:28.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o9\",\"text\":\"Fix the off-by-one in the pager.\"}"
+            },
+            {
+              "message_id": "m001",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:29.000Z",
+              "payload_json": "{\"text\":\"I fixed it and rewrote the pagination to use cursors.\"}"
+            },
+            {
+              "message_id": "m002",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:30.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r9\",\"text\":\"no cursors, I only wanted the off-by-one fix\"}"
+            }
+          ]
+        }
+      }
+    },
+    "stage": "cycle"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": [],
+    "context": "jev-classify (jev-1.14.0): 22 owner replies: 0 qualified (0 new, 0 duplicate, 0 dup unassessed), 0 unqualified, 0 unresolved, 22 unevaluated; report ~/.local/state/stack/jev-classify/latest.json\nunevaluated: 22 (classification disabled 22)\nqualification is disabled: the duplicate decision failed its own gate, so the `new` list is empty; REVIEW\nthe duplicate check is disabled: heldout precision 0.77, recall 1.00 miss the target 0.80 / 0.50",
+    "report": {
+      "complete": true,
+      "counts": {
+        "classified": 0,
+        "dup_unassessed": 0,
+        "dup_unassessed_lookup": 0,
+        "duplicate": 0,
+        "items": 22,
+        "new": 0,
+        "not_done": 0,
+        "qualified": 0,
+        "unevaluated": 22,
+        "unresolved": 0
+      },
+      "decisions": {
+        "duplicate": "disabled",
+        "qualification": "disabled"
+      },
+      "items": [
+        {
+          "id": "fit-b01",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "t3:th:fit-b:p1:r0"
+        },
+        {
+          "id": "fit-b02",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "t3:th:fit-b:p1:r1"
+        },
+        {
+          "id": "fit-b03",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p2/s.jsonl:3"
+        },
+        {
+          "id": "fit-b04",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p2/s.jsonl:6"
+        },
+        {
+          "id": "fit-b05",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p2/s.jsonl:9"
+        },
+        {
+          "id": "fit-b06",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p2/s.jsonl:12"
+        },
+        {
+          "id": "fit-b07",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p2/s.jsonl:15"
+        },
+        {
+          "id": "fit-b08",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p2/s.jsonl:18"
+        },
+        {
+          "id": "fit-b09",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "t3:th:fit-b:p1:r8"
+        },
+        {
+          "id": "fit-b10",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "t3:th:fit-b:p3:r9"
+        },
+        {
+          "id": "fit-b11",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "t3:th:fit-b:p1:r10"
+        },
+        {
+          "id": "fit-b12",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p2/s.jsonl:21"
+        },
+        {
+          "id": "fit-b13",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "t3:th:fit-b:p1:r12"
+        },
+        {
+          "id": "fit-b14",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p2/s.jsonl:24"
+        },
+        {
+          "id": "fit-b15",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "t3:th:fit-b:p1:r14"
+        },
+        {
+          "id": "fit-b16",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p2/s.jsonl:27"
+        },
+        {
+          "id": "fit-b17",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "t3:th:fit-b:p1:r16"
+        },
+        {
+          "id": "fit-b18",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p2/s.jsonl:30"
+        },
+        {
+          "id": "fit-b19",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "t3:th:fit-b:p1:r18"
+        },
+        {
+          "id": "fit-b20",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "t3:th:fit-b:p1:r19"
+        },
+        {
+          "id": "fit-b21",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "p2/s.jsonl:33"
+        },
+        {
+          "id": "fit-b22",
+          "opener": "owner",
+          "qualified": false,
+          "reason": "classification disabled",
+          "status": "unevaluated",
+          "where": "t3:th:fit-b:p1:r21"
+        }
+      ],
+      "model": "jev-1.14.0",
+      "run": {
+        "finished": "2026-01-08T12:00:00Z",
+        "id": "",
+        "started": "2026-01-08T12:00:00Z"
+      },
+      "sources": {
+        "t3": {
+          "error": "",
+          "status": "ok"
+        },
+        "transcripts": {
+          "error": "",
+          "status": "ok"
+        }
+      },
+      "usage": {
+        "input_tokens": 0,
+        "requests": 0,
+        "unknown": 0
+      },
+      "version": 1,
+      "window": {
+        "since": "2026-01-01T12:00:00Z",
+        "until": "2026-01-08T11:59:00Z"
+      }
+    }
+  },
+  "repo": {
+    "layouts": [
+      {
+        "kind": "checkout",
+        "dir": "p1"
+      },
+      {
+        "kind": "checkout",
+        "dir": "p2"
+      },
+      {
+        "kind": "checkout",
+        "dir": "p3"
+      }
+    ]
+  },
+  "label": {
+    "items": {
+      "fit-b01": {
+        "dup": "new",
+        "group": "pair-3",
+        "hard": true,
+        "kind": "drift",
+        "lang": "en",
+        "why": "restores the scope (one flag) after a parser rewrite; no index line covers scope in this directory"
+      },
+      "fit-b02": {
+        "group": "pair-3",
+        "hard": true,
+        "kind": "request",
+        "lang": "en",
+        "why": "the same assistant and reply as fit-b01, but the owner had asked for the replacement"
+      },
+      "fit-b03": {
+        "dup": "duplicate",
+        "group": "pair-4",
+        "hard": true,
+        "kind": "drift",
+        "lang": "ja",
+        "why": "restores the scope (dry run only); the index states the dry-run rule"
+      },
+      "fit-b04": {
+        "group": "pair-4",
+        "hard": true,
+        "kind": "request",
+        "lang": "ja",
+        "why": "the same assistant and reply as fit-b03, but the owner had asked for the run"
+      },
+      "fit-b05": {
+        "dup": "duplicate",
+        "kind": "correction",
+        "lang": "en",
+        "why": "says the approach was wrong; the index states the rule"
+      },
+      "fit-b06": {
+        "dup": "duplicate",
+        "kind": "correction",
+        "lang": "ja",
+        "why": "says the approach was wrong; the index states the rule"
+      },
+      "fit-b07": {
+        "dup": "new",
+        "hard": true,
+        "kind": "correction",
+        "lang": "en",
+        "why": "a correction asked as a question; no index line covers settings"
+      },
+      "fit-b08": {
+        "dup": "new",
+        "kind": "correction",
+        "lang": "ja",
+        "why": "states a standing rule; no index line in this directory covers dependencies"
+      },
+      "fit-b09": {
+        "dup": "new",
+        "hard": true,
+        "kind": "correction",
+        "lang": "en",
+        "why": "a standing rule that never says wrong"
+      },
+      "fit-b10": {
+        "dup": "duplicate",
+        "kind": "drift",
+        "lang": "en",
+        "why": "restores the scope the owner set; the index states the scope rule"
+      },
+      "fit-b11": {
+        "dup": "new",
+        "kind": "drift",
+        "lang": "ja",
+        "why": "restores the scope the owner set; no index line covers scope"
+      },
+      "fit-b12": {
+        "dup": "new",
+        "hard": true,
+        "kind": "drift",
+        "lang": "ja",
+        "why": "restores the scope; the index only covers the log format, not the logger choice"
+      },
+      "fit-b13": {
+        "dup": "duplicate",
+        "hard": true,
+        "kind": "drift",
+        "lang": "ja",
+        "overlap": true,
+        "why": "an overlap: corrects the exit codes and restores the scope; the index states the exit codes"
+      },
+      "fit-b14": {
+        "dup": "duplicate",
+        "kind": "drift",
+        "lang": "ja",
+        "overlap": true,
+        "why": "an overlap: corrects the format change and restores the scope; the index states the log format"
+      },
+      "fit-b15": {
+        "dup": "new",
+        "hard": true,
+        "kind": "correction",
+        "lang": "en",
+        "why": "a standing rule about the implementation, never saying wrong; no index line covers globals"
+      },
+      "fit-b16": {
+        "kind": "approval",
+        "lang": "ja",
+        "why": "accepts the change"
+      },
+      "fit-b17": {
+        "kind": "approval",
+        "lang": "en",
+        "why": "accepts the result"
+      },
+      "fit-b18": {
+        "kind": "approval",
+        "lang": "ja",
+        "why": "acknowledges a result"
+      },
+      "fit-b19": {
+        "hard": true,
+        "kind": "request",
+        "lang": "ja",
+        "why": "reports a status and asks a question, without saying the agent worked wrongly"
+      },
+      "fit-b20": {
+        "hard": true,
+        "kind": "noise",
+        "lang": "en",
+        "why": "an input test that reads as text"
+      },
+      "fit-b21": {
+        "hard": true,
+        "kind": "noise",
+        "lang": "ja",
+        "why": "a bare attachment note"
+      },
+      "fit-b22": {
+        "kind": "noise",
+        "lang": "en",
+        "why": "a lone link"
+      }
+    },
+    "split": "fit"
+  },
+  "observe": {
+    "items": [
+      {
+        "id": "fit-b01",
+        "signal": "owner-reply",
+        "where": "t3:th:fit-b:p1:r0",
+        "excerpt": "revert the parser",
+        "ts": "2026-01-08T09:00:03Z"
+      },
+      {
+        "id": "fit-b02",
+        "signal": "owner-reply",
+        "where": "t3:th:fit-b:p1:r1",
+        "excerpt": "revert the parser",
+        "ts": "2026-01-08T09:00:06Z"
+      },
+      {
+        "id": "fit-b03",
+        "signal": "owner-reply",
+        "where": "p2/s.jsonl:3",
+        "excerpt": "止めて、元に戻して",
+        "ts": "2026-01-08T09:00:09Z"
+      },
+      {
+        "id": "fit-b04",
+        "signal": "owner-reply",
+        "where": "p2/s.jsonl:6",
+        "excerpt": "止めて、元に戻して",
+        "ts": "2026-01-08T09:00:12Z"
+      },
+      {
+        "id": "fit-b05",
+        "signal": "owner-reply",
+        "where": "p2/s.jsonl:9",
+        "excerpt": "SQL belongs in .sql files",
+        "ts": "2026-01-08T09:00:15Z"
+      },
+      {
+        "id": "fit-b06",
+        "signal": "owner-reply",
+        "where": "p2/s.jsonl:12",
+        "excerpt": "生データは消しちゃだめ。",
+        "ts": "2026-01-08T09:00:18Z"
+      },
+      {
+        "id": "fit-b07",
+        "signal": "owner-reply",
+        "where": "p2/s.jsonl:15",
+        "excerpt": "isn't that a setting?",
+        "ts": "2026-01-08T09:00:21Z"
+      },
+      {
+        "id": "fit-b08",
+        "signal": "owner-reply",
+        "where": "p2/s.jsonl:18",
+        "excerpt": "依存は増やさない方針です",
+        "ts": "2026-01-08T09:00:24Z"
+      },
+      {
+        "id": "fit-b09",
+        "signal": "owner-reply",
+        "where": "t3:th:fit-b:p1:r8",
+        "excerpt": "naming: verbs plus the object, please",
+        "ts": "2026-01-08T09:00:27Z"
+      },
+      {
+        "id": "fit-b10",
+        "signal": "owner-reply",
+        "where": "t3:th:fit-b:p3:r9",
+        "excerpt": "no cursors, I only wanted the off-by-one fix",
+        "ts": "2026-01-08T09:00:30Z"
+      },
+      {
+        "id": "fit-b11",
+        "signal": "owner-reply",
+        "where": "t3:th:fit-b:p1:r10",
+        "excerpt": "コマンド名は戻して。誤字だけ。",
+        "ts": "2026-01-08T09:00:33Z"
+      },
+      {
+        "id": "fit-b12",
+        "signal": "owner-reply",
+        "where": "p2/s.jsonl:21",
+        "excerpt": "今のロガーのままで。行数のログだけ",
+        "ts": "2026-01-08T09:00:36Z"
+      },
+      {
+        "id": "fit-b13",
+        "signal": "owner-reply",
+        "where": "t3:th:fit-b:p1:r12",
+        "excerpt": "exit code は 0/1/2 のまま。改名だけって言ったでしょ",
+        "ts": "2026-01-08T09:00:39Z"
+      },
+      {
+        "id": "fit-b14",
+        "signal": "owner-reply",
+        "where": "p2/s.jsonl:24",
+        "excerpt": "ログは JSON のまま。出力先だけって言ったでしょ",
+        "ts": "2026-01-08T09:00:42Z"
+      },
+      {
+        "id": "fit-b15",
+        "signal": "owner-reply",
+        "where": "t3:th:fit-b:p1:r14",
+        "excerpt": "no globals in handlers, pass the level in",
+        "ts": "2026-01-08T09:00:45Z"
+      },
+      {
+        "id": "fit-b16",
+        "signal": "owner-reply",
+        "where": "p2/s.jsonl:27",
+        "excerpt": "いいね、マージして",
+        "ts": "2026-01-08T09:00:48Z"
+      },
+      {
+        "id": "fit-b17",
+        "signal": "owner-reply",
+        "where": "t3:th:fit-b:p1:r16",
+        "excerpt": "yes, that's what I wanted",
+        "ts": "2026-01-08T09:00:51Z"
+      },
+      {
+        "id": "fit-b18",
+        "signal": "owner-reply",
+        "where": "p2/s.jsonl:30",
+        "excerpt": "確認しました、OK",
+        "ts": "2026-01-08T09:00:54Z"
+      },
+      {
+        "id": "fit-b19",
+        "signal": "owner-reply",
+        "where": "t3:th:fit-b:p1:r18",
+        "excerpt": "CI が落ちてるけど原因わかる？",
+        "ts": "2026-01-08T09:00:57Z"
+      },
+      {
+        "id": "fit-b20",
+        "signal": "owner-reply",
+        "where": "t3:th:fit-b:p1:r19",
+        "excerpt": "asdf test",
+        "ts": "2026-01-08T09:01:00Z"
+      },
+      {
+        "id": "fit-b21",
+        "signal": "owner-reply",
+        "where": "p2/s.jsonl:33",
+        "excerpt": "スクリーンショット添付",
+        "ts": "2026-01-08T09:01:03Z"
+      },
+      {
+        "id": "fit-b22",
+        "signal": "owner-reply",
+        "where": "t3:th:fit-b:p1:r21",
+        "excerpt": "https://example.com/log/881",
+        "ts": "2026-01-08T09:01:06Z"
+      }
+    ],
+    "sources": {
+      "t3": {
+        "status": "ok",
+        "error": ""
+      },
+      "transcripts": {
+        "status": "ok",
+        "error": ""
+      }
+    },
+    "version": 1,
+    "window": {
+      "since": "2026-01-01T12:00:00Z",
+      "until": "2026-01-08T11:59:00Z"
+    }
+  },
+  "files": {
+    "p2/s.jsonl": [
+      {
+        "cwd": "p2",
+        "message": {
+          "content": "バックフィルはまず --dry-run だけ実行して結果を見せて。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:07Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": [
+            {
+              "text": "バックフィルを本番データに対して直接実行しました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:08Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": "止めて、元に戻して",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:09Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": "バックフィルを本番に流して。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:10Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": [
+            {
+              "text": "バックフィルを本番データに対して直接実行しました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:11Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": "止めて、元に戻して",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:12Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": "Add the monthly rollup query.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:13Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": [
+            {
+              "text": "I put the query inline in a Go string in rollup.go.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:14Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": "SQL belongs in .sql files",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:15Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": "取り込み処理のディスク使用量を減らして。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:16Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": [
+            {
+              "text": "取り込み後に生データのファイルを削除する処理を追加しました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:17Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": "生データは消しちゃだめ。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:18Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": "Make the fetcher more robust.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:19Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": [
+            {
+              "text": "I hard-coded the retry count to 5.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:20Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": "isn't that a setting?",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:21Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": "CSV の読み込みを速くして。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:22Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": [
+            {
+              "text": "新しい依存ライブラリを 3 つ追加しました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:23Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": "依存は増やさない方針です",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:24Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": "取り込み処理に処理行数のログを足して。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:34Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": [
+            {
+              "text": "行数のログを足して、ロガーのライブラリも切り替えました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:35Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": "今のロガーのままで。行数のログだけ",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:36Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": "ログの出力先だけ変えて。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:40Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": [
+            {
+              "text": "ログをプレーンテキストに変えました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:41Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": "ログは JSON のまま。出力先だけって言ったでしょ",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:42Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": "集計クエリを直して。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:46Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": [
+            {
+              "text": "集計クエリを修正し、テストも通りました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:47Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": "いいね、マージして",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:48Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": "スケジュールを確認して。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:52Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": [
+            {
+              "text": "pipeline.toml の設定を確認しました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:53Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": "確認しました、OK",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:54Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": "ログを見せて。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:01Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": [
+            {
+              "text": "直近のログを貼りました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:01:02Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p2",
+        "message": {
+          "content": "スクリーンショット添付",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:03Z",
+        "type": "user"
+      }
+    ]
+  },
+  "memory": {
+    "p1": "- Prefer small, composable functions; no function over 60 lines.\n- All user-facing strings go through the i18n helper.\n- Write tests as table-driven tests.\n- Exit codes: 0 ok, 1 error, 2 usage.\n- 出力は常に UTF-8 で扱う。\n",
+    "p2": "- Never delete raw input files after a run.\n- Schedules are defined in pipeline.toml, not in code.\n- Keep SQL in .sql files, not in Go strings.\n- Backfills need the --dry-run pass first.\n- ログは構造化 JSON で出す。\n",
+    "p3": "- Stay within the requested change; no rewrites.\n- Keep the README in sync with the flags.\n- Run gofmt before committing.\n"
+  },
+  "samples": {
+    "sha256:08c6f340621238ae61ca57b0961ad9cc01e73a7339c233b4992d031b7b5b4b9d": {
+      "dup_r18": [
+        0.98,
+        0.98,
+        0.98
+      ]
+    },
+    "sha256:0cde6bdd970edcee58f8524680bb6619400d3b473af195d47288226b2ab9b0eb": {
+      "dup_r9": [
+        0.92,
+        0.93,
+        0.93
+      ]
+    },
+    "sha256:16b0af1ce0f0e066d2a09b2c3c8d26644fa337341e617cf53085950e7d16bebe": {
+      "dup_r17": [
+        0.97,
+        0.98,
+        0.98
+      ]
+    },
+    "sha256:3bcae60801a22eb617bf956ce1d0f56016a7040e5a0eeaab7029af0f8bc933a4": {
+      "dup_r21": [
+        0.06,
+        0.04,
+        0.04
+      ]
+    },
+    "sha256:4d9e77a544358e5e17589f8f85d2a776a1245258fd4ed293a2aa9a7c67e974b0": {
+      "dup_r19": [
+        0.3,
+        0.25,
+        0.21
+      ]
+    },
+    "sha256:543f81ef9433c692dfa1d54f7fe839913d2ed711e1d6a8bd6e9315323fe1dbb8": {
+      "dup_r14": [
+        0.26,
+        0.09,
+        0.15
+      ]
+    },
+    "sha256:70cb32c49ac449a35539f4a1667566377ffe1de80c503af6734ed8016e4df4d0": {
+      "dup_r12": [
+        0.06,
+        0.06,
+        0.06
+      ]
+    },
+    "sha256:78777a77b341ea7708348373ec492dc244f3aa698c364a84451939476a8c39f0": {
+      "dup_r22": [
+        0.18,
+        0.16,
+        0.18
+      ]
+    },
+    "sha256:7d54ad1d5d589cd61b0ad362f229a22022a13aaa43ac6bd11be9345d40316c1a": {
+      "dup_r20": [
+        0.64,
+        0.61,
+        0.67
+      ]
+    },
+    "sha256:9256aff38493b9525c58a690b36caf0d56bd202da201aabdfe981196e3b742b0": {
+      "kind_r21": [
+        0.6599999999999999,
+        0.69,
+        0.6799999999999999
+      ],
+      "kind_r22": [
+        0.97,
+        0.98,
+        0.97
+      ]
+    },
+    "sha256:9ba6652382cea0bfbc91abe9b85158c7d98b1610ae5cfbd1e699252a13c93d97": {
+      "dup_r11": [
+        0.39,
+        0.42,
+        0.48
+      ]
+    },
+    "sha256:b31697f4ccbe81ab59cb1aa65036875ee2ba528d03470fe4a04cc8418985558e": {
+      "dup_r10": [
+        0.9,
+        0.91,
+        0.92
+      ]
+    },
+    "sha256:b444b2da2c741dc62c87eaaf40ca066fe9c10cf22d850acea1a9b68cfd97ef12": {
+      "dup_r8": [
+        0.13,
+        0.11,
+        0.12
+      ]
+    },
+    "sha256:d1b3eebc84d17f3ebe41648475544c395637713281a866bb8d79282fe68c7892": {
+      "kind_r1": [
+        0,
+        0,
+        0
+      ],
+      "kind_r10": [
+        1,
+        1,
+        1
+      ],
+      "kind_r11": [
+        1,
+        1,
+        1
+      ],
+      "kind_r12": [
+        1,
+        1,
+        1
+      ],
+      "kind_r13": [
+        1,
+        1,
+        1
+      ],
+      "kind_r14": [
+        0.92,
+        0.9500000000000001,
+        0.93
+      ],
+      "kind_r15": [
+        1,
+        1,
+        1
+      ],
+      "kind_r16": [
+        0.57,
+        0.53,
+        0.52
+      ],
+      "kind_r17": [
+        0.98,
+        0.99,
+        0.99
+      ],
+      "kind_r18": [
+        0.99,
+        0.99,
+        0.99
+      ],
+      "kind_r19": [
+        0.8799999999999999,
+        0.8700000000000001,
+        0.8799999999999999
+      ],
+      "kind_r2": [
+        0.01,
+        0.01,
+        0.01
+      ],
+      "kind_r20": [
+        0.93,
+        0.93,
+        0.92
+      ],
+      "kind_r3": [
+        0,
+        0,
+        0
+      ],
+      "kind_r4": [
+        0.17,
+        0.14,
+        0.13
+      ],
+      "kind_r5": [
+        0,
+        0,
+        0
+      ],
+      "kind_r6": [
+        0,
+        0,
+        0
+      ],
+      "kind_r7": [
+        0,
+        0,
+        0
+      ],
+      "kind_r8": [
+        0.99,
+        0.99,
+        0.99
+      ],
+      "kind_r9": [
+        1,
+        1,
+        1
+      ]
+    },
+    "sha256:d847480ba935a37a23ff42866ade9f58c2e8b20a176aa06ad365e4b08d8ad73f": {
+      "dup_r15": [
+        0.12,
+        0.13,
+        0.13
+      ]
+    },
+    "sha256:eb78fcc453eaed1e691e2afeb85c816af2b0599fb2c37e7334234f92b74f6d5f": {
+      "dup_r16": [
+        0.57,
+        0.62,
+        0.59
+      ]
+    },
+    "sha256:f17ee6cffe41e4d3692824ae21e78440b246fdda7e969a28cecbe6d052ab8821": {
+      "dup_r13": [
+        0.86,
+        0.82,
+        0.9
+      ]
+    }
+  }
+}

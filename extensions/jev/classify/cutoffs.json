@@ -1,0 +1,103 @@
+{
+  "model": "jev-1.14.0",
+  "decisions": {
+    "duplicate": {
+      "enabled": false,
+      "cutoff": 0.5,
+      "target": 0.8,
+      "reason": "heldout precision 0.77, recall 1.00 miss the target 0.80 / 0.50",
+      "fit": {
+        "tp": 38,
+        "fp": 7,
+        "fn": 1,
+        "tn": 32,
+        "precision": 0.8444444444444444,
+        "recall": 0.9743589743589743,
+        "positive_cases": 13,
+        "negative_cases": 13
+      },
+      "heldout": {
+        "tp": 24,
+        "fp": 7,
+        "fn": 0,
+        "tn": 17,
+        "precision": 0.7741935483870968,
+        "recall": 1,
+        "positive_cases": 8,
+        "negative_cases": 8
+      },
+      "baseline": 0.5,
+      "margin": {
+        "tp": 38,
+        "fp": 9,
+        "fn": 1,
+        "tn": 30,
+        "precision": 0.8085106382978723,
+        "recall": 0.9743589743589743,
+        "positive_cases": 13,
+        "negative_cases": 13
+      },
+      "unstable": [
+        "fit-a10: 0.450",
+        "fit-a10: 0.530",
+        "fit-a13: 0.460",
+        "fit-b12: 0.480",
+        "held-a03: 0.540",
+        "held-a03: 0.540"
+      ]
+    },
+    "qualification": {
+      "enabled": false,
+      "cutoff": 0.5,
+      "target": 0.8,
+      "reason": "the duplicate decision failed its own gate, so the `new` list is empty; REVIEW",
+      "fit": {
+        "tp": 75,
+        "fp": 12,
+        "fn": 3,
+        "tn": 42,
+        "precision": 0.8620689655172413,
+        "recall": 0.9615384615384616,
+        "positive_cases": 26,
+        "negative_cases": 18
+      },
+      "heldout": {
+        "tp": 48,
+        "fp": 8,
+        "fn": 0,
+        "tn": 40,
+        "precision": 0.8571428571428571,
+        "recall": 1,
+        "positive_cases": 16,
+        "negative_cases": 16
+      },
+      "baseline": 0.5,
+      "margin": {
+        "tp": 73,
+        "fp": 12,
+        "fn": 5,
+        "tn": 42,
+        "precision": 0.8588235294117647,
+        "recall": 0.9358974358974359,
+        "positive_cases": 26,
+        "negative_cases": 18
+      },
+      "unstable": [
+        "fit-b07: 0.530",
+        "fit-b07: 0.520",
+        "held-a25: 0.480",
+        "held-a25: 0.510"
+      ]
+    }
+  },
+  "end_to_end": {
+    "tp": 0,
+    "fp": 0,
+    "fn": 8,
+    "precision": 0,
+    "recall": 0,
+    "support": 8,
+    "passed": false,
+    "scored": false
+  }
+}

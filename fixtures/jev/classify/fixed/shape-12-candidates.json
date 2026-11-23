@@ -1,0 +1,906 @@
+{
+  "synthetic": "records written by hand: each reply's kind_ and dup_ answer is assigned in the fixture's generator and keyed by the body hash the runtime sends; fixed fixtures check behaviour and are never recorded live (jev-calibrate records the cal cases)",
+  "request": {
+    "jev": {
+      "claude": "claude",
+      "now": "2026-01-08T12:00:00Z",
+      "observe": "observe.json",
+      "records": {
+        "sha256:ccf2c198114dfd7e87256e00da943b8e78931e66ac9fab434be5ce0e002fd1b5": {
+          "answer": {
+            "answers": {
+              "kind_r1": {
+                "choice": "correction",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.9,
+                  "drift": 0.024999999999999994,
+                  "noise": 0.024999999999999994,
+                  "request": 0.024999999999999994
+                },
+                "type": "choice"
+              },
+              "kind_r10": {
+                "choice": "correction",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.9,
+                  "drift": 0.024999999999999994,
+                  "noise": 0.024999999999999994,
+                  "request": 0.024999999999999994
+                },
+                "type": "choice"
+              },
+              "kind_r11": {
+                "choice": "correction",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.9,
+                  "drift": 0.024999999999999994,
+                  "noise": 0.024999999999999994,
+                  "request": 0.024999999999999994
+                },
+                "type": "choice"
+              },
+              "kind_r12": {
+                "choice": "correction",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.9,
+                  "drift": 0.024999999999999994,
+                  "noise": 0.024999999999999994,
+                  "request": 0.024999999999999994
+                },
+                "type": "choice"
+              },
+              "kind_r2": {
+                "choice": "correction",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.9,
+                  "drift": 0.024999999999999994,
+                  "noise": 0.024999999999999994,
+                  "request": 0.024999999999999994
+                },
+                "type": "choice"
+              },
+              "kind_r3": {
+                "choice": "correction",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.9,
+                  "drift": 0.024999999999999994,
+                  "noise": 0.024999999999999994,
+                  "request": 0.024999999999999994
+                },
+                "type": "choice"
+              },
+              "kind_r4": {
+                "choice": "correction",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.9,
+                  "drift": 0.024999999999999994,
+                  "noise": 0.024999999999999994,
+                  "request": 0.024999999999999994
+                },
+                "type": "choice"
+              },
+              "kind_r5": {
+                "choice": "correction",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.9,
+                  "drift": 0.024999999999999994,
+                  "noise": 0.024999999999999994,
+                  "request": 0.024999999999999994
+                },
+                "type": "choice"
+              },
+              "kind_r6": {
+                "choice": "correction",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.9,
+                  "drift": 0.024999999999999994,
+                  "noise": 0.024999999999999994,
+                  "request": 0.024999999999999994
+                },
+                "type": "choice"
+              },
+              "kind_r7": {
+                "choice": "correction",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.9,
+                  "drift": 0.024999999999999994,
+                  "noise": 0.024999999999999994,
+                  "request": 0.024999999999999994
+                },
+                "type": "choice"
+              },
+              "kind_r8": {
+                "choice": "correction",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.9,
+                  "drift": 0.024999999999999994,
+                  "noise": 0.024999999999999994,
+                  "request": 0.024999999999999994
+                },
+                "type": "choice"
+              },
+              "kind_r9": {
+                "choice": "correction",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.9,
+                  "drift": 0.024999999999999994,
+                  "noise": 0.024999999999999994,
+                  "request": 0.024999999999999994
+                },
+                "type": "choice"
+              }
+            },
+            "model": "jev-1.14.0",
+            "usage": {
+              "input_tokens": 10,
+              "output_tokens": 1
+            }
+          }
+        }
+      },
+      "t3": {}
+    },
+    "stage": "cycle"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": null,
+    "context": "jev-classify (jev-1.14.0): 12 owner replies: 12 qualified (12 new, 0 duplicate, 0 dup unassessed), 0 unqualified, 0 unresolved, 0 unevaluated; report ~/.local/state/stack/jev-classify/latest.json\ncorrection p/s.jsonl:36: fix c12\ncorrection p/s.jsonl:33: fix c11\ncorrection p/s.jsonl:30: fix c10\ncorrection p/s.jsonl:27: fix c9\ncorrection p/s.jsonl:24: fix c8\ncorrection p/s.jsonl:21: fix c7\ncorrection p/s.jsonl:18: fix c6\ncorrection p/s.jsonl:15: fix c5\ncorrection p/s.jsonl:12: fix c4\ncorrection p/s.jsonl:9: fix c3\n(+2 more in the report)",
+    "report": {
+      "complete": true,
+      "sources": {
+        "t3": {
+          "status": "ok",
+          "error": ""
+        },
+        "transcripts": {
+          "status": "ok",
+          "error": ""
+        }
+      },
+      "counts": {
+        "items": 12,
+        "classified": 12,
+        "unresolved": 0,
+        "unevaluated": 0,
+        "qualified": 12,
+        "duplicate": 0,
+        "new": 12,
+        "dup_unassessed": 0,
+        "dup_unassessed_lookup": 0,
+        "not_done": 0
+      },
+      "items": [
+        {
+          "id": "it01",
+          "where": "p/s.jsonl:3",
+          "status": "classified",
+          "reason": "",
+          "opener": "owner",
+          "qualified": true,
+          "kind": "correction",
+          "excerpt": "fix c1",
+          "duplicate": "new",
+          "dup_reason": "no memory yet"
+        },
+        {
+          "id": "it02",
+          "where": "p/s.jsonl:6",
+          "status": "classified",
+          "reason": "",
+          "opener": "owner",
+          "qualified": true,
+          "kind": "correction",
+          "excerpt": "fix c2",
+          "duplicate": "new",
+          "dup_reason": "no memory yet"
+        },
+        {
+          "id": "it03",
+          "where": "p/s.jsonl:9",
+          "status": "classified",
+          "reason": "",
+          "opener": "owner",
+          "qualified": true,
+          "kind": "correction",
+          "excerpt": "fix c3",
+          "duplicate": "new",
+          "dup_reason": "no memory yet"
+        },
+        {
+          "id": "it04",
+          "where": "p/s.jsonl:12",
+          "status": "classified",
+          "reason": "",
+          "opener": "owner",
+          "qualified": true,
+          "kind": "correction",
+          "excerpt": "fix c4",
+          "duplicate": "new",
+          "dup_reason": "no memory yet"
+        },
+        {
+          "id": "it05",
+          "where": "p/s.jsonl:15",
+          "status": "classified",
+          "reason": "",
+          "opener": "owner",
+          "qualified": true,
+          "kind": "correction",
+          "excerpt": "fix c5",
+          "duplicate": "new",
+          "dup_reason": "no memory yet"
+        },
+        {
+          "id": "it06",
+          "where": "p/s.jsonl:18",
+          "status": "classified",
+          "reason": "",
+          "opener": "owner",
+          "qualified": true,
+          "kind": "correction",
+          "excerpt": "fix c6",
+          "duplicate": "new",
+          "dup_reason": "no memory yet"
+        },
+        {
+          "id": "it07",
+          "where": "p/s.jsonl:21",
+          "status": "classified",
+          "reason": "",
+          "opener": "owner",
+          "qualified": true,
+          "kind": "correction",
+          "excerpt": "fix c7",
+          "duplicate": "new",
+          "dup_reason": "no memory yet"
+        },
+        {
+          "id": "it08",
+          "where": "p/s.jsonl:24",
+          "status": "classified",
+          "reason": "",
+          "opener": "owner",
+          "qualified": true,
+          "kind": "correction",
+          "excerpt": "fix c8",
+          "duplicate": "new",
+          "dup_reason": "no memory yet"
+        },
+        {
+          "id": "it09",
+          "where": "p/s.jsonl:27",
+          "status": "classified",
+          "reason": "",
+          "opener": "owner",
+          "qualified": true,
+          "kind": "correction",
+          "excerpt": "fix c9",
+          "duplicate": "new",
+          "dup_reason": "no memory yet"
+        },
+        {
+          "id": "it10",
+          "where": "p/s.jsonl:30",
+          "status": "classified",
+          "reason": "",
+          "opener": "owner",
+          "qualified": true,
+          "kind": "correction",
+          "excerpt": "fix c10",
+          "duplicate": "new",
+          "dup_reason": "no memory yet"
+        },
+        {
+          "id": "it11",
+          "where": "p/s.jsonl:33",
+          "status": "classified",
+          "reason": "",
+          "opener": "owner",
+          "qualified": true,
+          "kind": "correction",
+          "excerpt": "fix c11",
+          "duplicate": "new",
+          "dup_reason": "no memory yet"
+        },
+        {
+          "id": "it12",
+          "where": "p/s.jsonl:36",
+          "status": "classified",
+          "reason": "",
+          "opener": "owner",
+          "qualified": true,
+          "kind": "correction",
+          "excerpt": "fix c12",
+          "duplicate": "new",
+          "dup_reason": "no memory yet"
+        }
+      ]
+    }
+  },
+  "repo": {
+    "layouts": [
+      {
+        "kind": "checkout",
+        "dir": "repo"
+      }
+    ]
+  },
+  "observe": {
+    "items": [
+      {
+        "id": "it01",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:3",
+        "excerpt": "fix c1",
+        "ts": "2026-01-08T09:00:03Z"
+      },
+      {
+        "id": "it02",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:6",
+        "excerpt": "fix c2",
+        "ts": "2026-01-08T09:00:06Z"
+      },
+      {
+        "id": "it03",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:9",
+        "excerpt": "fix c3",
+        "ts": "2026-01-08T09:00:09Z"
+      },
+      {
+        "id": "it04",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:12",
+        "excerpt": "fix c4",
+        "ts": "2026-01-08T09:00:12Z"
+      },
+      {
+        "id": "it05",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:15",
+        "excerpt": "fix c5",
+        "ts": "2026-01-08T09:00:15Z"
+      },
+      {
+        "id": "it06",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:18",
+        "excerpt": "fix c6",
+        "ts": "2026-01-08T09:00:18Z"
+      },
+      {
+        "id": "it07",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:21",
+        "excerpt": "fix c7",
+        "ts": "2026-01-08T09:00:21Z"
+      },
+      {
+        "id": "it08",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:24",
+        "excerpt": "fix c8",
+        "ts": "2026-01-08T09:00:24Z"
+      },
+      {
+        "id": "it09",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:27",
+        "excerpt": "fix c9",
+        "ts": "2026-01-08T09:00:27Z"
+      },
+      {
+        "id": "it10",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:30",
+        "excerpt": "fix c10",
+        "ts": "2026-01-08T09:00:30Z"
+      },
+      {
+        "id": "it11",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:33",
+        "excerpt": "fix c11",
+        "ts": "2026-01-08T09:00:33Z"
+      },
+      {
+        "id": "it12",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:36",
+        "excerpt": "fix c12",
+        "ts": "2026-01-08T09:00:36Z"
+      }
+    ],
+    "sources": {
+      "t3": {
+        "status": "ok",
+        "error": ""
+      },
+      "transcripts": {
+        "status": "ok",
+        "error": ""
+      }
+    },
+    "version": 1,
+    "window": {
+      "since": "2026-01-01T12:00:00Z",
+      "until": "2026-01-08T11:59:00Z"
+    }
+  },
+  "files": {
+    "p/s.jsonl": [
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "task",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:01Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:02Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "fix c1",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:03Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "task",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:04Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:05Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "fix c2",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:06Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "task",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:07Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:08Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "fix c3",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:09Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "task",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:10Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:11Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "fix c4",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:12Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "task",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:13Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:14Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "fix c5",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:15Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "task",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:16Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:17Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "fix c6",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:18Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "task",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:19Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:20Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "fix c7",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:21Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "task",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:22Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:23Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "fix c8",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:24Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "task",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:25Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:26Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "fix c9",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:27Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "task",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:28Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:29Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "fix c10",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:30Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "task",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:31Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:32Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "fix c11",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:33Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "task",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:34Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:35Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "fix c12",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:36Z",
+        "type": "user"
+      }
+    ]
+  }
+}

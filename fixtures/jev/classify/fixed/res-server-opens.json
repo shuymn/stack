@@ -1,0 +1,148 @@
+{
+  "synthetic": "records written by hand: each reply's kind_ and dup_ answer is assigned in the fixture's generator and keyed by the body hash the runtime sends; fixed fixtures check behaviour and are never recorded live (jev-calibrate records the cal cases)",
+  "request": {
+    "jev": {
+      "claude": "claude",
+      "now": "2026-01-08T12:00:00Z",
+      "observe": "observe.json",
+      "records": {
+        "sha256:036fd317ce88b78086a8a61e87c17eb097803f363d60ceeff0dd8d954ec28488": {
+          "answer": {
+            "answers": {
+              "kind_r1": {
+                "choice": "correction",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.9,
+                  "drift": 0.024999999999999994,
+                  "noise": 0.024999999999999994,
+                  "request": 0.024999999999999994
+                },
+                "type": "choice"
+              }
+            },
+            "model": "jev-1.14.0",
+            "usage": {
+              "input_tokens": 10,
+              "output_tokens": 1
+            }
+          }
+        }
+      },
+      "t3": {
+        "th:s": {
+          "cwd": "repo",
+          "rows": [
+            {
+              "message_id": "m000",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:01.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"server\",\"id\":\"s1\",\"text\":\"queued prompt\"}"
+            },
+            {
+              "message_id": "m001",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:02.000Z",
+              "payload_json": "{\"text\":\"closing S\"}"
+            },
+            {
+              "message_id": "m002",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:03.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o1\",\"text\":\"fix one\"}"
+            }
+          ]
+        }
+      }
+    },
+    "stage": "cycle"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": null,
+    "context": "jev-classify (jev-1.14.0): 1 owner replies: 1 qualified (1 new, 0 duplicate, 0 dup unassessed), 0 unqualified, 0 unresolved, 0 unevaluated; report ~/.local/state/stack/jev-classify/latest.json\ncorrection t3:th:s:o1: fix one",
+    "report": {
+      "complete": true,
+      "sources": {
+        "t3": {
+          "status": "ok",
+          "error": ""
+        },
+        "transcripts": {
+          "status": "ok",
+          "error": ""
+        }
+      },
+      "counts": {
+        "items": 1,
+        "classified": 1,
+        "unresolved": 0,
+        "unevaluated": 0,
+        "qualified": 1,
+        "duplicate": 0,
+        "new": 1,
+        "dup_unassessed": 0,
+        "dup_unassessed_lookup": 0,
+        "not_done": 0
+      },
+      "items": [
+        {
+          "id": "it01",
+          "where": "t3:th:s:o1",
+          "status": "classified",
+          "reason": "",
+          "opener": "prompt",
+          "qualified": true,
+          "kind": "correction",
+          "excerpt": "fix one",
+          "duplicate": "new",
+          "dup_reason": "no memory yet"
+        }
+      ]
+    },
+    "sent": [
+      {
+        "reply": "fix one",
+        "owner": "",
+        "assistant": "closing S"
+      }
+    ]
+  },
+  "repo": {
+    "layouts": [
+      {
+        "kind": "checkout",
+        "dir": "repo"
+      }
+    ]
+  },
+  "observe": {
+    "items": [
+      {
+        "id": "it01",
+        "signal": "owner-reply",
+        "where": "t3:th:s:o1",
+        "excerpt": "fix one",
+        "ts": "2026-01-08T09:00:03Z"
+      }
+    ],
+    "sources": {
+      "t3": {
+        "status": "ok",
+        "error": ""
+      },
+      "transcripts": {
+        "status": "ok",
+        "error": ""
+      }
+    },
+    "version": 1,
+    "window": {
+      "since": "2026-01-01T12:00:00Z",
+      "until": "2026-01-08T11:59:00Z"
+    }
+  }
+}

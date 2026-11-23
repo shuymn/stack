@@ -114,7 +114,7 @@ func lines(prefix string, n int) string {
 //nolint:gocyclo,maintidx // one subtest per packing claim of C3
 func TestPack(t *testing.T) {
 	t.Run("25 KiB texts with a small diff go whole", func(t *testing.T) {
-		units := []Unit{{"a.go", "+x\n"}, {"b.go", "-y\n"}}
+		units := []Unit{{Name: "a.go", Text: "+x\n"}, {Name: "b.go", Text: "-y\n"}}
 		plan, err := Pack(Input{
 			Layout: withTitle(strings.Repeat("t", 25<<10)), Units: units,
 			Questions: testQuestions(),
@@ -134,7 +134,11 @@ func TestPack(t *testing.T) {
 	})
 
 	t.Run("a file over the budget is split into ordered parts", func(t *testing.T) {
-		units := []Unit{{"a.go", "+a\n"}, {"big.go", lines("+line", 12000)}, {"c.go", "+c\n"}}
+		units := []Unit{
+			{Name: "a.go", Text: "+a\n"},
+			{Name: "big.go", Text: lines("+line", 12000)},
+			{Name: "c.go", Text: "+c\n"},
+		}
 		plan, err := Pack(Input{
 			Layout: withTitle("fix"), Units: units,
 			Questions: testQuestions(),
@@ -187,7 +191,7 @@ func TestPack(t *testing.T) {
 		}
 		return l
 	}
-	big := []Unit{{"a.go", lines("+a", 300)}, {"b.go", lines("+b", 300)}}
+	big := []Unit{{Name: "a.go", Text: lines("+a", 300)}, {Name: "b.go", Text: lines("+b", 300)}}
 
 	t.Run("a budget just above 1 KiB splits", func(t *testing.T) {
 		plan, err := Pack(Input{
@@ -224,7 +228,7 @@ func TestPack(t *testing.T) {
 	})
 
 	t.Run("a small diff that fits whole goes whole under a 1 KiB budget", func(t *testing.T) {
-		small := []Unit{{"a.go", "+a\n"}}
+		small := []Unit{{Name: "a.go", Text: "+a\n"}}
 		plan, err := Pack(Input{
 			Layout: budgetLayout(t, 200), Units: small,
 			Questions: testQuestions(),
@@ -242,7 +246,7 @@ func TestPack(t *testing.T) {
 		chunk := "\"\\\t\x01\u2028日本語\xff<>&" + strings.Repeat("é", 7) + "\n"
 		//nolint:gosmopolitan // multi-byte runes at the part boundary
 		text := strings.Repeat(chunk, 3) + strings.Repeat("\"日\x02", 900) + "\n" + chunk
-		units := []Unit{{"esc\"name\t.go", text}}
+		units := []Unit{{Name: "esc\"name\t.go", Text: text}}
 		const limit = 2 << 10
 		plan, err := Pack(Input{
 			Layout: withTitle("x"), Units: units,
@@ -278,7 +282,7 @@ func TestPack(t *testing.T) {
 				Instructions: strings.Repeat("why ", 100),
 			})
 		}
-		units := []Unit{{"a.go", "+a\n"}}
+		units := []Unit{{Name: "a.go", Text: "+a\n"}}
 		plan, err := Pack(Input{Layout: withTitle("x"), Units: units, Questions: qs})
 		if err != nil {
 			t.Fatal(err)
@@ -312,9 +316,9 @@ func TestPack(t *testing.T) {
 
 	t.Run("a unit whose smallest part cannot fit is reported, the rest packed", func(t *testing.T) {
 		units := []Unit{
-			{"a.go", lines("+a", 100)},
-			{strings.Repeat("n", 3000), lines("+n", 100)},
-			{"c.go", lines("+c", 100)},
+			{Name: "a.go", Text: lines("+a", 100)},
+			{Name: strings.Repeat("n", 3000), Text: lines("+n", 100)},
+			{Name: "c.go", Text: lines("+c", 100)},
 		}
 		plan, err := Pack(Input{
 			Layout: withTitle("x"), Units: units,
@@ -355,7 +359,7 @@ func TestPackOversizeQuestion(t *testing.T) {
 		{Name: "huge", Type: TypeNoul, Instructions: strings.Repeat("x", QuestionBudget)},
 	}
 	plan, err := Pack(Input{
-		Layout: withTitle("x"), Units: []Unit{{"a.go", "+a\n"}},
+		Layout: withTitle("x"), Units: []Unit{{Name: "a.go", Text: "+a\n"}},
 		Questions: qs,
 	})
 	if err != nil {

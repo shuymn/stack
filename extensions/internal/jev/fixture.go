@@ -19,6 +19,15 @@ type Fixture struct {
 	Want      *Want           `json:"want,omitempty"`
 	Repo      json.RawMessage `json:"repo,omitempty"`
 	Label     json.RawMessage `json:"label,omitempty"`
+	// Observe, Files and Memory are classify's disk inputs (§3.4): the observe file's content,
+	// files by path relative to the cwd (a string, or an array of transcript records written one
+	// per line) and memory index text by directory, written where classify's lookup places it.
+	Observe json.RawMessage            `json:"observe,omitempty"`
+	Files   map[string]json.RawMessage `json:"files,omitempty"`
+	Memory  map[string]string          `json:"memory,omitempty"`
+	// Build names the test build a fixed classify fixture runs under when the default one (both
+	// decisions enabled at the test cutoff) does not fit: "no-qualification".
+	Build string `json:"build,omitempty"`
 	// Samples maps a body hash to each question's three scores (nil for an unscored attempt).
 	Samples map[string]map[string][]*float64 `json:"samples,omitempty"`
 }
@@ -39,6 +48,19 @@ type Expect struct {
 type Want struct {
 	Findings []Finding `json:"findings"`
 	Context  string    `json:"context,omitempty"`
+	// Report is classify's artifact: a fixed fixture holds the matched parts (§3.5), a cal
+	// fixture the whole normalised report.
+	Report json.RawMessage `json:"report,omitempty"`
+	// Sent lists, for classify's resolution fixtures, the exact owner and assistant texts each
+	// reply is sent with.
+	Sent []Sent `json:"sent,omitempty"`
+}
+
+// Sent is the owner and assistant text a reply is sent with.
+type Sent struct {
+	Reply     string `json:"reply"`
+	Owner     string `json:"owner"`
+	Assistant string `json:"assistant"`
 }
 
 // ReadFixture reads and decodes a fixture.
@@ -81,13 +103,25 @@ func (f *Fixture) RequestRecords() (Replay, error) {
 	return ParseReplay(req.Jev)
 }
 
-// SetRecords replaces the replay records of the fixture's request, keeping its other fields.
+// SetRecords replaces the replay records of the fixture's request, keeping its other fields and
+// the other keys of its jev object (classify's now, observe, claude, t3; §3.4).
 func (f *Fixture) SetRecords(records map[string]Record) error {
 	var req map[string]json.RawMessage
 	if err := json.Unmarshal(f.Request, &req); err != nil {
 		return fmt.Errorf("fixture request: %w", err)
 	}
-	j, err := Marshal(map[string]any{"records": records})
+	obj := map[string]json.RawMessage{}
+	if raw := bytes.TrimSpace(req["jev"]); len(raw) > 0 && raw[0] == '{' {
+		if err := json.Unmarshal(raw, &obj); err != nil {
+			return fmt.Errorf("fixture request jev: %w", err)
+		}
+	}
+	rec, err := Marshal(records)
+	if err != nil {
+		return err
+	}
+	obj["records"] = rec
+	j, err := Marshal(obj)
 	if err != nil {
 		return err
 	}

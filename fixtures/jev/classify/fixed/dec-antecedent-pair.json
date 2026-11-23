@@ -1,0 +1,256 @@
+{
+  "synthetic": "records written by hand: each reply's kind_ and dup_ answer is assigned in the fixture's generator and keyed by the body hash the runtime sends; fixed fixtures check behaviour and are never recorded live (jev-calibrate records the cal cases)",
+  "request": {
+    "jev": {
+      "claude": "claude",
+      "now": "2026-01-08T12:00:00Z",
+      "observe": "observe.json",
+      "records": {
+        "sha256:36994ded04d547da7dabc63361e342b0974a490a9703178a6522f5f7dcdd874e": {
+          "answer": {
+            "answers": {
+              "dup_r2": {
+                "noul": 0.9,
+                "type": "noul"
+              }
+            },
+            "model": "jev-1.14.0",
+            "usage": {
+              "input_tokens": 10,
+              "output_tokens": 1
+            }
+          }
+        },
+        "sha256:6d063a0808ccc7d1c9507e44847cf285638f5d558b320667d62f2aec5e81c0d7": {
+          "answer": {
+            "answers": {
+              "kind_r1": {
+                "choice": "request",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.024999999999999994,
+                  "drift": 0.024999999999999994,
+                  "noise": 0.024999999999999994,
+                  "request": 0.9
+                },
+                "type": "choice"
+              },
+              "kind_r2": {
+                "choice": "drift",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.024999999999999994,
+                  "drift": 0.9,
+                  "noise": 0.024999999999999994,
+                  "request": 0.024999999999999994
+                },
+                "type": "choice"
+              }
+            },
+            "model": "jev-1.14.0",
+            "usage": {
+              "input_tokens": 10,
+              "output_tokens": 1
+            }
+          }
+        }
+      },
+      "t3": {}
+    },
+    "stage": "cycle"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": null,
+    "context": "jev-classify (jev-1.14.0): 2 owner replies: 1 qualified (0 new, 1 duplicate, 0 dup unassessed), 1 unqualified, 0 unresolved, 0 unevaluated; report ~/.local/state/stack/jev-classify/latest.json",
+    "report": {
+      "complete": true,
+      "sources": {
+        "t3": {
+          "status": "ok",
+          "error": ""
+        },
+        "transcripts": {
+          "status": "ok",
+          "error": ""
+        }
+      },
+      "counts": {
+        "items": 2,
+        "classified": 2,
+        "unresolved": 0,
+        "unevaluated": 0,
+        "qualified": 1,
+        "duplicate": 1,
+        "new": 0,
+        "dup_unassessed": 0,
+        "dup_unassessed_lookup": 0,
+        "not_done": 0
+      },
+      "items": [
+        {
+          "id": "it01",
+          "where": "p/s.jsonl:3",
+          "status": "classified",
+          "reason": "",
+          "opener": "owner",
+          "qualified": true,
+          "kind": "drift",
+          "excerpt": "revert that",
+          "duplicate": "duplicate",
+          "dup_reason": ""
+        },
+        {
+          "id": "it02",
+          "where": "p/s.jsonl:6",
+          "status": "classified",
+          "reason": "",
+          "opener": "owner",
+          "qualified": false,
+          "kind": "",
+          "excerpt": "",
+          "duplicate": "",
+          "dup_reason": ""
+        }
+      ]
+    },
+    "sent": [
+      {
+        "reply": "revert that",
+        "owner": "Note 0 about the parser rewrite, kept for context and not relevant here.\nNote 1 about the parser rewrite, kept for context and not relevant here.\nNote 2 about the parser rewrite, kept for context and not relevant here.\nNote 3 about the parser rewrite, kept for context and not relevant here.\nNote 4 about the parser rewrite, kept for context and not relevant here.\nNote 5 about the parser rewrite, kept for context and not relevant here.\nNote 6 about the parser rewrite, kept for context and not relevant here.\nNote 7 about the parser rewrite, kept for context and not relevant here.\nNote 8 about the parser rewrite, kept for context and not relevant here.\nNote 9 about the parser rewrite, kept for context and not relevant here.\nNote 10 about the parser rewrite, kept for context and not relevant here.\nNote 11 about the parser rewrite, kept for context and not relevant here.\nNote 12 about the parser rewrite, kept for context and not relevant here.\nNote 13 about the parser rewrite, kept for context and not relevant here.\nNote 14 about the parser rewrite, kept for context and not relevant here.\nNote 15 about the parser rewrite, kept for context and not relevant here.\nNote 16 about the parser rewrite, kept for context and not relevant here.\nNote 17 about the parser rewrite, kept for context and not relevant here.\nNote 18 about the parser rewrite, kept for context and not relevant here.\nNote 19 about the parser rewrite, kept for context and not relevant here.\nNote 20 about the parser rewrite, kept for context and not relevant here.\nNote 21 about the parser rewrite, kept for context and not relevant here.\nNote 22 about the parser rewrite, kept for context and not relevant here.\nNote 23 about the parser rewrite, kept for context and not relevant here.\nNote 24 about the parser rewrite, kept for context and not relevant here.\nNote 25 about the parser rewrite, kept for context and not relevant here.\nNote 26 about the parser rewrite, kept for context and not relevant here.\nNote 27 about the parser rewrite, kept for context and not relevant here.\nNote 28 about the parser rewrite, kept for context and not relevant here.\nNote 29 about the parser rewrite, kept for context and not relevant here.\nNote 30 about the parser rewrite, kept for context and not relevant here.\nNote 31 about the parser rewrite, kept for context and not relevant here.\nNote 32 about the parser rewrite, kept for context and not relevant here.\nNote 33 about the parser rewrite, kept for context and not relevant here.\nNote 34 about the parser rewrite, kept for context and not relevant here.\nNote 35 about the parser rewrite, kept for context and not relevant here.\nNote 36 about the parser rewrite, kept for context and not relevant here.\nNote 37 about the parser rewrite, kept for context and not relevant here.\nNote 38 about the parser rewrite, kept for context and not relevant here.\nNote 39 about the parser rewrite, kept for context and not relevant here.\nNote 40 about the parser rewrite, kept for context and not relevant here.\nNote 41 about the parser rewrite, kept for context and not relevant here.\nNote 42 about the parser rewrite, kept for context and not relevant here.\nNote 43 about the parser rewrite, kept for context and not relevant here.\nNote 44 about the parser rewrite, kept for context and not relevant here.\nNote 45 about the parser rewrite, kept for context and not relevant here.\nNote 46 about the parser rewrite, kept for context and not relevant here.\nNote 47 about the parser rewrite, kept for context and not relevant here.\nNote 48 about the parser rewrite, kept for context and not relevant here.\nNote 49 about the parser rewrite, kept for context and not relevant here.\nNote 50 about the parser rewrite, kept for context and not relevant here.\nNote 51 about the parser rewrite, kept for context and not relevant here.\nNote 52 about the parser rewrite, kept for context and not relevant here.\nNote 53 about the parser rewrite, kept for context and not relevant here.\nNote 54 about the parser rewrite, kept for context and not relevant here.\nNote 55 about the parser rewrite, kept for context and not relevant here.\nNote 56 about the parser rewrite, kept for context and not relevant here.\nNote 57 about the parser rewrite, kept for context and not relevant here.\nNote 58 about the parser rewrite, kept for context and not relevant here.\nNote 59 about the parser rewrite, kept for context and not relevant here.\nNote 60 about the parser rewrite, kept for context and not relevant here.\nNote 61 about the parser rewrite, kept for context and not relevant here.\nNote 62 about the parser rewrite, kept for context and not relevant here.\nNote 63 about the parser rewrite, kept for context and not relevant here.\nNote 64 about the parser rewrite, kept for context and not relevant here.\nNote 65 about the parser rewrite, kept for context and not relevant here.\nNote 66 about the parser rewrite, kept for context and not relevant here.\nNote 67 about the parser rewrite, kept for context and not relevant here.\nNote 68 about the parser rewrite, kept for context and not relevant here.\nNote 69 about the parser rewrite, kept for context and not relevant here.\nNote 70 about the parser rewrite, kept for context and not relevant here.\nNote 71 about the parser rewrite, kept for context and not relevant here.\nNote 72 about the parser rewrite, kept for context and not relevant here.\nNote 73 about the parser rewrite, kept for context and not relevant here.\nNote 74 about the parser rewrite, kept for context and not relevant here.\nNote 75 about the parser rewrite, kept for context and not relevant here.\nNote 76 about the parser rewrite, kept for context and not relevant here.\nNote 77 about the parser rewrite, kept for context and not relevant here.\nNote 78 about the parser rewrite, kept for context and not relevant here.\nNote 79 about the parser rewrite, kept for context and not relevant here.\nDo not touch the config files.",
+        "assistant": "I rewrote config.toml and the CI settings."
+      },
+      {
+        "reply": "revert that",
+        "owner": "Please rewrite config.toml so the timeout is configurable.",
+        "assistant": "I rewrote config.toml and the CI settings."
+      }
+    ]
+  },
+  "repo": {
+    "layouts": [
+      {
+        "kind": "checkout",
+        "dir": "repo"
+      }
+    ]
+  },
+  "observe": {
+    "items": [
+      {
+        "id": "it01",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:3",
+        "excerpt": "revert that",
+        "ts": "2026-01-08T09:00:03Z"
+      },
+      {
+        "id": "it02",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:6",
+        "excerpt": "revert that",
+        "ts": "2026-01-08T09:00:06Z"
+      }
+    ],
+    "sources": {
+      "t3": {
+        "status": "ok",
+        "error": ""
+      },
+      "transcripts": {
+        "status": "ok",
+        "error": ""
+      }
+    },
+    "version": 1,
+    "window": {
+      "since": "2026-01-01T12:00:00Z",
+      "until": "2026-01-08T11:59:00Z"
+    }
+  },
+  "files": {
+    "p/s.jsonl": [
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "Note 0 about the parser rewrite, kept for context and not relevant here.\nNote 1 about the parser rewrite, kept for context and not relevant here.\nNote 2 about the parser rewrite, kept for context and not relevant here.\nNote 3 about the parser rewrite, kept for context and not relevant here.\nNote 4 about the parser rewrite, kept for context and not relevant here.\nNote 5 about the parser rewrite, kept for context and not relevant here.\nNote 6 about the parser rewrite, kept for context and not relevant here.\nNote 7 about the parser rewrite, kept for context and not relevant here.\nNote 8 about the parser rewrite, kept for context and not relevant here.\nNote 9 about the parser rewrite, kept for context and not relevant here.\nNote 10 about the parser rewrite, kept for context and not relevant here.\nNote 11 about the parser rewrite, kept for context and not relevant here.\nNote 12 about the parser rewrite, kept for context and not relevant here.\nNote 13 about the parser rewrite, kept for context and not relevant here.\nNote 14 about the parser rewrite, kept for context and not relevant here.\nNote 15 about the parser rewrite, kept for context and not relevant here.\nNote 16 about the parser rewrite, kept for context and not relevant here.\nNote 17 about the parser rewrite, kept for context and not relevant here.\nNote 18 about the parser rewrite, kept for context and not relevant here.\nNote 19 about the parser rewrite, kept for context and not relevant here.\nNote 20 about the parser rewrite, kept for context and not relevant here.\nNote 21 about the parser rewrite, kept for context and not relevant here.\nNote 22 about the parser rewrite, kept for context and not relevant here.\nNote 23 about the parser rewrite, kept for context and not relevant here.\nNote 24 about the parser rewrite, kept for context and not relevant here.\nNote 25 about the parser rewrite, kept for context and not relevant here.\nNote 26 about the parser rewrite, kept for context and not relevant here.\nNote 27 about the parser rewrite, kept for context and not relevant here.\nNote 28 about the parser rewrite, kept for context and not relevant here.\nNote 29 about the parser rewrite, kept for context and not relevant here.\nNote 30 about the parser rewrite, kept for context and not relevant here.\nNote 31 about the parser rewrite, kept for context and not relevant here.\nNote 32 about the parser rewrite, kept for context and not relevant here.\nNote 33 about the parser rewrite, kept for context and not relevant here.\nNote 34 about the parser rewrite, kept for context and not relevant here.\nNote 35 about the parser rewrite, kept for context and not relevant here.\nNote 36 about the parser rewrite, kept for context and not relevant here.\nNote 37 about the parser rewrite, kept for context and not relevant here.\nNote 38 about the parser rewrite, kept for context and not relevant here.\nNote 39 about the parser rewrite, kept for context and not relevant here.\nNote 40 about the parser rewrite, kept for context and not relevant here.\nNote 41 about the parser rewrite, kept for context and not relevant here.\nNote 42 about the parser rewrite, kept for context and not relevant here.\nNote 43 about the parser rewrite, kept for context and not relevant here.\nNote 44 about the parser rewrite, kept for context and not relevant here.\nNote 45 about the parser rewrite, kept for context and not relevant here.\nNote 46 about the parser rewrite, kept for context and not relevant here.\nNote 47 about the parser rewrite, kept for context and not relevant here.\nNote 48 about the parser rewrite, kept for context and not relevant here.\nNote 49 about the parser rewrite, kept for context and not relevant here.\nNote 50 about the parser rewrite, kept for context and not relevant here.\nNote 51 about the parser rewrite, kept for context and not relevant here.\nNote 52 about the parser rewrite, kept for context and not relevant here.\nNote 53 about the parser rewrite, kept for context and not relevant here.\nNote 54 about the parser rewrite, kept for context and not relevant here.\nNote 55 about the parser rewrite, kept for context and not relevant here.\nNote 56 about the parser rewrite, kept for context and not relevant here.\nNote 57 about the parser rewrite, kept for context and not relevant here.\nNote 58 about the parser rewrite, kept for context and not relevant here.\nNote 59 about the parser rewrite, kept for context and not relevant here.\nNote 60 about the parser rewrite, kept for context and not relevant here.\nNote 61 about the parser rewrite, kept for context and not relevant here.\nNote 62 about the parser rewrite, kept for context and not relevant here.\nNote 63 about the parser rewrite, kept for context and not relevant here.\nNote 64 about the parser rewrite, kept for context and not relevant here.\nNote 65 about the parser rewrite, kept for context and not relevant here.\nNote 66 about the parser rewrite, kept for context and not relevant here.\nNote 67 about the parser rewrite, kept for context and not relevant here.\nNote 68 about the parser rewrite, kept for context and not relevant here.\nNote 69 about the parser rewrite, kept for context and not relevant here.\nNote 70 about the parser rewrite, kept for context and not relevant here.\nNote 71 about the parser rewrite, kept for context and not relevant here.\nNote 72 about the parser rewrite, kept for context and not relevant here.\nNote 73 about the parser rewrite, kept for context and not relevant here.\nNote 74 about the parser rewrite, kept for context and not relevant here.\nNote 75 about the parser rewrite, kept for context and not relevant here.\nNote 76 about the parser rewrite, kept for context and not relevant here.\nNote 77 about the parser rewrite, kept for context and not relevant here.\nNote 78 about the parser rewrite, kept for context and not relevant here.\nNote 79 about the parser rewrite, kept for context and not relevant here.\nDo not touch the config files.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:01Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "text": "I rewrote config.toml and the CI settings.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:02Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "revert that",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:03Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "Please rewrite config.toml so the timeout is configurable.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:04Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "text": "I rewrote config.toml and the CI settings.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:05Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "revert that",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:06Z",
+        "type": "user"
+      }
+    ]
+  },
+  "memory": {
+    "repo": "- Do not touch the config files unless asked.\n- Run scripts/test before every push.\n"
+  }
+}
