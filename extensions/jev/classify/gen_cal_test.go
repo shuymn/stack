@@ -1,10 +1,12 @@
 package classify
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -1176,26 +1178,7 @@ func TestGenerateCal(t *testing.T) {
 				f.w.turn(c.dir+"/s.jsonl", c.dir, c.task, c.closing, c.reply)
 			}
 			f.w.items[n].ID = c.id
-			l := map[string]any{"kind": c.kind, "lang": c.lang, "why": c.why}
-			if c.dup != "" {
-				l["dup"] = c.dup
-			}
-			if c.overlap {
-				l["overlap"] = true
-			}
-			if c.hard {
-				l["hard"] = true
-			}
-			if c.group != "" {
-				l["group"] = c.group
-			}
-			if k := cf.dupKinds[c.id]; k != "" {
-				l["dup_kind"] = k
-			}
-			if cf.undo[c.id] {
-				l["undo"] = true
-			}
-			labels[c.id] = l
+			labels[c.id] = calLabel(cf, c)
 		}
 		f.status = jev.StatusPass
 		fixture := f.fixture()
@@ -1210,6 +1193,30 @@ func TestGenerateCal(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+}
+
+// calLabel is the label the generator writes for case c of fixture cf.
+func calLabel(cf calFixture, c calCase) map[string]any {
+	l := map[string]any{"kind": c.kind, "lang": c.lang, "why": c.why}
+	if c.dup != "" {
+		l["dup"] = c.dup
+	}
+	if c.overlap {
+		l["overlap"] = true
+	}
+	if c.hard {
+		l["hard"] = true
+	}
+	if c.group != "" {
+		l["group"] = c.group
+	}
+	if k := cf.dupKinds[c.id]; k != "" {
+		l["dup_kind"] = k
+	}
+	if cf.undo[c.id] {
+		l["undo"] = true
+	}
+	return l
 }
 
 // calPairErrors lists the antecedent pairs of the drafted corpus whose members do not share their
@@ -1257,4 +1264,39 @@ func TestCalPairs(t *testing.T) {
 		}
 	}
 	t.Fatal("no pair to change")
+}
+
+// TestCalLabelsCommitted: the committed cal fixtures carry the labels the draft generates, so a
+// label edited by hand (e.g. a pair group moved to another item) cannot pass while every pinned
+// body, record and sample stays the same.
+func TestCalLabelsCommitted(t *testing.T) {
+	for _, cf := range calFixtures {
+		fx, err := jev.ReadFixture(filepath.Join(fixtureRoot, "cal", cf.name+".json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got any
+		if err := json.Unmarshal(fx.Label, &got); err != nil {
+			t.Fatal(err)
+		}
+		items := map[string]map[string]any{}
+		for _, c := range cf.cases {
+			items[c.id] = calLabel(cf, c)
+		}
+		raw, err := json.Marshal(map[string]any{"split": cf.split, "items": items})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var want any
+		if err := json.Unmarshal(raw, &want); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf(
+				"%s: committed labels differ from the draft; regenerate with %s=1",
+				cf.name,
+				genEnv,
+			)
+		}
+	}
 }

@@ -406,15 +406,16 @@ func TestClassifyCorpus(t *testing.T) {
 				}
 			}
 		}},
-		{"a group spanning splits", "spans", func(cs []ClassifyCase) {
+		{"a group spanning splits", "group span-probe spans", func(cs []ClassifyCase) {
+			// An ordinary group, not a pair, so only the split check can fail.
 			i, id := find(cs, func(c ClassifyCase, _ string, l ItemLabel) bool {
-				return c.Label.Split == SplitFit && l.Group == "pair-1"
+				return c.Label.Split == SplitFit && l.Group == ""
 			})
-			j, id2 := find(cs, held)
-			l := cs[i].Label.Items[id]
-			cs[j].Label.Items[id2] = ItemLabel{
-				Kind: classify.LabelNoise, Lang: "en", Why: "x", Group: l.Group,
-			}
+			j, id2 := find(cs, func(c ClassifyCase, _ string, l ItemLabel) bool {
+				return c.Label.Split == SplitHeldout && l.Group == ""
+			})
+			set(cs, i, id, func(l *ItemLabel) { l.Group = "span-probe" })
+			set(cs, j, id2, func(l *ItemLabel) { l.Group = "span-probe" })
 		}},
 		{"fewer than four pairs", "2 antecedent pairs (groups pair-*), want at least 4", func(cs []ClassifyCase) {
 			// The fit pairs go; heldout keeps its en and ja pair.
