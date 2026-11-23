@@ -8,11 +8,10 @@ is a follow-up in `shuymn/dotfiles` (§7).
 Legacy sources are cited by their deployed path (`~/.claude/...`, deployed from `shuymn/dotfiles:home/dot_claude/`,
 byte-identical today) and `dotfiles:scripts/kaizen/public-check`.
 
-`docs/design/core-stages.md` (architecture v11) supersedes parts of this design: §4.2 step 2's
-"No extensions run", §4.3's rules other than raw-merge, §4.4 step 1 (merge messages are checked only by the extensions
+`docs/design/core-stages.md` (architecture v11) supersedes parts of this design: §4.3's rules other than raw-merge, §4.4 step 1 (merge messages are checked only by the extensions
 listed in the new `[merge].message_checks`, default `[]`), §4.5, §4.6, §4.7's stages, request fields and
 `block` handling (a `block` at `entry` or `cycle` becomes `warn` with exit 0, and replay fixtures expecting `block`
-there move to `warn`), the `[safety]` table and the matching C10–C12, C14–C15, C19 (its extension assertion only),
+there move to `warn`), the `[safety]` table and the matching C10–C12, C14–C15,
 C26 (its message clause) and C27; the list is in that design's §4.10.
 
 §4.1, §4.1.1 and §4.2 are also the contract for programs and agents outside this repository that read kit files,
@@ -226,18 +225,18 @@ error. Hook commands always exit `0`.
 - `close`: removes the slug from `<id>.kits` (idempotent; deletes the file when empty); never touches the kit dir.
   Without `STACK_SESSION_ID`: exit 2 (there is no record to change).
 - After a successful `open`, `cli` runs the `entry` stage (§4.7) with `prompt = ""`, `range = ""` and appends each
-  result's `context`; `block` there is shown, not enforced. `kit open` is the only path that runs entry extensions
-  implicitly; `stack run entry` runs them explicitly.
+  result's `context`; `block` there is shown, not enforced. The stage also runs at compaction (§4.2 step 2) and
+  explicitly through `stack run entry`.
 - **Concurrency.** Every access to `<id>.kits`, read or write, holds an exclusive OS lock on `<id>.lock`
   (`gofrs/flock`, `TryLockContext` polling every 25 ms). The OS releases it when the holder exits, so there is no
   time-based stale reclaim; the lock file itself is never deleted. `open`/`close` wait up to 5 s; on timeout they
   exit 1 with `stack: <id>.kits is locked by another process` and change nothing (`open` then prints no context either,
   so the caller retries the whole command). A write goes to a uniquely named temp file in the sessions dir, its
   handle is closed, and it is renamed over the old file through an `os.Root` on that dir (`Root.Rename`); an emptied
-  list is removed (`Root.Remove`). A rename is atomic on Unix; on Windows a rename or remove fails while another
+  list is removed (`Root.Remove`). A rename is atomic on Unix; on Windows a rename or remove can fail while another
   handle to the file is open, which the lock rules out among `stack`'s own readers, since they hold it too and close
   their handle before unlocking (lockless outside readers: below). Different ids never share a file or lock. No
-  command retries by itself: a failure is reported and the caller reruns the command.
+  command retries by itself: a failure is reported, and rerunning the command succeeds once the conflict is gone.
 - **Read-only format for external readers.** Programs that cannot run `stack` (a Claude Code hook, an agent limited
   to file tools) may read `<id>.kits` directly; the format below is stable, and changing it is a breaking change.
   - *Path:* `~/.local/state/stack/sessions/<id>.kits`, `<id>` the session id (`^[A-Za-z0-9_-]{1,128}$`, §2.1)
@@ -257,7 +256,7 @@ error. Hook commands always exit `0`.
     can see either side, so a check of "does this session have a kit" can go either way in that window. On Windows a
     reader holding the file open can make a concurrent `open`'s rename or a last `close`'s remove fail (exit 2): the
     failed `open` records nothing but may already have created the kit dir, and the failed `close` leaves the slug
-    recorded; the caller reruns the command. A reader that only needs presence checks metadata (exists, non-empty)
+    recorded; the caller reruns the command, which succeeds once the reader has closed the file. A reader that only needs presence checks metadata (exists, non-empty)
     and never opens the file; a reader of the content opens, reads and closes it at once.
 
 #### 4.1.1 Kit context renderer (shared with compact restore)
@@ -274,7 +273,7 @@ also have CRLF turned into LF. The items body is built from the rules themselves
 |---|---|---|---|
 | `NORTH.md` | `<orchestration-state path=".../NORTH.md">` | nothing | `[unreadable: <path>]` |
 | `state.md` | `<orchestration-state path=".../state.md">` | `[new kit: <kit dir>; write state.md here]` | `[unreadable: <path>]` |
-| `attention/items.json` | `<orchestrator-attention-items path=".../attention/items.json">`, one `- <rule>` line per rendered item | nothing | `[unreadable: <path>]` |
+| `attention/items.json` | `<orchestrator-attention-items path=".../attention/items.json">`, one `- ` prefix per rendered rule | nothing | `[unreadable: <path>]` |
 | handover file of the first active `[handover]` entry (§2.1; `HERDR_ENV` active only when exactly `1`; a relative path against the config file's directory) | `<orchestration-handover path="<file>">` | nothing (no active entry) | `[unreadable: <path>]` |
 | `bin/board`, found by `ResolveExecutable`, run with cwd = kit dir (`orchestration-context.py:193-212`) | `<orchestration-board path="<executable>">` holding stdout minus a leading repeat of the state files, then `[board output truncated]`, `[board output incomplete: its pipes outlived it]` as they apply, and `[board exit N: <last stderr line or "no output">]` when it exits non-zero or leaves no output after that removal (also with exit 0); `[board failed: …]` or `[board timed out]` instead of output | nothing | `[unreadable: <path>]`, `[board not runnable on this OS: <path>]`, or `[board skipped: deadline]` once the deadline has passed |
 
@@ -676,7 +675,7 @@ Each PR passes `scripts/test` on Linux/macOS and `go vet` + `go test -race` + bu
 6. **feat: add kit open and close** — `internal/kit` (store, lock, renderer, board), `stack kit open/close`. Done
    when: C16–C17 pass.
 7. **feat: add session-start hook** — `internal/session`, `stack hook claude session-start`. Done when: C18–C20 pass;
-   C19's "no extension on compact" uses a fake `stack-<name>` on `PATH` that logs any call (PR 8 reruns it).
+   C19's extension assertion uses a fake `stack-<name>` on `PATH` that logs any call.
 8. **feat: add extension protocol and run** — `internal/ext`, `stack run`, entry stage after `kit open`. Done when:
    C21–C22 pass.
 9. **feat: add checked-head pr merge** — `internal/github`, `internal/merge`, `stack pr merge`. Done when: C23–C26
@@ -773,7 +772,7 @@ those callers.
 | C16 | `kit open` shall record the slug once per session id and `kit close` shall remove it, with same-id updates serialised. | `kit.TestStore`, `kit.TestStoreProcesses`, `cli.TestKitOpenClose` | invalid slugs (`demo.`, `con.txt`, `..`) exit 2; separate processes opening `a` and `b` under one id → both listed; a writer against a contending reader and interleaved open/close keep the list consistent; lock held by another process past the timeout → exit 1 with reason, file unchanged; different ids independent; no `STACK_SESSION_ID` → context on stdout, warning on stderr, exit 0, no file |
 | C17 | The renderer shall select the handover by `[handover]` order and render unreadable parts as markers. | `kit.TestRender` | T3 beats herdr; `HERDR_ENV=0` → none, `=1` → herdr; out-of-kit symlink → marker; board `.cmd` on Windows → marker |
 | C18 | For every source, when `CLAUDE_ENV_FILE` is provided, session-start shall append the export line; it shall print nothing except on compact. | `session.TestExport` | sources incl. `fork`; sourcing the file yields the id; stdout empty; `CLAUDE_ENV_FILE` unset → nothing written, exit 0, and a compact worker payload still restores the worker part |
-| C19 | When source is `compact`, session-start shall render the kits of that id only, and run no extension other than the `entry` stage (`docs/design/core-stages.md` C4). | `session.TestCompact` | resume→compact (same id) restores; fork→compact (new id) restores nothing; close then compact → absent; `.kits` lock held → kits omitted, worker part still restored; fake `stack-<name>` on `PATH` never invoked |
+| C19 | When source is `compact`, session-start shall render the kits of that id only, and run no extension other than the `entry` stage, which runs as `docs/design/core-stages.md` §4.3 and C4 state. | `session.TestCompact`, `session.TestCompactEntry` | resume→compact (same id) restores; fork→compact (new id) restores nothing; close then compact → absent; `.kits` lock held → kits omitted, worker part still restored; entry: invoked once with the restored kits, not invoked without a restored kit (`TestCompactEntry`); a fake `stack-<name>` on `PATH` with `[stages].entry` empty never invoked (no test yet) |
 | C20 | For a detected worker, compact shall restore body and brief within the 9,500-char budget in the stated priority. | `session.TestWorker`, `session.TestMultiKitReservation`, `session.TestReservedMarkers`, `session.TestBudgetUTF16` | each signal alone; string, block-array, tool_result-first and CRLF transcripts; rules whole and long brief verbatim with kits cut; a brief alone over 9,500 chars → rules whole, brief cut with marker, total incl. tags and markers ≤ 9,500; a rules body alone over 9,500 → rules cut with marker, then only the brief and kit omitted markers, total ≤ 9,500; broken transcript keeps kits; unreadable kit keeps brief; several kits (`NORTH.md` and `state.md`) → each file keeps its header and first 600 chars when they fit, else its omitted marker naming its path; `.kits locked` and brief markers survive a long brief or rules; budget counted in UTF-16 units |
 | C21 | `ext` shall skip missing extensions, warn on unrunnable/timeout/WaitDelay/truncated/malformed output, reject non-component names, and aggregate block > warn > pass. | `ext.TestRun*` (proctest) | valid JSON then hang → warn; JSON and exit per case; mixed statuses; `--ext ../x` → exit 2; Windows: only `stack-x.cmd` on PATH → warn not runnable; a `.cmd` earlier on PATH than `stack-x.exe` → the `.exe` runs |
 | C22 | `--replay` shall send the fixture request, compare `expect`, and reject a stage mismatch. | `cli.TestRunReplay` | match → expected status; status mismatch → 1; stage mismatch → 2; fake's stdin log equals the fixture request |

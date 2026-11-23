@@ -33,7 +33,7 @@ Verdict per behaviour against R, U and S (§0.1). "Core" needs all three; one fa
 |---|---|---|---|---|
 | `STACK_SESSION_ID` export on every SessionStart (`internal/session/session.go:54-80`) | yes: every stage that needs the session (kits, `merged`) keys on it | yes: identity must be one value shared by core and every extension | yes: one env var, unchanged since v10 | **Core** |
 | `kit open/close`, `<id>.kits` store and lock (`internal/cli/kit.go:55-139`, `internal/kit/store.go:46-200`) | yes | yes: the record decides what compaction restores; a second writer would race the lock | yes | **Core** |
-| Restore contract: what compaction restores (the session's kits, a detected worker's body and brief, the handover, the kits' boards), in which order, within the 9,500-char budget, with an omission marker for every part that does not fit (`internal/session/session.go:115-170`, `internal/session/budget.go`, `internal/kit/render.go:90-216`) | conditionally: a no-op without a kit or worker, required as soon as one exists, since compaction is where essence is lost (#28 comment) | yes: compaction runs inside a hook with a hard output limit; only the core sees the whole budget | yes | **Core** |
+| Restore contract: what compaction restores (the session's kits, a detected worker's body and brief, the handover, the kits' boards), in which order, within the 9,500-char budget, with an omission marker for every part that does not fit while room for the marker remains (`docs/design/phase2-core.md` §4.2 step 5) (`internal/session/session.go:115-170`, `internal/session/budget.go`, `internal/kit/render.go:90-216`) | conditionally: a no-op without a kit or worker, required as soon as one exists, since compaction is where essence is lost (#28 comment) | yes: compaction runs inside a hook with a hard output limit; only the core sees the whole budget | yes | **Core** |
 | Replaceable restore content: which state files a kit has (`NORTH.md`, `state.md`, `internal/kit/render.go:37`), the worker marker, agent types and body (`[worker]`), the handover files per environment (`[handover]`), each kit's board command | no: each is the owner's choice | no | no: varies per user | **Config and kit files** read by the core contract; the built-in `-worktrees/agent-*` worker signal (`internal/session/session.go:214-260`) stays as the one non-configurable detection rule |
 | 3,000-byte `state.md` note (`internal/kit/render.go:24-25,123-126`) | no: a size number is not what diverts attention (#28 comment) | no | no: the threshold is policy | **Removed** (§5.3) |
 | Extension discovery, protocol, deadlines, aggregation (`internal/ext/ext.go:27-418`, `internal/ext/request.go`) | yes | yes: it is the contract | yes: evolution rule | **Core** |
@@ -225,8 +225,7 @@ Step 2 of `docs/design/phase2-core.md` §4.2 gains a last step: when at least on
   result leaves no text in the context and the hook writes `stack: entry context of <name> dropped: context limit`
   to stderr; this happens only when the restore already filled the budget, so the restore itself is intact.
 
-This makes compaction return what `kit open` showed, which v10 did not (C19 of `docs/design/phase2-core.md`
-asserted that no extension runs; only that assertion changes, §4.10).
+This makes compaction return what `kit open` showed.
 
 ### 4.4 `stack-public` (outbound extension)
 
@@ -337,11 +336,15 @@ except on its own errors.
     states (`~` expanded, a relative root against the config file's directory, default
     `~/.local/state/stack/kits`), and the slug is recorded in the merging session's `.kits` with that dir present
     (`internal/cli/prmerge.go:73-92`, `internal/cli/run.go:281-307`).
-  - *How a consumer finds that dir:* it resolves the current config as above. It may instead reuse a dir it saw for
-    `<slug>` in this session, from `kit open` output or a compact restore (the directory of an
-    `<orchestration-state path=…>`, the path in `[new kit: …]`, or the file path in `[state omitted: context limit:
-    <path>]` or `[unreadable: <path>]`), only when it knows `[kit].root` has not changed since; it never assumes
-    the default root.
+  - *How a consumer finds that dir:* it resolves the current config as above. The premise is that `[kit].root` is
+    not edited while `pr merge` runs; editing it then is outside this design. The consumer may instead reuse a dir
+    it saw for `<slug>` in this session, from `kit open` output or a compact restore, only when it knows
+    `[kit].root` has not changed since: an `<orchestration-state path=…>` or `[state omitted: context limit:
+    <path>]` path names `<kit dir>/NORTH.md` or `<kit dir>/state.md`, so the kit dir is its parent; `[new kit:
+    <path>; …]` names the kit dir; `[unreadable: <path>]` names the kit dir itself (a kit dir that cannot be
+    opened), `<kit dir>/NORTH.md`, `<kit dir>/state.md` or `<kit dir>/attention/items.json`, so the consumer
+    strips that file name when present. It never assumes the default root; when no dir can be established, it
+    reports the slug as unresolved instead of guessing.
   - *Replay:* with `stack run merged --replay`, the request is the fixture's, so the line's slug names the
     fixture's `kits` entry and its `dir`, not anything under the kit root.
 - **Best effort.** The reset is written before core accepts the response; if the stage deadline passes or stdout
@@ -371,9 +374,7 @@ Public behaviour that changes on purpose, each from #28 or #30 or decided here:
 
 ### 4.10 What v11 overrides in the phase designs
 
-- `docs/design/phase2-core.md`: §4.2 step 2 "No extensions run" and C19's assertion that a
-  fake extension is never invoked (entry at compaction, §4.3; C19's other assertions on ids, the lock, fork and
-  close, and C20's restore priority stay); §4.3 (the core hook keeps only raw-merge; the other rules move to
+- `docs/design/phase2-core.md`: §4.3 (the core hook keeps only raw-merge; the other rules move to
   `stack-guard`, C10–C12, C14–C15 move with them); §4.4 step 1 and C26's message clause (`[merge].message_checks`,
   §4.2); §4.5 (`stack-public check`); §4.6 and C27 (removed); §4.7 (stages, request fields, block demotion, §4.9);
   §2.1's `[safety]` table (§4.6) and its new `[merge]` table and `[stages].outbound` default (§4.2, §7 PR 7).
