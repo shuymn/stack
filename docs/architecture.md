@@ -85,11 +85,14 @@ fixtures) are in `docs/design/phase2-core.md` §4.7.
   counts even with a non-zero exit).
   stderr is forwarded to core's stderr with `[<name>] ` before each line.
 - **Limits and failures:** one deadline per stage shared by its extensions (entry 10 s, outbound 120 s, merged 10 s,
-  cycle 30 min). Entry at compaction also ends by the hook's 55 s cut-off, after which no further work starts and
-  the hook writes the built restore before Claude Code's 60 s, and runs only when its runner deadline (below) is at
-  least 1 s away; there and at `merged` run by `stack pr merge`, whose 10 s include request preparation (a manual
-  `stack run merged` prepares its request outside the 10 s, like every `stack run` stage), the runner's deadline is the stage's end less the 2 s pipe-reaping allowance, so reaping
-  fits inside the stage. An extension not started by the deadline is left unstarted. Before parsing stdout, core checks for a lookup or start failure, the deadline, a pipe still open when the
+  cycle 30 min). Entry at compaction ends at the earlier of its 10 s window and the hook's cut-off 55 s after the
+  hook started (Claude Code's 60 s less 5 s for the output); the cut-off bounds only the entry stage, not the
+  restore's own reads and boards, nor the extension lookup or the output write. It runs only with a restored kit
+  and a non-empty `[stages].entry`, and leaves `[entry skipped: deadline]` when its runner deadline (below) is less
+  than 1 s away. There and at `merged` run by `stack pr merge`, whose 10 s include request preparation (a manual
+  `stack run merged` prepares its request outside the 10 s, like every `stack run` stage), the runner's deadline is
+  the stage's end less the 2 s pipe-reaping allowance, so reaping fits inside the stage (`docs/design/core-stages.md`
+  §4.3). An extension not started by the deadline is left unstarted. Before parsing stdout, core checks for a lookup or start failure, the deadline, a pipe still open when the
   cleanup grace period after exit ends, and oversized stdout; these, an invalid response and an extension left
   unstarted at the deadline become `warn` with a synthetic finding, never `block`.
 - **Result:** statuses aggregate as `block > warn > pass` (no result = `pass`). Only `outbound` can block:

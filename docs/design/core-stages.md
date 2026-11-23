@@ -183,7 +183,7 @@ All additions follow the evolution rule: new optional request fields, safe to ig
    lookup error) and none is runnable, it prints that name's `warn` marker after the `MERGED` line without reading
    `.kits` and exits 0, as the runner reports it at every stage (`internal/ext/ext.go:223`). Otherwise the stage's end is 10 s after it starts and covers the `.kits` read, the request encoding,
    every extension and the reaping of their pipes: the runner gets a deadline that is that end less its pipe-reaping
-   allowance (`defaultWaitDelay`, 2 s, `internal/proc/proc.go:28`), so an extension that runs to the deadline and
+   allowance (`defaultWaitDelay`, 2 s, `internal/proc/proc.go:29`), so an extension that runs to the deadline and
    leaves a pipe open to a grandchild is still reaped by the end. An extension not started by the deadline is left
    unstarted with a `warn`. For each result that is not `pass` or has a non-empty `context`, print to stdout, after
    the `MERGED` line, the `warn` marker `[extension <name>: warn: <reason>]` when it warned, then its trimmed
@@ -208,7 +208,7 @@ Step 2 of `docs/design/phase2-core.md` §4.2 gains a last step: when at least on
   write the output). The cut-off bounds only the entry stage, not the restore's own file reads and board commands,
   which keep their v10 bounds (`docs/design/phase2-core.md` §4.2). Once the restore is built, the stage's deadline
   is the earlier of 10 s from its start and the cut-off, less the runner's pipe-reaping allowance (2 s,
-  `internal/proc/proc.go:28`; `internal/session/session.go:257-258`), so an extension that runs to that deadline and
+  `internal/proc/proc.go:29`; `internal/session/session.go:257-258`), so an extension that runs to that deadline and
   leaves a pipe open to a grandchild is reaped about when that earlier time arrives, never after the cut-off. The
   runner kills an extension at the deadline and launches no further extension once it has passed, leaving each
   unstarted one with a `warn` (`internal/ext/ext.go:247-260`). Placing the results and encoding and writing the
