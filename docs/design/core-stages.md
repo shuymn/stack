@@ -183,7 +183,7 @@ All additions follow the evolution rule: new optional request fields, safe to ig
    lookup error) and none is runnable, it prints that name's `warn` marker after the `MERGED` line without reading
    `.kits` and exits 0, as the runner reports it at every stage (`internal/ext/ext.go:223`). Otherwise the stage's end is 10 s after it starts and covers the `.kits` read, the request encoding,
    every extension and the reaping of their pipes: the runner gets a deadline that is that end less its pipe-reaping
-   allowance (`defaultWaitDelay`, 2 s, `internal/proc/proc.go:29`), so an extension that runs to the deadline and
+   allowance (`proc.DefaultWaitDelay`, 2 s, `internal/proc/proc.go:29`), so an extension that runs to the deadline and
    leaves a pipe open to a grandchild is still reaped by the end. An extension not started by the deadline is left
    unstarted with a `warn`. For each result that is not `pass` or has a non-empty `context`, print to stdout, after
    the `MERGED` line, the `warn` marker `[extension <name>: warn: <reason>]` when it warned, then its trimmed
