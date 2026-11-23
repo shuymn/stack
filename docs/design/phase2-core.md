@@ -285,8 +285,9 @@ objects, each with a string `role` and a string `rule`; other fields are ignored
 `items` decodes as an array of raw elements, so an earlier `items` that is neither an array nor `null` still
 rejects the file even when a later one is an array, and an `items` whose last value is `null` leaves no array.
 `role` and `rule` decode into any JSON value, so an earlier value of another type is replaced by a later string
-and the element renders, unless the earlier value cannot be decoded at all (a number past float64 such as `1e400`),
-which rejects the element (`internal/kit/render.go:211-223`).
+and the element is accepted (and rendered when that last `role` is one of the roles below), unless the earlier
+value cannot be decoded at all (a number past float64 such as `1e400`), which rejects the element
+(`internal/kit/render.go:211-231`).
 
 ```json
 {"items": [{"role": "orchestrator", "rule": "Check the current objective before continuing."}]}
@@ -327,7 +328,12 @@ Stdin: SessionStart payload. Env: `CLAUDE_ENV_FILE`.
    (`docs/architecture.md:49,54`).
 2. **Compact only.** Take the `<id>.lock` with a 1 s timeout, read `<id>.kits`, release, and render each listed kit
    whose dir exists. If the lock is not acquired, the kit part is omitted (`[kits omitted: .kits locked]`) and the
-   worker part below is still restored. Independently, if the session is a worker (step 3), restore the worker body (frontmatter
+   worker part below is still restored; a `.kits` that cannot be read leaves `[kits omitted: .kits unreadable]` the
+   same way. Distinct from both, a kit root that cannot be made absolute ends the kit part before `.kits` is read,
+   with no marker and no handover (`internal/session/session.go:378-381`); the worker part is still restored. The
+   root is absolute whenever `HOME` is (`~` expands under it, and a relative `[kit].root` is taken from the config
+   file's directory, `internal/paths/paths.go:323-329`), so this happens only with a relative `HOME` and a working
+   directory that cannot be resolved. Independently, if the session is a worker (step 3), restore the worker body (frontmatter
    stripped, CRLF-tolerant) and the original brief (`orchestration-context.py:276-300`). A broken transcript
    loses only the brief; an unreadable kit loses only its blocks (`orchestration-context.py:288-300`). The `entry`
    stage runs last, when at least one kit was restored and time is left (`docs/design/core-stages.md` §4.3). Boards
@@ -747,7 +753,7 @@ those callers.
 | P7 | If the config is invalid, then hooks shall apply §5 defaults. | constraint | secrets still denied | broken `config.toml`, Read-secret payload → deny JSON |
 | P8 | If one kit file, board or transcript cannot be read, then the hook shall omit only that part. | constraint | other blocks present | compact payload with unreadable `state.md` and a valid brief |
 | P9 | When any SessionStart event with a valid id fires (incl. `fork`) and `CLAUDE_ENV_FILE` is provided, the hook shall export `STACK_SESSION_ID`; it shall inject nothing except on compact. | §4 S1, T0 | `echo $STACK_SESSION_ID` equals the session id; no context on startup | live: new session, run the echo; inspect transcript |
-| P10 | When a session compacts, the hook shall restore the kits opened and not closed under that session id, when the `.kits` lock is acquired within 1 s (else the kit part is omitted with a marker). | §3, §4 | kit block present after `/compact`; absent after `kit close`; absent in a fork | live: `kit open demo`, `/compact`; close, `/compact` again |
+| P10 | When a session compacts, the hook shall restore the kits opened and not closed under that session id, when the kit root resolves and the `.kits` lock is acquired within 1 s (a lock not acquired or a `.kits` not read omits the kit part with a marker; a kit root that cannot be resolved omits it with none, §4.2 step 2). | §3, §4 | kit block present after `/compact`; absent after `kit close`; absent in a fork | live: `kit open demo`, `/compact`; close, `/compact` again |
 | P11 | When a worker session compacts, the hook shall restore `opus-worker.md` whole and the original brief, verbatim when both fit in 9,500 chars and otherwise cut with a marker. | §4 worker detection | rules and brief visible after compact | live: first prompt starting with the marker; `/compact` |
 | P12 | When `check public` finds a local path (POSIX or Windows) or private term in a range or metadata, it shall exit 1 naming each hit. | §1, §3 | stderr lists hits; exit 1; clean → 0; bad range → 2 | real repo branch with a seeded commit; Windows CI via `stack.exe` |
 | P13 | When `pr merge` merges without `--auto`, it shall merge only the checked full head SHA, after every check of that SHA passed (or none exist and `--allow-no-checks` is given) and `.claude/merge-check` is absent or passed; with `--auto`, steps 1–8 shall check that SHA, the submission shall require it, and success shall require a verified merge of it; a merge of any other head (GitHub cannot pin the head it later merges while auto-merge is active) is reported as a failure (§4.4 step 10). | §3 | stdout `MERGED <H> …`; refusals exit 1 | scratch GitHub repo PR: stale SHA, failing check, no checks without the flag, refusing merge-check, then success; `--auto`: a dotfiles PR whose gate status is absent until auto-merge is enabled merges `H` |
