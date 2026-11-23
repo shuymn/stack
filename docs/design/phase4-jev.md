@@ -36,8 +36,7 @@ the Workers AI and OpenRouter routes; `[merge].message_checks` wiring; improve's
 **Prior art** (another project's practice, not a backend fact; https://github.com/mizchi/jev-lint, its
 `docs/reference.md`): it pins `jev-1.14.0`, fits "at or above" cutoffs per rule and replays verdicts with no key, as
 §3.4–§3.5 do; its measured pass-to-pass score spread (median 0.010, p90 0.050, max 0.300) is the scale of §3.5's
-δ = 0.05, and in one of its review rounds 2 of 11 findings were wrong, which is why every Jev answer here is advice
-and never a block (§3.2).
+δ = 0.05.
 
 **Assumptions:** 70–500 ms per call (#57; only the benchmark above is published); an over-long request's 400 body
 contains `max_tokens_exceeded` (the page names the error, not its field); 4 requests in flight stay under the rate
@@ -96,20 +95,19 @@ end 0.1 s before it to leave room for the bounded ledger append (§3.3). At the 
 The reserve covers the response and classify's file. Children get a 0.2 s pipe wait and a timeout 0.2 s before the
 work deadline, so killing git and reaping its pipes fit inside the budget. The response stays under 512 KiB, half core's 1 MiB stdout limit
 (`internal/ext/ext.go:211`): further findings become one `jev-omitted` count, context lines are cut with a marker.
-Core's deadlines are separate (`internal/ext/ext.go:47-50`), one per stage run and shared by its extensions in
-order: entry 10 s at `kit open`, at compaction `min(10 s, time left to the hook's 55 s cut-off) − 2 s`, run when
-≥ 1 s remains (`internal/session/session.go:255-289`); outbound 120 s from the start of the stage. In a run of the
-default selection (`public`, then `jev-semantic`), semantic gets what `public` leaves of that window: `public` stops
-its scan 100 s after its own start (`extensions/public/stage.go:29-40`), usually leaving semantic ≥ 18 s. hiden's
-caller runs `--ext jev-semantic` alone (below), so semantic starts at the beginning of the window; cycle 30 min. When core cuts a child it records a synthetic `warn`, distinct from a self-answered partial
-result; at compaction the router's stderr is discarded.
+Core's stage deadlines and its synthetic `warn` for a child it cuts, which differs from a self-answered partial
+result, are separate: `docs/architecture.md` §3, with the deadline of entry at compaction in `core-stages.md` §4.3.
+In a run of the default outbound selection (`public`, then `jev-semantic`), semantic gets what `public` leaves of the
+120 s window, and `public` stops its scan 100 s after its own start (`extensions/public/stage.go:29-40`). hiden's
+caller runs `--ext jev-semantic` alone (below), so semantic starts at the beginning of the window. At compaction the
+router's stderr is discarded.
 
 ### 3.2 What each extension sends and returns (item 2)
 
 All requests use `model: "jev-1.14.0"`; generated metadata in them has no wall-clock time or local absolute path.
 
 **`jev-semantic` (outbound).** Read from `repo` (the cwd when `""`) with two git commands: the messages of
-`<range>`, one per commit, newest first, and the patch of `<range>` with three lines of context, `a/`/`b/` prefixes,
+`<range>`, one per commit in Git log order, and the patch of `<range>` with three lines of context, `a/`/`b/` prefixes,
 full blob ids, no renames and no external diff or text conversion, both LF-normalised. Git runs with the
 repository-location variables dropped (as `extensions/internal/proc/repovars.go`), system, global and
 environment-supplied config off, and command-line overrides that beat repository-local config, so a body depends
@@ -140,26 +138,24 @@ Answer: each `p ≥ cutoff` adds a finding `{"kind":"jev-meta-duty"|"jev-unsuppo
 `block`: the answer is probabilistic and coarse, which is not a hard boundary (`docs/architecture.md` §1).
 
 **Supported caller.** The hiden `commit-pr` step in `shuymn/dotfiles`
-(`home/dot_claude/skills/hiden/references/commit-pr.md`, step 2) writes the title and body to files and runs
-`stack-public check <PR base>..<head> --title-file <t> --body-file <b> --branch <branch>` before each push and PR
-create or edit. When a PR is created or edited, that check passed and `stack-jev-semantic` is on `PATH`, it pins
-`head` to a commit, resolves `mb=$(git merge-base <PR base> <head>)` (the comparison GitHub shows for a PR) and runs
-`stack run outbound --ext jev-semantic --range <mb>..<head>` with the same three text flags; with no merge base it
-skips semantic and says so. The agent reports the findings, and the exit code does not stop the push. Starting the
-range at the merge base keeps a test that only the base added from showing as deleted. CI is not wired (it would
-need the key as a secret). The caller is agent instruction text without an automated test; its merge-base step is
-checked by O2 and the extension side by the diverged-base fixture (P2).
+(`home/dot_claude/skills/hiden/references/commit-pr.md`, step 2) owns the command and how its result is reported. On
+a PR create or edit, after `stack-public check` passed and when `stack-jev-semantic` is on `PATH`, it sends
+`<merge-base>..<pinned head>` with the same title, body and branch inputs. The merge-base range is the comparison
+GitHub shows for a PR, so a test that only the base added does not show as deleted; with no merge base the caller
+reports that semantic was skipped. The agent reports the findings as advice, which never stops the push or the
+PR; `stack-public check` still gates both. CI is not wired (it would need the key as a secret). The caller is agent
+instruction text without an automated test; its merge-base step is checked by O2 and the extension side by the
+diverged-base fixture (P2).
 
 **`jev-router` (entry).** Deferred until the trigger below. Hiden already routes by step type and calls for
 re-reading the reference after compaction. The router targets a missed re-read of a single step named in restored kit
 state. Both `kit open` and compaction provide kit state without a prompt. Observe's window-wide `reference-unread`
 signal cannot establish whether the reference was read before that step.
 
-**Prerequisite.** Each kit restores an orchestrator rule to re-read the hiden reference of the step in progress
-after compaction, as an item of its `attention/items.json` in the format of
-[`phase2-core.md` §4.1.1](phase2-core.md#411-kit-context-renderer-shared-with-compact-restore); hiden's kit
-convention puts it there and words it. It counts only for a kit whose restore output shows it in its
-`orchestrator-attention-items` block; a kit whose file renders no such item does not count. **Trigger:** two distinct
+**Prerequisite.** A kit counts only when compaction restores, in that kit's `orchestrator-attention-items`
+block, the orchestrator rule to re-read the hiden reference of the step in progress. hiden supplies and words the
+rule; [`phase2-core.md` §4.1.1](phase2-core.md#411-kit-context-renderer-shared-with-compact-restore) defines the
+format. **Trigger:** two distinct
 cases, recorded in two separate retrospectives, of a step run after compaction in such a kit whose rule lives in that
 step's hiden reference, where that reference was not read between the compact boundary and the step's first action (a read after that
 action still counts as a miss), and where the kit state at the boundary names that step in progress (a miss the
