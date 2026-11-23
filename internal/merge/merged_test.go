@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -221,7 +222,7 @@ func TestMergedStage(t *testing.T) {
 }
 
 // TestMergedStageDeadline covers C5's deadline: nothing starts after the runner's deadline, and a
-// pipe a grandchild holds open is reaped within the stage's 10 s.
+// pipe a grandchild holds open is reaped within the stage's window (20 s in that case).
 func TestMergedStageDeadline(t *testing.T) {
 	t.Parallel()
 	t.Run("a slow first extension", func(t *testing.T) {
@@ -292,6 +293,44 @@ func TestMergedStageDeadline(t *testing.T) {
 				window, limit)
 		}
 	})
+}
+
+// deadlineRunner records the deadline and the time of its one call instead of running anything.
+type deadlineRunner struct {
+	proc.Exec
+
+	deadline, called *time.Time
+}
+
+func (r deadlineRunner) Run(ctx context.Context, _ proc.Cmd) (proc.Result, error) {
+	*r.called = time.Now()
+	*r.deadline, _ = ctx.Deadline()
+	return proc.Result{Stdout: []byte(`{"status":"pass"}`)}, nil
+}
+
+// TestMergedStageRunnerDeadline covers C5's pipe allowance on the clock: the runner's deadline is
+// the stage's end, 10 s after the window opens, less the runner's pipe wait. The window opens
+// between the two readings around it, so the check holds however slow the scheduler; a deadline
+// at the end itself is past the later bound unless the stage took the whole pipe wait to call the
+// runner.
+func TestMergedStageRunnerDeadline(t *testing.T) {
+	t.Parallel()
+	var deadline, called time.Time
+	s := MergedStage{
+		Names: []string{"demo"},
+		Ext:   ext.Options{Runner: deadlineRunner{deadline: &deadline, called: &called}},
+		resolve: func([]string) []ext.Plan {
+			return []ext.Plan{{Name: "demo", Path: "demo"}}
+		},
+	}
+	before := time.Now()
+	runMerged(t.Context(), s, io.Discard, "o/r", ext.Merge{})
+	runnerWindow := ext.MergedTimeout - proc.DefaultWaitDelay
+	lo, hi := before.Add(runnerWindow), called.Add(runnerWindow)
+	if deadline.Before(lo) || deadline.After(hi) {
+		t.Fatalf("runner deadline %s after the stage began, want %s less the pipe wait %s",
+			deadline.Sub(before), ext.MergedTimeout, proc.DefaultWaitDelay)
+	}
 }
 
 // checkMergedRequest checks demo's one request of a direct merge: it is what the run verified, and
