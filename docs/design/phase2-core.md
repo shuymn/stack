@@ -328,8 +328,8 @@ Stdin: SessionStart payload. Env: `CLAUDE_ENV_FILE`.
    stripped, CRLF-tolerant) and the original brief (`orchestration-context.py:276-300`). A broken transcript
    loses only the brief; an unreadable kit loses only its blocks (`orchestration-context.py:288-300`). The `entry`
    stage runs last, when at least one kit was restored and time is left (`docs/design/core-stages.md` §4.3). Boards
-   run in `.kits` order after the handover is budgeted and before the `entry` results (step 5). A kit without
-   `bin/board` yields nothing, and a board that cannot be resolved or run on this OS yields its §4.1.1 marker. A
+   run in `.kits` order after the handover is budgeted and before the `entry` results (step 5). A board lookup
+   that finds no board yields nothing, and a board that cannot be resolved or run on this OS yields its §4.1.1 marker. A
    runnable board whose block cannot fit is not launched and leaves `[board omitted: context limit: <path>]`. One
    deadline of 40 s covers all boards (`orchestration-context.py:47`); once it passes, a runnable board that clears
    the space check is not launched and leaves `[board skipped: deadline]`. Each marker appears only when it fits. A
