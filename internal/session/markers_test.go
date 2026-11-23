@@ -9,10 +9,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/shuymn/stack/internal/config"
+	"github.com/shuymn/stack/internal/ext"
 	"github.com/shuymn/stack/internal/hookio"
 	"github.com/shuymn/stack/internal/paths"
 	"github.com/shuymn/stack/internal/proc"
@@ -57,6 +59,24 @@ func (r *cancelRunner) Run(_ context.Context, c proc.Cmd) (proc.Result, error) {
 }
 
 func (r *cancelRunner) Stream(context.Context, proc.Cmd, func(io.Reader) error) error {
+	return errors.New("unexpected stream")
+}
+
+// entryRunner answers every run with stdout and records the commands.
+type entryRunner struct {
+	stdout string
+	mu     sync.Mutex
+	cmds   []proc.Cmd
+}
+
+func (r *entryRunner) Run(_ context.Context, c proc.Cmd) (proc.Result, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.cmds = append(r.cmds, c)
+	return proc.Result{Stdout: []byte(r.stdout)}, nil
+}
+
+func (r *entryRunner) Stream(context.Context, proc.Cmd, func(io.Reader) error) error {
 	return errors.New("unexpected stream")
 }
 
@@ -239,16 +259,27 @@ func TestCompactEntryMarkers(t *testing.T) {
 	})
 
 	t.Run("entry context omitted: context limit", func(t *testing.T) {
-		bin := pathDir(t)
-		fakeEntry(t, bin, "demo", passWith("ENTRY CTX"))
 		f := newFixture(t)
 		f.cfg.Stages.Entry = []string{"demo"}
 		f.open("demo", map[string]string{"state.md": "S"})
+		// The extension's run is a fake that answers at once, so no process start under load can
+		// run into the stage deadline.
+		exe := filepath.Join(t.TempDir(), ext.Prefix+"demo")
+		runner := &entryRunner{stdout: `{"status":"pass","context":"ENTRY CTX"}`}
+		f.params = func(p *Params) {
+			p.Runner = runner
+			p.resolve = func(names []string) []ext.Plan {
+				return []ext.Plan{{Name: names[0], Path: exe}}
+			}
+		}
 		state := stateBlock(filepath.Join(f.kitDir("demo"), "state.md"), "S")
 		omitted := "[entry context omitted: context limit: demo]"
 		ctx, _ := f.start(rulesLeaving(f, cost(omitted), state))
 		if !strings.HasSuffix(ctx, "</worker-rules>\n\n"+state+"\n\n"+omitted+"\n") {
 			t.Fatalf("context = %q\nwant suffix %q", squash(ctx), omitted)
+		}
+		if len(runner.cmds) != 1 || runner.cmds[0].Name != exe {
+			t.Fatalf("runs = %+v, want one of %s", runner.cmds, exe)
 		}
 		if f.stderr.Len() != 0 {
 			t.Fatalf("stderr = %q, want nothing: the marker fits", f.stderr.String())
