@@ -35,14 +35,14 @@ decision and the index. Changing to (a) later means moving text, not changing be
 
 ### 3.1 `attention/items.json`
 
-The shape, the restored roles and every ignored input are stated once, in `phase2-core.md` §4.1.1, as the code
-behaves today. Items for roles `stack` does not restore may stay in the file: the format is shared with whatever
-else reads it, and `stack` renders only its own audience.
+The shape, the restored roles and every ignored input are stated once, in `phase2-core.md` §4.1.1. Items for roles
+`stack` does not restore may stay in the file: the format is shared with whatever else reads it, and `stack`
+renders only its own audience.
 
-A warning at `stack kit open` is worth adding (§4): an ignored register silently loses a rule the orchestrator
-relies on after compaction (the re-read rule of `phase4-jev.md` §3.2 counts only when its block appears), and
-`kit open` is the one moment the orchestrator sees stderr and can fix the file. Compaction stays silent: its stdout
-is the restore, and stderr there does not reach the agent's context.
+Ignored items are reported as §4 states, for these reasons: an ignored register silently loses a rule the
+orchestrator relies on after compaction (the re-read rule of `phase4-jev.md` §3.2 counts only when its block
+appears); `kit open` is the one moment the orchestrator sees stderr and can fix the file; at compaction stdout is
+the restore, and stderr does not reach the agent's context.
 
 ### 3.2 Restore output
 
@@ -77,11 +77,10 @@ Rejected: adding the kit dir to the line (§6).
 `core-stages.md` §4.8 no longer states the steward report format or how it is started; it points to
 `shuymn/dotfiles`. P14 checks only what `stack` emits; the steward's acceptance moves to the companion PR (§8).
 
-## 4. Follow-up code change: warn about ignored attention items
+## 4. Warning about ignored attention items
 
-Not part of this PR. `internal/kit` reports why it ignored items; `internal/cli/kit.go` prints it; compaction is
-unchanged. Item indexes are 0-based (the JSON array index). hiden writes the register after the first `kit open` of
-a new kit, so the warning catches a malformed file when the kit is opened again (a reopen or a handover), not on
+`internal/kit` reports why it ignored items, without changing what it renders; `internal/cli/kit.go` prints it.
+Item indexes are 0-based (the JSON array index). hiden writes the register after the first `kit open` of a new kit, so the warning catches a malformed file when the kit is opened again (a reopen or a handover), not on
 creation.
 
 | ID | EARS claim | Test |
@@ -89,7 +88,7 @@ creation.
 | W1 | When `stack kit open` renders a kit whose `attention/items.json` is readable but is not a JSON object whose `items` is an array, it shall write exactly one line `stack: <path>: attention items ignored: <reason>` to stderr. | `cli.TestKitOpenItemsWarning`, one case each with its reason string: invalid JSON, top-level `null`, `123`, `"x"`, `[]`, `{}` (`items` missing), `{"items": null}`, `{"items": "x"}`; control: no file → no line |
 | W2 | When `items` is an array holding elements that are not objects, or whose `role` or `rule` is missing, `null` or not a string, `stack kit open` shall write exactly one line `stack: <path>: <n> of <m> attention items ignored (first: item <i>: <reason>)` to stderr and still render the valid items. | same test, mixing valid `orchestrator` and `all` items with a `null` element (`{"items": [null, …]}`; a top-level `null` file is W1's), `3`, an item without `rule`, `{"role": 1, "rule": "x"}`, `{"role": "all", "rule": 2}`: asserts one line, `n`, `m`, the first index and reason, and the surviving bullets in order; `kit.TestItemsDiagnostics` for each reason |
 | W3 | While the file is absent or every element is well-formed, `stack kit open` shall write nothing about the items, including for items whose role is neither `orchestrator` nor `all`, an empty `rule`, and an empty `items` array. | same test: a `worker` item (no block, silent), an empty `all` rule (`- `, silent), `{"items": []}` (no block, silent) |
-| W4 | `stack kit open` shall keep its stdout byte-identical and its exit code unchanged in every W1–W3 case. | same test, comparing stdout and the exit code with fixed expectations written for today's renderer, stderr captured separately |
+| W4 | `stack kit open` shall keep its stdout byte-identical and its exit code unchanged in every W1–W3 case. | same test, comparing stdout and the exit code with fixed expectations of the renderer's output, stderr captured separately, including a number past `float64` and a repeated `items` key in another letter case, which render as Go's JSON decoding gives them |
 | W5 | Session-start shall not write any item diagnostic. | `cli.TestSessionStartItems`: `cli.Run` of `hook claude session-start` with a compact payload and a malformed file, with `STACK_DEBUG` unset and set to `1`: no diagnostic on stderr or in `additionalContext` |
 
 ## 5. Open questions
@@ -143,7 +142,7 @@ needed the summary, or if `stack` gained its own scheduled runner. (a) changes n
 
 | Side effect | Why it does not harm the purpose |
 |---|---|
-| Ignored items stay silent until §4 lands | valid state and valid items still render; a register that was malformed before stays malformed and unannounced, as it was, and the stated shape lets the loss be diagnosed once noticed |
+| Ignored items get no marker in the restore; which entry point reports them is §4 | valid state and valid items still render; the report of §4 comes when the orchestrator can fix the file, and the stated shape lets a loss seen after compaction be diagnosed |
 | Freezing the `.kits` format | it is already what both readers depend on; a future change gets a read command (§3.3) instead of a silent break |
 | Lockless `.kits` readers see no fresh snapshot: a read racing a session's first `kit open` or last `kit close` can see either side, so the ask-owner hook may show or skip the checklist for that one question | the effect is one reminder more or less on one question |
 | Steward's caller lookup through `.kits` is best-effort: when two sessions list the slug, or one closes it while steward reads, steward can pick the other session's transcript | `.kits` records kits, not callers, so no reader can do better from it; the companion PR (§8) requires steward to name the session it inspected on every lookup, or say it could not establish the caller, so an on-track line is not mistaken for an audit of the right session |
@@ -176,9 +175,9 @@ needed the summary, or if `stack` gained its own scheduled runner. (a) changes n
 
 | ID | EARS claim | Source | Verified by |
 |---|---|---|---|
-| L1 | The renderer shall render items whose `role` is `orchestrator` or `all` and whose `rule` is a string, in file order, and render no block for a malformed file. | §3.1 | `kit.TestRenderStateAndItems` (roles, a non-string rule, a non-object element), `kit.TestRenderNewKit` (invalid JSON); a top-level array, `null` and a non-array `items` get tests with §4 |
-| L2 | When a kit has `NORTH.md` and no `state.md`, the renderer shall render the `NORTH.md` block and the `[new kit: …]` marker. | §3.2 | built CLI (A2); `kit.TestRender` covers `NORTH.md` with an unreadable `state.md` only; a unit test comes with §4 |
-| L3 | Compact restore shall emit the tags and markers of `phase2-core.md` §4.2 step 6 within 9,500 UTF-16 units, and other sources nothing. | §3.2 | `session.TestWorker` (worker line, `<worker-rules>`, `<original-brief>`), `session.TestCompact` (kits, `<orchestration-board>`, `[kits omitted: .kits locked]`), `session.TestReservedMarkers` and `session.TestMultiKitReservation` (`[state omitted: …]`, `[brief omitted: …]`), `session.TestBudgetUTF16` (`[...cut N chars]`, the total), `session.TestBoards` (board not launched without room), `session.TestCompactEntry`, `session.TestCompactEntryDeadline`, `session.TestEntryOmittedMarker` (entry blocks, `<orchestration-handover>`, `[entry skipped: deadline]`, `[entry context omitted: …]`), `session.TestExport` (other sources print nothing). No compact test yet for `[entry extensions skipped: …]` (the deadline test asserts only its absence), the items block, `[kits omitted: .kits unreadable]`, `[board omitted: …]`, `[board skipped: deadline]`, `[items omitted: …]`, `[handover omitted: …]` or `[worker rules omitted: …]` |
+| L1 | The renderer shall render items whose `role` is `orchestrator` or `all` and whose `rule` is a string, in file order, and render no block for a malformed file. | §3.1 | `kit.TestRenderStateAndItems` (roles, a non-string rule, a non-object element), `kit.TestRenderNewKit` (invalid JSON), `kit.TestItemsDiagnostics` (every file-level case, including a top-level array, `null` and a non-array `items`) |
+| L2 | When a kit has `NORTH.md` and no `state.md`, the renderer shall render the `NORTH.md` block and the `[new kit: …]` marker. | §3.2 | `kit.TestRenderNorthOnly`; built CLI (A2) |
+| L3 | Compact restore shall emit the tags and markers of `phase2-core.md` §4.2 step 6 within 9,500 UTF-16 units, and other sources nothing. | §3.2 | `session.TestWorker` (worker line, `<worker-rules>`, `<original-brief>`), `session.TestCompact` (kits, `<orchestration-board>`, `[kits omitted: .kits locked]`), `session.TestReservedMarkers` and `session.TestMultiKitReservation` (`[state omitted: …]`, `[brief omitted: …]`), `session.TestBudgetUTF16` (`[...cut N chars]`, the total), `session.TestBoards` (board not launched without room), `session.TestCompactEntry`, `session.TestCompactEntryDeadline`, `session.TestEntryOmittedMarker` (entry blocks, `<orchestration-handover>`, `[entry skipped: deadline]`, `[entry context omitted: …]`), `session.TestExport` (other sources print nothing), `session.TestRestoreMarkers` (the items block, `[kits omitted: .kits unreadable]`, `[board omitted: …]`, `[board skipped: deadline]`, `[items omitted: …]`, `[handover omitted: …]`, `[worker rules omitted: …]`), `session.TestCompactEntryMarkers` (`[entry extensions skipped: …]`, `[entry context omitted: …]` from a real entry result; C19's empty `[stages].entry` invokes no extension) |
 | L4 | `kit open`/`close` shall write `<id>.kits` as LF-terminated valid slugs, de-duplicated in the order added, through a rename, and delete it when empty; `kit.Store` shall read it trimming each line and skip blank, invalid and repeated lines. | §3.3 | `kit.TestStore`, `kit.TestStoreReadsCRLFAndSkipsInvalidLines`, `kit.TestStoreTempFileIsUnique` |
 | L5 | `stack-audit-due` shall answer a JSON response whose `context` is exactly the due line with the request's slug, which `pr merge` prints after `MERGED`. | §3.4 | `auditdue.TestK`, `auditdue.TestStateUnchanged` (the context), `merge.TestMergedStage` (printing after `MERGED`) |
 | L6 | The `kits` sent to `merged` and `entry` shall name dirs under the configured kit root. | §3.4 | `cli.TestRequestKits` (default root), `cli.TestRelativeKitRoot` and `session.TestRelativeKitRoot` (a relative root) |

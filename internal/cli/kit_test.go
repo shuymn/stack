@@ -343,3 +343,122 @@ func TestKitOpenStdoutError(t *testing.T) {
 		t.Fatalf(".kits = %q, want demo (open is retried, not undone)", got)
 	}
 }
+
+// TestKitOpenItemsWarning covers W1–W4 of docs/design/kit-contracts.md §4: one stderr line for an
+// items file `kit open` ignores in whole or in part, none otherwise, and stdout and the exit code
+// as the renderer gives them without the warning.
+func TestKitOpenItemsWarning(t *testing.T) {
+	t.Parallel()
+	const (
+		first  = `{"role": "orchestrator", "rule": "first"}`
+		second = `{"role": "all", "rule": "second"}`
+	)
+	tests := []struct {
+		name    string
+		content string // "" means no items file
+		bullets string // the items block body; "" means no block
+		warning string // the stderr line after `stack: <path>: `; "" means none
+	}{
+		// W1: the whole file.
+		{"invalid JSON", `{malformed`, "", "attention items ignored: invalid JSON: " +
+			"invalid character 'm' looking for beginning of object key string"},
+		{
+			"top-level null", `null`, "",
+			"attention items ignored: top level is null, not an object",
+		},
+		{
+			"top-level number", `123`, "",
+			"attention items ignored: top level is a number, not an object",
+		},
+		{
+			"top-level string", `"x"`, "",
+			"attention items ignored: top level is a string, not an object",
+		},
+		{
+			"top-level array", `[]`, "",
+			"attention items ignored: top level is an array, not an object",
+		},
+		{"items missing", `{}`, "", `attention items ignored: "items" is missing`},
+		{
+			"items null", `{"items": null}`, "",
+			`attention items ignored: "items" is null, not an array`,
+		},
+		{
+			"items string", `{"items": "x"}`, "",
+			`attention items ignored: "items" is a string, not an array`,
+		},
+		// W2: elements; the valid items still render, in order.
+		{
+			"mixed elements",
+			`{"items": [null, ` + first + `, 3, {"role": "all"}, ` + second +
+				`, {"role": 1, "rule": "x"}, {"role": "all", "rule": 2}]}`,
+			"- first\n- second",
+			"5 of 7 attention items ignored (first: item 0: null, not an object)",
+		},
+		{
+			"number element", `{"items": [` + first + `, 3, ` + second + `]}`,
+			"- first\n- second",
+			"1 of 3 attention items ignored (first: item 1: a number, not an object)",
+		},
+		{
+			"rule missing", `{"items": [` + first + `, {"role": "all"}, ` + second + `]}`,
+			"- first\n- second",
+			`1 of 3 attention items ignored (first: item 1: "rule" is missing)`,
+		},
+		{
+			"role number", `{"items": [` + first + `, {"role": 1, "rule": "x"}]}`, "- first",
+			`1 of 2 attention items ignored (first: item 1: "role" is a number, not a string)`,
+		},
+		{
+			"rule number", `{"items": [{"role": "all", "rule": 2}, ` + second + `]}`, "- second",
+			`1 of 2 attention items ignored (first: item 0: "rule" is a number, not a string)`,
+		},
+		// W3: silent.
+		{"no file", "", "", ""},
+		{"worker item", `{"items": [{"role": "worker", "rule": "w"}]}`, "", ""},
+		{"empty rule", `{"items": [{"role": "all", "rule": ""}]}`, "- ", ""},
+		{"empty items", `{"items": []}`, "", ""},
+		// Rendering as Go's JSON decoding gives it: numbers past float64, repeated keys.
+		{
+			"number past float64 as element", `{"items": [` + first + `, 1e400]}`, "- first",
+			"1 of 2 attention items ignored (first: item 1: a number, not an object)",
+		},
+		{
+			"number past float64 in another field",
+			`{"items": [{"role": "all", "rule": "keep", "extra": 1e400}]}`, "- keep", "",
+		},
+		{
+			"a non-array items before an array in another case",
+			`{"items": 0, "ITEMS": [` + first + `]}`, "",
+			`attention items ignored: "items" is a number, not an array`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			home := t.TempDir()
+			kitDir := filepath.Join(home, ".local", "state", "stack", "kits", "demo")
+			state := filepath.Join(kitDir, "state.md")
+			items := filepath.Join(kitDir, "attention", "items.json")
+			writeFile(t, state, []byte("the state\n"))
+			if tt.content != "" {
+				writeFile(t, items, []byte(tt.content))
+			}
+			wantOut := "<orchestration-state path=" + strconv.Quote(state) + ">\nthe state\n" +
+				"</orchestration-state>\n"
+			if tt.bullets != "" {
+				wantOut += "\n<orchestrator-attention-items path=" + strconv.Quote(items) +
+					">\n" + tt.bullets + "\n</orchestrator-attention-items>\n"
+			}
+			wantErr := ""
+			if tt.warning != "" {
+				wantErr = "stack: " + items + ": " + tt.warning + "\n"
+			}
+			r := runIn(t, home, map[string]string{"STACK_SESSION_ID": "demo-1"},
+				"kit", "open", "demo")
+			if r.code != exitOK || r.stdout != wantOut || r.stderr != wantErr {
+				t.Fatalf("open = %+v\nwant stdout %q\nwant stderr %q", r, wantOut, wantErr)
+			}
+		})
+	}
+}

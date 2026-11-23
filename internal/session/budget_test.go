@@ -1,7 +1,6 @@
 package session
 
 import (
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -48,8 +47,12 @@ func TestBudgetUTF16(t *testing.T) {
 	in := compactIn(testID)
 	in.TranscriptPath = f.transcript(userLine(marker + "\n" + strings.Repeat("😀", 5200) +
 		"\nBRIEF TAIL"))
-	ctx, _ := f.start(in) // fails when over Budget UTF-16 units
+	ctx, _ := f.start(in) // fails when over 9,500 UTF-16 units
 	mustContain(t, ctx, "RULES", " chars]\n</original-brief>")
+	// The cut brief fills the budget to within a surrogate pair.
+	if n := units(ctx); n < contractLimit-1 {
+		t.Fatalf("context is %d UTF-16 units; the cut brief should fill %d", n, contractLimit)
+	}
 	if presence(ctx, filepath.Join(f.kitDir("demo"), "state.md")) == "" {
 		t.Fatal("kit state disappeared")
 	}
@@ -164,23 +167,12 @@ func TestRelativeKitRoot(t *testing.T) {
 
 func TestBoards(t *testing.T) {
 	t.Parallel()
-	installBoard := func(t *testing.T, kitDir string, r proctest.Response) string {
-		t.Helper()
-		bin := filepath.Join(kitDir, "bin")
-		if err := os.MkdirAll(bin, 0o700); err != nil {
-			t.Fatal(err)
-		}
-		return proctest.InstallAt(t, bin, "board", proctest.Scenario{
-			Responses: []proctest.Response{r},
-		})
-	}
-
 	t.Run("no budget left: not launched", func(t *testing.T) {
 		t.Parallel()
 		f := newFixture(t)
 		f.rules(strings.Repeat("r", 12_000))
 		f.open("demo", map[string]string{"state.md": "DEMO STATE"})
-		board := installBoard(t, f.kitDir("demo"), proctest.Response{Sleep: time.Minute})
+		path := board(t, f.kitDir("demo"), proctest.Response{Sleep: time.Minute})
 		in := compactIn(testID)
 		in.AgentType = "opus-worker"
 		start := time.Now()
@@ -188,7 +180,7 @@ func TestBoards(t *testing.T) {
 		if d := time.Since(start); d > 10*time.Second {
 			t.Fatalf("compact took %v", d)
 		}
-		if calls := proctest.Calls(t, board); len(calls) != 0 {
+		if calls := proctest.Calls(t, path); len(calls) != 0 {
 			t.Fatalf("board launched: %+v", calls)
 		}
 		mustContain(t, ctx, "</worker-rules>")
@@ -200,13 +192,13 @@ func TestBoards(t *testing.T) {
 		other := strings.Repeat("B", 2500)
 		f.open("a", map[string]string{"state.md": "A STATE"})
 		f.open("b", map[string]string{"state.md": other})
-		board := installBoard(
+		path := board(
 			t,
 			f.kitDir("a"),
 			proctest.Response{Stdout: other + "\nLIVE: 3 PRs\n"},
 		)
 		ctx, _ := f.start(compactIn(testID))
-		mustContain(t, ctx, "<orchestration-board path="+strconv.Quote(board)+
+		mustContain(t, ctx, "<orchestration-board path="+strconv.Quote(path)+
 			">\nLIVE: 3 PRs\n</orchestration-board>")
 	})
 }

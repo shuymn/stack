@@ -50,7 +50,8 @@ func render(t *testing.T, r Renderer, dir string) string {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), BoardDeadline)
 	defer cancel()
-	return Join(r.Render(ctx, dir))
+	blocks, _ := r.Render(ctx, dir)
+	return Join(blocks)
 }
 
 // block is the expected rendering of a tagged block; the path is quoted as Go quotes it, so
@@ -89,6 +90,167 @@ func TestRenderNewKit(t *testing.T) {
 	if got != "[new kit: "+dir+"; write state.md here]\n" {
 		t.Fatalf("new kit = %q; malformed items must be omitted", got)
 	}
+}
+
+// TestRenderNorthOnly covers L2: a kit with NORTH.md and no state.md renders the NORTH.md block,
+// then the new-kit marker.
+func TestRenderNorthOnly(t *testing.T) {
+	t.Parallel()
+	dir := newKit(t, map[string]string{"NORTH.md": "north\n"})
+	want := block("orchestration-state", filepath.Join(dir, "NORTH.md"), "north") + "\n\n" +
+		"[new kit: " + dir + "; write state.md here]\n"
+	if got := render(t, Renderer{}, dir); got != want {
+		t.Fatalf("render =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// TestItemsDiagnostics covers the reasons of W1 and W2 in docs/design/kit-contracts.md §4: the
+// warning StateBlocksWarning returns for each way a readable items file loses items. For a file
+// rejected whole (W1), it also covers L1: the same blocks render no items block.
+func TestItemsDiagnostics(t *testing.T) {
+	t.Parallel()
+	const valid = `{"role": "all", "rule": "ok"}`
+	tests := []struct {
+		name, content, reason string
+	}{
+		{"invalid JSON", `{malformed`, "attention items ignored: invalid JSON: " +
+			"invalid character 'm' looking for beginning of object key string"},
+		{"empty file", ``, "attention items ignored: invalid JSON: " +
+			"unexpected end of JSON input"},
+		{"null", `null`, "attention items ignored: top level is null, not an object"},
+		{"number", `123`, "attention items ignored: top level is a number, not an object"},
+		{"string", `"x"`, "attention items ignored: top level is a string, not an object"},
+		{"array", `[]`, "attention items ignored: top level is an array, not an object"},
+		{
+			"array of items", `[{"role": "all", "rule": "r"}]`,
+			"attention items ignored: top level is an array, not an object",
+		},
+		{"boolean", ` true`, "attention items ignored: top level is a boolean, not an object"},
+		{"items missing", `{}`, `attention items ignored: "items" is missing`},
+		{
+			"items null", `{"items": null}`,
+			`attention items ignored: "items" is null, not an array`,
+		},
+		{
+			"items string", `{"items": "x"}`,
+			`attention items ignored: "items" is a string, not an array`,
+		},
+		{
+			"items object", `{"items": {}}`,
+			`attention items ignored: "items" is an object, not an array`,
+		},
+		{
+			"items one item object", `{"items": {"role": "all", "rule": "r"}}`,
+			`attention items ignored: "items" is an object, not an array`,
+		},
+		{
+			"null element", `{"items": [` + valid + `, null]}`,
+			"1 of 2 attention items ignored (first: item 1: null, not an object)",
+		},
+		{
+			"number element", `{"items": [3]}`,
+			"1 of 1 attention items ignored (first: item 0: a number, not an object)",
+		},
+		{
+			"array element", `{"items": [[]]}`,
+			"1 of 1 attention items ignored (first: item 0: an array, not an object)",
+		},
+		{
+			"rule missing", `{"items": [{"role": "all"}]}`,
+			`1 of 1 attention items ignored (first: item 0: "rule" is missing)`,
+		},
+		{
+			"rule null", `{"items": [{"role": "all", "rule": null}]}`,
+			`1 of 1 attention items ignored (first: item 0: "rule" is null, not a string)`,
+		},
+		{
+			"rule number", `{"items": [{"role": "all", "rule": 2}]}`,
+			`1 of 1 attention items ignored (first: item 0: "rule" is a number, not a string)`,
+		},
+		{
+			"role missing", `{"items": [{"rule": "x"}]}`,
+			`1 of 1 attention items ignored (first: item 0: "role" is missing)`,
+		},
+		{
+			"role null", `{"items": [{"role": null, "rule": "x"}]}`,
+			`1 of 1 attention items ignored (first: item 0: "role" is null, not a string)`,
+		},
+		{
+			"role number", `{"items": [{"role": 1, "rule": "x"}]}`,
+			`1 of 1 attention items ignored (first: item 0: "role" is a number, not a string)`,
+		},
+		{
+			"role checked before rule", `{"items": [{"role": 1}]}`,
+			`1 of 1 attention items ignored (first: item 0: "role" is a number, not a string)`,
+		},
+		{
+			"counts every bad element, names the first",
+			`{"items": [` + valid + `, {"role": "worker"}, 3, ` + valid + `]}`,
+			`2 of 4 attention items ignored (first: item 1: "rule" is missing)`,
+		},
+		{"keys in any letter case", `{"ITEMS": [{"Role": "all", "RULE": "x"}]}`, ""},
+		{
+			"other roles and empty rules are not ignored",
+			`{"items": [{"role": "worker", "rule": "w"}, {"role": "all", "rule": ""}]}`,
+			"",
+		},
+		{"empty items", `{"items": []}`, ""},
+		{
+			"number past float64 as element", `{"items": [{"role": "all", "rule": "keep"}, 1e400]}`,
+			"1 of 2 attention items ignored (first: item 1: a number, not an object)",
+		},
+		{
+			"number past float64 in another field",
+			`{"items": [{"role": "all", "rule": "keep", "extra": 1e400}]}`, "",
+		},
+		{
+			"number past float64 as rule", `{"items": [{"role": "all", "rule": 1e400}]}`,
+			`1 of 1 attention items ignored (first: item 0: "rule" is a number, not a string)`,
+		},
+		{
+			"a non-array items before an array in another case",
+			`{"items": 0, "ITEMS": [{"role": "all", "rule": "keep"}]}`,
+			`attention items ignored: "items" is a number, not an array`,
+		},
+		{
+			"null items last", `{"items": [], "Items": null}`,
+			`attention items ignored: "items" is null, not an array`,
+		},
+		{"last role wins", `{"items": [{"role": 1, "ROLE": "all", "rule": "x"}]}`, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			dir := newKit(t, map[string]string{"state.md": "s", "attention/items.json": tt.content})
+			blocks, got := StateBlocksWarning(dir)
+			want := ""
+			if tt.reason != "" {
+				want = filepath.Join(dir, "attention", "items.json") + ": " + tt.reason
+			}
+			if got != want {
+				t.Fatalf("warning = %q\nwant      %q", got, want)
+			}
+			if strings.HasPrefix(tt.reason, "attention items ignored: ") {
+				state := block("orchestration-state", filepath.Join(dir, "state.md"), "s") + "\n"
+				if rendered := Join(blocks); rendered != state {
+					t.Fatalf("render =\n%s\nwant no items block:\n%s", rendered, state)
+				}
+			}
+		})
+	}
+
+	t.Run("no file, unreadable file and unopenable kit say nothing", func(t *testing.T) {
+		t.Parallel()
+		for _, dir := range []string{
+			newKit(t, nil),
+			newKit(t, map[string]string{"attention/items.json/x": ""}),
+			filepath.Join(t.TempDir(), "missing"),
+		} {
+			if _, got := StateBlocksWarning(dir); got != "" {
+				t.Errorf("%s: warning = %q, want none", dir, got)
+			}
+		}
+	})
 }
 
 // TestRender covers C17: handover selection by `[handover]` order and unreadable parts as markers;
@@ -291,7 +453,8 @@ func TestRenderBoard(t *testing.T) {
 		installBoard(t, dir, proctest.Response{Stdout: "late", Sleep: 10 * time.Second})
 		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 		defer cancel()
-		got := Join(Renderer{Runner: proc.Exec{}}.Render(ctx, dir))
+		blocks, _ := Renderer{Runner: proc.Exec{}}.Render(ctx, dir)
+		got := Join(blocks)
 		if !strings.Contains(got, "[board timed out]") {
 			t.Fatalf("render =\n%s", got)
 		}
@@ -303,7 +466,8 @@ func TestRenderBoard(t *testing.T) {
 		board := installBoard(t, dir, proctest.Response{Stdout: "live"})
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		got := Join(Renderer{Runner: proc.Exec{}}.Render(ctx, dir))
+		blocks, _ := Renderer{Runner: proc.Exec{}}.Render(ctx, dir)
+		got := Join(blocks)
 		if !strings.HasSuffix(got, "\n[board skipped: deadline]\n") ||
 			len(proctest.Calls(t, board)) != 0 {
 			t.Fatalf("render =\n%s", got)
@@ -315,7 +479,7 @@ func TestRenderBoard(t *testing.T) {
 		dir := newKit(t, map[string]string{"state.md": "s"})
 		installBoard(t, dir, proctest.Response{Stdout: "ok"})
 		rec := &recorder{}
-		_ = Renderer{Runner: rec}.Render(context.Background(), dir)
+		_, _ = Renderer{Runner: rec}.Render(context.Background(), dir)
 		if rec.cmd.Dir != dir {
 			t.Fatalf("board dir = %q, want %q", rec.cmd.Dir, dir)
 		}

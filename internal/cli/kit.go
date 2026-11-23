@@ -99,8 +99,12 @@ func runKitOpen(ctx context.Context, env Env, inv invocation) error {
 		Handover: cfg.Handover,
 	}
 	// The kit first, then each entry result as it completes: a slow extension never holds it back.
+	blocks, warning := r.Render(boardCtx, dir)
+	if warning != "" {
+		_, _ = fmt.Fprintf(env.Stderr, "stack: %s\n", warning)
+	}
 	bw := &blockWriter{w: env.Stdout}
-	err = bw.write(r.Render(boardCtx, dir)...)
+	err = bw.write(blocks...)
 	if err == nil {
 		err = writeEntryStage(ctx, env, id, root, cfg.Stages.Entry, bw)
 	}
