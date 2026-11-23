@@ -47,12 +47,8 @@ const (
 	SplitFixed   = "fixed"
 )
 
-var (
-	errNoKey = errors.New(jev.KeyEnv + " is not set")
-	// errRerun reports cal cases whose first attempt had no replayable outcome; nothing was
-	// written.
-	errRerun = errors.New("nothing written; rerun jev-calibrate: no replayable first outcome for")
-)
+// errRerun reports cal cases whose first attempt had no replayable outcome; nothing was written.
+var errRerun = errors.New("nothing written; rerun jev-calibrate: no replayable first outcome for")
 
 // Options configures a run.
 type Options struct {
@@ -426,12 +422,4 @@ func Refresh(c *Case, decisions map[string]jev.Decision) error {
 	c.Fixture.Expect = &jev.Expect{Status: resp.Status}
 	c.Fixture.Want = &jev.Want{Findings: resp.Findings, Context: resp.Context}
 	return nil
-}
-
-// Key returns the key from getenv, or an error naming the variable.
-func Key(getenv func(string) string) (string, error) {
-	if k := getenv(jev.KeyEnv); k != "" {
-		return k, nil
-	}
-	return "", errNoKey
 }

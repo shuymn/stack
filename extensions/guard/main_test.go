@@ -154,16 +154,21 @@ type denyOutput struct {
 	} `json:"hookSpecificOutput"`
 }
 
-// deniedBy returns the rule of a deny printed with prefix ("stack-guard" or "stack guard"), or ""
-// when r is not such a deny.
-func deniedBy(r result, prefix string) string {
+// denyReason returns the reason of a PreToolUse deny, or "" when r is not one.
+func denyReason(r result) string {
 	var out denyOutput
 	if r.code != 0 || json.Unmarshal([]byte(r.stdout), &out) != nil ||
 		out.HookSpecificOutput.HookEventName != "PreToolUse" ||
 		out.HookSpecificOutput.PermissionDecision != "deny" {
 		return ""
 	}
-	rest, ok := strings.CutPrefix(out.HookSpecificOutput.PermissionDecisionReason, prefix+" (")
+	return out.HookSpecificOutput.PermissionDecisionReason
+}
+
+// deniedBy returns the rule of a deny printed with prefix ("stack-guard" or "stack guard"), or ""
+// when r is not such a deny.
+func deniedBy(r result, prefix string) string {
+	rest, ok := strings.CutPrefix(denyReason(r), prefix+" (")
 	if !ok {
 		return ""
 	}

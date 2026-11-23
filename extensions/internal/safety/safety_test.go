@@ -22,8 +22,9 @@ func write(t *testing.T, body string) string {
 func TestLoadDefaults(t *testing.T) {
 	// The default T3 secrets directory, built at run time like the package's own value.
 	t3 := "~/" + filepath.ToSlash(filepath.Join(".t3", "userdata", "secrets"))
+	jevKey := "~/" + filepath.ToSlash(filepath.Join(".config", "stack", "jev", "key"))
 	want := Config{
-		Secrets:            []string{t3, ".dev.vars"},
+		Secrets:            []string{t3, ".dev.vars", jevKey},
 		PrivateTerms:       "~/.config/stack/private-terms",
 		DenyPencilGenerate: true,
 	}
@@ -49,7 +50,7 @@ mystery = 1
 private_terms = "v10 table"
 `)
 	cfg, warnings, err := Load(p)
-	want := Config{Secrets: []string{"/s"}, PrivateTerms: "~/terms"}
+	want := Config{Secrets: []string{"/s", JevKey}, PrivateTerms: "~/terms"}
 	if err != nil || !reflect.DeepEqual(cfg, want) {
 		t.Fatalf("Load = %+v, %v; want %+v", cfg, err, want)
 	}
@@ -60,6 +61,22 @@ private_terms = "v10 table"
 	}
 	if !slices.Equal(warnings, wantWarnings) {
 		t.Errorf("warnings = %q, want %q", warnings, wantWarnings)
+	}
+}
+
+// TestLoadJevKeyKept: a configured secrets list replaces the defaults but always keeps the Jev
+// key file, once.
+func TestLoadJevKeyKept(t *testing.T) {
+	for body, want := range map[string][]string{
+		`secrets = []`:                       {JevKey},
+		`secrets = ["/s"]`:                   {"/s", JevKey},
+		`secrets = ["` + JevKey + `", "/s"]`: {JevKey, "/s"},
+		`secrets = ["` + JevKey + `", "/s", "` + JevKey + `"]`: {JevKey, "/s"},
+	} {
+		cfg, _, err := Load(write(t, body))
+		if err != nil || !slices.Equal(cfg.Secrets, want) {
+			t.Errorf("%s: Secrets = %q, %v; want %q", body, cfg.Secrets, err, want)
+		}
 	}
 }
 

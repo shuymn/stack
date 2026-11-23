@@ -34,17 +34,17 @@ const (
 
 var errRequest = errors.New("invalid request")
 
-// Request is the part of a protocol request the extensions read. Jev is the replay object, nil
-// in a live request.
+// Request is the part of a protocol request the extensions read.
 type Request struct {
-	Stage  string          `json:"stage"`
-	Repo   string          `json:"repo"`
-	Range  string          `json:"range"`
-	Prompt string          `json:"prompt"`
-	Title  string          `json:"title"`
-	Body   string          `json:"body"`
-	Branch string          `json:"branch"`
-	Jev    json.RawMessage `json:"jev"`
+	Stage  string `json:"stage"`
+	Repo   string `json:"repo"`
+	Range  string `json:"range"`
+	Prompt string `json:"prompt"`
+	Title  string `json:"title"`
+	Body   string `json:"body"`
+	Branch string `json:"branch"`
+	// Jev is nil when the field is omitted; an explicit null is kept, an invalid replay (§3.4).
+	Jev json.RawMessage `json:"jev"`
 }
 
 // ParseRequest decodes stdin, which must be one JSON object with a string stage.
@@ -69,9 +69,6 @@ func ParseRequest(data []byte) (Request, error) {
 	var req Request
 	if err := json.Unmarshal(raw, &req); err != nil {
 		return Request{}, fmt.Errorf("%w: %w", errRequest, err)
-	}
-	if bytes.Equal(bytes.TrimSpace(req.Jev), []byte("null")) {
-		req.Jev = nil
 	}
 	return req, nil
 }

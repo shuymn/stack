@@ -285,7 +285,9 @@ version; moving them to a public `pkg/` tree would rename every core import for 
 
 The v10 `[safety]` table as its own top-level file read by both safety extensions: the keys `secrets`,
 `private_terms` and `deny_pencil_generate`, unchanged in meaning and defaults (`internal/config/config.go:80-84`:
-the T3 secrets directory and `.dev.vars`; `~/.config/stack/private-terms`; `true`).
+the T3 secrets directory and `.dev.vars`; `~/.config/stack/private-terms`; `true`). One addition: `secrets` always
+holds the Jev key file `~/.config/stack/jev/key` (`docs/design/phase4-jev.md` §3.1), in the defaults and appended to
+a configured list that does not name it, so a custom list cannot unprotect it.
 
 Missing file or key → the default. A broken file → the default rules apply, as the core hook does today
 (`internal/config/config.go:209-211`); custom entries in the file are not kept until it is fixed. `stack-guard`

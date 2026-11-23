@@ -29,15 +29,37 @@ GOBIN="$HOME/.local/bin" go install ./extensions/jev/semantic/cmd/stack-jev-sema
 Install `stack-improve` after `stack-public`: improve's public check runs `stack-public check`, which reads
 `~/.config/stack/safety.toml`. `stack-improve` embeds `extensions/improve/writing.md`; reinstall after changing it.
 
-`stack-jev-semantic` answers `pass` without `TYPESAFE_API_KEY`; the key opts in to live use, and it then sends the
-PR's texts and diff to Jev for the questions it can assess under an enabled decision, warning on a likely hit. The
-committed placeholder cutoffs disable both decisions, so nothing is sent until `jev-calibrate` has run. It embeds
-its cutoffs (`extensions/jev/semantic/cutoffs.json`); reinstall after `jev-calibrate` changes them.
+`stack-jev-semantic` answers `pass` without a key; the key opts in to live use, and it then sends the PR's texts and
+diff to Jev for the questions it can assess under an enabled decision, warning on a likely hit. The committed
+placeholder cutoffs disable both decisions, so nothing is sent until `jev-calibrate` has run. It embeds its cutoffs
+(`extensions/jev/semantic/cutoffs.json`); reinstall after `jev-calibrate` changes them.
+
+The Jev extensions and `jev-calibrate` take the key from `TYPESAFE_API_KEY`, or else from `~/.config/stack/jev/key`.
+They read the file only when it is a regular file (or a symlink to one) that you own with no group or other
+permission bits (the command below makes it `0600`), at most 4 KiB, holding a non-blank key; otherwise the stage
+reports `jev-error` and `jev-calibrate` exits 2. On Unix only the file's mode and owner are checked, not ACLs or its
+parent directories; on Windows no mode or owner is checked. Removing the file (and leaving the variable unset) opts
+out. To write it, type or paste the key at the silent prompt and press Enter; nothing is written on EOF or empty
+input:
+
+```sh
+(umask 077; mkdir -p ~/.config/stack/jev &&
+  IFS= read -rs k && [ -n "$k" ] &&
+  f=~/.config/stack/jev/key && touch "$f" && chmod 600 "$f" &&
+  printf '%s\n' "$k" > "$f")
+```
+
+`stack-guard` treats the file as a secret. File tools resolve their paths against the working directory, and `Read`
+and `NotebookRead` also follow symlinks, so they are denied on the file by its resolved path or through a symlink; a
+hard link to it is not recognised. A Bash command is
+matched only by the path text it contains: naming the file by a relative path from its directory (`cat key`), or
+through a symlink elsewhere, is not denied.
 
 `stack-guard` is a Claude Code hook of its own, not a stage extension: wire it as a separate `PreToolUse` entry
 (matcher `Bash|PowerShell|Read|NotebookRead|Grep|Glob|mcp__pencil__execute`, exec form `stack-guard hook claude pre-tool-use`,
 `timeout: 5`, `onFailure: "continue"`) and never list it in `[stages]`, where it prints usage and exits 2. Without
-`safety.toml` it applies the defaults, without custom `secrets` entries. The core hook does not have these rules:
+`safety.toml` it applies the defaults, without custom `secrets` entries; any `secrets` list also keeps the Jev key
+file. The core hook does not have these rules:
 without `stack-guard` wired, nothing denies them.
 
 To check `stack pr merge` messages for local paths and private terms, list `public` in `~/.config/stack/config.toml`
