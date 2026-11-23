@@ -326,16 +326,24 @@ except on its own errors.
   one, so its warn appears once.
 - **Output:** one line per due kit, in `kits` order, nothing otherwise. With one kit open, at most one line per
   merge.
+- **The due line** `audit due (<reason>): run steward on kit <slug>` is the whole signal, and consumers match its
+  text, so changing it is a breaking change. It means that, by the rule above, the orchestration recorded in kit
+  `<slug>` is due an audit now. It is advisory: `stack` starts nothing on it. "steward" names the auditor of the
+  owner's setup; which agent runs, with what request and what report, belongs to that setup in `shuymn/dotfiles`
+  (`agents/steward.md` and the hiden skill), not to `stack`. `<slug>` is the `slug` of a `kits` entry: a kit
+  recorded in the merging session's `.kits`, whose dir is that entry's `dir`, `<kit root>/<slug>`. `<kit root>` is
+  `[kit].root` of `~/.config/stack/config.toml`, resolved as `docs/design/phase2-core.md` §2.1 states (`~`
+  expanded, a relative root against the config file's directory, default `~/.local/state/stack/kits`). A consumer
+  that does not read the config takes the dir that `stack kit open <slug>` printed in that session (the directory of
+  its `orchestration-state` paths, or the path in `[new kit: …]`), and never assumes the default root.
 - **Best effort.** The reset is written before core accepts the response; if the stage deadline passes or stdout
   is lost after that, the count restarts without a line shown. A `--replay` fixture is sent as is, so a fixture that
   names a real kit's `dir` and a `merge` would change its state: replay fixtures use a throwaway kit directory.
 
-### 4.8 Steward (shuymn/dotfiles, listed for the split only)
+### 4.8 The audit itself (shuymn/dotfiles)
 
-`agents/steward.md` gains the output of #28 (one `on-track — continue: <next step>` line; otherwise findings with
-file:line evidence, about 5 lines, ending with the next step) and makes the kit's state file an explicit audit
-target at any size (#28 comment). The hiden orchestration text starts steward in the background with only the kit
-path when a due line appears. Acceptance: P14.
+`stack` owns only the due line (§4.7). How the owner's setup reacts to it (the auditor, its request, its report
+format and when it is started) is specified in `shuymn/dotfiles`, beside the agent that does it.
 
 ### 4.9 Compatibility exceptions
 
@@ -463,9 +471,9 @@ belongs to the legacy `attention-budget.py`, retired by Phase 3, and is not a ca
 3. **feat: add the merged stage** — `merged` (stage, 10 s, `merge` field, `stack run merged`), `stack pr merge`
    runs it (§4.2 step 3), default `[stages].merged = ["audit-due"]`. Done when C5–C7 pass.
 4. **feat(ext): add audit-due** — `extensions/auditdue`, README install line. Done when C8–C11 pass.
-5. dotfiles **docs: audit on the merged stage's due signal** — steward output (§4.8), orchestrator starts steward in
-   the background on a due line, `attention.md:5` sentence removed, `stack-audit-due` added to the install command.
-   After PR 4. Done when P14 passes.
+5. dotfiles **docs: audit on the merged stage's due signal** — the owner's setup reacts to the due line (§4.8),
+   `attention.md:5` sentence removed, `stack-audit-due` added to the install command. After PR 4. Done when P14
+   passes.
 6. **refactor: drop the state.md byte threshold and budget status** — `StateLimit`, `internal/budget`, the
    command, docs. After PR 5 (its last textual caller). Done when C12 passes.
 7. **feat(ext): add stack-public** — `extensions/public` (both modes, reading `safety.toml`), `stack run outbound
@@ -561,7 +569,7 @@ serial cost and no gain over a second hook entry).
 | P11 | The kit context shall carry no size note, and compaction shall keep its 9,500-char budget. | #28 comment | no `bytes, over` text; compact output ≤ 9,500 UTF-16 units | `kit open` on a kit with a 10 kB `state.md`; `/compact` and measure the hook's `additionalContext` in UTF-16 units |
 | P12 | When a session with open kits compacts and the hook has the time of §4.3 left after the restore, it shall restore the entry contexts after the kits within the budget. | #30 stage table | entry block after compaction | live: a stub entry extension, `kit open demo`, `/compact` |
 | P13 | Where a stage cannot block, a `block` response shall be reported as `warn` and `stack run` shall exit 0. | #30 stage table | `"status":"warn"` with the finding and `error` | stub `stack-demo` answering block, `stack run cycle --ext demo` |
-| P14 | When a due line appears, the orchestrator shall start steward in the background with only the kit path, and steward shall answer with one `on-track — continue:` line or about 5 lines of findings with file:line evidence ending with the next step. | #28 acceptance (steward) | the steward request and its answer | after dotfiles PR 5: a kit with an up-to-date state → the one line; a kit whose `state.md` names a finished item as open → its file:line and a next step |
+| P14 | When a due line appears, its `<slug>` shall name a kit of the merging session whose dir is `<kit root>/<slug>` under the configured `[kit].root`. | #28 acceptance (steward), §4.7 | the line's slug and the dir `kit open` printed for it | `[kit].root` set to a scratch dir, `stack kit open demo`, two scratch merges without a state change → the line names `demo`, whose `orchestration-state` paths are under the scratch root; the reaction to the line is accepted in `shuymn/dotfiles` (§4.8) |
 | P15 | Each stage shall fire at every call site of §2, except where its deadline rule skips it. | #30 stage table | one request per call site in the stub's log | a logging stub selected at every stage and in `[merge].message_checks` in a temporary config: `kit open`, `/compact` (well inside the hook's time), `pr merge --body` and the merge itself on a scratch PR, `stack run cycle`, `stack run merged` |
 | P16 | Before PR 10 is installed, its wiring shall deny the four moved rules through `stack-guard` alone and check merge messages through `stack-public`. | #30 acceptance 5, §5.4 | `stack-guard (<rule>): ` denies; raw merge denied by `stack guard (raw-merge): `; `pr merge --body <home path>` refused by `public` before `gh` | an isolated Claude Code config with PR 10's `stack` build, the `stack-guard` entry and PR 9's `config.toml` (`message_checks = ["public"]`): the P7 checks and a scratch-PR merge with a home path in `--body` |
 
