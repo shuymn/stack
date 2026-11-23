@@ -4,7 +4,7 @@ A minimal Go CLI (`stack`) and optional extension surface for personal AI agent 
 
 ## Platforms
 
-Develop on macOS or Linux. Windows (x64) is a supported runtime target, built and tested in CI (`windows-latest`), so `cmd/stack` and `internal/` must stay portable across OSes (no Unix-only syscalls; handle Windows paths such as `C:\Users\...` in path resolution). Work done on macOS keeps Windows from getting stuck later: portable code and a green Windows CI job (`go vet`, `go test -race`, build). Windows-only details that CI does not exercise (Git Bash path forms, UNC and drive-relative paths, behaviour on a real Windows machine) are finished later on Windows, not chased from macOS. Scheduled `cycle` runs via `launchd` on macOS only, while `stack run cycle` itself works cross-platform.
+Develop on macOS, Linux or Windows: the full check runs on all three (on Windows as `mise exec -- bash scripts/test`, with mise installing MinGW gcc for `go test -race`). Windows (x64) is a supported runtime target, built and tested in CI (`windows-latest`: `go vet`, `go test -race`, build), so `cmd/stack` and `internal/` must stay portable across OSes (no Unix-only syscalls; handle Windows paths such as `C:\Users\...` in path resolution). Windows-only details that CI does not exercise (Git Bash path forms, UNC and drive-relative paths) are checked on a Windows machine. Scheduled `cycle` runs via `launchd` on macOS only, while `stack run cycle` itself works cross-platform.
 
 ## Commands
 

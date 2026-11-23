@@ -278,7 +278,7 @@ func removeItemTarget(
 
 // literalTildeOpaque reports a `-LiteralPath` value whose `~` expansion is unmeasured, so it is not
 // judged. On Windows only `~` followed by nothing but separators and `.` components (`~\`, `~\.`,
-// `~/./`) was measured to name home (W3, 5.1 and 7.7), so every other value starting with `~` is
+// `~/./`) was measured to name home (5.1 and 7.7, powershell-guard §4.4), so every other value starting with `~` is
 // opaque; elsewhere nothing was measured, so the home forms
 // `~`, `~/…` and `~\…` are opaque and `~user` is a literal name.
 func literalTildeOpaque(p string, windows bool) bool {
