@@ -29,18 +29,15 @@ GOBIN="$HOME/.local/bin" go install ./extensions/jev/semantic/cmd/stack-jev-sema
 Install `stack-improve` after `stack-public`: improve's public check runs `stack-public check`, which reads
 `~/.config/stack/safety.toml`. `stack-improve` embeds `extensions/improve/writing.md`; reinstall after changing it.
 
-`stack-jev-semantic` answers `pass` without a key; the key opts in to live use, and it then sends the PR's texts and
-diff to Jev for the questions it can assess under an enabled decision, warning on a likely hit. The committed
-placeholder cutoffs disable both decisions, so nothing is sent until `jev-calibrate` has run. It embeds its cutoffs
-(`extensions/jev/semantic/cutoffs.json`); reinstall after `jev-calibrate` changes them.
+A key opts `stack-jev-semantic` into sending eligible PR data to TypeSafe's Jev API, including the title, body,
+branch, commit messages and diff. A hit produces an advisory `warn`. Without a key a live request (no `jev`
+field) returns `pass` without a call. The shipped cutoffs enable both decisions. If both are disabled, the extension sends nothing.
+Reinstall after `jev-calibrate` changes the embedded cutoffs (`extensions/jev/semantic/cutoffs.json`).
 
-The Jev extensions and `jev-calibrate` take the key from `TYPESAFE_API_KEY`, or else from `~/.config/stack/jev/key`.
-They read the file only when it is a regular file (or a symlink to one) that you own with no group or other
-permission bits (the command below makes it `0600`), at most 4 KiB, holding a non-blank key; otherwise the stage
-reports `jev-error` and `jev-calibrate` exits 2. On Unix only the file's mode and owner are checked, not ACLs or its
-parent directories; on Windows no mode or owner is checked. Removing the file (and leaving the variable unset) opts
-out. To write it, type or paste the key at the silent prompt and press Enter; nothing is written on EOF or empty
-input:
+Set `TYPESAFE_API_KEY` or use `~/.config/stack/jev/key`. A non-blank environment value takes precedence. To opt out,
+unset the variable and remove the file. On Unix, use a key file you own with mode `0600`. At the silent prompt below,
+enter the key and press Enter. EOF or empty input leaves the file untouched. See the
+[Jev key requirements and error handling](docs/design/phase4-jev.md#31-opt-out-failure-batching-and-budgets-item-1).
 
 ```sh
 (umask 077; mkdir -p ~/.config/stack/jev &&
