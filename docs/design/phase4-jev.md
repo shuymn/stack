@@ -352,11 +352,44 @@ largest 2.5 KB). Each qualified item is its own `dup_` request, so a body depend
 `{memory_index, owner, assistant, reply}`, each text whole as in `kind_`: the closing message gives a reply such as
 "not that" its object, and the opening owner turn the scope a drift reply restores, which decides which index line
 it repeats;
-one `noul` question `dup_r<n>`, instructions "Does a line of `memory_index` already state what reply `r<n>` asks of
-the agent?", criteria true "a line states the way of working the reply corrects, or the scope or goal it restores,
-in any language or wording", false "no line does; a line that only shares its topic or states a different rule does
-not count". A body that does not fit is `unassessed` (`too large`). Outcome: `duplicate` (at or above the cutoff),
-`new` (below it: **no match in the assessed index**; topic files are not read and an undetected match stays
+one `noul` question `dup_r<n>`, instructions "Does `memory_index` already cover every required rule of reply
+`r<n>`? First settle from the `owner` turn and the `assistant` message which of the agent's changes the reply refers
+to and what it asks: a reply that undoes or stops that change ('roll that back', 'なしにして') asks for the
+instruction the change broke, from `owner` or a standing rule, plus any further instruction the reply states. A
+rule is an action (what the agent must do or not do) under a condition (when it applies); a rule that only sets
+this task's scope (what to change this time) is task-local. The required rules are all the reply asks, leaving out
+a task-local rule when the reply also asks a reusable rule that a line covers. A line covers a rule when it states
+the same condition and the same action, in any language or wording; a line requiring a result covers the fix that
+restores it in this case, while a method the reply sets for every case is a rule of its own; a task-local rule is
+covered by a line stating it as a standing rule or by a general line that applies to every case of its kind. A line
+sharing a rule's topic, object or keyword does not cover it when it governs another object of the same kind,
+applies only under another condition, asks a different action about the same thing, or is a rule the agent's action
+also broke while the reply asks for another.", criteria true "the conversation establishes at least one required rule,
+settles any referent needed to interpret it, and for each required rule at least one line of the index covers it; an
+explicit standing instruction needs no earlier change to refer to", false "any of these does not hold: no required
+rule is established, a referent needed to read one is not settled, or a required rule has no covering line".
+
+*Rules the question settles.* The required rules are defined once and both criteria use them: the false criterion is the
+true one's complement, so `duplicate` needs positive evidence, and runtime `new` means **coverage not established**:
+a required rule uncovered, or the rules or their referent left unsettled. A reply restating a covered
+rule and setting a new standing one ("leave vendor alone, and never regenerate fixtures on a version bump") is
+`new`; a task-local scope drops out only beside a covered reusable rule, so an overlap whose correction is stated
+reads `duplicate`, while a reply asking only a scope needs a line for that scope. An undo is read through the
+conversation, never through the index: "revert that" after a rounding change the owner ruled out repeats a line
+forbidding rounding changes, and "undo that" after a message reporting two changes, with no owner turn naming one,
+is `new` even when the index forbids one of them. A fix for this case (split this PR, put the wrapper back) is
+covered by a line requiring the result (a size limit, the shared wrapper); a method for every case is not. The four
+kinds a related line can differ by are those behind every topic-related false positive among the `fit` cases
+(§3.5): a retry count kept in settings beside where schedules live, and build numbers beside where release builds
+are cut (another object); private storage beside what tag-only changes leave alone (another condition); not cutting
+a build yet beside where builds are cut, and, as a margin-test false positive only (`fit-b12`), the logger choice
+beside the log format (another action); a links-only scope beside the heading style the rewrite also broke (a rule
+also broken). The other false positive, `fit-a10`, has no evident topic match; its score does not show which line
+the model used. The question names the kinds, not those cases' objects, and its examples are not corpus replies or
+rules.
+
+A `dup_` body that does not fit is `unassessed` (`too large`). Outcome: `duplicate` (at or above the cutoff),
+`new` (below it: **coverage not established in the assessed index**; topic files are not read and an undetected match stays
 possible), `unassessed` (`transient`, `deadline`, `malformed answer`, `request failed`, `duplicate check disabled`,
 or a lookup reason above). A persistent request failure (§3.1) marks only the items of that body: a failed `kind_`
 request leaves its items `unevaluated` (`request failed`), a failed `dup_` request its item `unassessed`
@@ -428,8 +461,11 @@ promises no atomicity there; the Windows-machine check (§7) covers it.
 *Context.* The counts; `new` qualified items, newest first, then qualified items whose duplicate check is
 `unassessed`, each marked `(dup unassessed: <reason>)`; up to 10 lines in all, each `<kind> <where>: <excerpt>`, then
 `(+k more in the report)`; the unresolved and unevaluated counts; and, in every run whose report is published, an
-empty week included, any failed observe source, any disabled decision, and `complete: false` with the items not done
-and why. A dropped run's context is the drop notice and its warnings only.
+empty week included, any failed observe source, any disabled decision (`<decision> is disabled: <reason>`; for the
+duplicate check while qualification is enabled, followed by `; candidates are not checked against memory`, an
+empty week included, since it states what any week's list would be; with qualification disabled too there are no
+candidates and the suffix is left out), and `complete: false` with the items not
+done and why. A dropped run's context is the drop notice and its warnings only.
 
 **Cycle wiring (dotfiles).** The supported path, scheduled or manual, is a dedicated call in the cycle job,
 `stack run cycle --ext jev-classify` (`docs/design/phase3-cycle.md` §4.8), made right after a valid observe with a
@@ -526,7 +562,13 @@ dropped): the cutoff `t` is the lowest of 0.50–0.95 (step 0.01) that passes a 
 δ = 0.05, where a positive is a hit only at a score ≥ t + δ, a negative is a false positive already at ≥ t − δ and a
 missing score stays a miss, with precision ≥ the target (semantic 0.8, classify 0.8, router 0.7), true positives > 0
 and recall ≥ 0.5. The floor stays 0.50 because a score under it leans no, and easy negatives would otherwise pull the
-cutoff down to where live false positives rise. The runtime decision stays score ≥ t; samples within ±0.05 of it are
+cutoff down to where live false positives rise. A cutoff on the floor is acceptable: the margin test already
+counts a positive only at ≥ t + δ and a negative as a false positive from t − δ, so a fit passing at 0.50 reaches
+its target with hits counted only from 0.55 and every negative from 0.45 counted against it. A held-out miss is
+evidence that the question does not separate its cases, and the duplicate decision's miss prompted revising its
+question (§3.2). A cutoff rule chosen because it would have cleared a held-out result already seen (§4 records one)
+would need a fresh held-out week to validate it, so the rule stays. The same rule serves every decision; a precision slack, a higher floor, a wider δ and the cutoff of highest fit precision were rejected (§4).
+The runtime decision stays score ≥ t; samples within ±0.05 of it are
 listed as unstable. Each decision needs ≥ 6 + 6 positive and negative `fit` cases and ≥ 3 + 3 `heldout` cases, and
 must meet its precision target and recall ≥ 0.5 on `heldout`; otherwise, or when no cutoff passes the margin test,
 it ships disabled, its context says so and the calibrate report flags it for review. Each run reports, per decision,
@@ -581,14 +623,48 @@ hard: corrections asked as a question ("that is ignored on this OS, isn't it?"),
 "wrong" ("reply in Japanese"), approvals that open with "no" ("no, that is fine"), defect reports on what was built
 (`request`), and noise that reads as text (an input-method test sentence); and at least 4 antecedent pairs, the
 same `assistant` and reply under two `owner` turns, one ruling the action out (drift) and one asking for it
-(request), each pair a `group` in one split. Hard duplicate positives restate an English index line in Japanese or
-by paraphrase; hard negatives share its topic or keyword with a different or opposite rule; paraphrases and items
+(request), each pair a `group` in one split. A duplicate label follows the `dup_` question (§3.2): `duplicate` only
+when the texts settle the reply's referent and a line covers each of its required rules, `new` only when an
+identifiable required rule is uncovered. A reply whose rules or referent the texts leave unsettled reads `new` at
+runtime but is no gold case: it is not drafted into `fit` or `heldout`, and the example of that behaviour is the prose
+one in §3.2, with no corpus case or calibrate path of its own. `dup_kind` names a hard duplicate category: for a
+`duplicate` item `restatement` (a Japanese restatement of an English line), `paraphrase`, `general` (a general line
+covers it) or `multi` (two reusable rules, each covered by a separate line); for a `new` item one of the four kinds
+the criteria name, `object`, `condition`, `action` or `broken`, or `partial` (one rule covered, another reusable
+rule not). It is required on the held-out items that fill the `dup_kind` quotas below and optional elsewhere;
+wherever present it matches the item's `dup` (a positive category only on `duplicate`, a negative one only on
+`new`) and implies `hard: true`. `undo` marks a reply that only undoes or stops a change. Paraphrases and items
 sharing one memory rule stay in one split. Indexes are 3–20 lines, as observed. Cases are drafted from these quotas
 and the label definitions, never from a real reply, path or name, with labels and `why` written and checked against
 the label definitions by a reviewer model before any score is seen; they freeze then. A label changed after scores
 were seen (the owner may still relabel in the PR) does not keep its case: a held-out case relabelled that way is
-replaced by a fresh one, since rerunning on the same case is no longer an independent check. The real week sets only
-the quotas.
+replaced by a fresh one, since rerunning on the same case is no longer an independent check. A `fit` case whose
+label the definitions do not settle is replaced the same way: `fit-a13`, whose "never delete changelog entries"
+may or may not be what "never rewrite the changelog history" forbids, gives way to `fit-a23`, drafted from the
+definitions in the same role (English, not hard, a drift overlap labelled `duplicate`, no group, in `fit-a`'s
+`p2`), whose correction has the same condition and action as one `p2` line other than the changelog line and whose
+scope part is task-local; the implementation PR regenerates the fixture. The real week sets only the quotas.
+
+A held-out fixture is inspected as a whole once any of its cases is (its scores, records or texts read to diagnose
+a decision, beyond the figures and unstable lines every run reports): its items share `kind_` bodies and one split,
+so it moves to `fit` whole. The fixtures are `fit-a`, `fit-b`, `fit-c` (the former `heldout-a`, moved to `fit`
+whole after its duplicate scores were inspected; `fit-c<nn>` keeps the number of `held-a<nn>`) and `heldout-b`.
+`heldout-b` is one fresh week of exactly the `heldout` counts above. Its held-out classes are `duplicate`, `new` and
+the others, 4 + 4, 4 + 4 and 8 + 8 by language. Its `duplicate` items hold at least 5 hard positives (2
+`restatement`, 1 `paraphrase`, 1 `general`, 1 `multi`) and at least one `undo` reply, which may fill one of those;
+its `new` items at least one hard negative of each kind, `object`, `condition`, `action`, `broken` and `partial`,
+one of them an overlap. No `fit` case is `partial` or `multi`, so `heldout-b` is the first measure of them. The
+`general` line may be a scope rule only if it is worded independently and states a substantively different rule
+from the general scope rule of `fit-a11` and `fit-b10`, which stays measured in `fit` and in O4. It holds 2
+antecedent pairs of its own, one `en` and one `ja`, whose request halves count among the 6 requests, and at least
+40% hard items. Its indexes and objects are new: no index line and no corrected object is taken from a `fit`
+fixture. The reviewer model checks each label, `why`, `dup_kind` and `undo` against the definitions, each
+`duplicate` naming the covering line for each of its required rules, each `new` naming an uncovered required rule
+the conversation establishes, and each hard negative the line it shares a
+topic with and how it differs, and confirms that each held-out positive's rules are distinct from every `fit`
+rule; the cases freeze before the first score. The `dup_` question, the cutoff rule and the Activation criteria
+below are fixed before any `heldout-b` score is seen; when its aggregate result leads to changing any of them,
+`heldout-b` moves to `fit` as well and a fresh held-out week validates the change.
 
 `jev-calibrate` records every `kind_` body as the runtime packs it. Samples for the duplicate decision come from
 the 3 calls on each ground-truth correcting item, whatever its `kind_` request answered (a 413 included). After
@@ -600,16 +676,49 @@ runtime sends.
 **Activation.** The two decisions passing their own gates is not enough, since they can pass while the report
 lists nothing new: if qualification finds the 8 held-out duplicates and misses the 8 held-out `new` items, its
 precision is 1.0 and recall 0.5, the duplicate decision can pass too, and the `new` list is empty. So on `heldout`
-calibrate also scores the report end to end, before it sets any enabled bit: with the provisional cutoffs (those
-that passed their own gates), the items listed as qualified and `new` from the first answers against the items
-labelled correcting and `new`, with precision, recall and support (a missing score is a miss); a decision that
-failed its own gate has no cutoff there, so the list is empty. The output also gives these figures per language,
-reported but not a gate. Classify ships its
-qualification decision enabled only when that list also reaches precision 0.8 and recall 0.5; otherwise it ships
-disabled (§3.2: sources read, report written, items `unevaluated`, `classification disabled`), flagged `REVIEW`,
-unless the owner accepts the result in the cutoff table (`accepted`: the pin, a hash of the `heldout` fixtures'
-cases, records, repository layouts and samples, the figures, and the owner's one-line reason). The acceptance holds only while all three match;
-any change to the pin, the evaluation inputs or the figures voids it.
+calibrate also scores the list the report would show, end to end, from the first answers with the provisional
+cutoffs (those of decisions that passed their own gates), before it sets any enabled bit. Which list is scored
+follows the duplicate decision's gate alone, and whether anything is listed follows qualification's:
+
+| Qualification gate | Duplicate gate | `list` | Listed | Scored against (`support`) | `scored` |
+|---|---|---|---|---|---|
+| pass | pass | `new` | qualified, with a `dup_` score below its cutoff | items labelled correcting and `new` | true |
+| pass | fail | `qualified` | qualified | items labelled correcting; recall also on those labelled `new` | true |
+| fail | pass | `new` | nothing | as in the first row | false |
+| fail | fail | `qualified` | nothing | as in the second row | false |
+
+`tp`, `fp`, `fn`, precision and recall count the listed items against `support`; a missing `kind_` or `dup_` score
+is a miss, and a `dup_` score equal to its cutoff is `duplicate`, so not in the `new` list. With `list` `qualified`
+the figures also carry `new_support` and `new_recall`, the listed share of the items labelled `new`; both are
+written whenever `list` is `qualified`, a `0` included, and left out with `new`. Equality of figures is by value:
+`Acceptance.Holds` and `VerifyClassify` compare the fields' values (an `Equal` method when a field is a pointer
+kept for that presence), never pointers. The gate is
+precision 0.8 and recall 0.5, and with `list` `qualified` also `new_recall` 0.5, so a list of known corrections
+alone (the 8 duplicates found, the 8 `new` missed) fails. The output also gives the figures per language, reported
+but not a gate. When qualification passed its own gate and the end-to-end gate fails, qualification ships disabled
+(§3.2: sources read, report written, items `unevaluated`, `classification disabled`) with the reason
+"end-to-end `<list>` list on heldout: precision <p>, recall <r>[, new recall <n>], support <s> miss the target
+0.80 / 0.50; REVIEW", unless the owner accepts the result in the cutoff table (`accepted`: the pin, a hash of the
+`heldout` fixtures' cases, records, repository layouts and samples, the figures with their `list`, and the owner's
+one-line reason). Qualification thus ships enabled only when it passes its own gate and either the scored list
+passes or a matching acceptance holds. The acceptance applies only in that case and holds only while all three match; any change to the
+pin, the evaluation inputs, the figures or `list` voids it. When qualification failed its own gate it keeps its own
+reason and the calibrate report's own-gate `REVIEW`; the end-to-end figures (`scored: false`, every labelled item a
+miss) are reported and there is nothing to accept. A duplicate decision failing its own gate ships disabled in
+every row.
+
+With the duplicate check disabled, every qualified item is `unassessed` (`duplicate check disabled`, a done reason,
+so it alone never makes `complete` false), no `dup_` request is sent, and the owner sees the counts (`n qualified
+(0 new, 0 duplicate, n dup unassessed)`), up to 10 candidates newest first, each `<kind> <where>: <excerpt> (dup
+unassessed: duplicate check disabled)`, then `(+k more in the report)`, and the line `the duplicate check is
+disabled: <reason>; candidates are not checked against memory`. The purpose, surfacing new rules from the week's
+corrections, keeps its recall in the report: the duplicate check's harmful error is a new rule marked `duplicate`
+and hidden, which a disabled check never makes, and the `new_recall` gate holds qualification to finding the new
+ones. The 10 context lines are not so protected: they share their slots with corrections the index already states,
+and a newer known correction can push a new rule into `(+k more in the report)`. Triage therefore happens in the
+report, where every candidate's excerpt is listed and the owner rules out known ones against an index of a few
+lines (median 270 B, largest 2.5 KB observed; the index read now, which may differ from what the replying session
+loaded). A known correction listed is itself worth seeing: the reply repeats a rule present in the current index.
 
 The `fixed` classify fixtures are matched per item by ID, on `where`, `status`, `reason`, `opener`, `qualified`,
 `kind`, `excerpt`, `duplicate` and `dup_reason`, and on status, finding kinds, `complete`, `sources`, `counts` and the
@@ -626,8 +735,11 @@ context (lines, order and markers), so a dropped or swapped row fails. They are:
 - decisions: a known `duplicate`; a known `new` whose `dup_` record, deleted alone, fails the fixture; an approval;
   the antecedent pair, whose bodies differ only in `owner`, with the scope rule at the end of a 6 KiB owner turn;
   a duplicate pair where only the opening instruction differs, so the same reply restores a scope one index line
-  states (`duplicate`) or one it does not (`new`); and a duplicate whose referent sits at the start of a long
-  closing message;
+  states (`duplicate`) or one it does not (`new`); a duplicate whose referent sits at the start of a long
+  closing message; and, in a build with the duplicate check disabled (`no-duplicate`), a qualified reply its index
+  states and a newer qualified `new` one, both `unassessed` (`duplicate check disabled`), no `dup_` request,
+  `complete: true`, the counts `2 qualified (0 new, 0 duplicate, 2 dup unassessed)`, both candidate rows newest
+  first with their marker, and the disabled line ending exactly `; candidates are not checked against memory`;
 - memory, each with a decoy index where a wrong lookup would land: an index in the main checkout's project
   directory with a decoy at a linked worktree's; a checkout `.claude/settings.json` setting `autoMemoryDirectory`;
   a linked worktree whose main checkout's `.claude/settings.local.json` sets it (both `project memory override`); a
@@ -637,7 +749,11 @@ context (lines, order and markers), so a dropped or swapped row fails. They are:
 - failures and shape: a `kind_` batch rejected for size; a missing `kind_` answer (`warn`); 12 qualified candidates
   (10 context lines, `(+2 more in the report)`, all 12 excerpts in the report); an empty healthy week; an empty
   week with observe's T3 source failed (`complete: true`, `sources.t3` failed); an empty week with qualification
-  disabled and a failed source (`complete: true`, both gaps in the context); an all-unresolved week.
+  disabled and a failed source (`complete: true`, both gaps in the context); an empty week in a build with both
+  decisions disabled (`no-decisions`: both disabled lines present, the duplicate one ending at its reason, without
+  the suffix); an empty week in a `no-duplicate` build (the duplicate line with the suffix); a `no-duplicate` week with
+  a missing `kind_` answer (`complete: false` for those items, though every qualified item's duplicate reason is
+  done); an all-unresolved week.
 
 Replay uses the recorded transport. **Model
 bump:** one PR changes the pin, re-records, refits, and reports old vs new on `heldout` (precision, recall, support,
@@ -685,6 +801,19 @@ of it, uncapped; O6 reports what the ledger saw against the number of runs.
 | | split, then combine part answers (max, or `unevaluated` on disagreement) | no item lost | a part without the reply has nothing to judge, so its answer is noise | — |
 | Duplicate request (§3.2) | **one reply per `dup_` request, with its whole closing message (chosen)** | a body depends on its reply alone, so calibration records what runtime sends whatever else qualifies; "not that" has its object | one request per qualified item (140–200 in the sizing scenario) | high |
 | | the directory's qualified replies in one request | fewer requests | a body depends on which other items qualified, so calibration's bodies miss at replay (`jev-unrecorded`) | — |
+| Duplicate question (§3.2) | **required rules defined once (all the reply asks, a task-local scope dropped only beside a covered reusable rule); `duplicate` only when a line covers each and the referent is settled from the conversation; four named kinds of related line that do not cover (chosen)** | true and false criteria cannot both hold; excludes the kinds of line behind every topic-related `fit` false positive; a new standing rule beside a covered one stays `new`; an undo keeps the rule it restores, never inferred from the index | a longer one-shot question per `dup_` body (a recall risk, §8); an overlap whose correction is covered reads `duplicate` though its scope is not stated | high; flips if fresh held-out false positives come from a kind of line the criteria do not name, or `restatement`, `multi` or `undo` positives start to miss |
+| | the topic-only exclusion ("a line that only shares its topic") | a shorter question | a line on the same topic stating another rule still reads as a match (7 false-positive calls on 3 `fit` cases at 0.50, scores up to 0.91) | — |
+| | one stated rule is enough | a short criterion for overlaps | hides a new standing rule asked beside a covered one | — |
+| | one question per index line | a judgment per line | a body's question count grows with the index; a general line covering a specific reply is judged line by line out of context | — |
+| Cutoff selection (§3.5) | **lowest cutoff passing the margin test, floor 0.50, δ 0.05, for every decision (chosen)** | decided on `fit` alone; a cutoff on the floor already counts hits only from 0.55 and negatives from 0.45 | a decision whose question does not separate its cases passes fit thinly and misses on `heldout` | high; revisit only with evidence from a fresh held-out week, never from one already seen |
+| | a slack of one case (3 samples) added to fit false positives | a thin fit cannot pass | chosen with the seen held-out result in view (on the old question it alone lifts held-out duplicate precision past 0.80); sized on negatives while precision moves with hits; disables a thin decision with no false positive (6 positive cases, 9 hits: 9/12 = 0.75) | — |
+| | a higher floor (0.60) | a uniform guard | arbitrary; moves every decision, and meta-duty's held-out recall is 0.50 at 0.50, so it risks disabling a passing decision | — |
+| | a wider δ | a wider band of doubt | the predeclared δ matches the measured pass-to-pass spread (§2); widening it after a miss is fitting to the seen result | — |
+| | the cutoff of highest fit precision | the most fit margin | chases a few cases among 12–13 and gives up recall (0.68 on the committed duplicate samples, fit recall 0.90) | — |
+| Held-out refresh (§3.5) | **an inspected held-out fixture moves to `fit` whole; a fresh week replaces it (chosen)** | one split per fixture and its `kind_` packing kept; no judgment of which cases were seen | 32 fresh cases to draft and review, not 16 | high |
+| | move only the inspected cases | fewer fresh cases | splits a fixture across splits and repacks its `kind_` bodies; rests on a record of who read which score | — |
+| Activation without the duplicate check (§3.5) | **when the duplicate decision fails its gate, gate qualification on the `qualified` list, with recall also on the items labelled `new` (chosen)** | the week's corrections reach the owner, none hidden, and a list of known corrections alone fails | known rules are listed beside new ones and share the 10 context lines; triage happens in the report | high; the `new` list applies again once the duplicate decision passes |
+| | keep qualification disabled until the duplicate decision passes | no list unchecked against memory | a secondary filter's miss withholds every candidate | — |
 | Classify deadline (§3.2) | **groups of 4 `kind_` requests, each followed by its `dup_` requests (chosen)** | a cut leaves the newest items fully checked; no reserve to size | no overlap between a group's `dup_` and the next `kind_` | high |
 | | a fixed reserve for the `dup_` phase | `kind_` runs uninterrupted | the reserve's size depends on how many qualify, unknown in advance | — |
 | Classify order in the job (§3.2) | **after observe, before improve (chosen)** | the report depends on observe alone and appears when improve fails or times out | improve starts up to 5 min later | high |
@@ -724,7 +853,7 @@ of it, uncapped; O6 reports what the ledger saw against the number of runs.
 | P3 | When the PR text claims what the diff does not show and the PR fits one request, `jev-semantic` shall answer `warn` with `jev-unsupported-claim`; when it does not fit, it shall report the question unassessed. | #57; owner decision | "add tests" without tests; a large PR | finding or `jev-unassessed` | `replay-test`; key: O2 |
 | P4 | `jev-semantic` shall never make `stack run outbound` exit 1, and `public`'s refusal shall still exit 1. | §1 | live run, both extensions | exit 0 with a semantic `warn`; exit 1 with `public: block` | C15 |
 | P5 | (When built, §3.2.) When an open kit's state names a single step in progress whose hiden reference scores at or above the cutoff, the entry context shall point at that reference, one path per kit, uncut in the router's output and whenever shown whole, within 1,000 UTF-16 units in total (any pointer that does not fit, the first included, is omitted with a count), at `kit open` and, room permitting, after compaction; a kit with several workstreams and none in progress, or a conditional wait, shall get no pointer. | #57; §3.2 trigger | synthetic kit reviewing a PR; a multi-workstream kit; a conditional-wait kit | the `want` context | `replay-test`, C16; key: O3 |
-| P6 | When observe found owner replies, `jev-classify` shall classify each resolvable one that fits a request newest first with its opening owner turn, while qualification is enabled and before its deadline (C4, C7), give each qualified one a duplicate outcome, asking `dup_` alone against its directory's memory index only where §3.2 calls for a request, report every item once with separate classification and duplicate reasons, list qualified `new` items and those whose duplicate check is unassessed, answer `pass` unless the owner must act, and write a report for every fresh week, an empty one included, never over a newer week's. (After #56.) | #57 | both locator forms, a known duplicate and `new`, an approval, an unresolved item, an antecedent pair, an empty week | each item's outcome and reasons, `complete`, `sources` and the context | `replay-test` incl. the artifact (C12); budget cut: C4; key: O4 |
+| P6 | When observe found owner replies, `jev-classify` shall classify each resolvable one that fits a request newest first with its opening owner turn, while qualification is enabled and before its deadline (C4, C7), give each qualified one a duplicate outcome, asking `dup_` alone against its directory's memory index only where §3.2 calls for a request (while the duplicate check is disabled, none: every qualified item `unassessed`, `duplicate check disabled`), report every item once with separate classification and duplicate reasons, list qualified `new` items and those whose duplicate check is unassessed, answer `pass` unless the owner must act, and write a report for every fresh week, an empty one included, never over a newer week's. (After #56.) | #57 | both locator forms, a known duplicate and `new`, an approval, an unresolved item, an antecedent pair, an empty week, the duplicate check disabled | each item's outcome and reasons, `complete`, `sources` and the context | `replay-test` incl. the artifact (C12); budget cut: C4; key: O4 |
 | P7 | Each extension shall send only the pinned model, with cutoffs from calibration on `fixtures/jev/`. | #57 | any call | `model` `jev-1.14.0` | C10, C11; O1 |
 | P8 | When a fixture carries recorded answers, the extension shall answer from them with no network, and `warn` `jev-unrecorded` on a miss. | #57 | key unset; dummy key + failing endpoint | `want` met; deleted record → feature assertion fails | C12 |
 | P9 | If Jev fails or answers malformed, the stage shall continue: unassessed on transient or too large, `warn` on persistent, within the budgets. | §3.1 | fake server | per §3.1 | C2, C4; key: O5 |
@@ -743,8 +872,8 @@ of it, uncapped; O6 reports what the ledger saw against the number of runs.
 | C6 | `jev-semantic` shall build identical bodies under config variants (system, global, `GIT_CONFIG_PARAMETERS`, repository-local `diff.suppressBlankEmpty`, `diff.noprefix`, `diff.relative`, `diff.indentHeuristic` on a patch whose hunks move, `core.abbrev`, `diff.orderFile`), ask `unsupported_claim` only when the whole PR fits, and answer `warn` before any request on a git failure. | P2, P3 | `semantic.TestState` (synthetic repository) |
 | C7 | A probability just below, at and above the cutoff shall decide pass, hit, hit; a disabled decision never flags; never `block`. Classify's decision shall qualify on the summed probability at the cutoff, take the larger label as kind and `correction` on a tie, send no `kind_` request when qualification is disabled and no `dup_` request when the duplicate decision is, and still write the report. | P2–P4, P6 | `semantic.TestDecision`, `classify.TestDecision` (sum just below, at and above; equal labels; each decision disabled) |
 | C8 | When built, the router shall follow §3.2’s candidate, state and decision rules. Its output shall satisfy the UTF-16 budget with astral characters, preserve whole paths and report unassessed kits as specified there. | P5 | `router.TestCandidates`, `router.TestState`, `router.TestContext` |
-| C9 | `jev-classify` shall resolve both locator forms as §3.2 states (T3 locators formed as observe forms them, observe's line numbering and owner provenance, the turn boundary, the excerpt and timestamp check, and each query failure's outcome), report each unresolved item with its reason; send items newest first under `r<n>` IDs, so generated metadata carries no path or observe ID; find the memory directory only as §3.2 establishes it; run each group's `dup_` requests after its `kind_` requests, each with one qualified reply and no unqualified one; write the report under the lock only over an older one; and build the context as §3.2 states. | P6 | `classify.TestResolve` (asserting the exact `owner` and `assistant` of each item, in both readers: a rewritten line; a tool result before the reply; a compaction summary between a finished turn and the reply, `intervening prompt`, and opening the answered turn, `owner` `""` with `opener` `compaction`; two owner turns in a row after a turn with text; a tool-only turn followed by two owner replies, both `no assistant text`; a server-created row opening a turn, `owner` `""`; a finished turn, then a server-created prompt, then the reply, `intervening prompt`; a task notification before the reply, `intervening prompt`; a source starting mid-turn; a missing file; the locator query, a thread query and the cwd query each failing), `classify.TestT3` (fake `sqlite3`: argv, failure, timeout), `classify.TestT3RealSQLite` (the real SQL on a database built with the real `sqlite3`: thread and message IDs holding `:`; two rows forming one locator, `ambiguous locator`; a numeric and a `null` payload `id`, the expected locators computed by observe's `jsonScalar` as oracle; a deleted thread; a missing message in an existing thread; an intervening owner row; tied `created_at`; both cwd sources. The authoritative job is `ubuntu-latest`, whose image lists SQLite; `macos-latest` uses the system `sqlite3`; the test logs `sqlite3 --version`, and with `CI=true` on those OSes fails rather than skipping), `classify.TestMemoryDir` (ordinary checkout, registered linked worktree, subdirectory, non-repository cwd; submodule, separate Git directory and one named `.git`, a gitfile pointing at another checkout's `.git`, a worktree not registered back → `unsupported layout`; removed cwd; no project directory → `new`; user `autoMemoryDirectory` absolute, with `~/`, relative → `unassessed`; either settings file setting it in the cwd, the checkout or the main checkout → `project memory override`, each with a decoy index where it points; malformed user settings; `CLAUDE_CONFIG_DIR`; inherited `GIT_DIR`; a decoy index at the cwd's encoding; the encoding on fixed POSIX and Windows paths), `classify.TestState` (oldest-first input sent newest first; IDs; the same bodies under two roots; an embedded path in a reply sent as written), `classify.TestPhases` (fake endpoint over two groups, order within a phase free: the exact multiset of attempted bodies per phase, group 1 `kind_`, group 1 `dup_`, group 2 `kind_`, group 2 `dup_`, each phase starting only after the previous one's requests all returned; one `{owner, assistant, reply}` per `dup_` body; no unqualified item; no body attempted twice), `classify.TestContext` (order, markers, the 10-line bound, `(+k more…)` with every candidate's excerpt in the report; `complete` and coverage for an empty healthy week, an empty week with a failed source, an all-unresolved week, a removed worktree), `classify.TestPublish` (replacement; a failed rename keeps the old file whole and answers `latest-not-written`; two runs contending inside compare-and-rename; two runs finishing in reverse order, for different windows and for the same window, keep the newer and leave no temp file of the dropped run; the lock held past the bound → `latest-not-written`; a lock left by a killed process does not block; an empty week replaces an older report), `classify.TestRun` (missing and stale observe file → `pass`, no write; malformed, unknown `version` and a `window.until` 6 min ahead → `warn`; a week with `new` items → `pass`, no hit finding; a persistent failure (401) on one `kind_` and one `dup_` request beside successful ones → `warn`, those items `request failed` and not done, the other candidates kept; a paused write leaves the old file whole) |
-| C10 | Calibration shall apply §3.5’s fit, eligibility, corpus and reporting rules. Changing only held-out scores shall leave the fitted cutoff unchanged and may disable the decision. When built, the router shall count distinct kits by ground truth and score wrong choices under §3.5’s false-positive and recall rules. For classify it shall check the corpus counts, splits, groups and languages, record `kind_` bodies and the `dup_` union, and enable qualification only when the end-to-end `new` list on `heldout` meets its target, scored with the provisional cutoffs, or a matching owner acceptance is recorded. | P7 | `jev.TestCutoff`, `jev.TestCorpus`, `calibrate.TestReport`, `calibrate.TestClassify` (a corpus one case short in each count; a first answer qualifying an unlabelled item records its `dup_` body; a missing score on a true `new` item is a miss; qualification finding all 8 held-out duplicates and missing all 8 `new` items, with both decisions passing their own gates, ships qualification disabled; the same with a recorded acceptance ships it enabled, and a changed pin, `heldout` hash or figure voids that acceptance; the end-to-end score uses the provisional cutoffs, before any enabled bit is set), `router.TestSamples` (when built) |
+| C9 | `jev-classify` shall resolve both locator forms as §3.2 states (T3 locators formed as observe forms them, observe's line numbering and owner provenance, the turn boundary, the excerpt and timestamp check, and each query failure's outcome), report each unresolved item with its reason; send items newest first under `r<n>` IDs, so generated metadata carries no path or observe ID; find the memory directory only as §3.2 establishes it; run each group's `dup_` requests after its `kind_` requests, each with one qualified reply and no unqualified one and the §3.2 question; write the report under the lock only over an older one; and build the context as §3.2 states. | P6 | `classify.TestResolve` (asserting the exact `owner` and `assistant` of each item, in both readers: a rewritten line; a tool result before the reply; a compaction summary between a finished turn and the reply, `intervening prompt`, and opening the answered turn, `owner` `""` with `opener` `compaction`; two owner turns in a row after a turn with text; a tool-only turn followed by two owner replies, both `no assistant text`; a server-created row opening a turn, `owner` `""`; a finished turn, then a server-created prompt, then the reply, `intervening prompt`; a task notification before the reply, `intervening prompt`; a source starting mid-turn; a missing file; the locator query, a thread query and the cwd query each failing), `classify.TestT3` (fake `sqlite3`: argv, failure, timeout), `classify.TestT3RealSQLite` (the real SQL on a database built with the real `sqlite3`: thread and message IDs holding `:`; two rows forming one locator, `ambiguous locator`; a numeric and a `null` payload `id`, the expected locators computed by observe's `jsonScalar` as oracle; a deleted thread; a missing message in an existing thread; an intervening owner row; tied `created_at`; both cwd sources. The authoritative job is `ubuntu-latest`, whose image lists SQLite; `macos-latest` uses the system `sqlite3`; the test logs `sqlite3 --version`, and with `CI=true` on those OSes fails rather than skipping), `classify.TestMemoryDir` (ordinary checkout, registered linked worktree, subdirectory, non-repository cwd; submodule, separate Git directory and one named `.git`, a gitfile pointing at another checkout's `.git`, a worktree not registered back → `unsupported layout`; removed cwd; no project directory → `new`; user `autoMemoryDirectory` absolute, with `~/`, relative → `unassessed`; either settings file setting it in the cwd, the checkout or the main checkout → `project memory override`, each with a decoy index where it points; malformed user settings; `CLAUDE_CONFIG_DIR`; inherited `GIT_DIR`; a decoy index at the cwd's encoding; the encoding on fixed POSIX and Windows paths), `classify.TestState` (oldest-first input sent newest first; IDs; the same bodies under two roots; an embedded path in a reply sent as written), `classify.TestPhases` (fake endpoint over two groups, order within a phase free: the exact multiset of attempted bodies per phase, group 1 `kind_`, group 1 `dup_`, group 2 `kind_`, group 2 `dup_`, each phase starting only after the previous one's requests all returned; one `{owner, assistant, reply}` per `dup_` body; no unqualified item; no body attempted twice), `classify.TestContext` (order, markers, the 10-line bound, `(+k more…)` with every candidate's excerpt in the report; `complete` and coverage for an empty healthy week, an empty week with a failed source, an all-unresolved week, a removed worktree; the duplicate check disabled: every candidate marked `duplicate check disabled`, `complete` true, the disabled line ending `; candidates are not checked against memory` on a week with candidates and on an empty week, and, with both decisions disabled, the duplicate-disabled line present without it, and a failed `kind_` request still `complete: false`), `classify.TestDupQuestion` (the `dup_r<n>` request: the state keys `memory_index`, `owner`, `assistant`, `reply` in order, and the question's name, type, instructions and both criteria exactly as §3.2 states them), `classify.TestPublish` (replacement; a failed rename keeps the old file whole and answers `latest-not-written`; two runs contending inside compare-and-rename; two runs finishing in reverse order, for different windows and for the same window, keep the newer and leave no temp file of the dropped run; the lock held past the bound → `latest-not-written`; a lock left by a killed process does not block; an empty week replaces an older report), `classify.TestRun` (missing and stale observe file → `pass`, no write; malformed, unknown `version` and a `window.until` 6 min ahead → `warn`; a week with `new` items → `pass`, no hit finding; a persistent failure (401) on one `kind_` and one `dup_` request beside successful ones → `warn`, those items `request failed` and not done, the other candidates kept; a paused write leaves the old file whole) |
+| C10 | Calibration shall apply §3.5’s fit, eligibility, corpus and reporting rules, one cutoff rule for every decision. Changing only held-out scores shall leave the fitted cutoff unchanged and may disable the decision. When built, the router shall count distinct kits by ground truth and score wrong choices under §3.5’s false-positive and recall rules. For classify it shall check the corpus counts, splits, groups, languages, held-out `dup_kind` and `undo` quotas (`dup_kind` matching `dup` and implying `hard`) and the held-out pairs (one `en`, one `ja`), record `kind_` bodies and the `dup_` union, and fill `end_to_end` as §3.5’s table states for each combination of the two own gates; it shall enable qualification exactly when qualification passes its own gate and (the scored list on `heldout`, `new` or `qualified` with `new_recall`, scored with the provisional cutoffs, meets its target, or a matching owner acceptance holds), comparing figures by value. | P7 | `jev.TestCutoff`, `jev.TestCorpus`, `calibrate.TestReport`, `calibrate.TestClassifyCorpus` (a corpus one case short in each count; held-out `duplicate` 5 + 3 and `new` 3 + 5 by language, keeping 8 + 8 correcting; a held-out hard-negative kind missing; a held-out positive `dup_kind` missing; no held-out `undo` positive; a `dup_kind` whose polarity mismatches `dup`, and one on an item not `hard`; no antecedent pair in `heldout`, and two of one language, while `fit` meets the pair floor), `calibrate.TestClassify` (a first answer qualifying an unlabelled item records its `dup_` body; a qualified true-`new` item whose first `dup_` score is missing is a miss (not a score of 0), and one whose first `dup_` score equals the cutoff is `duplicate`, so not listed; each of the four own-gate combinations, asserting `list`, `scored`, `support`, `fn`, the reason and `REVIEW`; qualification finding all 8 held-out duplicates and missing all 8 `new` items ships qualification disabled both with the duplicate decision passing (`new` list empty) and with it disabled (`qualified` list at precision 1.0, recall 0.5, `new_recall` 0); the duplicate decision failing its gate with the `qualified` list meeting every target ships qualification enabled, the duplicate disabled and `list` `qualified`; qualification passing its 3-call held-out gate while its first-answer `qualified` list fails, from per-attempt scores; qualification eligible with an empty list; a recorded acceptance ships it enabled only after qualification passed its own gate, never after it failed, and a changed pin, `heldout` hash, figure or `list` alone voids it, while a `new_recall` of 0 round-trips through the table and still matches, and the table JSON itself has the `new_support` and `new_recall` keys, `new_recall: 0` included, with `list` `qualified` and neither key with `new`; the report prints O1's per-case lines for a held-out case with a `dup_kind` and for an `undo` positive without one, each with its ID, expected label, category and three attempt outcomes, a missing attempt shown as `missing`, and scores labelled as such when no cutoff fits; the end-to-end score uses the provisional cutoffs, before any enabled bit is set), `router.TestSamples` (when built) |
 | C11 | Every answer record and cutoff table shall name the pin, and every status record shall match a rebuilt body hash; cutoffs refitted from `samples` shall equal the committed ones; changing the root dir, or the clock within observe's freshness, keeps every key, and changing state, a question or the pin changes it. | P7, §3.4 | `jev.TestFixturesPinned` (semantic and classify fixtures; for classify it rebuilds the §3.5 record union and checks that every body replay sends has a record) |
 | C12 | Every `fixed` fixture and every recorded `cal` fixture (a pending one has no `expect` yet) shall, through `replay-test`, give exactly one self-answered result with empty `error`, its `expect` status, its `want` (`cal`: exact findings and context, classify: the artifact too; `fixed`: §3.5 matching, classify's including `complete` and the context), and no `jev-unrecorded` or `jev-error` unless wanted; once with the key unset and once with a dummy key and a test endpoint that fails the test on any request; a hit fixture with its records deleted shall fail the `want` assertion. The mixed fixture keeps the hit and reports the rejected batch's questions unassessed with no `jev-error`, and its live counterpart against a fake endpoint sends exactly one request per planned body. | P2–P9, P6 | `<ext>.TestFixtures`, `semantic.TestMixedLive` |
 | C13 | No package under `cmd/` or `internal/` shall import `extensions/`, and the jev packages shall import no `internal/` package outside test helpers. | owner decision | existing `depguard` rules |
@@ -761,7 +890,7 @@ and Linux run them in `scripts/test`; Windows CI runs `go vet`, `go test -race` 
 (`.github/workflows/ci.yml:40-55`). Classify's report replacement while a reader holds the old file open, which
 Windows CI does not exercise, is checked on a Windows machine. Real-key checks are owner steps:
 
-**O1** each PR: `jev-calibrate`; committed cutoffs equal its output; unstable list read. **O2** the §3.2 caller on
+**O1** each PR: `jev-calibrate`; committed cutoffs equal its output; unstable list read; for classify, the per-case held-out duplicate outcomes, printed by the calibrate report and read only after the §3.5 freeze: for each held-out correcting item its ID, expected label, `dup_kind` and `undo`, and its three attempts' outcomes at the fitted cutoff (`duplicate`, `new`, or `missing`), or, when no cutoff fits, its three scores labelled as scores. **O2** the §3.2 caller on
 a scratch PR deleting an assertion → warn, on a clean change → pass, and on a scratch PR whose base gained a test
 after the branch point (base and head diverged) → no finding that the test was deleted. **O3** (when built) `kit open demo` with a state
 reviewing a PR → pointer to `review.md`; `/compact` → restored when room is left. **O4** (after #56) `stack run cycle --ext jev-classify` after a real observe run with T3 and Claude replies: `complete` true, or false only with its cause shown, and elapsed under the 5-min budget; coverage gaps (`sources`, unresolved, lookup `unassessed`) checked against their causes, not counted as failure. Before opening the report, draw 40 items at random and label them by hand (kind, and duplicate against the index for correcting ones); then compare with the report, giving agreement per label with its support (support under 10 stated as such), and check every unresolved, unassessed and duplicate outcome in the sample against its source. **O5** `TYPESAFE_API_KEY=invalid` with input at
@@ -779,10 +908,19 @@ log, hook runs), since a run with no attempt writes no ledger line.
   documented, and two paths can encode to one directory; managed settings, `--settings` files and
   `CLAUDE_CODE_PROJECT_DIR_NAME` of the session that wrote the memory are invisible to classify. A wrong directory
   shows as `new` (`no memory yet`) or a wrong `duplicate`; C9's decoy and O4's audit are the checks.
-- `new` means no match in the index as loaded at session start; a rule kept only in a topic file, or past the
+- `new` means coverage not established in the index as loaded at session start (a required rule uncovered, or the
+  reply's rules or referent unsettled); a rule kept only in a topic file, or past the
   index's first 200 lines or 25 KB, reads as `new`. A repository that overrides the memory location in its own
   settings gets no duplicate check (`project memory override`).
-- The published kind is advisory; only qualification and the `new` list are calibrated.
+- The published kind is advisory; qualification, the duplicate decision and the scored list (`new`, or `qualified`
+  while the duplicate check is disabled) are calibrated.
+- The `dup_` criteria name the kinds of related line seen among the `fit` cases; a line related in another way can
+  still read as a match. The highest-scoring observed misses are a rule the agent's action also broke (`fit-a03`) and
+  a line under another condition (`fit-c07`), both about 0.9 under the topic-only wording; `heldout-b` holds one
+  case of each kind, and of `partial` and `multi`, which no `fit` case has, to measure them.
+- The `dup_` question is long (about 1.5 KB, several interacting clauses) and System One answers it in one shot with
+  no reasoning text, so a reply with a covering line can still read `new`: a recall risk, measured by the positive
+  categories in O1.
 - The launchd job needs the key for classify; without it classify opts out.
 
 ## 9. Owner questions
