@@ -150,7 +150,7 @@ installed, unsafe if left to extensions, stable); the reasoning per built-in is 
 - **Worker detection:** `agent_type == "opus-worker"`, `WORKER_LINE` in first prompt, or `-worktrees/agent-*` only. Never guess from `~/.t3/worktrees/`.
 
 ### Optional Jev (System One) Extensions
-- **Opt-in by key:** With no key, installed Jev extensions return `pass` without a call. See the [setup instructions](../README.md#install) and the [key and failure contract](design/phase4-jev.md#31-opt-out-failure-batching-and-budgets-item-1).
+- **Opt-in by key:** With no key, installed Jev extensions answer a live request (no `jev` replay field) with `pass` without a call. See the [setup instructions](../README.md#install) and the [key and failure contract](design/phase4-jev.md#31-opt-out-failure-batching-and-budgets-item-1).
 - `jev-router` (`entry`): deferred. It would point to the hiden reference for each kit's step in progress. The default stage skips the absent binary. See the [router trigger](design/phase4-jev.md#32-what-each-extension-sends-and-returns-item-2).
 - `jev-semantic` (`outbound`): warns on possible meta-duty regressions and unsupported claims. The hiden `commit-pr` step calls it for PR creation and editing after `stack-public check` passes. CI runs without a live Jev key. See the [supported caller and request contract](design/phase4-jev.md#32-what-each-extension-sends-and-returns-item-2).
 - `jev-classify` (`cycle`): batch-classifies 7-day transcripts for corrections/drift and pre-filters memory duplicates.
@@ -182,8 +182,8 @@ cycle = ["observe", "jev-classify", "improve"]
 message_checks = []                   # outbound extensions pr merge requires for --subject/--body; the owner sets ["public"]
 ```
 
-Extensions keep their own settings beside it: `~/.config/stack/safety.toml` (`stack-guard`, `stack-public`; the v10
-`[safety]` keys `secrets`, `private_terms` and `deny_pencil_generate` with their v10 defaults. See the
+Extensions keep their own settings beside it: `~/.config/stack/safety.toml` (`stack-guard`, `stack-public`; the
+`[safety]` keys `secrets`, `private_terms` and `deny_pencil_generate`. See the
 [built-in secret entries](design/core-stages.md#46-configstacksafetytoml)), `~/.config/stack/improve.toml`
 and `~/.config/stack/audit-due.toml`. A missing `safety.toml` or key gives its default. A broken `safety.toml` means
 the default rules apply (custom entries are not kept until it is fixed), so a typo never turns a deny off:

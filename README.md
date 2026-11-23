@@ -30,8 +30,8 @@ Install `stack-improve` after `stack-public`: improve's public check runs `stack
 `~/.config/stack/safety.toml`. `stack-improve` embeds `extensions/improve/writing.md`; reinstall after changing it.
 
 A key opts `stack-jev-semantic` into sending eligible PR data to TypeSafe's Jev API, including the title, body,
-branch, commit messages and diff. A hit produces an advisory `warn`. Without a key the extension returns `pass`
-without a call. The shipped cutoffs enable both decisions. If both are disabled, the extension sends nothing.
+branch, commit messages and diff. A hit produces an advisory `warn`. Without a key a live request (no recorded
+`--replay` answers) returns `pass` without a call. The shipped cutoffs enable both decisions. If both are disabled, the extension sends nothing.
 Reinstall after `jev-calibrate` changes the embedded cutoffs (`extensions/jev/semantic/cutoffs.json`).
 
 Set `TYPESAFE_API_KEY` or use `~/.config/stack/jev/key`. A non-blank environment value takes precedence. To opt out,
