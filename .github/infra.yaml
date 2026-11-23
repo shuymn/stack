@@ -93,6 +93,7 @@ spec:
         - actions/create-github-app-token@*
         - actions/setup-go@*
         - jdx/mise-action@*
+        - oven-sh/setup-bun@*
         - shuymn/github-actions/.github/workflows/gha.yml@*
         - shuymn/github-actions/.github/workflows/renovate.yml@*
         - shuymn/github-actions/.github/workflows/security.yml@*
