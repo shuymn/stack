@@ -1,6 +1,7 @@
 package kit
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -81,21 +82,29 @@ type Renderer struct {
 	Handover []config.HandoverEntry
 }
 
-// Render returns one kit's blocks in order: state files, items, handover, board. ctx bounds the
-// board; give it BoardDeadline.
-func (r Renderer) Render(ctx context.Context, dir string) []Block {
-	blocks := StateBlocks(dir)
+// Render returns one kit's blocks in order: state files, items, handover, board; and the items
+// warning of StateBlocksWarning. ctx bounds the board; give it BoardDeadline.
+func (r Renderer) Render(ctx context.Context, dir string) ([]Block, string) {
+	blocks, warning := StateBlocksWarning(dir)
 	blocks = append(blocks, r.HandoverBlocks()...)
-	return append(blocks, r.BoardBlocks(ctx, dir, blocks)...)
+	return append(blocks, r.BoardBlocks(ctx, dir, blocks)...), warning
 }
 
 // StateBlocks returns the `NORTH.md`, `state.md` and attention item blocks of the kit at dir, which
 // must be absolute. Files are opened through an os.Root on dir, so a symlink leaving the kit is not
 // followed and renders as unreadable.
 func StateBlocks(dir string) []Block {
+	blocks, _ := StateBlocksWarning(dir)
+	return blocks
+}
+
+// StateBlocksWarning is StateBlocks plus one line, `<path>: <reason>`, saying why it ignored items
+// of a readable `attention/items.json` (`docs/design/kit-contracts.md` §4), or "" when it ignored
+// none.
+func StateBlocksWarning(dir string) ([]Block, string) {
 	root, err := os.OpenRoot(dir)
 	if err != nil {
-		return []Block{unreadable(KindState, dir)}
+		return []Block{unreadable(KindState, dir)}, ""
 	}
 	defer func() { _ = root.Close() }()
 
@@ -121,10 +130,11 @@ func StateBlocks(dir string) []Block {
 			Body: strings.ReplaceAll(text(data), "\r\n", "\n"),
 		})
 	}
-	if b, ok := itemsBlock(root, dir); ok {
+	b, ok, warning := itemsBlock(root, dir)
+	if ok {
 		blocks = append(blocks, b)
 	}
-	return blocks
+	return blocks, warning
 }
 
 // ErrMissing reports a kit file that does not exist, as opposed to one that cannot be read.
@@ -160,44 +170,129 @@ func missing(root *os.Root, rel string, err error) bool {
 
 // itemsBlock lists the rules of `attention/items.json` for roles orchestrator and all. A missing or
 // malformed file, or one without such rules, yields no block; an unreadable one yields a marker.
-func itemsBlock(root *os.Root, dir string) (Block, bool) {
+// The warning is `<path>: <reason>` when items of a readable file were ignored, else "".
+func itemsBlock(root *os.Root, dir string) (Block, bool, string) {
 	path := filepath.Join(dir, ItemsFile)
 	data, err := ReadFile(root, ItemsFile)
 	if errors.Is(err, ErrMissing) {
-		return Block{}, false
+		return Block{}, false, ""
 	}
 	if err != nil {
-		return unreadable(KindItems, path), true
+		return unreadable(KindItems, path), true, ""
 	}
-	var doc struct {
-		Items []json.RawMessage `json:"items"`
-	}
-	if json.Unmarshal(data, &doc) != nil {
-		return Block{}, false
-	}
-	var rules []string
-	for _, raw := range doc.Items {
-		var item struct {
-			Role any `json:"role"`
-			Rule any `json:"rule"`
-		}
-		if json.Unmarshal(raw, &item) != nil {
-			continue // not an object
-		}
-		rule, ok := item.Rule.(string)
-		if ok && (item.Role == "orchestrator" || item.Role == "all") {
-			rules = append(rules, "- "+rule)
-		}
+	rules, reason := parseItems(data)
+	warning := ""
+	if reason != "" {
+		warning = path + ": " + reason
 	}
 	if len(rules) == 0 {
-		return Block{}, false
+		return Block{}, false, warning
 	}
 	return Block{
 		Kind: KindItems,
 		Tag:  "orchestrator-attention-items",
 		Path: path,
 		Body: strings.Join(rules, "\n"),
-	}, true
+	}, true, warning
+}
+
+// parseItems returns the rendered rules of an items file (`- ` and the rule) and why it ignored
+// items: `attention items ignored: <reason>` for a file that is not an object whose `items` is an
+// array, `<n> of <m> attention items ignored (first: item <i>: <reason>)` when elements are not
+// objects with a string `role` and `rule`, else "". Keys match in any letter case, as in Go's JSON
+// decoding.
+func parseItems(data []byte) ([]string, string) {
+	if err := json.Unmarshal(data, new(any)); err != nil {
+		return nil, "attention items ignored: invalid JSON: " + err.Error()
+	}
+	if k := kindOf(data); k != kindObject {
+		return nil, "attention items ignored: top level is " + k + ", not an object"
+	}
+	var doc struct {
+		Items json.RawMessage `json:"items"`
+	}
+	_ = json.Unmarshal(data, &doc) // valid JSON object: always decodes into a raw field
+	if doc.Items == nil {
+		return nil, `attention items ignored: "items" is missing`
+	}
+	var items []json.RawMessage
+	if k := kindOf(doc.Items); k != kindArray || json.Unmarshal(doc.Items, &items) != nil {
+		return nil, `attention items ignored: "items" is ` + k + ", not an array"
+	}
+	var rules []string
+	ignored, first := 0, ""
+	for i, raw := range items {
+		role, rule, reason := parseItem(raw)
+		if reason != "" {
+			if ignored == 0 {
+				first = fmt.Sprintf("item %d: %s", i, reason)
+			}
+			ignored++
+			continue
+		}
+		if role == "orchestrator" || role == "all" {
+			rules = append(rules, "- "+rule)
+		}
+	}
+	if ignored == 0 {
+		return rules, ""
+	}
+	return rules, fmt.Sprintf("%d of %d attention items ignored (first: %s)",
+		ignored, len(items), first)
+}
+
+// parseItem returns an element's role and rule, or why it is ignored.
+func parseItem(raw json.RawMessage) (role, rule, reason string) {
+	if k := kindOf(raw); k != kindObject {
+		return "", "", k + ", not an object"
+	}
+	var item struct {
+		Role json.RawMessage `json:"role"`
+		Rule json.RawMessage `json:"rule"`
+	}
+	_ = json.Unmarshal(raw, &item) // valid JSON object: always decodes into raw fields
+	fields := []struct {
+		name string
+		raw  json.RawMessage
+		dst  *string
+	}{{"role", item.Role, &role}, {"rule", item.Rule, &rule}}
+	for _, f := range fields {
+		if f.raw == nil {
+			return "", "", `"` + f.name + `" is missing`
+		}
+		if k := kindOf(f.raw); k != kindString || json.Unmarshal(f.raw, f.dst) != nil {
+			return "", "", `"` + f.name + `" is ` + k + ", not a string"
+		}
+	}
+	return role, rule, ""
+}
+
+const (
+	kindObject = "an object"
+	kindArray  = "an array"
+	kindString = "a string"
+)
+
+// kindOf names the kind of a valid JSON value, with its article.
+func kindOf(raw []byte) string {
+	v := bytes.TrimLeft(raw, " \t\r\n")
+	if len(v) == 0 {
+		return "empty"
+	}
+	switch v[0] {
+	case '{':
+		return kindObject
+	case '[':
+		return kindArray
+	case '"':
+		return kindString
+	case 'n':
+		return "null"
+	case 't', 'f':
+		return "a boolean"
+	default:
+		return "a number"
+	}
 }
 
 // HandoverBlocks returns the handover file of the first active `[handover]` entry, if any. An entry

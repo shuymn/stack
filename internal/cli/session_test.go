@@ -76,6 +76,51 @@ func TestSessionStart(t *testing.T) {
 	}
 }
 
+// TestSessionStartItems covers W5 of docs/design/kit-contracts.md §4: compaction restores a kit
+// whose items file `kit open` warns about without any item diagnostic, with and without
+// STACK_DEBUG.
+func TestSessionStartItems(t *testing.T) {
+	for _, content := range []string{
+		`null`,
+		`{"items": [null, {"role": "all", "rule": "kept"}]}`,
+	} {
+		for _, debug := range []string{"", "1"} {
+			t.Run(content+" STACK_DEBUG="+debug, func(t *testing.T) {
+				home := t.TempDir()
+				env := map[string]string{"STACK_SESSION_ID": "s1", "STACK_DEBUG": debug}
+				kitDir := filepath.Join(home, ".local", "state", "stack", "kits", "demo")
+				writeFile(t, filepath.Join(kitDir, "state.md"), []byte("DEMO STATE\n"))
+				writeFile(t, filepath.Join(kitDir, "attention", "items.json"), []byte(content))
+				if r := runIn(t, home, env, "kit", "open", "demo"); r.code != exitOK ||
+					!strings.Contains(r.stderr, "attention items ignored") {
+					t.Fatalf("kit open = %+v, want its warning", r)
+				}
+
+				r := sessionStart(t, home, env, `{"session_id":"s1","source":"compact"}`)
+				var out struct {
+					HookSpecificOutput struct {
+						AdditionalContext string `json:"additionalContext"`
+					} `json:"hookSpecificOutput"`
+				}
+				if r.code != exitOK || json.Unmarshal([]byte(r.stdout), &out) != nil {
+					t.Fatalf("compact = %+v", r)
+				}
+				restored := out.HookSpecificOutput.AdditionalContext
+				if !strings.Contains(restored, "DEMO STATE") ||
+					strings.Contains(content, "kept") != strings.Contains(restored, "- kept") {
+					t.Fatalf("compact restored %q", restored)
+				}
+				for _, s := range []string{r.stderr, restored} {
+					if strings.Contains(s, "ignored") || strings.Contains(s, "items.json:") {
+						t.Fatalf("compact wrote an item diagnostic: stderr %q, context %q",
+							r.stderr, restored)
+					}
+				}
+			})
+		}
+	}
+}
+
 // A relative `[kit] root` names one dir, under the config file's dir, whatever the working dir.
 func TestRelativeKitRoot(t *testing.T) {
 	home := t.TempDir()
