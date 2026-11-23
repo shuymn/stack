@@ -1719,61 +1719,67 @@ func untabled(cmdlet, param string) string {
 	return ""
 }
 
-// TestVerdictNestedUndecided judges a synthetic engine record of a nested script whose position
-// the engine's binding cannot decide (`-Process:{…}` before a `--`): no corpus case can hold it,
-// since it is always inconclusive. The same record with the position decided passes, so only the
-// undecided position makes the case inconclusive.
+// undecidedOutput is the output testdata/oracle.ps1 writes for the one case
+// `iex '1 | ForEach-Object -Process:{ gh pr merge 7 } --'`, with the nested gh's ctx as CTX. The
+// static binder rejects the `--`, and the command rebuilt without it finds the block only as the
+// argument of `-Process:`, not as an element, so Get-Context reports `unknown:binding`.
+const undecidedOutput = `{"version":"7.6.5","edition":"Core","languageMode":"FullLanguage",
+"nativeArgumentPassing":"Standard","home":"","modules":[],
+"cases":[{"id":0,"errors":[],
+"commands":[{"name":"iex","end":54,"ctx":"plain","elements":[
+ {"k":"str","t":"iex","ast":"StringConstantExpressionAst","v":"iex","q":"BareWord"},
+ {"k":"str","t":"'1 | ForEach-Object -Process:{ gh pr merge 7 } --'",
+  "ast":"StringConstantExpressionAst",
+  "v":"1 | ForEach-Object -Process:{ gh pr merge 7 } --","q":"SingleQuoted"}],
+ "eligible":false}],
+"nested":[
+ {"name":"ForEach-Object","ctx":"plain","elements":[
+  {"k":"str","t":"ForEach-Object","ast":"StringConstantExpressionAst","v":"ForEach-Object",
+   "q":"BareWord"},
+  {"k":"param","t":"-Process:{ gh pr merge 7 }","ast":"CommandParameterAst",
+   "prefix":"-Process:",
+   "arg":{"k":"block","t":"{ gh pr merge 7 }","ast":"ScriptBlockExpressionAst"}},
+  {"k":"param","t":"--","ast":"CommandParameterAst"}]},
+ {"name":"gh","ctx":"CTX","elements":[
+  {"k":"str","t":"gh","ast":"StringConstantExpressionAst","v":"gh","q":"BareWord"},
+  {"k":"str","t":"pr","ast":"StringConstantExpressionAst","v":"pr","q":"BareWord"},
+  {"k":"str","t":"merge","ast":"StringConstantExpressionAst","v":"merge","q":"BareWord"},
+  {"k":"str","t":"7","ast":"ConstantExpressionAst","v":"7","q":"Constant"}]}]}],
+"resolved":{"iex":"cmdlet:Invoke-Expression","ForEach-Object":"cmdlet:ForEach-Object"},
+"aliasesOf":{},"params":{},"pBinding":"AmbiguousParameter,Microsoft.PowerShell.Commands.RemoveItemCommand",
+"stubRuns":0,"stubSame":{}}`
+
+// TestVerdictNestedUndecided judges the engine output of a nested script whose position the
+// engine's binding cannot decide: no corpus case can hold it, since it is always inconclusive.
+// The output goes through the validation and decoding of runOracle. The same output with the
+// position decided passes, so only the undecided position makes the case inconclusive.
 func TestVerdictNestedUndecided(t *testing.T) {
 	const text = `iex '1 | ForEach-Object -Process:{ gh pr merge 7 } --'`
-	str := func(v, q string) oElem { return oElem{K: "str", V: v, Q: q} }
-	name := func(s string) *string { return &s }
-	record := func(ctx string) *oCase {
-		return &oCase{
-			Commands: []oCmd{{
-				Name: name("iex"), Ctx: "plain", End: len(text),
-				Elements: []oElem{
-					str("iex", "BareWord"),
-					str("1 | ForEach-Object -Process:{ gh pr merge 7 } --", "SingleQuoted"),
-				},
-			}},
-			Nested: []oNested{
-				{Name: name("ForEach-Object"), Ctx: "plain", Elements: []oElem{
-					str("ForEach-Object", "BareWord"),
-					{
-						K: "param", T: "-Process:{ gh pr merge 7 }", Prefix: "-Process:",
-						Arg: &oElem{K: "block"},
-					},
-					{K: "param", T: "--"},
-				}},
-				{Name: name("gh"), Ctx: ctx, Elements: []oElem{
-					str("gh", "BareWord"), str("pr", "BareWord"), str("merge", "BareWord"),
-					str("7", "Constant"),
-				}},
-			},
+	judgeOutput := func(ctx string, nested []string) (Verdict, []string) {
+		t.Helper()
+		b := []byte(strings.Replace(undecidedOutput, "CTX", ctx, 1))
+		if err := validateOutput(b, nil, nil); err != nil {
+			t.Fatal(err)
 		}
-	}
-	engine := &oracleOut{
-		Version: "7.6.5", LanguageMode: "FullLanguage",
-		Resolved: map[string]string{"iex": "cmdlet:Invoke-Expression"},
-	}
-	judgeRecord := func(oc *oCase, d *declared) (Verdict, []string) {
-		e := evidence{text: text, decl: d, engine: engine, oc: oc, r: Parse(text, "", "", Unix)}
+		var o oracleOut
+		if err := json.Unmarshal(b, &o); err != nil {
+			t.Fatal(err)
+		}
+		d := &declared{Cmd: text, Calls: []string{"iex"}, Nested: nested}
+		e := evidence{
+			text: text, decl: d, engine: &o, oc: &o.Cases[0],
+			r: Parse(text, "", o.Home, Unix),
+		}
 		var st stats
 		return verdict(e, observe(e, &st), &st)
 	}
 
-	decl := &declared{Cmd: text, Calls: []string{"iex"}, Nested: []string{"ForEach-Object"}}
-	v, notes := judgeRecord(record("unknown:binding"), decl)
+	v, notes := judgeOutput("unknown:binding", []string{"ForEach-Object"})
 	if v != Inconclusive ||
 		!slices.Contains(notes, "nested position not decided: unknown:binding") {
 		t.Errorf("undecided nested position: %s %q, want inconclusive", v, notes)
 	}
-	decided := &declared{
-		Cmd:    text,
-		Calls:  []string{"iex"},
-		Nested: []string{"ForEach-Object", "gh"},
-	}
-	if v, notes := judgeRecord(record("plain"), decided); v != Pass {
+	if v, notes := judgeOutput("plain", []string{"ForEach-Object", "gh"}); v != Pass {
 		t.Errorf("decided nested position: %s %q, want pass", v, notes)
 	}
 }
