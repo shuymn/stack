@@ -565,6 +565,8 @@ func TestLedgerRows(t *testing.T) {
 		"| 2026-11-20 | 旧表示 \\| 見逃しを防ぐ条件を記録 | 採用 |",      // 16 escaped pipe
 		"| 2026-11-20 | PR #5 | 見逃し　無し | - |",            // 17 full-width negation
 		"| 2026-11-20 | 見逃し（main） | 見逃し なし | - |",        // 18 negation in another cell
+		"| 2026-11-20 | 　見逃し（full-width） | - |",          // 19 miss after a full-width space
+		"- 2026-11-16 s: 見逃し 調査、見逃し なし",                  // 20 bullet: the whole line is negated
 	}
 	path := f.write(".claude/review-ledgers/stack.md", strings.Join(lines, "\n")+"\n")
 	resp, l := f.run()
@@ -577,7 +579,7 @@ func TestLedgerRows(t *testing.T) {
 		got = append(got, it.Where)
 	}
 	slices.Sort(got)
-	misses := []int{8, 9, 13, 15, 18}
+	misses := []int{8, 9, 13, 15, 18, 19}
 	want := make([]string, 0, len(misses))
 	for _, n := range misses {
 		want = append(want, path+":"+strconv.Itoa(n))
@@ -586,11 +588,11 @@ func TestLedgerRows(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Errorf("ledger-miss where = %q, want %q", got, want)
 	}
-	if st := l.Sources["ledgers"]; st.Status != srcOK || st.Files != 1 || st.Records != 16 {
-		t.Errorf("ledgers = %+v, want ok, 1 file, 16 records", st)
+	if st := l.Sources["ledgers"]; st.Status != srcOK || st.Files != 1 || st.Records != 18 {
+		t.Errorf("ledgers = %+v, want ok, 1 file, 18 records", st)
 	}
-	if !strings.Contains(resp.Context, "ledger-miss 5") {
-		t.Errorf("context %q lacks ledger-miss 5", resp.Context)
+	if !strings.Contains(resp.Context, "ledger-miss 6") {
+		t.Errorf("context %q lacks ledger-miss 6", resp.Context)
 	}
 }
 
