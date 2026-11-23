@@ -104,21 +104,20 @@ creation.
 | Option | Gains | Loses | Reversibility | Cost |
 |---|---|---|---|---|
 | (a) Keep it embedded | improve's prompt is self-contained; no new config | a generic extension carries one target's rules; edits cross repositories and need a reinstall; the target's editors read another repository | — | none |
-| **(b) The target may supply it (recommended)** | the repository whose files are edited owns their rules; an edit takes effect at the next run; existing configurations without the key see no change | an optional field in improve's repository contract and one new error that only that field can reach; the embedded file stays until a later decision | drop the key | one `stack` PR (field, read, tests, I7 extended) and one dotfiles PR (copy the initial guide to a path outside the editable globs, set the key, update `AGENTS.md:45`) |
+| **(b) The target may supply it (chosen)** | the repository whose files are edited owns their rules; an edit takes effect at the next run; existing configurations without the key see no change, except that one holding both `paths` and `Paths` always uses `paths` | an optional field in improve's repository contract and one new error that only that field can reach; the embedded file stays until a later decision | drop the key | one `stack` PR (field, read, tests, I7 extended) and one dotfiles PR (copy the initial guide to a path outside the editable globs, set the key, update `AGENTS.md:45`) |
 | (c) Point the model at a file in the worktree by name | no config | the model may not read it; nothing checks it | easy | small |
 
-(b) in detail, as a follow-up: `.stack/improve.toml` gains an optional `writing = "<path>"`, a repository-relative
-path read at the base commit. `git ls-tree` at the base commit must show it as a regular-file blob (mode `100644` or
-`100755`), stricter than the `" blob "` check `.stack/improve.toml` gets (`extensions/improve/improve.go:358-367`),
-which also passes a symlink (`120000`) and would then read the link target's name as the guide. With the key absent,
-the embedded guide is used as today. With the key set, that file replaces the embedded guide; a path that `paths`
-matches (improve could rewrite its own rules), a symlink, a tree, a missing path or a failed lookup or read is
-`warn` and stop. The initial guide is a copy of the embedded one, which stays as the fallback. The order is safe
-either way: today's `repoConfig` ignores unknown keys, so dotfiles can set the key first; a configuration that
-already holds an unrelated `writing` key would give it this meaning.
+Decided: (b), an optional `writing` key in `.stack/improve.toml`; its rules and claims are in `phase3-cycle.md`
+§3.4 step 3 and I7. Rollout: dotfiles copies the embedded guide to a path outside its editable globs, sets the key
+and updates `AGENTS.md:45`; the embedded guide stays as the fallback. The order is safe either way: a
+`stack-improve` without the key ignores it, so dotfiles can set the key first; a configuration that already holds an
+unrelated `writing` key would give it this meaning.
 
-Recommendation (b). With the embedded fallback the change is additive: no prompt of an existing configuration
-without the key changes, and the new error needs the new key, so it is a method choice. It becomes an owner decision if the embedded default is
+With the embedded fallback the `writing` key is additive: no prompt of an existing configuration without the key
+changes, and its errors need the key, so it is a method choice. The regular-file rule is not additive: a
+`.stack/improve.toml` that is a directory, a gitlink (submodule) or a symlink is `warn` and stop instead of `pass`
+(a directory or gitlink read as absent) or a read of the link target's name. Keys now match exactly, so a
+configuration holding both `paths` and `Paths` always uses `paths`, where either could bind before. It becomes an owner decision if the embedded default is
 dropped (targets without the key would lose the writing section). It would change if a second target wanted the same
 rules (a shared default in `stack-improve` fits that better), or if improve stopped editing agent instructions.
 

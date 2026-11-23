@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -52,35 +53,78 @@ func enabled(home string) (bool, error) {
 	return ok && on, nil
 }
 
+// repoCfg is the target's .stack/improve.toml.
+type repoCfg struct {
+	paths []string
+	// writing is the repository path of the writing guide, "" when the key is absent.
+	writing string
+}
+
 // repoConfig decodes the target's .stack/improve.toml: `paths` is a required non-empty list of
-// valid patterns.
-func repoConfig(data []byte) ([]string, error) {
-	var cfg struct {
-		Paths []string `toml:"paths"`
+// valid patterns; `writing` is an optional repository path. Keys match exactly: toml's struct
+// decoding also binds keys in another case, so a `Writing` could stand in for `writing`.
+func repoConfig(data []byte) (repoCfg, error) {
+	var cfg map[string]any
+	if _, err := toml.Decode(string(data), &cfg); err != nil {
+		return repoCfg{}, fmt.Errorf("%w: .stack/improve.toml is not valid TOML", errConfig)
 	}
-	md, err := toml.Decode(string(data), &cfg)
-	if err != nil {
-		return nil, fmt.Errorf("%w: .stack/improve.toml is not valid TOML", errConfig)
+	list, _ := cfg["paths"].([]any)
+	if len(list) == 0 {
+		return repoCfg{}, fmt.Errorf(
+			"%w: .stack/improve.toml needs a non-empty paths list",
+			errConfig,
+		)
 	}
-	if !md.IsDefined("paths") || len(cfg.Paths) == 0 {
-		return nil, fmt.Errorf("%w: .stack/improve.toml needs a non-empty paths list", errConfig)
-	}
-	for _, p := range cfg.Paths {
-		if !validPattern(p) {
-			return nil, fmt.Errorf(
-				"%w: .stack/improve.toml path %q is not a valid pattern",
+	out := repoCfg{paths: make([]string, 0, len(list))}
+	for _, v := range list {
+		p, ok := v.(string)
+		if !ok || !validPattern(p) {
+			return repoCfg{}, fmt.Errorf(
+				"%w: .stack/improve.toml path %s is not a valid pattern",
 				errConfig,
-				p,
+				quoteValue(v),
 			)
 		}
+		out.paths = append(out.paths, p)
 	}
-	return cfg.Paths, nil
+	if v, set := cfg["writing"]; set {
+		w, ok := v.(string)
+		if !ok || !validPath(w) {
+			return repoCfg{}, fmt.Errorf(
+				"%w: .stack/improve.toml writing %s is not a valid repository path",
+				errConfig,
+				quoteValue(v),
+			)
+		}
+		out.writing = w
+	}
+	return out, nil
+}
+
+// validPath reports a valid pattern that names one repository path: no `.` or `..` segment and no
+// backslash.
+func validPath(p string) bool {
+	if !validPattern(p) || strings.Contains(p, `\`) {
+		return false
+	}
+	for seg := range strings.SplitSeq(p, "/") {
+		if seg == "." || seg == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+// quoteValue renders a decoded TOML value for an error message.
+func quoteValue(v any) string {
+	if s, ok := v.(string); ok {
+		return strconv.Quote(s)
+	}
+	return fmt.Sprintf("of type %T", v)
 }
 
 func validPattern(p string) bool {
-	if p == "" || strings.HasPrefix(p, "/") {
-		return false
-	}
+	// An empty pattern or a leading slash gives an empty segment.
 	for seg := range strings.SplitSeq(p, "/") {
 		if seg == "" {
 			return false

@@ -335,14 +335,24 @@ step's timeout is cut to what the deadline leaves after the reserve and the late
    updates; `--refmap=` keeps a configured `remote.origin.fetch` from updating other refs, and the two `--no-prune`
    flags override `fetch.prune` and `fetch.pruneTags`), then `base_oid =
    git rev-parse --verify refs/remotes/origin/<default>^{commit}` once; every later step uses `base_oid`, never the
-   ref. Config from the pinned commit, `git show <base_oid>:.stack/improve.toml`, so only merged config counts:
+   ref. Config from the pinned commit, so only merged config counts:
    ```toml
    paths = ["home/dot_claude/skills/**", "home/dot_claude/agents/**"]   # required; ** = any directories
+   writing = "docs/writing.md"   # optional; the writing guide of the prompt (step 9)
    ```
    `**` at the end of a pattern matches at least one segment (`skills/**` never matches a file named `skills`); in
-   the middle it matches zero or more. Absent → `pass` "`<repo>` has no .stack/improve.toml", read with `git ls-tree
-   <base_oid> -- .stack/improve.toml`, so a failed `git show` of a file that exists is `warn`, not absent. Invalid →
-   `warn`. Fetch failure → `warn`.
+   the middle it matches zero or more. Keys match exactly; a key in another case (`Paths`, `Writing`) is unknown and
+   ignored. A repository file is read at the base commit only when `git --literal-pathspecs ls-tree -z --full-tree
+   <base_oid> -- <path>` (a name such as `:(glob)x` is a file name; this call alone drops an inherited `GIT_GLOB_PATHSPECS` or `GIT_ICASE_PATHSPECS`, which git refuses next to the flag), parsed
+   record by record (mode, type, oid, path), shows it as a regular-file blob (mode `100644` or `100755`); its content
+   is `git cat-file blob <oid>`. A symlink (`120000`, whose blob is the target's name), a directory or a submodule is
+   `warn` and stop, as is a failed lookup or read. `.stack/improve.toml` absent → `pass` "`<repo>` has no
+   .stack/improve.toml". Invalid → `warn`. Fetch failure → `warn`.
+
+   `writing`, when set, is a repository path checked as a `paths` pattern is, with no `.` or `..` segment and no
+   backslash; that file replaces the embedded `writing.md` in the prompt. It must lie outside `paths`, so the model
+   cannot rewrite its own rules: a path `paths` matches, an invalid value or a missing file is `warn` and stop, each
+   with its own reason. Without the key the embedded `writing.md` is used and the prompt does not change.
 4. **Open PR gate.** `gh api --paginate --slurp 'repos/<slug>/pulls?state=open&per_page=100'` (every page, as
    `ready.py:130-139`); a PR counts when its head ref starts with `improve/` or `kaizen/` and its
    `head.repo.full_name` equals `<slug>` (case-insensitive; a fork's branch does not count). Any → `pass` naming
@@ -381,7 +391,7 @@ step's timeout is cut to what the deadline leaves after the reserve and the late
    "blockWritesOutsideWorkingDirectories":true}}`: the file tools refuse paths outside the working directory in
    every permission mode (Claude Code permissions, "Block file-tool reads and writes outside the working
    directories", https://code.claude.com/docs/en/permissions). Prompt on stdin: the evidence brief (`id | signal |
-   URL | excerpt` of public items only, `improve.py:589-593`), the embedded `writing.md`, and the task
+   URL | excerpt` of public items only, `improve.py:589-593`), the writing guide (step 3), and the task
    (`improve.py:73-87` with the allowed `paths` from the config instead of the fixed directories). Schema as
    `improve.py:88-92` (`change, evidence_ids, summary, watch, commit_message, pr_title, pr_body`).
 
@@ -869,7 +879,7 @@ I7); no remote write without enough time (I14); one run at a time (I5); a Codex 
 | I4 | When an open `improve/` or `kaizen/` PR of the same repository exists on any page, improve shall not create a stamp, and shall warn when it is older than 14 days. | `improve.TestOpenPR` | match on page 2; fork head with same ref ignored; 13 vs 15 days; gh error → warn |
 | I5 | Improve shall hold one run lock from the open-PR check through cleanup and stamp finalisation, so that concurrent runs on one machine make at most one model call and never remove a running worktree. | `improve.TestRunLock` (two real processes, `improvetest` build) | A in week W blocks in fake claude, B starts at W+1 → B `pass` "active", A's worktree intact; A ends unbilled (stamp removed after cleanup), B starts right after → one new claim, no overlap |
 | I6 | If the claude child never started or a complete result proves zero cost, improve shall remove the stamp after the child exits and cleanup; otherwise it shall keep it. | `improve.TestBilling` | start failure, worktree failure, too little time right before start → removed; cost 0 with all four counters 0 → removed; kept with cost `unknown` and `cost-unknown`: cost 0 + `usage: {}`, cost 0 + one counter missing, cost 0 + a counter that is a string, negative or fractional; kept: cost 0 + a non-zero counter, missing response, timeout; kept with cost `unknown`: a zero result followed by more bytes (also after a `change: false` result), a zero result from a child killed by a signal, a result without `type: result` |
-| I7 | Improve shall run `claude -p` with the stated flags, settings and environment, cwd = worktree, the brief, `writing.md` and the task on stdin, and kill it at its timeout. | `improve.TestModelInvocation` | argv exact (`--setting-sources user`; no `--restricted`, `--safe-mode`, `--add-dir`, `--max-budget-usd`; `--settings` sets `autoMemoryEnabled: false` and blocks reads and writes); env has `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`; stdin contains brief ids and `writing.md`; timeout → `failed:timeout`, cost `unknown`, child gone |
+| I7 | Improve shall run `claude -p` with the stated flags, settings and environment, cwd = worktree, the brief, the writing guide (the `writing` file when `.stack/improve.toml` sets it, else the embedded `writing.md`) and the task on stdin, and kill it at its timeout; when `.stack/improve.toml` exists but is not a regular-file blob at the base commit, or the `writing` file is not one, is missing, lies inside `paths`, or its lookup or read fails, improve shall answer `warn` and stop before the model. | `improve.TestModelInvocation`, `improve.TestWritingGuide`, `improve.TestRepoConfigFile` | argv exact (`--setting-sources user`; no `--restricted`, `--safe-mode`, `--add-dir`, `--max-budget-usd`; `--settings` sets `autoMemoryEnabled: false` and blocks reads and writes); env has `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`; stdin contains brief ids and `writing.md`; timeout → `failed:timeout`, cost `unknown`, child gone; key absent → the embedded guide exactly as before; key set (modes 100644 and 100755) → the base commit's file and not the embedded guide; a symlinked or directory `.stack/improve.toml`, and a `writing` that `paths` matches, is a symlink, a directory, missing, fails lookup or read, or is an invalid value → `warn` with its own reason, no model call, no stamp |
 | I8 | If the worktree has anything but modifications of existing `100644` files within `paths`, or evidence ids are not ⊆ brief ids, then improve shall record a proposal with the patch and not commit. | `improve.TestProposal` | add, delete, rename, mode change, type change (file → symlink), out-of-scope path, `**` boundary (`skills` vs `skills2`), empty diff with `change: true`, foreign id; `git rev-parse HEAD` still `base_oid` and no new ref |
 | I9 | Improve shall commit with the repository's hooks and the owner's config, without `--no-verify`. | `improve.TestCommit` (real git) | a failing `commit-msg` hook → `failed:commit` with patch; argv has no `--no-verify` |
 | I10 | Improve shall verify the pinned OID as one commit on `base_oid` changing only allowed existing files, run the credential check, `stack-public check` and the Codex check on that OID and the fixed title and body, and push exactly that OID. | `improve.TestCommitScope` (real git), `improve.TestPublicCheck` (real `stack-public` built in `TestMain`) | a `pre-commit` hook that succeeds after staging an extra file → `proposal:commit-scope`, no push; HEAD moved after the check → pushed OID is still the pinned one; a `post-commit` hook that replaces the commit (with the extra file) by an allowed one through `git replace` → still `proposal:commit-scope`; a `pre-push` hook that rewrites the body file → `gh pr create` gets the checked body; real `stack-public check` with a dummy private term in the diff, message, title or body → `proposal:public-check`; exit 2, or `stack-public` absent from `PATH` → `failed:check` with no Codex call, push or `gh pr create` |

@@ -1,0 +1,334 @@
+package improve
+
+import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+)
+
+// guide is a writing guide the fixture repository supplies; nothing else holds its content.
+const guide = "# Target writing guide\n\nKeep every rule short.\n"
+
+// commitConfig commits cfg as .stack/improve.toml and pushes it, with setup run before.
+func (f *fx) commitConfig(cfg string, setup func()) {
+	f.t.Helper()
+	if setup != nil {
+		setup()
+	}
+	f.repo.Write(".stack/improve.toml", cfg)
+	f.pushAll()
+}
+
+// pushAll stages the whole work tree, commits it and pushes it to origin.
+func (f *fx) pushAll() {
+	f.t.Helper()
+	f.repo.Git("add", "-A")
+	f.repo.Git("commit", "-q", "-m", "config")
+	f.repo.Git("push", "-q", "origin", "main")
+}
+
+func (f *fx) symlink(name, target string) {
+	f.t.Helper()
+	p := filepath.Join(f.repo.Dir, filepath.FromSlash(name))
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		f.t.Fatal(err)
+	}
+	if err := os.Symlink(target, p); err != nil {
+		f.t.Fatal(err)
+	}
+}
+
+// failGit makes every git call that has the argument arg exit 3; other calls run the real git.
+func (f *fx) failGit(arg string) {
+	f.t.Helper()
+	f.wrapGit("for a in \"$@\"; do [ \"$a\" = '" + arg + "' ] && exit 3; done\n")
+}
+
+// logGlobGit records, for every git call, the value of GIT_GLOB_PATHSPECS (or "unset") and the git
+// subcommand after `-C <dir>` and an optional --literal-pathspecs, one line each, in the returned
+// file.
+func (f *fx) logGlobGit() string {
+	f.t.Helper()
+	log := filepath.Join(f.t.TempDir(), "git.log")
+	f.wrapGit("sub() {\n" +
+		"  if [ \"$1\" = -C ]; then shift 2; fi\n" +
+		"  if [ \"$1\" = --literal-pathspecs ]; then shift; fi\n" +
+		"  printf '%s' \"$1\"\n" +
+		"}\n" +
+		"printf '%s %s\\n' \"${GIT_GLOB_PATHSPECS-unset}\" \"$(sub \"$@\")\" >> '" + log + "'\n")
+	return log
+}
+
+// wrapGit installs a git that runs pre, then the real git.
+func (f *fx) wrapGit(pre string) {
+	f.t.Helper()
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	dir := f.t.TempDir()
+	writeHook(f.t, dir, "git", pre+"exec '"+gitPath+"' \"$@\"")
+	f.tools["git"] = filepath.Join(dir, "git")
+}
+
+// wantStopped asserts a warn with context containing want, before the model and the stamp.
+func (f *fx) wantStopped(resp Response, want string) {
+	f.t.Helper()
+	if resp.Status != StatusWarn || !strings.Contains(resp.Context, want) {
+		f.t.Fatalf("resp %+v, want warn with %q", resp, want)
+	}
+	if len(f.calls("claude")) != 0 {
+		f.t.Fatal("claude ran")
+	}
+	f.noStamp()
+}
+
+// I1, I7: .stack/improve.toml must be a regular file at the base commit.
+func TestRepoConfigFile(t *testing.T) {
+	t.Parallel()
+	t.Run("symlink", func(t *testing.T) {
+		t.Parallel()
+		f := newFx(t)
+		f.repo.Write("real.toml", "paths = [\"skills/**\"]\n")
+		f.repo.Git("rm", "-q", ".stack/improve.toml")
+		f.symlink(".stack/improve.toml", "../real.toml")
+		f.pushAll()
+		f.wantStopped(f.run(), ".stack/improve.toml is a symlink, not a regular file")
+	})
+	t.Run("directory", func(t *testing.T) {
+		t.Parallel()
+		f := newFx(t)
+		f.repo.Git("rm", "-q", ".stack/improve.toml")
+		f.repo.Write(".stack/improve.toml/x", "paths = [\"skills/**\"]\n")
+		f.pushAll()
+		f.wantStopped(f.run(), ".stack/improve.toml is a directory, not a regular file")
+	})
+	t.Run("lookup fails", func(t *testing.T) {
+		t.Parallel()
+		f := newFx(t)
+		f.failGit(".stack/improve.toml")
+		f.wantStopped(f.run(), "git ls-tree of .stack/improve.toml failed: exit 3")
+	})
+}
+
+// I7: the writing key replaces the embedded guide; without it the prompt is unchanged.
+func TestWritingGuide(t *testing.T) {
+	t.Parallel()
+	embedded := "\n## Writing rules\n\n" + writing + "\n## Task\n"
+	t.Run("key absent", func(t *testing.T) {
+		t.Parallel()
+		f := newFx(t)
+		f.wantOutcome(f.run(), StatusPass, "pr https://github.com/o/r/pull/1")
+		in := f.calls("claude")[0].Stdin
+		if !strings.Contains(in, embedded) || strings.Contains(in, guide) {
+			t.Fatalf("stdin lacks the embedded guide:\n%s", in)
+		}
+	})
+	for _, tc := range []struct {
+		name, path, mode, env string
+	}{
+		{name: "100644", path: "docs/writing.md", mode: "100644"},
+		{name: "100755", path: "docs/writing.md", mode: "100755"},
+		// A name git would read as pathspec magic without --literal-pathspecs.
+		{name: "magic name", path: ":(glob)writing.md", mode: "100644"},
+		// Inherited pathspec settings git refuses next to --literal-pathspecs.
+		{name: "glob env", path: "docs/writing.md", mode: "100644", env: "GIT_GLOB_PATHSPECS=1"},
+		{name: "icase env", path: "docs/writing.md", mode: "100644", env: "GIT_ICASE_PATHSPECS=1"},
+		// Inherited settings git accepts next to --literal-pathspecs.
+		{name: "noglob env", path: "docs/writing.md", mode: "100644", env: "GIT_NOGLOB_PATHSPECS=1"},
+		{name: "literal env", path: "docs/writing.md", mode: "100644", env: "GIT_LITERAL_PATHSPECS=1"},
+	} {
+		t.Run("key set "+tc.name, func(t *testing.T) {
+			t.Parallel()
+			f := newFx(t)
+			if tc.env != "" {
+				f.opts.Env = append(f.opts.Env, tc.env)
+			}
+			f.commitConfig("paths = [\"skills/**\"]\nwriting = \""+tc.path+"\"\n", func() {
+				f.repo.Write(tc.path, guide)
+				if tc.mode == "100755" {
+					p := filepath.Join(f.repo.Dir, filepath.FromSlash(tc.path))
+					if err := os.Chmod(p, 0o700); err != nil {
+						t.Fatal(err)
+					}
+				}
+			})
+			entry := f.repo.Git("--literal-pathspecs", "ls-tree", "HEAD", "--", tc.path)
+			if !strings.HasPrefix(entry, tc.mode+" blob ") {
+				t.Fatalf("committed entry %q, want mode %s", entry, tc.mode)
+			}
+			// Only merged content counts: the work tree's copy differs from the base.
+			f.repo.Write(tc.path, "uncommitted\n")
+			f.wantOutcome(f.run(), StatusPass, "pr https://github.com/o/r/pull/1")
+			in := f.calls("claude")[0].Stdin
+			if !strings.Contains(in, "\n## Writing rules\n\n"+guide+"\n## Task\n") ||
+				strings.Contains(in, "# Writing agent knowledge") ||
+				strings.Contains(in, "uncommitted") {
+				t.Fatalf("stdin does not hold exactly the target's guide:\n%s", in)
+			}
+		})
+	}
+	t.Run("pathspec env dropped only for the lookup", func(t *testing.T) {
+		t.Parallel()
+		f := newFx(t)
+		f.opts.Env = append(f.opts.Env, "GIT_GLOB_PATHSPECS=1")
+		f.commitConfig("paths = [\"skills/**\"]\nwriting = \"docs/writing.md\"\n", func() {
+			f.repo.Write("docs/writing.md", guide)
+		})
+		log := f.logGlobGit()
+		f.wantOutcome(f.run(), StatusPass, "pr https://github.com/o/r/pull/1")
+		data, err := os.ReadFile(log)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var lookups, kept int
+		for line := range strings.SplitSeq(strings.TrimSpace(string(data)), "\n") {
+			glob, sub, _ := strings.Cut(line, " ")
+			switch {
+			case sub == "ls-tree":
+				lookups++
+				if glob != "unset" {
+					t.Errorf("lookup kept the variable: %s", line)
+				}
+			case glob == "1":
+				kept++
+			default:
+				t.Errorf("non-lookup call lost the variable: %s", line)
+			}
+		}
+		if lookups != 2 || kept == 0 {
+			t.Fatalf("lookups %d, other calls %d:\n%s", lookups, kept, data)
+		}
+	})
+	t.Run("read fails", func(t *testing.T) {
+		t.Parallel()
+		f := newFx(t)
+		f.commitConfig("paths = [\"skills/**\"]\nwriting = \"docs/writing.md\"\n", func() {
+			f.repo.Write("docs/writing.md", guide)
+		})
+		f.failGit(f.repo.Git("rev-parse", "HEAD:docs/writing.md"))
+		f.wantStopped(
+			f.run(),
+			`cannot read writing guide "docs/writing.md": exit 3; improve stopped`,
+		)
+	})
+	for _, tc := range []struct {
+		name, writing string
+		setup         func(f *fx)
+		want          string
+	}{
+		{
+			name: "inside paths", writing: "skills/a.md",
+			want: `writing guide "skills/a.md" matches paths, so improve could edit its own rules`,
+		},
+		{
+			name: "symlink", writing: "docs/writing.md",
+			setup: func(f *fx) {
+				f.repo.Write("docs/real.md", guide)
+				f.symlink("docs/writing.md", "real.md")
+			},
+			want: `writing guide "docs/writing.md" is a symlink, not a regular file`,
+		},
+		{
+			name: "directory", writing: "docs",
+			setup: func(f *fx) { f.repo.Write("docs/writing.md", guide) },
+			want:  `writing guide "docs" is a directory, not a regular file`,
+		},
+		{
+			name: "missing", writing: "docs/none.md",
+			want: `writing guide "docs/none.md" does not exist at the base commit`,
+		},
+		{
+			name: "lookup fails", writing: "docs/writing.md",
+			setup: func(f *fx) {
+				f.repo.Write("docs/writing.md", guide)
+				f.failGit("docs/writing.md")
+			},
+			want: `git ls-tree of writing guide "docs/writing.md" failed: exit 3`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			f := newFx(t)
+			f.commitConfig("paths = [\"skills/**\"]\nwriting = \""+tc.writing+"\"\n", func() {
+				if tc.setup != nil {
+					tc.setup(f)
+				}
+			})
+			f.wantStopped(f.run(), tc.want+"; improve stopped")
+		})
+	}
+	t.Run("invalid key", func(t *testing.T) {
+		t.Parallel()
+		for _, w := range []string{
+			`""`, `"/abs.md"`, `"a/../b.md"`, `"../b.md"`, `"./b.md"`, `"a//b.md"`, `'a\b.md'`,
+			`"a/[.md"`, "1", `["a.md"]`,
+		} {
+			f := newFx(t)
+			f.commitConfig("paths = [\"skills/**\"]\nwriting = "+w+"\n", nil)
+			resp := f.run()
+			f.wantStopped(resp, ".stack/improve.toml writing ")
+			f.wantStopped(resp, " is not a valid repository path")
+		}
+	})
+}
+
+// Keys match exactly: a key in another case is unknown and ignored, never bound instead.
+func TestRepoConfigKeys(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		cfg, writing string
+	}{
+		{
+			"Paths = [\"other/**\"]\npaths = [\"skills/**\"]\n" +
+				"Writing = \"skills/a.md\"\nwriting = \"docs/writing.md\"\n",
+			"docs/writing.md",
+		},
+		// A struct decoder binds Paths to the paths field and fails on its type.
+		{"paths = [\"skills/**\"]\nPaths = 1\n", ""},
+		{"paths = [\"skills/**\"]\nWriting = \"x.md\"\n", ""},
+	} {
+		cfg, err := repoConfig([]byte(tc.cfg))
+		if err != nil || !slices.Equal(cfg.paths, []string{"skills/**"}) ||
+			cfg.writing != tc.writing {
+			t.Errorf("%q: %+v, %v", tc.cfg, cfg, err)
+		}
+	}
+	for _, bad := range []string{
+		"paths = [\"skills/**\"]\nwriting = 1\nWriting = \"x.md\"\n",
+		"Paths = [\"skills/**\"]\n",
+		"paths = [\"skills/**\", 1]\n",
+	} {
+		if _, err := repoConfig([]byte(bad)); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+}
+
+func TestParseLsTree(t *testing.T) {
+	t.Parallel()
+	oid := strings.Repeat("a", 40)
+	got, err := parseLsTree([]byte("100644 blob " + oid + "\ta b\tc.md\x00120000 blob " + oid +
+		"\tl\x00"))
+	want := []treeEntry{{"100644", "blob", oid, "a b\tc.md"}, {"120000", "blob", oid, "l"}}
+	if err != nil || !slices.Equal(got, want) {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+	if got, err := parseLsTree(nil); err != nil || got != nil {
+		t.Fatalf("empty: %+v, %v", got, err)
+	}
+	for _, bad := range []string{
+		"100644 blob " + oid + "\tx", // no NUL
+		"100644 blob\tx\x00",
+		"100644 blob " + oid + "\x00",
+		"100644  blob " + oid + "\tx\x00",
+		"100644 blob " + oid + "\t\x00",
+	} {
+		if _, err := parseLsTree([]byte(bad)); err == nil {
+			t.Errorf("parseLsTree(%q) accepted", bad)
+		}
+	}
+}
