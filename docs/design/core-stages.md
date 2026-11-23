@@ -83,7 +83,8 @@ after demotion. Today `stack run entry` and `stack run cycle` exit 1 on `block` 
 fixture of those stages expecting `block` matches; this is a compatibility exception (§4.9).
 
 **Guarantee that each stage fires.** `entry` fires on every `kit open` and on every compact that restores a kit
-and still has the time of §4.3 left after the restore (otherwise its place shows `[entry skipped: deadline]`);
+with a non-empty `[stages].entry` and still has the time of §4.3 left after the restore (otherwise its place shows
+`[entry skipped: deadline]` if that fits);
 `merged` fires on every merge `stack pr merge` verifies, except after a cancel, and the raw-merge deny makes
 `stack pr merge` the only merge path an agent session has within the guard's static scope
 (`docs/design/phase2-core.md` §0.4, §6). Merges outside it (the GitHub UI, another machine, a `gh` alias) do not
@@ -183,8 +184,9 @@ All additions follow the evolution rule: new optional request fields, safe to ig
    lookup error) and none is runnable, it prints that name's `warn` marker after the `MERGED` line without reading
    `.kits` and exits 0, as the runner reports it at every stage (`internal/ext/ext.go:223`). Otherwise the stage's end is 10 s after it starts and covers the `.kits` read, the request encoding,
    every extension and the reaping of their pipes: the runner gets a deadline that is that end less its pipe-reaping
-   allowance (`proc.DefaultWaitDelay`, 2 s, `internal/proc/proc.go:29`), so an extension that runs to the deadline and
-   leaves a pipe open to a grandchild is still reaped by the end. An extension not started by the deadline is left
+   allowance (`proc.DefaultWaitDelay`, 2 s, `internal/proc/proc.go:29`), which starts once the killed extension's own wait
+   returns (`internal/proc/proc.go:313-335`), so an extension that runs to the deadline and leaves a pipe open to a
+   grandchild is reaped about at the end, later by the kill and wait latency below. An extension not started by the deadline is left
    unstarted with a `warn`. For each result that is not `pass` or has a non-empty `context`, print to stdout, after
    the `MERGED` line, the `warn` marker `[extension <name>: warn: <reason>]` when it warned, then its trimmed
    `context`. Exit 0 whatever the results, also when stdout is closed and those writes fail. The 10 s bounds the stage
@@ -205,26 +207,34 @@ Step 2 of `docs/design/phase2-core.md` §4.2 gains a last step: when at least on
   value may name another session), `kits` the list the restore read under the `.kits` lock (no second read), `repo`,
   `prompt` and `range` `""`. No git call is made, so a slow repository cannot delay it.
 - **Time:** the hook has a cut-off 55 s after it started (Claude Code's `timeout: 60` less 5 s to format, encode and
-  write the output). The cut-off bounds only the entry stage, not the restore's own file reads and board commands,
-  which keep their v10 bounds (`docs/design/phase2-core.md` §4.2). Once the restore is built, the stage's deadline
-  is the earlier of 10 s from its start and the cut-off, less the runner's pipe-reaping allowance (2 s,
-  `internal/proc/proc.go:29`; `internal/session/session.go:257-258`), so an extension that runs to that deadline and
-  leaves a pipe open to a grandchild is reaped about when that earlier time arrives, never after the cut-off. The
-  runner kills an extension at the deadline and launches no further extension once it has passed, leaving each
-  unstarted one with a `warn` (`internal/ext/ext.go:247-260`). Placing the results and encoding and writing the
-  output follow, outside the deadline.
+  write the output). The cut-off bounds only the entry stage. The restore's own reads and board commands have the
+  bounds of `docs/design/phase2-core.md` §4.2 (1 s for the `.kits` lock, 40 s for all boards), and the extension
+  lookup and the output write have none (premise below). Once the restore is built, the stage's end is the earlier
+  of 10 s from its start and the cut-off, and the runner's deadline is that end less the runner's pipe-reaping
+  allowance (`proc.DefaultWaitDelay`, 2 s, `internal/proc/proc.go:29`; `internal/session/session.go:257-258`). The
+  allowance starts once the killed extension's own wait returns (`internal/proc/proc.go:313-335`), so an extension
+  that runs to the deadline and leaves a pipe open to a grandchild is reaped about at the stage's end, later by the
+  operating system's kill and wait latency (C4 accepts a return less than the allowance after the cut-off). The
+  runner kills an extension at the deadline and launches no further extension once it has passed
+  (`internal/ext/ext.go:247-260`). Placing the results and encoding and writing the output follow, outside the
+  deadline.
 - **Skips**, checked in this order (`internal/session/session.go:245-278`): with no restored kit or an empty
-  `[stages].entry` the stage does nothing and leaves no text; with a deadline (after the allowance) less than 1 s
-  away it leaves `[entry skipped: deadline]` if that fits, so that marker appears only with a restored kit and a
-  non-empty selection; an invalid name in `[stages].entry` leaves `[entry extensions skipped: <reason>]` and
-  starts nothing; when no selected `stack-<name>` is found on `PATH`, nothing starts and no text is left (a name
-  found but not runnable gets a `warn` from the runner).
-- **Discovery:** the deadline is fixed before the names are checked and looked up, so the lookup's time comes out
-  of the entry window, and a lookup that ends past the deadline leaves every extension unstarted with its `warn`
-  (`session.TestCompactEntryDeadline`). The lookup itself takes no deadline and cannot be interrupted: it is one
-  `PATH` search per name, file-system calls only (`internal/ext/ext.go:142-149`, `internal/proc/resolve.go:51-85`).
-  Nothing in the hook bounds a `PATH` directory whose file system stalls; such a lookup can keep the hook past the
-  cut-off and Claude Code's 60 s timeout.
+  `[stages].entry` the stage does nothing and leaves no text. Otherwise the runner's deadline must be at least 1 s
+  away before the names are checked and looked up; when it is not, the stage leaves `[entry skipped: deadline]` if
+  that fits, so that marker appears only with a restored kit and a non-empty selection. An invalid name in
+  `[stages].entry` leaves `[entry extensions skipped: <reason>]` if that fits and starts nothing. When every
+  selected `stack-<name>` is missing from `PATH`, the runner is not called and no text is left.
+- **Discovery:** the deadline is fixed before the lookup, so the lookup's time comes out of the entry window
+  (`session.TestCompactEntryDeadline`). When the lookup returns past the deadline, a missing extension still leaves
+  nothing, one found but not runnable or not verifiable leaves its lookup-error `warn`, and a runnable one is not
+  started and leaves its deadline `warn` (`internal/ext/ext.go:247-260`). The lookup itself takes no deadline: it is
+  one `PATH` search per name, file-system calls only (`internal/ext/ext.go:142-149`,
+  `internal/proc/resolve.go:51-157`), and Go's file-system calls cannot be cancelled.
+- **Premise:** the hook meets Claude Code's 60 s only when `PATH` and the kit root are on responsive local file
+  systems and Claude Code drains the hook's stdout. The premise holds because a stalled `PATH` mount already stalls
+  the session's own commands before compaction, and Claude Code reads every hook's output. Outside it, the extension
+  lookup, a restore read or the output write can hold the hook past Claude Code's 60 s timeout, and the whole
+  restore is lost.
 - **Restore first:** the rules, brief, kits, boards and handover are placed before the stage starts and are never
   changed by it. Whatever the extensions do (hang, crash, flood stdout, leave a pipe open), the hook writes the
   already-built restore, plus what entry added.
@@ -587,7 +597,7 @@ serial cost and no gain over a second hook entry).
 | C1 | When an extension answers `block` at `entry`, `merged` or `cycle`, `ext` shall record `warn` with the stage finding and `error`. | `ext.TestBlockDemotion` | per stage; `outbound` keeps `block`; finding text; `context` and findings kept |
 | C2 | `stack run` shall exit 1 on `block` only at `outbound`. | `cli.TestRunBlockExit` | four stages; replay `expect` compared after demotion; `--title-file`/`--body-file`/`--branch` at a non-outbound stage or with `--replay` → exit 2 |
 | C3 | When `STACK_SESSION_ID` is valid, every live `entry` and `merged` request shall carry `kits` with the existing open kits in `.kits` order; otherwise `[]`. | `cli.TestRequestKits` | unset id → `[]`; a listed kit whose dir is gone is left out; `.kits` lock held past 1 s → `[]` plus the stderr note; `outbound` and `cycle` requests have no `kits` |
-| C4 | When compact restores at least one kit and the stage deadline of §4.3 is at least 1 s away, session-start shall run the entry stage once, place each result after the boards, cut or omitted within the budget, without changing the restore, and launch no further extension once the stage deadline has passed. | `session.TestCompactEntry`, `session.TestCompactEntryDeadline`, `session.TestCompactEntryBudget` (injected clock or start time) | fake extension invoked once with the restored `kits` and the payload's id in `STACK_SESSION_ID` when the inherited env names another id; no kits → not invoked; a fake `git` that sleeps is never called; with 5 s left to the cut-off, as if boards had used their time (simulated, no board runs) → entry bounded by the remaining window, the hook returned before the cut-off and the second extension not started; stage deadline just over 1 s away → invoked; just under 1 s → not invoked, `[entry skipped: deadline]`; an extension that runs to the deadline and leaves a pipe open to a grandchild → the next extension is not started and the hook returns less than the pipe-reaping allowance (`proc.DefaultWaitDelay`) after the cut-off, a margin a deadline set at the cut-off itself could not meet; a hanging extension → the restore is written whole; long context with astral-plane chars cut on a code-point boundary with marker; total ≤ 9,500 UTF-16 units; no room for the marker → no entry text and the stderr note; C19's lock, fork and close cases still pass |
+| C4 | When compact restores at least one kit, `[stages].entry` is not empty and the stage deadline of §4.3 is at least 1 s away, session-start shall run the entry stage once, place each result after the boards, cut or omitted within the budget, without changing the restore, and launch no further extension once the stage deadline has passed. | `session.TestCompactEntry`, `session.TestCompactEntryDeadline`, `session.TestCompactEntryBudget` (injected clock or start time) | fake extension invoked once with the restored `kits` and the payload's id in `STACK_SESSION_ID` when the inherited env names another id; no kits → not invoked; a fake `git` that sleeps is never called; with 5 s left to the cut-off, as if boards had used their time (simulated, no board runs) → entry bounded by the remaining window, the hook returned before the cut-off and the second extension not started; stage deadline just over 1 s away → invoked; just under 1 s → not invoked, `[entry skipped: deadline]`; an extension that runs to the deadline and leaves a pipe open to a grandchild → the next extension is not started and the hook returns less than the pipe-reaping allowance (`proc.DefaultWaitDelay`) after the cut-off, a margin a deadline set at the cut-off itself could not meet; a hanging extension → the restore is written whole; long context with astral-plane chars cut on a code-point boundary with marker; total ≤ 9,500 UTF-16 units; no room for the marker → no entry text and the stderr note; C19's lock, fork and close cases still pass |
 | C5 | When `pr merge` verifies a merge, it shall write the `MERGED` line before starting `merged` and exit 0 whatever the results. | `merge.TestMergedStage`, `merge.TestMergedStageDeadline` (fake gh, fake extension), `merge.TestMergedStageRunnerDeadline` (recording runner) | the test's stdout writer and the fake extension append to one ordered log, and the `MERGED` write precedes the extension's start; warn marker and context after the line; extension `block` → shown as warn, exit 0; direct path, `--auto` while polling, and `--auto` success found by the final read-back after the wait deadline; request `repo` and `merge` from the verified run with no extra git or gh call; a slow first extension → the next is not started after the deadline; a first extension that runs to the deadline and leaves a pipe open to a grandchild → the next is not started and, run in a window widened for a loaded machine, the stage returns within that window plus the pipe-reaping allowance (the results' printing follows); the runner's deadline is the stage's start plus 10 s less the pipe-reaping allowance; stdout closed → exit 0 |
 | C6 | If `pr merge` refuses or cannot confirm the merge, or is cancelled before its success point, it shall not run `merged`. | `merge.TestMergedStageNotRun` | refusal, unknown, cancel then success found by the final read-back: the fake extension's log is empty; cancel after `merged` started → the merge still reports success |
 | C7 | When no `merged` extension is installed, `pr merge` stdout, stderr and exit code shall be byte-identical to today, under the same `[merge].message_checks` configuration. | `merge.TestMergedNoExtension` | exact stdout, stderr and exit code, with `STACK_SESSION_ID` set, its `.kits` file present and its lock held by the test: the `.kits` file is not read and no lock note appears; a `merged` name found but not executable → `MERGED` line, then its warn marker, exit 0, `.kits` not read |
