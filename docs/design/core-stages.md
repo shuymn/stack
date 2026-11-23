@@ -339,12 +339,9 @@ except on its own errors.
     (`internal/cli/prmerge.go:73-92`, `internal/cli/run.go:281-307`).
   - *How a consumer finds that dir:* it resolves the current config as above. The premise is that `[kit].root` is
     not edited from the start of `pr merge` until the consumer has resolved the dir; editing it then is outside
-    this design. The consumer may instead reuse a dir it saw for `<slug>` in this session, from `kit open` output
-    or a compact restore, under the same premise: an `<orchestration-state path=…>` or `[state omitted: context
-    limit: <path>]` path names `<kit dir>/NORTH.md` or `<kit dir>/state.md`, so the kit dir is its parent, and
-    `[new kit: <path>; …]` names the kit dir. `[unreadable: <path>]` names either the kit dir or a file in it, and
-    a slug may itself be `state.md`, so the consumer does not derive a dir from it. It never assumes the default
-    root; when no dir can be established, it reports the slug as unresolved instead of guessing.
+    this design. The consumer does not reuse a dir seen in earlier output (`kit open`, a compact restore), since
+    that output may predate a root change. It never assumes the default root; when no dir can be established, it
+    reports the slug as unresolved instead of guessing.
   - *Replay:* with `stack run merged --replay`, the request is the fixture's, so the line's slug names the
     fixture's `kits` entry and its `dir`, not anything under the kit root.
 - **Best effort.** The reset is written before core accepts the response; if the stage deadline passes or stdout
