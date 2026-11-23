@@ -39,13 +39,27 @@ func (f *fx) symlink(name, target string) {
 // failGit makes every git call that has the argument arg exit 3; other calls run the real git.
 func (f *fx) failGit(arg string) {
 	f.t.Helper()
+	f.wrapGit("for a in \"$@\"; do [ \"$a\" = '" + arg + "' ] && exit 3; done\n")
+}
+
+// logGlobGit records, for every git call, GIT_GLOB_PATHSPECS and the arguments, one line each, in
+// the returned file.
+func (f *fx) logGlobGit() string {
+	f.t.Helper()
+	log := filepath.Join(f.t.TempDir(), "git.log")
+	f.wrapGit("echo \"glob=${GIT_GLOB_PATHSPECS-unset} $*\" >> '" + log + "'\n")
+	return log
+}
+
+// wrapGit installs a git that runs pre, then the real git.
+func (f *fx) wrapGit(pre string) {
+	f.t.Helper()
 	gitPath, err := exec.LookPath("git")
 	if err != nil {
 		f.t.Fatal(err)
 	}
 	p := filepath.Join(f.t.TempDir(), "git")
-	script := "#!/bin/sh\nfor a in \"$@\"; do [ \"$a\" = '" + arg + "' ] && exit 3; done\n" +
-		"exec '" + gitPath + "' \"$@\"\n"
+	script := "#!/bin/sh\n" + pre + "exec '" + gitPath + "' \"$@\"\n"
 	//nolint:gosec // G306: the fake git must be executable.
 	if err := os.WriteFile(p, []byte(script), 0o700); err != nil {
 		f.t.Fatal(err)
@@ -120,7 +134,9 @@ func TestWritingGuide(t *testing.T) {
 		// Inherited pathspec settings git refuses next to --literal-pathspecs.
 		{name: "glob env", path: "docs/writing.md", mode: "100644", env: "GIT_GLOB_PATHSPECS=1"},
 		{name: "icase env", path: "docs/writing.md", mode: "100644", env: "GIT_ICASE_PATHSPECS=1"},
+		// Inherited settings git accepts next to --literal-pathspecs.
 		{name: "noglob env", path: "docs/writing.md", mode: "100644", env: "GIT_NOGLOB_PATHSPECS=1"},
+		{name: "literal env", path: "docs/writing.md", mode: "100644", env: "GIT_LITERAL_PATHSPECS=1"},
 	} {
 		t.Run("key set "+tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -152,6 +168,37 @@ func TestWritingGuide(t *testing.T) {
 			}
 		})
 	}
+	t.Run("pathspec env dropped only for the lookup", func(t *testing.T) {
+		t.Parallel()
+		f := newFx(t)
+		f.opts.Env = append(f.opts.Env, "GIT_GLOB_PATHSPECS=1")
+		f.commitConfig("paths = [\"skills/**\"]\nwriting = \"docs/writing.md\"\n", func() {
+			f.repo.Write("docs/writing.md", guide)
+		})
+		log := f.logGlobGit()
+		f.wantOutcome(f.run(), StatusPass, "pr https://github.com/o/r/pull/1")
+		data, err := os.ReadFile(log)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var lookups, kept int
+		for line := range strings.SplitSeq(strings.TrimSpace(string(data)), "\n") {
+			switch {
+			case strings.Contains(line, " ls-tree "):
+				lookups++
+				if !strings.HasPrefix(line, "glob=unset ") {
+					t.Errorf("lookup kept the variable: %s", line)
+				}
+			case strings.HasPrefix(line, "glob=1 "):
+				kept++
+			default:
+				t.Errorf("non-lookup call lost the variable: %s", line)
+			}
+		}
+		if lookups != 2 || kept == 0 {
+			t.Fatalf("lookups %d, other calls %d:\n%s", lookups, kept, data)
+		}
+	})
 	oid := func(f *fx) string { return f.repo.Git("rev-parse", "HEAD:docs/writing.md") }
 	for _, tc := range []struct {
 		name, writing string

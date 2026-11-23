@@ -469,8 +469,14 @@ func parseLsTree(out []byte) ([]treeEntry, error) {
 // names it in problems. found is false when p is absent; problem is set when the lookup or the
 // read failed or p is not a regular file.
 func (s *state) regularFile(p, name string) ([]byte, bool, string) {
-	// --literal-pathspecs: a name such as `:(glob)x` is a file name, not pathspec magic.
-	out := s.git(s.repo, "--literal-pathspecs", "ls-tree", "-z", "--full-tree", s.baseOID, "--", p)
+	// --literal-pathspecs: a name such as `:(glob)x` is a file name, not pathspec magic. Only this
+	// call drops the inherited settings git refuses next to it; every other git call keeps them.
+	c := s.gitCmd(s.repo, "--literal-pathspecs", "ls-tree", "-z", "--full-tree", s.baseOID, "--", p)
+	c.env = slices.DeleteFunc(c.env, func(kv string) bool {
+		name, _, _ := strings.Cut(kv, "=")
+		return slices.Contains(literalRefused, name)
+	})
+	out := s.child("git", c)
 	if !out.ok() {
 		return nil, false, "git ls-tree of " + name + " failed: " + out.describe()
 	}
@@ -640,23 +646,17 @@ func (s *state) git(dir string, args ...string) outcome {
 }
 
 // gitCmd is a git call in dir. Replace refs are off: the checks must read the objects the push
-// sends. Inherited pathspec settings are dropped: git refuses any of them next to
-// --literal-pathspecs, and they would change what a pathspec names.
+// sends.
 func (s *state) gitCmd(dir string, args ...string) command {
-	env := slices.DeleteFunc(slices.Clone(s.o.Env), func(kv string) bool {
-		name, _, _ := strings.Cut(kv, "=")
-		return slices.Contains(pathspecVars, name)
-	})
 	return command{
 		args: append([]string{"-C", dir}, args...), timeout: s.o.limits.step,
-		env: append(env, "GIT_TERMINAL_PROMPT=0", noReplace),
+		env: append(slices.Clone(s.o.Env), "GIT_TERMINAL_PROMPT=0", noReplace),
 	}
 }
 
-// pathspecVars are git's global pathspec settings.
-var pathspecVars = []string{
-	"GIT_LITERAL_PATHSPECS", "GIT_GLOB_PATHSPECS", "GIT_NOGLOB_PATHSPECS", "GIT_ICASE_PATHSPECS",
-}
+// literalRefused are the inherited pathspec settings git refuses next to --literal-pathspecs;
+// GIT_LITERAL_PATHSPECS and GIT_NOGLOB_PATHSPECS it accepts.
+var literalRefused = []string{"GIT_GLOB_PATHSPECS", "GIT_ICASE_PATHSPECS"}
 
 // noReplace turns replace refs off for git and for the git `stack-public check` runs.
 const noReplace = "GIT_NO_REPLACE_OBJECTS=1"
