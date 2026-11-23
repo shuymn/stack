@@ -83,6 +83,7 @@ func TestSessionStartItems(t *testing.T) {
 	for _, content := range []string{
 		`null`,
 		`{"items": [null, {"role": "all", "rule": "kept"}]}`,
+		`{"items": [{"role": "all", "rule": "kept"}, 1e400]}`,
 	} {
 		for _, debug := range []string{"", "1"} {
 			t.Run(content+" STACK_DEBUG="+debug, func(t *testing.T) {

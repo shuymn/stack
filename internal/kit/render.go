@@ -199,73 +199,116 @@ func itemsBlock(root *os.Root, dir string) (Block, bool, string) {
 // parseItems returns the rendered rules of an items file (`- ` and the rule) and why it ignored
 // items: `attention items ignored: <reason>` for a file that is not an object whose `items` is an
 // array, `<n> of <m> attention items ignored (first: item <i>: <reason>)` when elements are not
-// objects with a string `role` and `rule`, else "". Keys match in any letter case, as in Go's JSON
-// decoding.
+// objects with a string `role` and `rule`, else "". The rules come from Go's JSON decoding (keys in
+// any letter case, the last of repeated keys); the reasons only describe what it rejected, from the
+// raw values, so a number is never converted for them.
 func parseItems(data []byte) ([]string, string) {
-	if err := json.Unmarshal(data, new(any)); err != nil {
-		return nil, "attention items ignored: invalid JSON: " + err.Error()
-	}
-	if k := kindOf(data); k != kindObject {
-		return nil, "attention items ignored: top level is " + k + ", not an object"
-	}
 	var doc struct {
-		Items json.RawMessage `json:"items"`
+		Items []json.RawMessage `json:"items"`
 	}
-	_ = json.Unmarshal(data, &doc) // valid JSON object: always decodes into a raw field
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return nil, "attention items ignored: " + fileReason(data, err)
+	}
 	if doc.Items == nil {
-		return nil, `attention items ignored: "items" is missing`
-	}
-	var items []json.RawMessage
-	if k := kindOf(doc.Items); k != kindArray || json.Unmarshal(doc.Items, &items) != nil {
-		return nil, `attention items ignored: "items" is ` + k + ", not an array"
+		return nil, "attention items ignored: " + fileReason(data, nil)
 	}
 	var rules []string
 	ignored, first := 0, ""
-	for i, raw := range items {
-		role, rule, reason := parseItem(raw)
-		if reason != "" {
-			if ignored == 0 {
-				first = fmt.Sprintf("item %d: %s", i, reason)
+	for i, raw := range doc.Items {
+		var item struct {
+			Role any `json:"role"`
+			Rule any `json:"rule"`
+		}
+		err := json.Unmarshal(raw, &item)
+		role, roleOK := item.Role.(string)
+		rule, ruleOK := item.Rule.(string)
+		if err == nil && roleOK && ruleOK {
+			if role == "orchestrator" || role == "all" {
+				rules = append(rules, "- "+rule)
 			}
-			ignored++
 			continue
 		}
-		if role == "orchestrator" || role == "all" {
-			rules = append(rules, "- "+rule)
+		if ignored == 0 {
+			first = fmt.Sprintf("item %d: %s", i, itemReason(raw, err))
 		}
+		ignored++
 	}
 	if ignored == 0 {
 		return rules, ""
 	}
 	return rules, fmt.Sprintf("%d of %d attention items ignored (first: %s)",
-		ignored, len(items), first)
+		ignored, len(doc.Items), first)
 }
 
-// parseItem returns an element's role and rule, or why it is ignored.
-func parseItem(raw json.RawMessage) (string, string, string) {
+// fileReason says why a file yielded no items array: err is its decoding error, or nil when it
+// decoded with no `items` (missing, or null last).
+func fileReason(data []byte, err error) string {
+	var raw json.RawMessage
+	if verr := json.Unmarshal(data, &raw); verr != nil { // validates without converting numbers
+		return "invalid JSON: " + verr.Error()
+	}
+	if k := kindOf(data); k != kindObject {
+		return "top level is " + k + ", not an object"
+	}
+	values := memberValues(data, "items")
+	if len(values) == 0 {
+		return `"items" is missing`
+	}
+	if err == nil { // the last value matching "items" is null
+		return `"items" is null, not an array`
+	}
+	for _, v := range values { // the decoder reports the first that is not an array or null
+		if k := kindOf(v); k != kindArray && k != "null" {
+			return `"items" is ` + k + ", not an array"
+		}
+	}
+	return err.Error()
+}
+
+// itemReason says why an element is ignored; err is its decoding error, if any.
+func itemReason(raw json.RawMessage, err error) string {
 	if k := kindOf(raw); k != kindObject {
-		return "", "", k + ", not an object"
+		return k + ", not an object"
 	}
-	var role, rule string
-	var item struct {
-		Role json.RawMessage `json:"role"`
-		Rule json.RawMessage `json:"rule"`
-	}
-	_ = json.Unmarshal(raw, &item) // valid JSON object: always decodes into raw fields
-	fields := []struct {
-		name string
-		raw  json.RawMessage
-		dst  *string
-	}{{"role", item.Role, &role}, {"rule", item.Rule, &rule}}
-	for _, f := range fields {
-		if f.raw == nil {
-			return "", "", `"` + f.name + `" is missing`
+	for _, name := range []string{"role", "rule"} {
+		values := memberValues(raw, name)
+		if len(values) == 0 {
+			return `"` + name + `" is missing`
 		}
-		if k := kindOf(f.raw); k != kindString || json.Unmarshal(f.raw, f.dst) != nil {
-			return "", "", `"` + f.name + `" is ` + k + ", not a string"
+		for _, v := range values {
+			if k := kindOf(v); k != kindString {
+				return `"` + name + `" is ` + k + ", not a string"
+			}
 		}
 	}
-	return role, rule, ""
+	if err != nil {
+		return err.Error()
+	}
+	return "unreadable" // not reached: a decoded object with string role and rule is accepted
+}
+
+// memberValues returns, in file order, the raw values of the members of the JSON object obj whose
+// key matches name in any letter case, as Go's JSON decoding matches a field.
+func memberValues(obj []byte, name string) []json.RawMessage {
+	dec := json.NewDecoder(bytes.NewReader(obj))
+	if _, err := dec.Token(); err != nil { // the opening brace
+		return nil
+	}
+	var out []json.RawMessage
+	for dec.More() {
+		tok, err := dec.Token()
+		if err != nil {
+			return out
+		}
+		var v json.RawMessage
+		if err := dec.Decode(&v); err != nil {
+			return out
+		}
+		if key, ok := tok.(string); ok && strings.EqualFold(key, name) {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 const (
