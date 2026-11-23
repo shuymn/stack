@@ -17,6 +17,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -173,12 +174,14 @@ type state struct {
 
 	repo, slug, branchBase string
 	paths                  []string
-	baseOID                string
-	week, stampPath        string
-	stateDir               string
-	tools                  map[string]string
-	settings               userSettings
-	settingsErr            error
+	// writing is the writing guide of the prompt: the target's when its config names one.
+	writing         string
+	baseOID         string
+	week, stampPath string
+	stateDir        string
+	tools           map[string]string
+	settings        userSettings
+	settingsErr     error
 }
 
 // Run answers one cycle request. It never answers block.
@@ -355,22 +358,23 @@ func (s *state) locked() (string, string) {
 		return StatusWarn, "cannot resolve " + ref + ": " + out.describe()
 	}
 	s.baseOID = strings.TrimSpace(string(out.stdout))
-	out = s.git(s.repo, "ls-tree", "-z", s.baseOID, "--", ".stack/improve.toml")
-	if !out.ok() {
-		return StatusWarn, "git ls-tree failed: " + out.describe()
+	data, found, problem := s.regularFile(".stack/improve.toml", ".stack/improve.toml")
+	if problem != "" {
+		return StatusWarn, problem + "; improve stopped"
 	}
-	if !strings.Contains(string(out.stdout), " blob ") {
+	if !found {
 		return StatusPass, s.slug + " has no .stack/improve.toml"
 	}
-	out = s.git(s.repo, "show", s.baseOID+":.stack/improve.toml")
-	if !out.ok() {
-		return StatusWarn, "cannot read .stack/improve.toml: " + out.describe()
-	}
-	paths, err := repoConfig(out.stdout)
+	cfg, err := repoConfig(data)
 	if err != nil {
 		return StatusWarn, err.Error()
 	}
-	s.paths = paths
+	s.paths, s.writing = cfg.paths, writing
+	if cfg.writing != "" {
+		if status, text, ok := s.writingGuide(cfg.writing); !ok {
+			return status, text
+		}
+	}
 	// 4. Open PR gate.
 	if status, text, ok := s.openPRs(); !ok {
 		return status, text
@@ -394,6 +398,97 @@ func (s *state) locked() (string, string) {
 	}
 	// 7-13.
 	return s.attempt(ev.public)
+}
+
+// writingGuide reads the target's writing guide p into s.writing. It must be a regular file outside
+// paths, so the model cannot rewrite its own rules.
+func (s *state) writingGuide(p string) (string, string, bool) {
+	name := "writing guide " + strconv.Quote(p)
+	if matchAny(s.paths, p) {
+		return StatusWarn, name + " matches paths, so improve could edit its own rules; " +
+			"improve stopped", false
+	}
+	data, found, problem := s.regularFile(p, name)
+	if problem != "" {
+		return StatusWarn, problem + "; improve stopped", false
+	}
+	if !found {
+		return StatusWarn, name + " does not exist at the base commit; improve stopped", false
+	}
+	s.writing = string(data)
+	return "", "", true
+}
+
+// treeEntry is one record of `git ls-tree -z`.
+type treeEntry struct{ mode, typ, oid, path string }
+
+// regular reports a regular-file blob; a symlink (120000) is a blob holding the target's name.
+func (e treeEntry) regular() bool {
+	return e.typ == "blob" && (e.mode == "100644" || e.mode == "100755")
+}
+
+// kind names what a non-regular entry is.
+func (e treeEntry) kind() string {
+	switch {
+	case e.mode == "120000":
+		return "a symlink"
+	case e.typ == "tree":
+		return "a directory"
+	case e.typ == "commit":
+		return "a submodule"
+	default:
+		return "mode " + e.mode + " " + e.typ
+	}
+}
+
+var errLsTree = errors.New("malformed git ls-tree output")
+
+// parseLsTree parses `git ls-tree -z` output: `<mode> SP <type> SP <oid> TAB <path>` records, each
+// ended by NUL.
+func parseLsTree(out []byte) ([]treeEntry, error) {
+	text := string(out)
+	if text == "" {
+		return nil, nil
+	}
+	if !strings.HasSuffix(text, "\x00") {
+		return nil, errLsTree
+	}
+	var entries []treeEntry
+	for rec := range strings.SplitSeq(strings.TrimSuffix(text, "\x00"), "\x00") {
+		meta, p, ok := strings.Cut(rec, "\t")
+		fields := strings.Split(meta, " ")
+		if !ok || p == "" || len(fields) != 3 || slices.Contains(fields, "") {
+			return nil, errLsTree
+		}
+		entries = append(entries, treeEntry{fields[0], fields[1], fields[2], p})
+	}
+	return entries, nil
+}
+
+// regularFile reads the repository path p at the base commit when it is a regular-file blob; name
+// names it in problems. found is false when p is absent; problem is set when the lookup or the
+// read failed or p is not a regular file.
+func (s *state) regularFile(p, name string) ([]byte, bool, string) {
+	out := s.git(s.repo, "ls-tree", "-z", "--full-tree", s.baseOID, "--", p)
+	if !out.ok() {
+		return nil, false, "git ls-tree of " + name + " failed: " + out.describe()
+	}
+	entries, err := parseLsTree(out.stdout)
+	if err != nil {
+		return nil, false, "git ls-tree of " + name + " failed: " + err.Error()
+	}
+	i := slices.IndexFunc(entries, func(e treeEntry) bool { return e.path == p })
+	if i < 0 {
+		return nil, false, ""
+	}
+	if e := entries[i]; !e.regular() {
+		return nil, true, name + " is " + e.kind() + ", not a regular file"
+	}
+	out = s.git(s.repo, "cat-file", "blob", entries[i].oid)
+	if !out.ok() {
+		return nil, true, "cannot read " + name + ": " + out.describe()
+	}
+	return out.stdout, true, ""
 }
 
 // modelTime is the model's timeout: what is left minus the reserve and the after-model steps.

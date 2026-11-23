@@ -202,7 +202,7 @@ func (a *attempt) prompt() string {
 	for _, p := range a.s.paths {
 		fmt.Fprintf(&pats, "- %s\n", p)
 	}
-	return a.briefTxt + "\n## Writing rules\n\n" + writing + "\n" +
+	return a.briefTxt + "\n## Writing rules\n\n" + a.s.writing + "\n" +
 		fmt.Sprintf(task, a.s.slug, a.s.baseOID, pats.String())
 }
 
