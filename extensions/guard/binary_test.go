@@ -1,7 +1,6 @@
 package guard
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -230,11 +229,7 @@ func TestJevKeySecret(t *testing.T) {
 		key := filepath.Join(home, ".config", "stack", "jev", "key")
 		r := runHook(t, home, payload(t, cwd, "Read", map[string]any{"file_path": key}))
 		assertDeny(t, name+": Read the key file", r, RuleSecrets)
-		var out denyOutput
-		if err := json.Unmarshal([]byte(r.stdout), &out); err != nil {
-			t.Fatalf("%s: %v", name, err)
-		}
-		reason := out.HookSpecificOutput.PermissionDecisionReason
+		reason := denyReason(r)
 		want := "stack-guard (secrets): Read targets the secret " +
 			strconv.Quote(safety.JevKey) + ". "
 		if !strings.HasPrefix(reason, want) {

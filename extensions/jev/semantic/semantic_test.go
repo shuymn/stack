@@ -450,6 +450,8 @@ func TestDecision(t *testing.T) {
 }
 
 func TestFailures(t *testing.T) {
+	const keyAction = "verify the Jev API key in TYPESAFE_API_KEY if set and non-blank, " +
+		"otherwise in ~/.config/stack/jev/key"
 	r := stateRepo(t)
 	for _, c := range []struct {
 		name    string
@@ -462,14 +464,12 @@ func TestFailures(t *testing.T) {
 	}{
 		{
 			"401 warns with the action", 401, jev.StatusWarn, jev.KindError,
-			"jev-semantic: Jev answered HTTP 401: verify the Jev API key in TYPESAFE_API_KEY if " +
-				"set and non-blank, otherwise in ~/.config/stack/jev/key",
+			"jev-semantic: Jev answered HTTP 401: " + keyAction,
 			"", `"outcome":"error"`,
 		},
 		{
 			"403 warns with the action", 403, jev.StatusWarn, jev.KindError,
-			"jev-semantic: Jev answered HTTP 403: verify the Jev API key in TYPESAFE_API_KEY if " +
-				"set and non-blank, otherwise in ~/.config/stack/jev/key",
+			"jev-semantic: Jev answered HTTP 403: " + keyAction,
 			"", `"outcome":"error"`,
 		},
 		{
