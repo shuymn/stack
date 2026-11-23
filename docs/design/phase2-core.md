@@ -292,11 +292,14 @@ whose last value is `null` leaves no array.
 An item is rendered when its `role` value is exactly `orchestrator` or `all` (case-sensitive) and its `rule` is a
 string: `- ` followed by the rule verbatim (not trimmed; a rule holding newlines keeps them, under its one `- `
 prefix; an empty rule renders as `- `), one per item in file order, joined by LF. Items for other roles (for example
-`worker`) may stay in the file; `stack` renders them nowhere. Ignored, with no marker in the output: a file that is
-not a JSON object whose `items` is an array (invalid JSON, a top-level array, `null` or other non-object value, an
-`items` that is missing, `null` or not an array: no block); an element that is not an object (`null` included), or
-whose `rule` or `role` is missing, `null` or not a string (that element skipped); a file with no rendered item (no
-block). Which entry point reports the malformed cases, and how, is stated in `docs/design/kit-contracts.md` §4.
+`worker`) may stay in the file; `stack` renders them nowhere. Three cases render nothing, with no marker in the
+output: a *malformed file*, one that is not a JSON object whose `items` is an array (invalid JSON, a top-level
+array, `null` or other non-object value, an `items` that is missing, `null` or not an array: no block); a
+*malformed element*, one that is not an object (`null` included), or whose `rule` or `role` is missing, `null` or
+not a string (that element skipped); and a *valid but not rendered* item, one whose `role` is neither
+`orchestrator` nor `all` (a file with no rendered item, including an empty `items` array, has no block). Which entry
+point reports the malformed files and elements, and how, is stated in `docs/design/kit-contracts.md` §4; a valid
+but not rendered item is reported nowhere.
 
 **`kit open`** writes to stdout, as plain text: the parts above in that order (state files, items, handover,
 board), then each `entry` result as it completes (§4.7, `docs/design/core-stages.md` §4.3): an
@@ -374,14 +377,15 @@ Stdin: SessionStart payload. Env: `CLAUDE_ENV_FILE`.
    |---|---|---|---|
    | State and items parts, `[new kit: …]`, `[unreadable: …]` (§4.1.1) | the opened kit | each restorable kit in `.kits` order, within the budget | nothing |
    | `<orchestration-handover>` | when an entry is active | the one active handover, after the `entry` results, when at least one kit was restored and the budget permits | nothing |
-   | `<orchestration-board>` and board markers | yes | run when its block can fit and the board deadline has not passed; otherwise `[board omitted: …]` or `[board skipped: deadline]` when it fits | nothing |
+   | `<orchestration-board>` and board markers | yes (§4.1.1) | board resolution as §4.1.1; launch and skip rules in step 2; output subject to step 5 | nothing |
    | `<extension-context>`, warn markers, `[entry extensions skipped: …]` | each `entry` result; the skip marker when the request cannot be built | each `entry` result, room permitting; the skip marker for an invalid name in `[stages].entry` | nothing |
    | Worker line, `<worker-rules>`, `<original-brief>` | never | for a detected worker | nothing |
    | `[kits omitted: …]`, `[… omitted: context limit…]`, `[...cut N chars]`, `[entry skipped: deadline]` | never | as they apply | nothing |
    | Size | no total budget; 1 MiB caps per board output and per extension response (§4.1.1) | 9,500 UTF-16 units in all (step 5) | — |
 
-   When the budget runs out before a kit's state block, compaction leaves its `[state omitted: …]` marker or no text
-   for that kit. An agent that misses a kit's state block after compaction reruns `stack kit open <slug>`, whose
+   When the budget runs out, a kit's state block can be replaced by its `[state omitted: …]` marker or omitted,
+   while the kit's other pieces are budgeted independently (step 5). An agent that misses a kit's state block after
+   compaction reruns `stack kit open <slug>`, whose
    output has no total budget; hiden checks for `<orchestration-state>` after `kit open` in a handover session, not
    after compaction.
 
