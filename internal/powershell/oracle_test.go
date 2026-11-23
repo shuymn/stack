@@ -1494,64 +1494,22 @@ func judge(t *testing.T, key string, o *oracleOut, stubs map[string][]string, co
 	return obs
 }
 
-// writeDeclared writes the declarations from the engines' observations of a Windows host: the
-// names come from the engines' ASTs, never from Parse. A changed declaration or a removed command
-// is written only with -update-oracle-changes; the differences are printed either way.
+// writeDeclared writes the declarations from the engines' observations of a Windows host (see
+// mergeDeclared) to testdata/. The differences are printed either way.
 func writeDeclared(t *testing.T, ens []struct{ key, exe string }, corpus []string,
 	old []declared, obs [][]observation,
 ) {
 	t.Helper()
-	if len(ens) != 2 || slices.ContainsFunc(obs, func(o []observation) bool { return o == nil }) {
-		t.Fatal("-update-oracle needs a run of both engines on Windows")
+	keys := make([]string, len(ens))
+	for i, en := range ens {
+		keys[i] = en.key
 	}
-	prev := map[string]declared{}
-	for _, d := range old {
-		prev[d.Cmd] = d
-	}
-	out := make([]declared, len(corpus))
-	var changes []string
-	for id, text := range corpus {
-		var d declared
-		for i, en := range ens {
-			ob := obs[i][id]
-			if len(ob.missing) > 0 {
-				t.Fatalf("case %q on %s: %q", text, en.key, ob.missing)
-			}
-			if ob.rejects {
-				d.Rejects = append(d.Rejects, en.key)
-			}
-			// The names of 7's AST; of a script it rejects, only a documented one's recovered AST
-			// is compared.
-			if en.key == "7" {
-				r := d.Rejects
-				d = declared{Cmd: text, Calls: []string{}}
-				if !ob.rejects || documentedParseErrors[text] != "" {
-					d = ob.declaredBy(text)
-				}
-				d.Rejects = r
-			}
-		}
-		p, had := prev[text]
-		d.DynamicUnix = p.DynamicUnix
-		if had && !sameDeclared(p, d) {
-			changes = append(
-				changes,
-				fmt.Sprintf("changed %s\n   to %s", mustJSON(t, p), mustJSON(t, d)),
-			)
-		}
-		out[id] = d
-	}
-	for _, p := range old {
-		if !slices.Contains(corpus, p.Cmd) {
-			changes = append(changes, "removed "+mustJSON(t, p))
-		}
-	}
+	out, changes, err := mergeDeclared(keys, corpus, old, obs, *updateChanges)
 	for _, c := range changes {
 		t.Log(c)
 	}
-	if len(changes) > 0 && !*updateChanges {
-		t.Fatalf("%d declarations would change or go: review them and rerun with "+
-			"-update-oracle-changes", len(changes))
+	if err != nil {
+		t.Fatal(err)
 	}
 	b, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
@@ -1566,16 +1524,73 @@ func writeDeclared(t *testing.T, ens []struct{ key, exe string }, corpus []strin
 	}
 }
 
+// mergeDeclared returns the declarations of corpus from the observations of the engines keys
+// (obs[i] for keys[i], one per corpus command): the names come from the engines' ASTs, never from
+// Parse, and a hand-written DynamicUnix is kept. It also returns the differences from old: each
+// changed declaration and each removed command. Unless rewrite is set, a difference is an error
+// (-update-oracle-changes); so is anything but a run of both engines, or a case with missing
+// evidence.
+func mergeDeclared(keys, corpus []string, old []declared, obs [][]observation, rewrite bool,
+) ([]declared, []string, error) {
+	if len(keys) != 2 || len(obs) != len(keys) ||
+		slices.ContainsFunc(obs, func(o []observation) bool { return o == nil }) {
+		return nil, nil, errors.New("-update-oracle needs a run of both engines on Windows")
+	}
+	prev := map[string]declared{}
+	for _, d := range old {
+		prev[d.Cmd] = d
+	}
+	out := make([]declared, len(corpus))
+	var changes []string
+	for id, text := range corpus {
+		var d declared
+		for i, key := range keys {
+			ob := obs[i][id]
+			if len(ob.missing) > 0 {
+				return nil, nil, fmt.Errorf("case %q on %s: %q", text, key, ob.missing)
+			}
+			if ob.rejects {
+				d.Rejects = append(d.Rejects, key)
+			}
+			// The names of 7's AST; of a script it rejects, only a documented one's recovered AST
+			// is compared.
+			if key == "7" {
+				r := d.Rejects
+				d = declared{Cmd: text, Calls: []string{}}
+				if !ob.rejects || documentedParseErrors[text] != "" {
+					d = ob.declaredBy(text)
+				}
+				d.Rejects = r
+			}
+		}
+		p, had := prev[text]
+		d.DynamicUnix = p.DynamicUnix
+		if had && !sameDeclared(p, d) {
+			changes = append(changes, fmt.Sprintf("changed %s\n   to %s", toJSON(p), toJSON(d)))
+		}
+		out[id] = d
+	}
+	for _, p := range old {
+		if !slices.Contains(corpus, p.Cmd) {
+			changes = append(changes, "removed "+toJSON(p))
+		}
+	}
+	if len(changes) > 0 && !rewrite {
+		return nil, changes, fmt.Errorf("%d declarations would change or go: review them and "+
+			"rerun with -update-oracle-changes", len(changes))
+	}
+	return out, changes, nil
+}
+
 func sameDeclared(a, b declared) bool {
 	return a.Cmd == b.Cmd && slices.Equal(a.Calls, b.Calls) && slices.Equal(a.Skipped, b.Skipped) &&
 		slices.Equal(a.Nested, b.Nested) && slices.Equal(a.Rejects, b.Rejects)
 }
 
-func mustJSON(t *testing.T, v any) string {
-	t.Helper()
-	b, err := json.Marshal(v)
+func toJSON(d declared) string {
+	b, err := json.Marshal(d)
 	if err != nil {
-		t.Fatal(err)
+		panic(err) // a declared always marshals
 	}
 	return string(b)
 }
@@ -1702,4 +1717,178 @@ func untabled(cmdlet, param string) string {
 		return "a comparison parameter set without -FilterScript"
 	}
 	return ""
+}
+
+// undecidedOutput is the output testdata/oracle.ps1 writes for the one case
+// `iex '1 | ForEach-Object -Process:{ gh pr merge 7 } --'`, with the nested gh's ctx as CTX. The
+// static binder rejects the `--`, and the command rebuilt without it finds the block only as the
+// argument of `-Process:`, not as an element, so Get-Context reports `unknown:binding`.
+const undecidedOutput = `{"version":"7.6.5","edition":"Core","languageMode":"FullLanguage",
+"nativeArgumentPassing":"Standard","home":"","modules":[],
+"cases":[{"id":0,"errors":[],
+"commands":[{"name":"iex","end":54,"ctx":"plain","elements":[
+ {"k":"str","t":"iex","ast":"StringConstantExpressionAst","v":"iex","q":"BareWord"},
+ {"k":"str","t":"'1 | ForEach-Object -Process:{ gh pr merge 7 } --'",
+  "ast":"StringConstantExpressionAst",
+  "v":"1 | ForEach-Object -Process:{ gh pr merge 7 } --","q":"SingleQuoted"}],
+ "eligible":false}],
+"nested":[
+ {"name":"ForEach-Object","ctx":"plain","elements":[
+  {"k":"str","t":"ForEach-Object","ast":"StringConstantExpressionAst","v":"ForEach-Object",
+   "q":"BareWord"},
+  {"k":"param","t":"-Process:{ gh pr merge 7 }","ast":"CommandParameterAst",
+   "prefix":"-Process:",
+   "arg":{"k":"block","t":"{ gh pr merge 7 }","ast":"ScriptBlockExpressionAst"}},
+  {"k":"param","t":"--","ast":"CommandParameterAst"}]},
+ {"name":"gh","ctx":"CTX","elements":[
+  {"k":"str","t":"gh","ast":"StringConstantExpressionAst","v":"gh","q":"BareWord"},
+  {"k":"str","t":"pr","ast":"StringConstantExpressionAst","v":"pr","q":"BareWord"},
+  {"k":"str","t":"merge","ast":"StringConstantExpressionAst","v":"merge","q":"BareWord"},
+  {"k":"str","t":"7","ast":"ConstantExpressionAst","v":"7","q":"Constant"}]}]}],
+"resolved":{"iex":"cmdlet:Invoke-Expression","ForEach-Object":"cmdlet:ForEach-Object"},
+"aliasesOf":{},"params":{},"pBinding":"AmbiguousParameter,Microsoft.PowerShell.Commands.RemoveItemCommand",
+"stubRuns":0,"stubSame":{}}`
+
+// TestVerdictNestedUndecided judges the engine output of a nested script whose position the
+// engine's binding cannot decide: no corpus case can hold it, since it is always inconclusive.
+// The output goes through the validation and decoding of runOracle. The same output with the
+// position decided passes, so only the undecided position makes the case inconclusive.
+func TestVerdictNestedUndecided(t *testing.T) {
+	const text = `iex '1 | ForEach-Object -Process:{ gh pr merge 7 } --'`
+	judgeOutput := func(ctx string, nested []string) (Verdict, []string) {
+		t.Helper()
+		b := []byte(strings.Replace(undecidedOutput, "CTX", ctx, 1))
+		if err := validateOutput(b, nil, nil); err != nil {
+			t.Fatal(err)
+		}
+		var o oracleOut
+		if err := json.Unmarshal(b, &o); err != nil {
+			t.Fatal(err)
+		}
+		d := &declared{Cmd: text, Calls: []string{"iex"}, Nested: nested}
+		e := evidence{
+			text: text, decl: d, engine: &o, oc: &o.Cases[0],
+			r: Parse(text, "", o.Home, Unix),
+		}
+		var st stats
+		return verdict(e, observe(e, &st), &st)
+	}
+
+	v, notes := judgeOutput("unknown:binding", []string{"ForEach-Object"})
+	if v != Inconclusive ||
+		!slices.Contains(notes, "nested position not decided: unknown:binding") {
+		t.Errorf("undecided nested position: %s %q, want inconclusive", v, notes)
+	}
+	if v, notes := judgeOutput("plain", []string{"ForEach-Object", "gh"}); v != Pass {
+		t.Errorf("decided nested position: %s %q, want pass", v, notes)
+	}
+}
+
+// TestMergeDeclared covers the declaration update of -update-oracle and -update-oracle-changes:
+// new commands are added, a changed (even only in its rejecting engines) or removed declaration
+// is a difference that is written only with rewrite, a hand-written dynamicUnix is kept, and a
+// run that is not both engines' or that misses evidence writes nothing.
+func TestMergeDeclared(t *testing.T) {
+	keys := []string{"5.1", "7"}
+	ob := func(calls ...string) observation { return observation{calls: calls} }
+	rejects := observation{rejects: true}
+	tests := []struct {
+		name    string
+		corpus  []string
+		old     []declared
+		obs     [][]observation // per engine of keys, per corpus command
+		changes []string
+		want    string // the JSON written with rewrite
+		plain   bool   // no difference: written without rewrite too
+	}{
+		{
+			name:   "new commands only",
+			corpus: []string{"a", "new; x"},
+			old:    []declared{{Cmd: "a", Calls: []string{"a"}, DynamicUnix: []string{"*.md"}}},
+			obs:    [][]observation{{ob("a"), rejects}, {ob("a"), ob("new", "x")}},
+			want: `[{"cmd":"a","calls":["a"],"dynamicUnix":["*.md"]},` +
+				`{"cmd":"new; x","calls":["new","x"],"rejects":["5.1"]}]`,
+			plain: true,
+		},
+		{
+			name:   "calls changed, dynamicUnix kept",
+			corpus: []string{"b"},
+			old:    []declared{{Cmd: "b", Calls: []string{"b"}, DynamicUnix: []string{"*.md"}}},
+			obs:    [][]observation{{ob("b", "c")}, {ob("b", "c")}},
+			changes: []string{
+				`changed {"cmd":"b","calls":["b"],"dynamicUnix":["*.md"]}` + "\n" +
+					`   to {"cmd":"b","calls":["b","c"],"dynamicUnix":["*.md"]}`,
+			},
+			want: `[{"cmd":"b","calls":["b","c"],"dynamicUnix":["*.md"]}]`,
+		},
+		{
+			name:   "rejecting engines changed only",
+			corpus: []string{"r"},
+			old:    []declared{{Cmd: "r", Calls: []string{"r"}}},
+			obs:    [][]observation{{rejects}, {ob("r")}},
+			changes: []string{
+				`changed {"cmd":"r","calls":["r"]}` + "\n" +
+					`   to {"cmd":"r","calls":["r"],"rejects":["5.1"]}`,
+			},
+			want: `[{"cmd":"r","calls":["r"],"rejects":["5.1"]}]`,
+		},
+		{
+			name:   "command removed only",
+			corpus: []string{"a"},
+			old: []declared{
+				{Cmd: "a", Calls: []string{"a"}},
+				{Cmd: "gone", Calls: []string{"gone"}},
+			},
+			obs:     [][]observation{{ob("a")}, {ob("a")}},
+			changes: []string{`removed {"cmd":"gone","calls":["gone"]}`},
+			want:    `[{"cmd":"a","calls":["a"]}]`,
+		},
+		{
+			name:   "undocumented rejection by 7",
+			corpus: []string{"x"},
+			obs:    [][]observation{{rejects}, {{rejects: true, calls: []string{"x"}}}},
+			want:   `[{"cmd":"x","calls":[],"rejects":["5.1","7"]}]`,
+			plain:  true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, rewrite := range []bool{false, true} {
+				got, changes, err := mergeDeclared(keys, tt.corpus, tt.old, tt.obs, rewrite)
+				if !slices.Equal(changes, tt.changes) {
+					t.Errorf("rewrite %v: changes %q, want %q", rewrite, changes, tt.changes)
+				}
+				if !rewrite && !tt.plain {
+					if err == nil || got != nil {
+						t.Errorf("without rewrite: got %+v, err %v; want an error and nothing "+
+							"to write", got, err)
+					}
+					continue
+				}
+				if err != nil {
+					t.Fatalf("rewrite %v: %v", rewrite, err)
+				}
+				b, err := json.Marshal(got)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(b) != tt.want {
+					t.Errorf("rewrite %v: got %s, want %s", rewrite, b, tt.want)
+				}
+			}
+		})
+	}
+
+	corpus := []string{"a"}
+	for name, obs := range map[string][][]observation{
+		"one engine":           {{ob("a")}},
+		"engine without a run": {{ob("a")}, nil},
+		"missing evidence":     {{ob("a")}, {{missing: []string{"x"}}}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got, _, err := mergeDeclared(keys[:len(obs)], corpus, nil, obs, true); err == nil {
+				t.Errorf("got %+v, want an error", got)
+			}
+		})
+	}
 }
