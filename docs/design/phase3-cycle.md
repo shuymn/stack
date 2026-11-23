@@ -773,12 +773,11 @@ owner, not of the repository.
 4. **chore: retire the kaizen cycle** (last) — repository deletions only: `scripts/kaizen/{cycle,observe,improve,
    apply,ready}.py`, `watch.json`, `writing.md`, `public-check`, `scripts/kaizen/__pycache__` if tracked,
    `tests/test_kaizen_{apply,cycle,improve,public_check}.py`, the parts of `tests/kaizen_fakes.py` no remaining test
-   uses, `.claude/kaizen-managed`, `home/dot_claude/hooks/executable_attention-budget.py`,
-   `home/dot_claude/attention/create_budget.json` and the global `home/dot_claude/attention/items.json` (no reader
+   uses, `.claude/kaizen-managed` and the global `home/dot_claude/attention/items.json` (no reader
    since Phase 2); the deleted paths leave `automation.yml`; `docs/kaizen.md` trimmed (§5). `signals.py`, `probe/`
    and their tests stay. Nothing is added to `home/.chezmoiremove`: deleting a source file leaves its live copy in
-   place, and the live copies go on the post-retirement list below. After at least one week of daily `stack-cycle`
-   runs with P1–P6 holding and P5 observed once. Done when P7 holds.
+   place, and the live copies go on the post-retirement list below. P1–P6 are the `stack-cycle` cutover checks;
+   a scheduled run recorded one real improve attempt (P5). Done when P7 holds.
 
 **Cutover order** (owner, on the real machine; this is the one order, §9 D2 refers to it). Git order alone does not
 order these, because `make switch` loads launchd jobs while `make apply` writes the private terms and the
@@ -803,9 +802,8 @@ statusline (`dotfiles:Makefile:80,113`):
 the exact paths with sizes and the owner decides what to delete (§9 D3); nothing is deleted before that:
 - legacy state: `~/.claude/kaizen/` (including `runs/`, `proposals/`, `probe/` results and `private-terms`),
   `~/.local/state/kaizen-apply/` with its backups, `~/.local/state/kaizen-improve/`;
-- live copies of retired sources: `~/.claude/hooks/attention-budget.py`, `~/.claude/attention/budget.json`,
-  `~/.claude/attention/items.json` (removable later with `home/.chezmoiremove` entries or by hand, as the owner
-  decides).
+- the live copy of the retired global items, `~/.claude/attention/items.json` (removable later with a
+  `home/.chezmoiremove` entry or by hand, as the owner decides).
 
 ## 7. Test Strategy
 
