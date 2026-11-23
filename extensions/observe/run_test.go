@@ -214,10 +214,22 @@ func TestLatestFileRun(t *testing.T) {
 func TestDeadline(t *testing.T) {
 	t.Parallel()
 	const budget, reserve = 3 * time.Second, time.Second
-	// gh version runs before replay: where replay runs to the deadline, the budget leaves the fake
-	// gh and stack time to start on a loaded machine.
-	const replayBudget = 10 * time.Second
-	slack := 3 * time.Second
+	// Where replay runs to the deadline, three fakes start one after another before it (gh auth
+	// status, gh --version, stack --version --json), each a fresh copy of the test binary; under
+	// the full suite one such start was measured at 2-3 s on macOS, and a 9 s work window was used
+	// up before replay began. The longer budget leaves them that time; the run still lasts until
+	// the deadline, which is what proves the order.
+	const replayBudget = 30 * time.Second
+	// hang is how long a hung fake sleeps. A run that waited for it instead of cutting it at the
+	// deadline would last at least that long: halfway between the budget and hang bounds the run
+	// far from both.
+	const hang = time.Minute
+	within := func(t *testing.T, took, budget time.Duration) {
+		t.Helper()
+		if limit := (budget + hang) / 2; took >= limit {
+			t.Fatalf("took %s, want the %s budget kept, under %s", took, budget, limit)
+		}
+	}
 	t.Run("gh and later sources", func(t *testing.T) {
 		t.Parallel()
 		f := newFixture(t)
@@ -225,7 +237,7 @@ func TestDeadline(t *testing.T) {
 		f.calls("r", bashCall(hourAgo, f.cwd, cmd("b"), guardDenySecrets))
 		f.fake(
 			"gh",
-			proctest.Response{Args: []string{"auth", "status"}, Sleep: time.Minute},
+			proctest.Response{Args: []string{"auth", "status"}, Sleep: hang},
 			ghVersion,
 		)
 		f.fake(
@@ -235,9 +247,7 @@ func TestDeadline(t *testing.T) {
 		)
 		start := time.Now()
 		resp, l := f.run()
-		if took := time.Since(start); took > budget+slack {
-			t.Fatalf("took %s", took)
-		}
+		within(t, time.Since(start), budget)
 		if l.Sources["gh"].Status != srcTimeout || l.Sources["replay"].Status != srcTimeout {
 			t.Errorf("gh %+v replay %+v, want timeout", l.Sources["gh"], l.Sources["replay"])
 		}
@@ -248,24 +258,19 @@ func TestDeadline(t *testing.T) {
 			t.Errorf("status = %q", resp.Status)
 		}
 	})
-	// Replay runs to the deadline, so gh version is read before it. Before replay, three fakes
-	// start one after another (gh auth status, gh --version, stack --version --json), each a fresh
-	// copy of the test binary; under the full suite one such start was measured at 2-3 s on macOS,
-	// enough to use up replayBudget's 9 s work window. The longer budget leaves them that time; the
-	// test still lasts until the deadline, which is what proves the order.
-	const ghFirstBudget = 30 * time.Second
+	// Replay runs to the deadline, so gh version is read before it.
 	t.Run("gh version before replay", func(t *testing.T) {
 		t.Parallel()
 		f := newFixture(t)
-		f.opts.Budget, f.opts.Reserve = ghFirstBudget, reserve
+		f.opts.Budget, f.opts.Reserve = replayBudget, reserve
 		f.calls("r", bashCall(hourAgo, f.cwd, cmd("b"), "ok"))
 		f.fake("gh", ghAuthOK, ghVersion)
 		f.fake(
 			"stack",
 			stackModel,
-			proctest.Response{Args: []string{"hook", "claude", "pre-tool-use"}, Sleep: time.Minute},
+			proctest.Response{Args: []string{"hook", "claude", "pre-tool-use"}, Sleep: hang},
 		)
-		f.opts.replayTimeout = time.Minute
+		f.opts.replayTimeout = hang
 		resp, l := f.run()
 		if l.Sources["replay"].Status != srcTimeout {
 			t.Errorf("replay %+v, want timeout", l.Sources["replay"])
@@ -291,14 +296,12 @@ func TestDeadline(t *testing.T) {
 		f.fake(
 			"stack",
 			stackModel,
-			proctest.Response{Args: []string{"hook", "claude", "pre-tool-use"}, Sleep: time.Minute},
+			proctest.Response{Args: []string{"hook", "claude", "pre-tool-use"}, Sleep: hang},
 		)
-		f.opts.replayTimeout = time.Minute
+		f.opts.replayTimeout = hang
 		start := time.Now()
 		resp, l := f.run()
-		if took := time.Since(start); took > replayBudget+slack {
-			t.Fatalf("took %s", took)
-		}
+		within(t, time.Since(start), replayBudget)
 		if l.Replay != (ReplayTotals{TruncatedCap: 2, TruncatedTime: 1}) {
 			t.Errorf("replay = %+v", l.Replay)
 		}
