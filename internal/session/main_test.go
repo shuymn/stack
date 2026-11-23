@@ -150,11 +150,18 @@ func (f *fixture) start(in hookio.Input) (string, []error) {
 		f.t.Fatalf("hook output %q: wrong event", out)
 	}
 	ctx := doc.HookSpecificOutput.AdditionalContext
-	if n := len(utf16.Encode([]rune(ctx))); n > Budget { // what Claude Code measures
-		f.t.Fatalf("context is %d UTF-16 units, over %d", n, Budget)
+	if n := units(ctx); n > contractLimit {
+		f.t.Fatalf("context is %d UTF-16 units, over %d", n, contractLimit)
 	}
 	return ctx, errs
 }
+
+// contractLimit is the compact budget the contract states (phase2-core.md §4.2 step 5), written
+// out so a change to Budget fails the tests.
+const contractLimit = 9500
+
+// units is the length of s in UTF-16 code units, what Claude Code measures.
+func units(s string) int { return len(utf16.Encode([]rune(s))) }
 
 func compactIn(id string) hookio.Input {
 	return hookio.Input{SessionID: id, Source: "compact", HookEventName: "SessionStart"}

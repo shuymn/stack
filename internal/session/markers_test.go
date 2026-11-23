@@ -2,7 +2,9 @@ package session
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,6 +15,7 @@ import (
 	"github.com/shuymn/stack/internal/config"
 	"github.com/shuymn/stack/internal/hookio"
 	"github.com/shuymn/stack/internal/paths"
+	"github.com/shuymn/stack/internal/proc"
 	"github.com/shuymn/stack/internal/proc/proctest"
 )
 
@@ -49,6 +52,23 @@ func installBoardAt(t *testing.T, kitDir string, resp proctest.Response) string 
 	}
 	return proctest.InstallAt(t, bin, "board",
 		proctest.Scenario{Responses: []proctest.Response{resp}})
+}
+
+// cancelRunner answers every run with "A BOARD" and ends the hook's context, as if that run had
+// used up the board deadline.
+type cancelRunner struct {
+	cancel context.CancelFunc
+	cmds   []proc.Cmd
+}
+
+func (r *cancelRunner) Run(_ context.Context, c proc.Cmd) (proc.Result, error) {
+	r.cmds = append(r.cmds, c)
+	r.cancel()
+	return proc.Result{Stdout: []byte("A BOARD")}, nil
+}
+
+func (r *cancelRunner) Stream(context.Context, proc.Cmd, func(io.Reader) error) error {
+	return errors.New("unexpected stream")
 }
 
 // TestRestoreMarkers covers the parts and markers of compact restore (phase2-core.md §4.2 step 6)
@@ -118,21 +138,24 @@ func TestRestoreMarkers(t *testing.T) {
 		f := newFixture(t)
 		f.open("a", map[string]string{"state.md": "A STATE"})
 		f.open("b", map[string]string{"state.md": "B STATE"})
-		installBoardAt(t, f.kitDir("a"), proctest.Response{Sleep: time.Minute})
-		late := installBoardAt(t, f.kitDir("b"), proctest.Response{Stdout: "B BOARD"})
-		// The first board outlives the hook's context, so its deadline has passed at the second.
-		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+		first := installBoardAt(t, f.kitDir("a"), proctest.Response{Stdout: "A BOARD"})
+		installBoardAt(t, f.kitDir("b"), proctest.Response{Stdout: "B BOARD"})
+		// The first board's run ends the hook's context, so the deadline has passed at the second.
+		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		f.ctx = ctx
+		runner := &cancelRunner{cancel: cancel}
+		f.params = func(p *Params) { p.Runner = runner }
 		got, _ := f.start(compactIn(testID))
-		if !strings.HasSuffix(
-			got,
-			"B STATE\n</orchestration-state>\n\n[board skipped: deadline]\n",
-		) {
-			t.Fatalf("context = %q", got)
+		want := "A STATE\n</orchestration-state>\n\n<orchestration-board path=" +
+			strconv.Quote(first) + ">\nA BOARD\n</orchestration-board>\n\n" +
+			stateBlock(filepath.Join(f.kitDir("b"), "state.md"), "B STATE") +
+			"\n\n[board skipped: deadline]\n"
+		if !strings.HasSuffix(got, want) {
+			t.Fatalf("context = %q\nwant suffix %q", got, want)
 		}
-		if calls := proctest.Calls(t, late); len(calls) != 0 {
-			t.Fatalf("board launched after the deadline: %+v", calls)
+		if len(runner.cmds) != 1 || runner.cmds[0].Name != first {
+			t.Fatalf("runs = %+v, want only the first board", runner.cmds)
 		}
 	})
 
@@ -223,6 +246,23 @@ func TestCompactEntryMarkers(t *testing.T) {
 		}
 		if calls := proctest.Calls(t, demo); len(calls) != 0 {
 			t.Fatalf("extension called: %+v", calls)
+		}
+	})
+
+	t.Run("entry context omitted: context limit", func(t *testing.T) {
+		bin := pathDir(t)
+		fakeEntry(t, bin, "demo", passWith("ENTRY CTX"))
+		f := newFixture(t)
+		f.cfg.Stages.Entry = []string{"demo"}
+		f.open("demo", map[string]string{"state.md": "S"})
+		state := stateBlock(filepath.Join(f.kitDir("demo"), "state.md"), "S")
+		omitted := "[entry context omitted: context limit: demo]"
+		ctx, _ := f.start(rulesLeaving(f, cost(omitted), state))
+		if !strings.HasSuffix(ctx, "</worker-rules>\n\n"+state+"\n\n"+omitted+"\n") {
+			t.Fatalf("context = %q\nwant suffix %q", squash(ctx), omitted)
+		}
+		if f.stderr.Len() != 0 {
+			t.Fatalf("stderr = %q, want nothing: the marker fits", f.stderr.String())
 		}
 	})
 

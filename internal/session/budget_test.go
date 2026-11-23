@@ -48,8 +48,12 @@ func TestBudgetUTF16(t *testing.T) {
 	in := compactIn(testID)
 	in.TranscriptPath = f.transcript(userLine(marker + "\n" + strings.Repeat("😀", 5200) +
 		"\nBRIEF TAIL"))
-	ctx, _ := f.start(in) // fails when over Budget UTF-16 units
+	ctx, _ := f.start(in) // fails when over 9,500 UTF-16 units
 	mustContain(t, ctx, "RULES", " chars]\n</original-brief>")
+	// The cut brief fills the budget to within a surrogate pair.
+	if n := units(ctx); n < contractLimit-1 {
+		t.Fatalf("context is %d UTF-16 units; the cut brief should fill %d", n, contractLimit)
+	}
 	if presence(ctx, filepath.Join(f.kitDir("demo"), "state.md")) == "" {
 		t.Fatal("kit state disappeared")
 	}
