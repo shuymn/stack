@@ -44,7 +44,7 @@
               "message_id": "m005",
               "role": "user",
               "created_at": "2026-01-08T09:00:21.000Z",
-              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r6\",\"text\":\"変数は必ずクォートして、shellcheck も通して\"}"
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r6\",\"text\":\"シェルスクリプトを変えたら毎回、変数展開は必ずクォートして、shellcheck も実行して\"}"
             },
             {
               "message_id": "m006",
@@ -176,19 +176,19 @@
               "message_id": "m027",
               "role": "user",
               "created_at": "2026-01-08T09:01:28.000Z",
-              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o29\",\"text\":\"Where is the runbook?\"}"
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o29\",\"text\":\"Rename the cron job label.\"}"
             },
             {
               "message_id": "m028",
               "role": "assistant",
               "created_at": "2026-01-08T09:01:29.000Z",
-              "payload_json": "{\"text\":\"The runbook is linked from the wiki.\"}"
+              "payload_json": "{\"text\":\"The job label is renamed.\"}"
             },
             {
               "message_id": "m029",
               "role": "user",
               "created_at": "2026-01-08T09:01:30.000Z",
-              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r29\",\"text\":\"https://example.com/runbook/17\"}"
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r29\",\"text\":\"https://example.com/recipes/17\"}"
             }
           ]
         }
@@ -222,7 +222,7 @@
         "kind": "drift",
         "lang": "ja",
         "undo": true,
-        "why": "undoes the delimiter change the owner ruled out; the required rule is to keep the delimiter, which no line covers: the CSV line governs the column order, another object of the same kind"
+        "why": "undoes the delimiter change the owner ruled out; the required rule is to keep the delimiter, which no line covers: p1's CSV line governs the column order, another object of the same kind"
       },
       "held-b02": {
         "group": "pair-b2",
@@ -279,7 +279,7 @@
         "kind": "drift",
         "lang": "en",
         "undo": true,
-        "why": "undoes the migration edit the owner ruled out; the instruction it broke is covered by 'Never edit a migration that has already been applied; add a new migration instead.', and the seed-only scope is task-local beside it"
+        "why": "undoes the edit of migration 0042, already applied, which the owner ruled out; the instruction it broke is covered by 'Never edit a migration that has already been applied; add a new migration instead.', and the seed-only scope is task-local beside it"
       },
       "held-b09": {
         "group": "pair-b1",
@@ -302,7 +302,7 @@
         "hard": true,
         "kind": "correction",
         "lang": "ja",
-        "why": "a standing rule to record the seed in the experiment log, which no line covers: the seed line asks a different action, fixing it"
+        "why": "a standing rule to record the seed in the experiment log for every experiment, which no line covers: p3's seed line asks a different action, fixing it"
       },
       "held-b12": {
         "dup": "new",
@@ -393,7 +393,7 @@
       "held-b26": {
         "kind": "approval",
         "lang": "ja",
-        "why": "acknowledges a result"
+        "why": "accepts the change"
       },
       "held-b27": {
         "kind": "approval",
@@ -409,17 +409,17 @@
       "held-b29": {
         "kind": "noise",
         "lang": "en",
-        "why": "a lone hash"
+        "why": "a lone hash, unrelated to the font change"
       },
       "held-b30": {
         "kind": "noise",
         "lang": "en",
-        "why": "a lone link"
+        "why": "a lone link, unrelated to the label rename"
       },
       "held-b31": {
         "kind": "noise",
         "lang": "en",
-        "why": "a bare attachment"
+        "why": "a bare attachment, unrelated to the comment"
       },
       "held-b32": {
         "kind": "noise",
@@ -435,14 +435,14 @@
         "id": "held-b01",
         "signal": "owner-reply",
         "where": "p1/s.jsonl:3",
-        "excerpt": "やっぱり元に戻して",
+        "excerpt": "区切り文字の変更は元に戻して",
         "ts": "2026-01-08T09:00:03Z"
       },
       {
         "id": "held-b02",
         "signal": "owner-reply",
         "where": "p1/s.jsonl:6",
-        "excerpt": "やっぱり元に戻して",
+        "excerpt": "区切り文字の変更は元に戻して",
         "ts": "2026-01-08T09:00:06Z"
       },
       {
@@ -477,21 +477,21 @@
         "id": "held-b07",
         "signal": "owner-reply",
         "where": "t3:th:heldout-b:p2:r6",
-        "excerpt": "変数は必ずクォートして、shellcheck も通して",
+        "excerpt": "シェルスクリプトを変えたら毎回、変数展開は必ずクォートして、shellcheck も実行して",
         "ts": "2026-01-08T09:00:21Z"
       },
       {
         "id": "held-b08",
         "signal": "owner-reply",
         "where": "p1/s.jsonl:15",
-        "excerpt": "put it back the way it was",
+        "excerpt": "put migration 0042 back the way it was",
         "ts": "2026-01-08T09:00:24Z"
       },
       {
         "id": "held-b09",
         "signal": "owner-reply",
         "where": "p1/s.jsonl:18",
-        "excerpt": "put it back the way it was",
+        "excerpt": "put migration 0042 back the way it was",
         "ts": "2026-01-08T09:00:27Z"
       },
       {
@@ -505,7 +505,7 @@
         "id": "held-b11",
         "signal": "owner-reply",
         "where": "p3/s.jsonl:6",
-        "excerpt": "使ったシードは実験ログにも残して",
+        "excerpt": "実験ごとに、使ったシードを必ず実験ログに記録して",
         "ts": "2026-01-08T09:00:33Z"
       },
       {
@@ -589,7 +589,7 @@
         "id": "held-b23",
         "signal": "owner-reply",
         "where": "p1/s.jsonl:27",
-        "excerpt": "no, that's fine as is, merge it",
+        "excerpt": "no worries about the two seconds, go ahead",
         "ts": "2026-01-08T09:01:09Z"
       },
       {
@@ -610,7 +610,7 @@
         "id": "held-b26",
         "signal": "owner-reply",
         "where": "p1/s.jsonl:30",
-        "excerpt": "OK、マージした",
+        "excerpt": "その言い回しで大丈夫",
         "ts": "2026-01-08T09:01:18Z"
       },
       {
@@ -638,14 +638,14 @@
         "id": "held-b30",
         "signal": "owner-reply",
         "where": "t3:th:heldout-b:p2:r29",
-        "excerpt": "https://example.com/runbook/17",
+        "excerpt": "https://example.com/recipes/17",
         "ts": "2026-01-08T09:01:30Z"
       },
       {
         "id": "held-b31",
         "signal": "owner-reply",
         "where": "p3/s.jsonl:30",
-        "excerpt": "[screenshot]",
+        "excerpt": "[sticker attached]",
         "ts": "2026-01-08T09:01:33Z"
       },
       {
@@ -702,7 +702,7 @@
       {
         "cwd": "p1",
         "message": {
-          "content": "やっぱり元に戻して",
+          "content": "区切り文字の変更は元に戻して",
           "role": "user"
         },
         "origin": {
@@ -739,7 +739,7 @@
       {
         "cwd": "p1",
         "message": {
-          "content": "やっぱり元に戻して",
+          "content": "区切り文字の変更は元に戻して",
           "role": "user"
         },
         "origin": {
@@ -839,7 +839,7 @@
         "message": {
           "content": [
             {
-              "text": "I fixed the seed script and edited migration 0042 to add the missing column.",
+              "text": "I fixed the seed script and edited migration 0042, which is already applied in production, to add the missing column.",
               "type": "text"
             }
           ]
@@ -850,7 +850,7 @@
       {
         "cwd": "p1",
         "message": {
-          "content": "put it back the way it was",
+          "content": "put migration 0042 back the way it was",
           "role": "user"
         },
         "origin": {
@@ -876,7 +876,7 @@
         "message": {
           "content": [
             {
-              "text": "I fixed the seed script and edited migration 0042 to add the missing column.",
+              "text": "I fixed the seed script and edited migration 0042, which is already applied in production, to add the missing column.",
               "type": "text"
             }
           ]
@@ -887,7 +887,7 @@
       {
         "cwd": "p1",
         "message": {
-          "content": "put it back the way it was",
+          "content": "put migration 0042 back the way it was",
           "role": "user"
         },
         "origin": {
@@ -973,7 +973,7 @@
       {
         "cwd": "p1",
         "message": {
-          "content": "Use the connection pool in the worker.",
+          "content": "Add an index on orders.created_at.",
           "role": "user"
         },
         "origin": {
@@ -987,7 +987,7 @@
         "message": {
           "content": [
             {
-              "text": "I switched the worker to the shared connection pool.",
+              "text": "I added the index; the migration takes about two seconds on a copy of production.",
               "type": "text"
             }
           ]
@@ -998,7 +998,7 @@
       {
         "cwd": "p1",
         "message": {
-          "content": "no, that's fine as is, merge it",
+          "content": "no worries about the two seconds, go ahead",
           "role": "user"
         },
         "origin": {
@@ -1010,7 +1010,7 @@
       {
         "cwd": "p1",
         "message": {
-          "content": "テストを流して。",
+          "content": "エラー画面の文言を直して。",
           "role": "user"
         },
         "origin": {
@@ -1024,7 +1024,7 @@
         "message": {
           "content": [
             {
-              "text": "全テストが通りました。",
+              "text": "文言を「再読み込みしてください」に変えました。",
               "type": "text"
             }
           ]
@@ -1035,7 +1035,7 @@
       {
         "cwd": "p1",
         "message": {
-          "content": "OK、マージした",
+          "content": "その言い回しで大丈夫",
           "role": "user"
         },
         "origin": {
@@ -1047,7 +1047,7 @@
       {
         "cwd": "p1",
         "message": {
-          "content": "Which commit added the column?",
+          "content": "Bump the font size on the settings page.",
           "role": "user"
         },
         "origin": {
@@ -1061,7 +1061,7 @@
         "message": {
           "content": [
             {
-              "text": "The commit before the release tag.",
+              "text": "The font size is now 16px.",
               "type": "text"
             }
           ]
@@ -1174,7 +1174,7 @@
         "message": {
           "content": [
             {
-              "text": "シードを 42 に固定して 3 本回しました。結果は表にまとめています。",
+              "text": "シードを 42 に固定して 3 本回しました。実験ログにはシードを書いていません。",
               "type": "text"
             }
           ]
@@ -1185,7 +1185,7 @@
       {
         "cwd": "p3",
         "message": {
-          "content": "使ったシードは実験ログにも残して",
+          "content": "実験ごとに、使ったシードを必ず実験ログに記録して",
           "role": "user"
         },
         "origin": {
@@ -1456,7 +1456,7 @@
       {
         "cwd": "p3",
         "message": {
-          "content": "Show the chart.",
+          "content": "Shorten the comment above the chart cell.",
           "role": "user"
         },
         "origin": {
@@ -1470,7 +1470,7 @@
         "message": {
           "content": [
             {
-              "text": "The chart is attached above.",
+              "text": "The comment is shorter now.",
               "type": "text"
             }
           ]
@@ -1481,7 +1481,7 @@
       {
         "cwd": "p3",
         "message": {
-          "content": "[screenshot]",
+          "content": "[sticker attached]",
           "role": "user"
         },
         "origin": {

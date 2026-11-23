@@ -508,13 +508,10 @@ func TestClassify(t *testing.T) {
 
 	t.Run("records the kind_ bodies and the dup_ union, refits and refreshes", func(t *testing.T) {
 		dir := copyClassify(t)
-		noiseReply := ""
-		for _, k := range slices.Sorted(maps.Keys(labels)) {
-			if labels[k].Kind == classify.LabelNoise && labels[k].Lang == "en" {
-				noiseReply = strings.SplitN(k, "\x00", 2)[1]
-				break
-			}
-		}
+		// A fit noise reply qualifies: its dup_ body joins the union, the heldout figures stay.
+		noiseReply := replies(t, dir, labels, SplitFit, func(l ItemLabel) bool {
+			return l.Kind == classify.LabelNoise && l.Lang == "en"
+		})[0]
 		f := &labelJev{labels: labels, qualify: map[string]bool{noiseReply: true}}
 		out, err := runClassify(t, dir, f)
 		if err != nil {

@@ -834,9 +834,9 @@ var calFixtures = []calFixture{
 				"p1",
 				"CSV エクスポートの文字化けだけ直して。区切り文字は変えないで。",
 				"文字化けを直し、区切り文字をタブに変えました。",
-				"やっぱり元に戻して",
+				"区切り文字の変更は元に戻して",
 				"undoes the delimiter change the owner ruled out; the required rule is to keep the " +
-					"delimiter, which no line covers: the CSV line governs the column order, another " +
+					"delimiter, which no line covers: p1's CSV line governs the column order, another " +
 					"object of the same kind",
 			},
 			{
@@ -850,7 +850,7 @@ var calFixtures = []calFixture{
 				"p1",
 				"CSV エクスポートの文字化けを直して、区切り文字もタブに変えて。",
 				"文字化けを直し、区切り文字をタブに変えました。",
-				"やっぱり元に戻して",
+				"区切り文字の変更は元に戻して",
 				"the same assistant and reply as held-b01, but the owner had asked for the delimiter " +
 					"change, so undoing it is a new task",
 			},
@@ -918,7 +918,7 @@ var calFixtures = []calFixture{
 				"p2",
 				"古いログを消すスクリプトを書いて。",
 				"cleanup.sh を書きました。変数はクォートしておらず、shellcheck も実行していません。",
-				"変数は必ずクォートして、shellcheck も通して",
+				"シェルスクリプトを変えたら毎回、変数展開は必ずクォートして、shellcheck も実行して",
 				"two reusable rules, each covered by its own line: 'Quote every variable expansion " +
 					"in shell scripts.' and 'Run shellcheck on every changed script.'",
 			},
@@ -932,11 +932,13 @@ var calFixtures = []calFixture{
 				true,
 				"p1",
 				"Fix the seed script only; do not edit the applied migrations.",
-				"I fixed the seed script and edited migration 0042 to add the missing column.",
-				"put it back the way it was",
-				"undoes the migration edit the owner ruled out; the instruction it broke is covered " +
-					"by 'Never edit a migration that has already been applied; add a new migration " +
-					"instead.', and the seed-only scope is task-local beside it",
+				"I fixed the seed script and edited migration 0042, which is already applied in " +
+					"production, to add the missing column.",
+				"put migration 0042 back the way it was",
+				"undoes the edit of migration 0042, already applied, which the owner ruled out; the " +
+					"instruction it broke is covered by 'Never edit a migration that has already been " +
+					"applied; add a new migration instead.', and the seed-only scope is task-local " +
+					"beside it",
 			},
 			{
 				"held-b09",
@@ -948,8 +950,9 @@ var calFixtures = []calFixture{
 				true,
 				"p1",
 				"Fix the seed script, and add the missing column to migration 0042.",
-				"I fixed the seed script and edited migration 0042 to add the missing column.",
-				"put it back the way it was",
+				"I fixed the seed script and edited migration 0042, which is already applied in " +
+					"production, to add the missing column.",
+				"put migration 0042 back the way it was",
 				"the same assistant and reply as held-b08, but the owner had asked for the migration " +
 					"edit, so undoing it is a new task",
 			},
@@ -978,10 +981,10 @@ var calFixtures = []calFixture{
 				true,
 				"p3",
 				"学習率の比較実験を回して。",
-				"シードを 42 に固定して 3 本回しました。結果は表にまとめています。",
-				"使ったシードは実験ログにも残して",
-				"a standing rule to record the seed in the experiment log, which no line covers: the " +
-					"seed line asks a different action, fixing it",
+				"シードを 42 に固定して 3 本回しました。実験ログにはシードを書いていません。",
+				"実験ごとに、使ったシードを必ず実験ログに記録して",
+				"a standing rule to record the seed in the experiment log for every experiment, which " +
+					"no line covers: p3's seed line asks a different action, fixing it",
 			},
 			{
 				"held-b12",
@@ -1093,9 +1096,9 @@ var calFixtures = []calFixture{
 			},
 			{
 				"held-b23", "en", app, "", "", false, true, "p1",
-				"Use the connection pool in the worker.",
-				"I switched the worker to the shared connection pool.",
-				"no, that's fine as is, merge it", "opens with no but accepts",
+				"Add an index on orders.created_at.",
+				"I added the index; the migration takes about two seconds on a copy of production.",
+				"no worries about the two seconds, go ahead", "opens with no but accepts",
 			},
 			{
 				"held-b24", "ja", app, "", "", false, false, "p2",
@@ -1109,8 +1112,8 @@ var calFixtures = []calFixture{
 			},
 			{
 				"held-b26", "ja", app, "", "", false, false, "p1",
-				"テストを流して。", "全テストが通りました。",
-				"OK、マージした", "acknowledges a result",
+				"エラー画面の文言を直して。", "文言を「再読み込みしてください」に変えました。",
+				"その言い回しで大丈夫", "accepts the change",
 			},
 			{
 				"held-b27", "ja", app, "", "", false, false, "p3",
@@ -1124,18 +1127,18 @@ var calFixtures = []calFixture{
 			},
 			{
 				"held-b29", "en", noi, "", "", false, false, "p1",
-				"Which commit added the column?", "The commit before the release tag.",
-				"9e4f1c0", "a lone hash",
+				"Bump the font size on the settings page.", "The font size is now 16px.",
+				"9e4f1c0", "a lone hash, unrelated to the font change",
 			},
 			{
 				"held-b30", "en", noi, "", "", false, false, "p2",
-				"Where is the runbook?", "The runbook is linked from the wiki.",
-				"https://example.com/runbook/17", "a lone link",
+				"Rename the cron job label.", "The job label is renamed.",
+				"https://example.com/recipes/17", "a lone link, unrelated to the label rename",
 			},
 			{
 				"held-b31", "en", noi, "", "", false, false, "p3",
-				"Show the chart.", "The chart is attached above.",
-				"[screenshot]", "a bare attachment",
+				"Shorten the comment above the chart cell.", "The comment is shorter now.",
+				"[sticker attached]", "a bare attachment, unrelated to the comment",
 			},
 			{
 				"held-b32", "ja", noi, "", "", false, false, "p1",
