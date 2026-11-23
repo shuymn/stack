@@ -130,8 +130,8 @@ func StateBlocksWarning(dir string) ([]Block, string) {
 			Body: strings.ReplaceAll(text(data), "\r\n", "\n"),
 		})
 	}
-	b, ok, warning := itemsBlock(root, dir)
-	if ok {
+	b, warning := itemsBlock(root, dir)
+	if b.Kind == KindItems {
 		blocks = append(blocks, b)
 	}
 	return blocks, warning
@@ -169,16 +169,17 @@ func missing(root *os.Root, rel string, err error) bool {
 }
 
 // itemsBlock lists the rules of `attention/items.json` for roles orchestrator and all. A missing or
-// malformed file, or one without such rules, yields no block; an unreadable one yields a marker.
-// The warning is `<path>: <reason>` when items of a readable file were ignored, else "".
-func itemsBlock(root *os.Root, dir string) (Block, bool, string) {
+// malformed file, or one without such rules, yields no block (a Block without Kind); an unreadable
+// one yields a marker. The warning is `<path>: <reason>` when items of a readable file were
+// ignored, else "".
+func itemsBlock(root *os.Root, dir string) (Block, string) {
 	path := filepath.Join(dir, ItemsFile)
 	data, err := ReadFile(root, ItemsFile)
 	if errors.Is(err, ErrMissing) {
-		return Block{}, false, ""
+		return Block{}, ""
 	}
 	if err != nil {
-		return unreadable(KindItems, path), true, ""
+		return unreadable(KindItems, path), ""
 	}
 	rules, reason := parseItems(data)
 	warning := ""
@@ -186,31 +187,32 @@ func itemsBlock(root *os.Root, dir string) (Block, bool, string) {
 		warning = path + ": " + reason
 	}
 	if len(rules) == 0 {
-		return Block{}, false, warning
+		return Block{}, warning
 	}
 	return Block{
 		Kind: KindItems,
 		Tag:  "orchestrator-attention-items",
 		Path: path,
 		Body: strings.Join(rules, "\n"),
-	}, true, warning
+	}, warning
 }
 
 // parseItems returns the rendered rules of an items file (`- ` and the rule) and why it ignored
 // items: `attention items ignored: <reason>` for a file that is not an object whose `items` is an
 // array, `<n> of <m> attention items ignored (first: item <i>: <reason>)` when elements are not
-// objects with a string `role` and `rule`, else "". The rules come from Go's JSON decoding (keys in
-// any letter case, the last of repeated keys); the reasons only describe what it rejected, from the
-// raw values, so a number is never converted for them.
+// objects with a string `role` and `rule`, else "".
+//
+// What renders is decided by Go's JSON decoding into typed fields, as it always was: keys match in
+// any letter case, the last of repeated keys wins, and a type error anywhere (an earlier
+// duplicate, a number past float64 in role or rule) rejects the file or element even when a later
+// duplicate decodes. The reasons only describe that rejection, from the raw members in file order,
+// so they never convert a number and never change what renders.
 func parseItems(data []byte) ([]string, string) {
 	var doc struct {
 		Items []json.RawMessage `json:"items"`
 	}
-	if err := json.Unmarshal(data, &doc); err != nil {
+	if err := json.Unmarshal(data, &doc); err != nil || doc.Items == nil {
 		return nil, "attention items ignored: " + fileReason(data, err)
-	}
-	if doc.Items == nil {
-		return nil, "attention items ignored: " + fileReason(data, nil)
 	}
 	var rules []string
 	ignored, first := 0, ""
@@ -229,7 +231,7 @@ func parseItems(data []byte) ([]string, string) {
 			continue
 		}
 		if ignored == 0 {
-			first = fmt.Sprintf("item %d: %s", i, itemReason(raw, err))
+			first = fmt.Sprintf("item %d: %s", i, itemReason(raw))
 		}
 		ignored++
 	}
@@ -243,9 +245,9 @@ func parseItems(data []byte) ([]string, string) {
 // fileReason says why a file yielded no items array: err is its decoding error, or nil when it
 // decoded with no `items` (missing, or null last).
 func fileReason(data []byte, err error) string {
-	var raw json.RawMessage
-	if verr := json.Unmarshal(data, &raw); verr != nil { // validates without converting numbers
-		return "invalid JSON: " + verr.Error()
+	// Unmarshal checks the whole input's syntax before decoding any of it.
+	if syntax := (*json.SyntaxError)(nil); errors.As(err, &syntax) {
+		return "invalid JSON: " + syntax.Error()
 	}
 	if k := kindOf(data); k != kindObject {
 		return "top level is " + k + ", not an object"
@@ -265,8 +267,8 @@ func fileReason(data []byte, err error) string {
 	return err.Error()
 }
 
-// itemReason says why an element is ignored; err is its decoding error, if any.
-func itemReason(raw json.RawMessage, err error) string {
+// itemReason says why an element is ignored.
+func itemReason(raw json.RawMessage) string {
 	if k := kindOf(raw); k != kindObject {
 		return k + ", not an object"
 	}
@@ -281,10 +283,9 @@ func itemReason(raw json.RawMessage, err error) string {
 			}
 		}
 	}
-	if err != nil {
-		return err.Error()
-	}
-	return "unreadable" // not reached: a decoded object with string role and rule is accepted
+	// Not reached: decoding an object whose role and rule values are all strings converts nothing,
+	// so it is accepted.
+	return "not an object with a string role and rule"
 }
 
 // memberValues returns, in file order, the raw values of the members of the JSON object obj whose

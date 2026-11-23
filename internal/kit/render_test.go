@@ -92,29 +92,6 @@ func TestRenderNewKit(t *testing.T) {
 	}
 }
 
-// TestRenderMalformedItemsFile covers L1: a file that is not an object whose `items` is an array
-// renders no block.
-func TestRenderMalformedItemsFile(t *testing.T) {
-	t.Parallel()
-	for _, content := range []string{
-		`[{"role": "all", "rule": "r"}]`,
-		`null`,
-		`{"items": {"role": "all", "rule": "r"}}`,
-		`{"items": "x"}`,
-		`{"items": null}`,
-		`{"items": 0, "ITEMS": [{"role": "all", "rule": "keep"}]}`,
-	} {
-		t.Run(content, func(t *testing.T) {
-			t.Parallel()
-			dir := newKit(t, map[string]string{"state.md": "s", "attention/items.json": content})
-			want := block("orchestration-state", filepath.Join(dir, "state.md"), "s") + "\n"
-			if got := render(t, Renderer{}, dir); got != want {
-				t.Fatalf("render =\n%s\nwant no items block:\n%s", got, want)
-			}
-		})
-	}
-}
-
 // TestRenderNorthOnly covers L2: a kit with NORTH.md and no state.md renders the NORTH.md block,
 // then the new-kit marker.
 func TestRenderNorthOnly(t *testing.T) {
@@ -128,7 +105,8 @@ func TestRenderNorthOnly(t *testing.T) {
 }
 
 // TestItemsDiagnostics covers the reasons of W1 and W2 in docs/design/kit-contracts.md §4: the
-// warning StateBlocksWarning returns for each way a readable items file loses items.
+// warning StateBlocksWarning returns for each way a readable items file loses items. For a file
+// rejected whole (W1), it also covers L1: the same blocks render no items block.
 func TestItemsDiagnostics(t *testing.T) {
 	t.Parallel()
 	const valid = `{"role": "all", "rule": "ok"}`
@@ -143,6 +121,10 @@ func TestItemsDiagnostics(t *testing.T) {
 		{"number", `123`, "attention items ignored: top level is a number, not an object"},
 		{"string", `"x"`, "attention items ignored: top level is a string, not an object"},
 		{"array", `[]`, "attention items ignored: top level is an array, not an object"},
+		{
+			"array of items", `[{"role": "all", "rule": "r"}]`,
+			"attention items ignored: top level is an array, not an object",
+		},
 		{"boolean", ` true`, "attention items ignored: top level is a boolean, not an object"},
 		{"items missing", `{}`, `attention items ignored: "items" is missing`},
 		{
@@ -155,6 +137,10 @@ func TestItemsDiagnostics(t *testing.T) {
 		},
 		{
 			"items object", `{"items": {}}`,
+			`attention items ignored: "items" is an object, not an array`,
+		},
+		{
+			"items one item object", `{"items": {"role": "all", "rule": "r"}}`,
 			`attention items ignored: "items" is an object, not an array`,
 		},
 		{
@@ -235,14 +221,20 @@ func TestItemsDiagnostics(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			dir := newKit(t, map[string]string{"attention/items.json": tt.content})
-			_, got := StateBlocksWarning(dir)
+			dir := newKit(t, map[string]string{"state.md": "s", "attention/items.json": tt.content})
+			blocks, got := StateBlocksWarning(dir)
 			want := ""
 			if tt.reason != "" {
 				want = filepath.Join(dir, "attention", "items.json") + ": " + tt.reason
 			}
 			if got != want {
 				t.Fatalf("warning = %q\nwant      %q", got, want)
+			}
+			if strings.HasPrefix(tt.reason, "attention items ignored: ") {
+				state := block("orchestration-state", filepath.Join(dir, "state.md"), "s") + "\n"
+				if rendered := Join(blocks); rendered != state {
+					t.Fatalf("render =\n%s\nwant no items block:\n%s", rendered, state)
+				}
 			}
 		})
 	}

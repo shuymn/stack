@@ -36,14 +36,15 @@ func passWith(context string) proctest.Response {
 	return proctest.Response{Stdout: `{"status":"pass","context":` + strconv.Quote(context) + `}`}
 }
 
-// board installs a fake board into the kit dir answering resp.
-func board(t *testing.T, kitDir string, resp proctest.Response) {
+// board installs a fake board into the kit dir answering resp and returns its path.
+func board(t *testing.T, kitDir string, resp proctest.Response) string {
 	t.Helper()
 	dir := filepath.Join(kitDir, "bin")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	proctest.InstallAt(t, dir, "board", proctest.Scenario{Responses: []proctest.Response{resp}})
+	return proctest.InstallAt(t, dir, "board",
+		proctest.Scenario{Responses: []proctest.Response{resp}})
 }
 
 // cutoffIn makes the hook's cut-off fall d after now on the real clock.

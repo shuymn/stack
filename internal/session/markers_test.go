@@ -43,17 +43,6 @@ func rulesLeaving(f *fixture, room int, others ...string) hookio.Input {
 	return in
 }
 
-// installBoardAt installs a fake board into the kit dir answering resp and returns its path.
-func installBoardAt(t *testing.T, kitDir string, resp proctest.Response) string {
-	t.Helper()
-	bin := filepath.Join(kitDir, "bin")
-	if err := os.MkdirAll(bin, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	return proctest.InstallAt(t, bin, "board",
-		proctest.Scenario{Responses: []proctest.Response{resp}})
-}
-
 // cancelRunner answers every run with "A BOARD" and ends the hook's context, as if that run had
 // used up the board deadline.
 type cancelRunner struct {
@@ -86,14 +75,14 @@ func TestRestoreMarkers(t *testing.T) {
 				`{"role": "worker", "rule": "w"}, {"role": "all", "rule": "r2"}]}`,
 		})
 		dir := f.kitDir("demo")
-		board := installBoardAt(t, dir, proctest.Response{Stdout: "LIVE\n"})
+		path := board(t, dir, proctest.Response{Stdout: "LIVE\n"})
 		ctx, errs := f.start(compactIn(testID))
 		want := stateBlock(filepath.Join(dir, "NORTH.md"), "N") + "\n\n" +
 			stateBlock(filepath.Join(dir, "state.md"), "S") + "\n\n" +
 			"<orchestrator-attention-items path=" +
 			strconv.Quote(filepath.Join(dir, "attention", "items.json")) + ">\n- r1\n- r2\n" +
 			"</orchestrator-attention-items>\n\n" +
-			"<orchestration-board path=" + strconv.Quote(board) + ">\nLIVE\n" +
+			"<orchestration-board path=" + strconv.Quote(path) + ">\nLIVE\n" +
 			"</orchestration-board>\n"
 		if ctx != want || errs != nil {
 			t.Fatalf("context =\n%s\nwant\n%s\nerrs %v", ctx, want, errs)
@@ -122,13 +111,13 @@ func TestRestoreMarkers(t *testing.T) {
 		f := newFixture(t)
 		f.open("demo", map[string]string{"state.md": "S"})
 		state := stateBlock(filepath.Join(f.kitDir("demo"), "state.md"), "S")
-		board := installBoardAt(t, f.kitDir("demo"), proctest.Response{Sleep: time.Minute})
-		omitted := "[board omitted: context limit: " + board + "]"
+		path := board(t, f.kitDir("demo"), proctest.Response{Sleep: time.Minute})
+		omitted := "[board omitted: context limit: " + path + "]"
 		ctx, _ := f.start(rulesLeaving(f, cost(omitted), state))
 		if !strings.HasSuffix(ctx, "</worker-rules>\n\n"+state+"\n\n"+omitted+"\n") {
 			t.Fatalf("context = %q\nwant suffix %q", squash(ctx), omitted)
 		}
-		if calls := proctest.Calls(t, board); len(calls) != 0 {
+		if calls := proctest.Calls(t, path); len(calls) != 0 {
 			t.Fatalf("board launched: %+v", calls)
 		}
 	})
@@ -138,8 +127,8 @@ func TestRestoreMarkers(t *testing.T) {
 		f := newFixture(t)
 		f.open("a", map[string]string{"state.md": "A STATE"})
 		f.open("b", map[string]string{"state.md": "B STATE"})
-		first := installBoardAt(t, f.kitDir("a"), proctest.Response{Stdout: "A BOARD"})
-		installBoardAt(t, f.kitDir("b"), proctest.Response{Stdout: "B BOARD"})
+		first := board(t, f.kitDir("a"), proctest.Response{Stdout: "A BOARD"})
+		board(t, f.kitDir("b"), proctest.Response{Stdout: "B BOARD"})
 		// The first board's run ends the hook's context, so the deadline has passed at the second.
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
