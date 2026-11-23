@@ -310,32 +310,40 @@ except on its own errors.
   on one kit at the same time may read the same count, so a due line may come one merge late or twice; the line is
   advisory, and neither outcome loses a merge or corrupts the file.
 - **Kit state hash:** SHA-256 over, for `NORTH.md` then `state.md`, the file name, NUL, its bytes or `absent`,
-  NUL. Both files are the kit state the renderer shows (`internal/kit/render.go:37`) and the steward reads, so
+  NUL. Both files are the kit state the renderer shows (`internal/kit/render.go:35`) and the steward reads, so
   editing either is a state update; a kit that keeps its essence in `NORTH.md` is judged the same way.
 - **Per kit in `kits` order, per merge, each kit on its own:** if `merge.oid` equals the stored `oid`, nothing
   changes (a retry of the same merge does not count twice; only the previous OID is remembered). Otherwise
   `n = merges + 1` and `h` = the current hash. Due when `n >= K` (reason `<n> merges since the last due signal`),
   or else when the state file existed and `h` equals its `state` (reason
-  `merged without a state update since the previous merge`). Due → write `{0, h, oid}` and add the line
-  `audit due (<reason>): run steward on kit <slug>`; not due → write `{n, h, oid}`. The first merge of a kit (no
+  `merged without a state update since the previous merge`). Due → write `{0, h, oid}` and add the kit's due
+  line (below) with that reason; not due → write `{n, h, oid}`. The first merge of a kit (no
   state file) starts the count at 1 and is never due by the second reason; with `K = 1` it is due by the first.
 - **K:** default 5; `~/.config/stack/audit-due.toml` `merges = <int >= 1>` overrides it; an invalid value →
   `warn` and the default.
 - **Errors** (kit dir unreadable, state file unwritable or not valid JSON): `warn` with one finding naming the kit;
   the other kits are still processed and their due lines still printed. A corrupt state file is replaced by a fresh
   one, so its warn appears once.
-- **Output:** one line per due kit, in `kits` order, nothing otherwise. With one kit open, at most one line per
-  merge.
+- **Output:** the response's `context` holds one due line per due kit, in `kits` order, nothing otherwise; `pr
+  merge` prints it after the `MERGED` line (§4.2 step 3). With one kit open, at most one line per merge.
 - **The due line** `audit due (<reason>): run steward on kit <slug>` is the whole signal, and consumers match its
   text, so changing it is a breaking change. It means that, by the rule above, the orchestration recorded in kit
   `<slug>` is due an audit now. It is advisory: `stack` starts nothing on it. "steward" names the auditor of the
   owner's setup; which agent runs, with what request and what report, belongs to that setup in `shuymn/dotfiles`
-  (`agents/steward.md` and the hiden skill), not to `stack`. `<slug>` is the `slug` of a `kits` entry: a kit
-  recorded in the merging session's `.kits`, whose dir is that entry's `dir`, `<kit root>/<slug>`. `<kit root>` is
-  `[kit].root` of `~/.config/stack/config.toml`, resolved as `docs/design/phase2-core.md` §2.1 states (`~`
-  expanded, a relative root against the config file's directory, default `~/.local/state/stack/kits`). A consumer
-  that does not read the config takes the dir that `stack kit open <slug>` printed in that session (the directory of
-  its `orchestration-state` paths, or the path in `[new kit: …]`), and never assumes the default root.
+  (`agents/steward.md` and the hiden skill), not to `stack`.
+  - *Which kit (live merge):* `<slug>` is the `slug` of an entry of the request's `kits`, and the kit audited is
+    that entry's `dir`: `<kit root>/<slug>`, where `<kit root>` is the effective root of that `stack pr merge` run,
+    `[kit].root` of the `~/.config/stack/config.toml` it loaded, resolved as `docs/design/phase2-core.md` §2.1
+    states (`~` expanded, a relative root against the config file's directory, default
+    `~/.local/state/stack/kits`), and the slug is recorded in the merging session's `.kits` with that dir present
+    (`internal/cli/prmerge.go:73-92`, `internal/cli/run.go:281-307`).
+  - *How a consumer finds that dir:* it resolves the current config as above. It may instead reuse a dir it saw for
+    `<slug>` in this session, from `kit open` output or a compact restore (the directory of an
+    `<orchestration-state path=…>`, the path in `[new kit: …]`, or the file path in `[state omitted: context limit:
+    <path>]` or `[unreadable: <path>]`), only when it knows `[kit].root` has not changed since; it never assumes
+    the default root.
+  - *Replay:* with `stack run merged --replay`, the request is the fixture's, so the line's slug names the
+    fixture's `kits` entry and its `dir`, not anything under the kit root.
 - **Best effort.** The reset is written before core accepts the response; if the stage deadline passes or stdout
   is lost after that, the count restarts without a line shown. A `--replay` fixture is sent as is, so a fixture that
   names a real kit's `dir` and a `merge` would change its state: replay fixtures use a throwaway kit directory.
@@ -569,7 +577,7 @@ serial cost and no gain over a second hook entry).
 | P11 | The kit context shall carry no size note, and compaction shall keep its 9,500-char budget. | #28 comment | no `bytes, over` text; compact output ≤ 9,500 UTF-16 units | `kit open` on a kit with a 10 kB `state.md`; `/compact` and measure the hook's `additionalContext` in UTF-16 units |
 | P12 | When a session with open kits compacts and the hook has the time of §4.3 left after the restore, it shall restore the entry contexts after the kits within the budget. | #30 stage table | entry block after compaction | live: a stub entry extension, `kit open demo`, `/compact` |
 | P13 | Where a stage cannot block, a `block` response shall be reported as `warn` and `stack run` shall exit 0. | #30 stage table | `"status":"warn"` with the finding and `error` | stub `stack-demo` answering block, `stack run cycle --ext demo` |
-| P14 | When a due line appears, its `<slug>` shall name a kit of the merging session whose dir is `<kit root>/<slug>` under the configured `[kit].root`. | #28 acceptance (steward), §4.7 | the line's slug and the dir `kit open` printed for it | `[kit].root` set to a scratch dir, `stack kit open demo`, two scratch merges without a state change → the line names `demo`, whose `orchestration-state` paths are under the scratch root; the reaction to the line is accepted in `shuymn/dotfiles` (§4.8) |
+| P14 | When a due line appears after a live merge, its `<slug>` shall name the kit whose dir `<kit root>/<slug>`, under the `[kit].root` that merge loaded, the extension counted. | #28 acceptance (steward), §4.7 | the line's slug; `audit-due.json` written in that dir and nowhere else | `[kit].root` set to a scratch dir, `stack kit open demo`, write `state.md`, then two scratch-PR merges with distinct merge OIDs and no state change → the second prints the line naming `demo`, and `<scratch root>/demo/audit-due.json` holds the second OID while the default root has no `demo`; the reaction to the line is accepted in `shuymn/dotfiles` (§4.8) |
 | P15 | Each stage shall fire at every call site of §2, except where its deadline rule skips it. | #30 stage table | one request per call site in the stub's log | a logging stub selected at every stage and in `[merge].message_checks` in a temporary config: `kit open`, `/compact` (well inside the hook's time), `pr merge --body` and the merge itself on a scratch PR, `stack run cycle`, `stack run merged` |
 | P16 | Before PR 10 is installed, its wiring shall deny the four moved rules through `stack-guard` alone and check merge messages through `stack-public`. | #30 acceptance 5, §5.4 | `stack-guard (<rule>): ` denies; raw merge denied by `stack guard (raw-merge): `; `pr merge --body <home path>` refused by `public` before `gh` | an isolated Claude Code config with PR 10's `stack` build, the `stack-guard` entry and PR 9's `config.toml` (`message_checks = ["public"]`): the P7 checks and a scratch-PR merge with a home path in `--body` |
 
