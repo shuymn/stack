@@ -35,11 +35,11 @@ decision and the index. Changing to (a) later means moving text, not changing be
 
 ### 3.1 `attention/items.json`
 
-The shape, the restored roles and every ignored input are stated once, in `phase2-core.md` §4.1.1, as the code
-behaves today. Items for roles `stack` does not restore may stay in the file: the format is shared with whatever
-else reads it, and `stack` renders only its own audience.
+The shape, the restored roles and every ignored input are stated once, in `phase2-core.md` §4.1.1. Items for roles
+`stack` does not restore may stay in the file: the format is shared with whatever else reads it, and `stack`
+renders only its own audience.
 
-A warning at `stack kit open` is worth adding (§4): an ignored register silently loses a rule the orchestrator
+`stack kit open` warns about ignored items (§4): an ignored register silently loses a rule the orchestrator
 relies on after compaction (the re-read rule of `phase4-jev.md` §3.2 counts only when its block appears), and
 `kit open` is the one moment the orchestrator sees stderr and can fix the file. Compaction stays silent: its stdout
 is the restore, and stderr there does not reach the agent's context.
@@ -77,10 +77,10 @@ Rejected: adding the kit dir to the line (§6).
 `core-stages.md` §4.8 no longer states the steward report format or how it is started; it points to
 `shuymn/dotfiles`. P14 checks only what `stack` emits; the steward's acceptance moves to the companion PR (§8).
 
-## 4. Follow-up code change: warn about ignored attention items
+## 4. Warning about ignored attention items
 
-Not part of this PR. `internal/kit` reports why it ignored items; `internal/cli/kit.go` prints it; compaction is
-unchanged. Item indexes are 0-based (the JSON array index). hiden writes the register after the first `kit open` of
+`internal/kit` reports why it ignored items; `internal/cli/kit.go` prints it; compaction writes nothing about
+them. Item indexes are 0-based (the JSON array index). hiden writes the register after the first `kit open` of
 a new kit, so the warning catches a malformed file when the kit is opened again (a reopen or a handover), not on
 creation.
 
@@ -144,7 +144,7 @@ needed the summary, or if `stack` gained its own scheduled runner. (a) changes n
 
 | Side effect | Why it does not harm the purpose |
 |---|---|
-| Ignored items stay silent until §4 lands | valid state and valid items still render; a register that was malformed before stays malformed and unannounced, as it was, and the stated shape lets the loss be diagnosed once noticed |
+| Ignored items get no marker in the restore, and compaction writes no warning about them | valid state and valid items still render; `kit open` names the file and the first ignored item on stderr (§4), the one moment the orchestrator can fix it, and the stated shape lets a loss seen after compaction be diagnosed |
 | Freezing the `.kits` format | it is already what both readers depend on; a future change gets a read command (§3.3) instead of a silent break |
 | Lockless `.kits` readers see no fresh snapshot: a read racing a session's first `kit open` or last `kit close` can see either side, so the ask-owner hook may show or skip the checklist for that one question | the effect is one reminder more or less on one question |
 | Steward's caller lookup through `.kits` is best-effort: when two sessions list the slug, or one closes it while steward reads, steward can pick the other session's transcript | `.kits` records kits, not callers, so no reader can do better from it; the companion PR (§8) requires steward to name the session it inspected on every lookup, or say it could not establish the caller, so an on-track line is not mistaken for an audit of the right session |
