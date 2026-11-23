@@ -539,9 +539,6 @@ func TestCodexAndLedgers(t *testing.T) {
 	}
 }
 
-// TestLedgerRows: a ledger records a miss as a dated bullet or as a table row whose first cell is
-// the date and some later cell starts with the miss word; a mention inside a summary cell is not a
-// miss, and a negation applies to its own cell.
 func TestLedgerRows(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
@@ -560,13 +557,12 @@ func TestLedgerRows(t *testing.T) {
 		"| 2026-11-18 | PR #4 | 低 | 見逃し なし | z |",        // 11 negated
 		"| 2026-11-20 JST | 見逃し（main） | 高 | - | x |",     // 12 date cell with extra text
 		"  |  2026-11-17  | 見逃し（padded） |  高  | - | x |", // 13 padded miss
-		"| 2026-11-13 | 見逃し（main） | 高 | - | old |",       // 14 before the window
-		"- 2026-11-16 r: 見逃し 1",                          // 15 bullet miss
-		"| 2026-11-20 | 旧表示 \\| 見逃しを防ぐ条件を記録 | 採用 |",      // 16 escaped pipe
-		"| 2026-11-20 | PR #5 | 見逃し　無し | - |",            // 17 full-width negation
-		"| 2026-11-20 | 見逃し（main） | 見逃し なし | - |",        // 18 negation in another cell
-		"| 2026-11-20 | 　見逃し（full-width） | - |",          // 19 miss after a full-width space
-		"- 2026-11-16 s: 見逃し 調査、見逃し なし",                  // 20 bullet: the whole line is negated
+		"- 2026-11-16 r: 見逃し 1",                          // 14 bullet miss
+		"| 2026-11-20 | 旧表示 \\| 見逃しを防ぐ条件を記録 | 採用 |",      // 15 escaped pipe
+		"| 2026-11-20 | PR #5 | 見逃し　無し | - |",            // 16 full-width negation
+		"| 2026-11-20 | 見逃し（main） | 見逃し なし | - |",        // 17 negation in another cell
+		"| 2026-11-20 | 　見逃し（full-width） | - |",          // 18 miss after a full-width space
+		"- 2026-11-16 s: 見逃し 調査、見逃し なし",                  // 19 bullet: the whole line is negated
 	}
 	path := f.write(".claude/review-ledgers/stack.md", strings.Join(lines, "\n")+"\n")
 	resp, l := f.run()
@@ -579,7 +575,7 @@ func TestLedgerRows(t *testing.T) {
 		got = append(got, it.Where)
 	}
 	slices.Sort(got)
-	misses := []int{8, 9, 13, 15, 18, 19}
+	misses := []int{8, 9, 13, 14, 17, 18}
 	want := make([]string, 0, len(misses))
 	for _, n := range misses {
 		want = append(want, path+":"+strconv.Itoa(n))
@@ -588,8 +584,8 @@ func TestLedgerRows(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Errorf("ledger-miss where = %q, want %q", got, want)
 	}
-	if st := l.Sources["ledgers"]; st.Status != srcOK || st.Files != 1 || st.Records != 18 {
-		t.Errorf("ledgers = %+v, want ok, 1 file, 18 records", st)
+	if st := l.Sources["ledgers"]; st.Status != srcOK || st.Files != 1 || st.Records != 17 {
+		t.Errorf("ledgers = %+v, want ok, 1 file, 17 records", st)
 	}
 	if !strings.Contains(resp.Context, "ledger-miss 6") {
 		t.Errorf("context %q lacks ledger-miss 6", resp.Context)

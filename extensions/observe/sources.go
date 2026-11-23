@@ -291,17 +291,17 @@ var (
 
 const missWord = "見逃し" //nolint:gosmopolitan // the ledger word for a miss (observe.py:314)
 
-// ledgerDate returns the date of a ledger line, whether the line is a table row, and whether it is
-// dated: a bullet starting `- YYYY-MM-DD` (the legacy form, observe.py:300-321) or a Markdown
-// table row whose first cell is the date alone.
-func ledgerDate(line string) (string, bool, bool) {
+// ledgerDate returns the date of a ledger line ("" when undated) and whether the line is a table
+// row: a bullet starting `- YYYY-MM-DD` (the legacy form, observe.py:300-321) or a Markdown table
+// row whose first cell is the date alone.
+func ledgerDate(line string) (string, bool) {
 	if m := reLedgerBullet.FindStringSubmatch(line); m != nil {
-		return m[1], false, true
+		return m[1], false
 	}
 	if m := reLedgerRow.FindStringSubmatch(line); m != nil {
-		return m[1], true, true
+		return m[1], true
 	}
-	return "", false, false
+	return "", false
 }
 
 // ledgerMiss reports whether a dated ledger line records a miss. A bullet records one when it
@@ -324,20 +324,17 @@ func ledgerMiss(line string, table bool) bool {
 // rowCells splits a table row on unescaped pipes; `\|` stays text inside its cell (GFM).
 func rowCells(line string) []string {
 	var cells []string
-	var b strings.Builder
+	start := 0
 	for i := 0; i < len(line); i++ {
 		switch {
 		case line[i] == '\\' && i+1 < len(line) && line[i+1] == '|':
-			b.WriteString(`\|`)
 			i++
 		case line[i] == '|':
-			cells = append(cells, b.String())
-			b.Reset()
-		default:
-			b.WriteByte(line[i])
+			cells = append(cells, line[start:i])
+			start = i + 1
 		}
 	}
-	return append(cells, b.String())
+	return append(cells, line[start:])
 }
 
 // ledgers reports review-ledger lines that record a miss on a day whose local start lies in the
@@ -381,8 +378,8 @@ func (s *state) ledgers(st *Source) error {
 				continue
 			}
 			st.Records++
-			date, table, ok := ledgerDate(line)
-			if !ok || !ledgerMiss(line, table) {
+			date, table := ledgerDate(line)
+			if date == "" || !ledgerMiss(line, table) {
 				continue
 			}
 			day, err := time.ParseInLocation(time.DateOnly, date, s.o.Location)
