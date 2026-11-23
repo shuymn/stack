@@ -31,6 +31,8 @@ type fixture struct {
 	env  map[string]string
 	// params, when set, adjusts the hook's parameters before it runs.
 	params func(*Params)
+	// ctx, when set, replaces the test's context as the hook's.
+	ctx    context.Context //nolint:containedctx // a test fixture's override
 	stderr strings.Builder
 }
 
@@ -127,7 +129,11 @@ func (f *fixture) start(in hookio.Input) (string, []error) {
 	if f.params != nil {
 		f.params(&p)
 	}
-	out, errs := Start(f.t.Context(), p)
+	hookCtx := f.t.Context()
+	if f.ctx != nil {
+		hookCtx = f.ctx
+	}
+	out, errs := Start(hookCtx, p)
 	if out == nil {
 		return "", errs
 	}
