@@ -1270,6 +1270,22 @@ func TestCalPairs(t *testing.T) {
 // label edited by hand (e.g. a pair group moved to another item) cannot pass while every pinned
 // body, record and sample stays the same.
 func TestCalLabelsCommitted(t *testing.T) {
+	files, err := filepath.Glob(filepath.Join(fixtureRoot, "cal", "*.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := make([]string, 0, len(files))
+	drafted := make([]string, 0, len(calFixtures))
+	for _, f := range files {
+		names = append(names, strings.TrimSuffix(filepath.Base(f), ".json"))
+	}
+	for _, cf := range calFixtures {
+		drafted = append(drafted, cf.name)
+	}
+	slices.Sort(drafted)
+	if !slices.Equal(names, drafted) {
+		t.Fatalf("committed cal fixtures %v, drafted %v", names, drafted)
+	}
 	for _, cf := range calFixtures {
 		fx, err := jev.ReadFixture(filepath.Join(fixtureRoot, "cal", cf.name+".json"))
 		if err != nil {
