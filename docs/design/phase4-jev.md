@@ -32,7 +32,11 @@ the Workers AI and OpenRouter routes; `[merge].message_checks` wiring; improve's
 | $0.042 per 1M input tokens; output free | same; https://developers.cloudflare.com/ai/models/typesafe/jev/ |
 | Body ≤ 32 MiB; 400 (one form is `max_tokens_exceeded`: "longer than the model's context length"), 401, 413, 415, 422 (`detail` array), 429, 529; back off on 429/529 | https://docs.typesafe.ai/api/errors.md |
 | One state with N questions is billed once; one benchmark of 13 questions over a ~54k-char article: 0.24 s, $0.000497, run-to-run std dev ≤ 0.015 | https://docs.typesafe.ai/cookbooks/parallel_questions.md |
-| Prior art: pinned `jev-1.14.0`, "at or above" cutoffs fitted per rule, verdicts replayed with no key; pass-to-pass spread median 0.010, p90 0.050, max 0.300; one review round had 2 of 11 findings wrong | https://github.com/mizchi/jev-lint, its `docs/reference.md` |
+
+**Prior art** (another project's practice, not a backend fact; https://github.com/mizchi/jev-lint, its
+`docs/reference.md`): it pins `jev-1.14.0`, fits "at or above" cutoffs per rule and replays verdicts with no key, as
+§3.4–§3.5 do; its measured pass-to-pass score spread (median 0.010, p90 0.050, max 0.300) is the scale of §3.5's
+δ = 0.05.
 
 **Assumptions:** 70–500 ms per call (#57; only the benchmark above is published); an over-long request's 400 body
 contains `max_tokens_exceeded` (the page names the error, not its field); 4 requests in flight stay under the rate
@@ -91,28 +95,26 @@ end 0.1 s before it to leave room for the bounded ledger append (§3.3). At the 
 The reserve covers the response and classify's file. Children get a 0.2 s pipe wait and a timeout 0.2 s before the
 work deadline, so killing git and reaping its pipes fit inside the budget. The response stays under 512 KiB, half core's 1 MiB stdout limit
 (`internal/ext/ext.go:211`): further findings become one `jev-omitted` count, context lines are cut with a marker.
-Core's deadlines are separate (`internal/ext/ext.go:47-50`): entry 10 s at `kit open`, at compaction `min(10 s, time left
-to the hook's 55 s cut-off) − 2 s`, run when ≥ 1 s remains (`internal/session/session.go:255-289`); outbound
-120 s after `public`, whose scan stops at 100 s (`extensions/public/stage.go:29-40`), leaving semantic ≥ 18 s
-usually; cycle 30 min. When core cuts a child it records a synthetic `warn`, distinct from a self-answered partial
+Core's deadlines are separate (`internal/ext/ext.go:47-50`), one per stage run and shared by its extensions in
+order: entry 10 s at `kit open`, at compaction `min(10 s, time left to the hook's 55 s cut-off) − 2 s`, run when
+≥ 1 s remains (`internal/session/session.go:255-289`); outbound 120 s from the start of the stage, so `jev-semantic`,
+which runs after `public` in the default order, gets what `public` leaves of it: `public` stops its scan 100 s into
+the stage (`extensions/public/stage.go:29-40`), usually leaving semantic ≥ 18 s; cycle 30 min. When core cuts a child it records a synthetic `warn`, distinct from a self-answered partial
 result; at compaction the router's stderr is discarded.
 
 ### 3.2 What each extension sends and returns (item 2)
 
 All requests use `model: "jev-1.14.0"`; generated metadata in them has no wall-clock time or local absolute path.
 
-**`jev-semantic` (outbound).** Read from `repo` (the cwd when `""`). Git runs with the repository-location variables
-dropped (as `extensions/internal/proc/repovars.go`), `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_COUNT` and its
-`GIT_CONFIG_KEY_*`/`GIT_CONFIG_VALUE_*` dropped, `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL` the null device, and
-`-c` overrides that beat repository-local config: `core.quotePath=false`, `diff.noprefix=false`,
-`diff.mnemonicPrefix=false`, `diff.suppressBlankEmpty=false`, `diff.relative=false`, `diff.renames=false`,
-`diff.context=3`, `diff.interHunkContext=0`, `diff.algorithm=myers`, `diff.indentHeuristic=true`, `diff.orderFile`
-neutralised, `i18n.logOutputEncoding=UTF-8`. Commands: `git log -z --encoding=UTF-8 --no-show-signature --format=%B
---end-of-options <range>` (NUL-separated into `commits`, a trailing field dropped only if empty) and `git diff --text
---no-ext-diff --no-textconv --no-color --no-renames --no-relative --ignore-submodules=none --submodule=short
---full-index --src-prefix=a/ --dst-prefix=b/ -U3 --end-of-options <range> --` (`--full-index` against
-`core.abbrev`), LF-normalised; bodies are reproducible in this environment for the settings C6 exercises. Fixed
-fields are `title`, `body`, `branch` and `commits`; units are the diff's files in diff order. Two `noul` questions:
+**`jev-semantic` (outbound).** Read from `repo` (the cwd when `""`) with two git commands: the messages of
+`<range>`, one per commit, newest first, and the patch of `<range>` with three lines of context, `a/`/`b/` prefixes,
+full blob ids, no renames and no external diff or text conversion, both LF-normalised. Git runs with the
+repository-location variables dropped (as `extensions/internal/proc/repovars.go`), system, global and
+environment-supplied config off, and command-line overrides that beat repository-local config, so a body depends
+only on the repository's content and `<range>`, not on any git configuration that changes how a patch or a message
+is printed (C6 lists the variants tested). The exact arguments and overrides are in
+`extensions/jev/semantic/git.go`. Fixed fields are `title`, `body`, `branch` and `commits`; units are the diff's
+files in diff order. Two `noul` questions:
 
 - `meta_duty_regression`. Instructions: "Does `diff` remove or weaken a duty the project performs on itself,
   without `title`, `body` or `commits` stating and justifying that change?" Criteria true: "deletes or loosens a
@@ -136,14 +138,15 @@ Answer: each `p ≥ cutoff` adds a finding `{"kind":"jev-meta-duty"|"jev-unsuppo
 `block`: the answer is probabilistic and coarse, which is not a hard boundary (`docs/architecture.md` §1).
 
 **Supported caller.** The hiden `commit-pr` step in `shuymn/dotfiles`
-(`home/dot_claude/skills/hiden/references/commit-pr.md`, step 2) already writes the title and body to files and runs
+(`home/dot_claude/skills/hiden/references/commit-pr.md`, step 2) writes the title and body to files and runs
 `stack-public check <PR base>..<head> --title-file <t> --body-file <b> --branch <branch>` before each push and PR
-create or edit; that call is unchanged. A dotfiles PR adds, after it passes: pin `head` to a commit, resolve
-`mb=$(git merge-base <PR base> <head>)` (the comparison GitHub shows for a PR), and run `stack run outbound --ext
-jev-semantic --range <mb>..<head>` with the same three text flags; the agent reports the findings and the exit code
-does not stop the push. `stack run outbound` already accepts these flags (`docs/architecture.md` §3); no core
-change; CI is not wired (it would need the key as a secret). The dotfiles PR tests that on a diverged repository
-where only the base adds a test, the `--range` it passes starts at the merge base, so that test never shows deleted.
+create or edit. When a PR is created or edited, that check passed and `stack-jev-semantic` is on `PATH`, it pins
+`head` to a commit, resolves `mb=$(git merge-base <PR base> <head>)` (the comparison GitHub shows for a PR) and runs
+`stack run outbound --ext jev-semantic --range <mb>..<head>` with the same three text flags; with no merge base it
+skips semantic and says so. The agent reports the findings, and the exit code does not stop the push. Starting the
+range at the merge base keeps a test that only the base added from showing as deleted. CI is not wired (it would
+need the key as a secret). The caller is agent instruction text with no automated test in `shuymn/dotfiles`; until
+one exists, its merge-base step is checked by O2 and the extension side by the diverged-base fixture (P2).
 
 **`jev-router` (entry).** Deferred until the trigger below. Hiden already routes by step type and calls for
 re-reading the reference after compaction. The router targets a missed re-read of a single step named in restored kit
