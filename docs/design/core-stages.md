@@ -33,7 +33,7 @@ Verdict per behaviour against R, U and S (§0.1). "Core" needs all three; one fa
 |---|---|---|---|---|
 | `STACK_SESSION_ID` export on every SessionStart (`internal/session/session.go:54-80`) | yes: every stage that needs the session (kits, `merged`) keys on it | yes: identity must be one value shared by core and every extension | yes: one env var, unchanged since v10 | **Core** |
 | `kit open/close`, `<id>.kits` store and lock (`internal/cli/kit.go:55-139`, `internal/kit/store.go:46-200`) | yes | yes: the record decides what compaction restores; a second writer would race the lock | yes | **Core** |
-| Restore contract: what compaction restores (the session's kits, a detected worker's body and brief, the handover, the kits' boards), in which order, within the 9,500-char budget, with an omission marker for every part that does not fit while room for the marker remains (`docs/design/phase2-core.md` §4.2 step 5) (`internal/session/session.go:115-170`, `internal/session/budget.go`, `internal/kit/render.go:90-216`) | conditionally: a no-op without a kit or worker, required as soon as one exists, since compaction is where essence is lost (#28 comment) | yes: compaction runs inside a hook with a hard output limit; only the core sees the whole budget | yes | **Core** |
+| Compact restore contract (`docs/design/phase2-core.md` §4.2 steps 5–7): what compaction restores (the session's kits, a detected worker's body and brief, the handover, the kits' boards), in which order and within the 9,500-char budget (`internal/session/session.go`, `internal/session/budget.go`, `internal/kit/render.go`) | conditionally: a no-op without a kit or worker, required as soon as one exists, since compaction is where essence is lost (#28 comment) | yes: compaction runs inside a hook with a hard output limit; only the core sees the whole budget | yes | **Core** |
 | Replaceable restore content: which state files a kit has (`NORTH.md`, `state.md`, `internal/kit/render.go:37`), the worker marker, agent types and body (`[worker]`), the handover files per environment (`[handover]`), each kit's board command | no: each is the owner's choice | no | no: varies per user | **Config and kit files** read by the core contract; the built-in `-worktrees/agent-*` worker signal (`internal/session/session.go:214-260`) stays as the one non-configurable detection rule |
 | 3,000-byte `state.md` note (`internal/kit/render.go:24-25,123-126`) | no: a size number is not what diverts attention (#28 comment) | no | no: the threshold is policy | **Removed** (§5.3) |
 | Extension discovery, protocol, deadlines, aggregation (`internal/ext/ext.go:27-418`, `internal/ext/request.go`) | yes | yes: it is the contract | yes: evolution rule | **Core** |
@@ -225,9 +225,6 @@ Step 2 of `docs/design/phase2-core.md` §4.2 gains a last step: when at least on
   result leaves no text in the context and the hook writes `stack: entry context of <name> dropped: context limit`
   to stderr; this happens only when the restore already filled the budget, so the restore itself is intact.
 
-Compaction and `kit open` render each kit with the same renderer; compaction adds its budget
-(`docs/design/phase2-core.md` §4.2), so it can omit what `kit open` shows.
-
 ### 4.4 `stack-public` (outbound extension)
 
 `extensions/public`, binary `stack-public`. Two modes:
@@ -324,24 +321,20 @@ except on its own errors.
 - **Errors** (kit dir unreadable, state file unwritable or not valid JSON): `warn` with one finding naming the kit;
   the other kits are still processed and their due lines still printed. A corrupt state file is replaced by a fresh
   one, so its warn appears once.
-- **Output:** the response's `context` holds one due line per due kit, in `kits` order, nothing otherwise; `pr
-  merge` prints it after the `MERGED` line (§4.2 step 3). With one kit open, at most one line per merge.
+- **Output:** the response's `context` holds one due line per due kit, in `kits` order, and is empty when none is
+  due; `pr merge` prints it after the `MERGED` line (§4.2 step 3).
 - **The due line** `audit due (<reason>): run steward on kit <slug>` is the whole signal, and consumers match its
   text, so changing it is a breaking change. It means that, by the rule above, the orchestration recorded in kit
   `<slug>` is due an audit now. It is advisory: `stack` starts nothing on it. "steward" names the auditor of the
-  owner's setup; which agent runs, with what request and what report, belongs to that setup in `shuymn/dotfiles`
-  (`agents/steward.md` and the hiden skill), not to `stack`.
-  - *Which kit (live merge):* `<slug>` is the `slug` of an entry of the request's `kits`, and the kit audited is
-    that entry's `dir`: `<kit root>/<slug>`, where `<kit root>` is the effective root of that `stack pr merge` run,
-    `[kit].root` of the `~/.config/stack/config.toml` it loaded, resolved as `docs/design/phase2-core.md` §2.1
-    states (`~` expanded, a relative root against the config file's directory, default
-    `~/.local/state/stack/kits`), and the slug is recorded in the merging session's `.kits` with that dir present
-    (`internal/cli/prmerge.go:73-92`, `internal/cli/run.go:281-307`).
-  - *How a consumer finds that dir:* it resolves the current config as above. The premise is that `[kit].root` is
-    not edited from the start of `pr merge` until the consumer has resolved the dir; editing it then is outside
-    this design. The consumer does not reuse a dir seen in earlier output (`kit open`, a compact restore), since
-    that output may predate a root change. It never assumes the default root; when no dir can be established, it
-    reports the slug as unresolved instead of guessing.
+  owner's setup; which agent runs, with what request and what report, belongs to that setup (§4.8).
+  - *Which kit (live merge):* `<slug>` and the `dir` the extension counted come from one entry of the request's
+    `kits`: a kit recorded in the merging session's `.kits` whose dir `<kit root>/<slug>` exists, under the
+    `[kit].root` of the config that `stack pr merge` run loaded, resolved as `docs/design/phase2-core.md` §2.1
+    states (`internal/cli/prmerge.go:73-92`, `internal/cli/run.go:281-306`).
+  - *How a consumer finds that dir:* it resolves the current config the same way, on the premise that `[kit].root`
+    is not edited from the start of `pr merge` until the consumer has resolved the dir. It does not reuse a dir seen
+    in earlier output (`kit open`, a compact restore), which may predate a root change, and never assumes the
+    default root; when no dir can be established, it reports the slug as unresolved instead of guessing.
   - *Replay:* with `stack run merged --replay`, the request is the fixture's, so the line's slug names the
     fixture's `kits` entry and its `dir`, not anything under the kit root.
 - **Best effort.** The reset is written before core accepts the response; if the stage deadline passes or stdout
@@ -351,7 +344,7 @@ except on its own errors.
 ### 4.8 The audit itself (shuymn/dotfiles)
 
 `stack` owns only the due line (§4.7). How the owner's setup reacts to it (the auditor, its request, its report
-format and when it is started) is specified in `shuymn/dotfiles`, beside the agent that does it.
+format and when it is started) is specified in `shuymn/dotfiles`, in the hiden skill and `agents/steward.md`.
 
 ### 4.9 Compatibility exceptions
 
@@ -419,9 +412,7 @@ interface.
   name #28 suggests. Contract §2, §4.2.
 - **State file** `<kit>/audit-due.json` inside each kit (§4.7): the signal belongs to the kit, and the kit dir is
   already the extension-visible place for kit state (`kits[].dir`).
-- **K = 5**, the issue's default. Over the 26 merges of the run #28 cites, with one kit whose state is updated
-  after every merge and one audit per due line, that is five due lines (§4.7), against the one audit that run
-  actually had.
+- **K = 5**, the issue's default.
 - **Kit state not updated, by content hash, not mtime.** A hash compares what the steward cares about (content);
   mtime changes on saves without changes, on checkouts and syncs, and has filesystem-dependent resolution, so tests
   would need sleeps. The files are small; hashing costs nothing measurable. Both `NORTH.md` and `state.md` are
@@ -575,7 +566,7 @@ serial cost and no gain over a second hook entry).
 | P11 | The kit context shall carry no size note, and compaction shall keep its 9,500-char budget. | #28 comment | no `bytes, over` text; compact output ≤ 9,500 UTF-16 units | `kit open` on a kit with a 10 kB `state.md`; `/compact` and measure the hook's `additionalContext` in UTF-16 units |
 | P12 | When a session with open kits compacts and the hook has the time of §4.3 left after the restore, it shall restore the entry contexts after the kits within the budget. | #30 stage table | entry block after compaction | live: a stub entry extension, `kit open demo`, `/compact` |
 | P13 | Where a stage cannot block, a `block` response shall be reported as `warn` and `stack run` shall exit 0. | #30 stage table | `"status":"warn"` with the finding and `error` | stub `stack-demo` answering block, `stack run cycle --ext demo` |
-| P14 | When a due line appears after a live merge, its `<slug>` shall name the kit whose dir `<kit root>/<slug>`, under the `[kit].root` that merge loaded, the extension counted. | #28 acceptance (steward), §4.7 | the line's slug; `audit-due.json` written in that dir and nowhere else | `[kit].root` set to a scratch dir, `stack kit open demo`, write `state.md`, then two scratch-PR merges with distinct merge OIDs and no state change → the second prints the line naming `demo`, and `<scratch root>/demo/audit-due.json` holds the second OID while the default root has no `demo`; the reaction to the line is accepted in `shuymn/dotfiles` (§4.8) |
+| P14 | When a due line appears after a live merge, its `<slug>` shall name the kit whose dir `<kit root>/<slug>`, under the `[kit].root` that merge loaded, the extension counted. | #28 acceptance (steward), §4.7 | the line's slug; `audit-due.json` written in that dir and nowhere else | with `stack-audit-due` installed and selected in `[stages].merged`, `[kit].root` set to a scratch dir and one valid `STACK_SESSION_ID` for every command: `stack kit open demo`, write `state.md`, then two scratch-PR merges with distinct merge OIDs and no state change → the second prints the line naming `demo`, and `<scratch root>/demo/audit-due.json` holds the second OID while the default root has no `demo`; the reaction to the line is accepted in `shuymn/dotfiles` (§4.8) |
 | P15 | Each stage shall fire at every call site of §2, except where its deadline rule skips it. | #30 stage table | one request per call site in the stub's log | a logging stub selected at every stage and in `[merge].message_checks` in a temporary config: `kit open`, `/compact` (well inside the hook's time), `pr merge --body` and the merge itself on a scratch PR, `stack run cycle`, `stack run merged` |
 | P16 | Before PR 10 is installed, its wiring shall deny the four moved rules through `stack-guard` alone and check merge messages through `stack-public`. | #30 acceptance 5, §5.4 | `stack-guard (<rule>): ` denies; raw merge denied by `stack guard (raw-merge): `; `pr merge --body <home path>` refused by `public` before `gh` | an isolated Claude Code config with PR 10's `stack` build, the `stack-guard` entry and PR 9's `config.toml` (`message_checks = ["public"]`): the P7 checks and a scratch-PR merge with a home path in `--body` |
 
@@ -586,7 +577,7 @@ serial cost and no gain over a second hook entry).
 | C1 | When an extension answers `block` at `entry`, `merged` or `cycle`, `ext` shall record `warn` with the stage finding and `error`. | `ext.TestBlockDemotion` | per stage; `outbound` keeps `block`; finding text; `context` and findings kept |
 | C2 | `stack run` shall exit 1 on `block` only at `outbound`. | `cli.TestRunBlockExit` | four stages; replay `expect` compared after demotion; `--title-file`/`--body-file`/`--branch` at a non-outbound stage or with `--replay` → exit 2 |
 | C3 | When `STACK_SESSION_ID` is valid, every live `entry` and `merged` request shall carry `kits` with the existing open kits in `.kits` order; otherwise `[]`. | `cli.TestRequestKits` | unset id → `[]`; a listed kit whose dir is gone is left out; `.kits` lock held past 1 s → `[]` plus the stderr note; `outbound` and `cycle` requests have no `kits` |
-| C4 | When compact restores at least one kit and the stage deadline of §4.3 is at least 1 s away, session-start shall run the entry stage once, place each result after the boards, cut or omitted within the budget, without changing the restore, start no work after the cut-off, and write its output before the host's 60 s. | `session.TestCompactEntry` (injected clock or start time) | fake extension invoked once with the restored `kits` and the payload's id in `STACK_SESSION_ID` when the inherited env names another id; no kits → not invoked; a fake `git` that sleeps is never called; boards running to their deadline → entry bounded by the remaining time, no work started after the cut-off and the hook's output written before 60 s; stage deadline just over 1 s away → invoked; just under 1 s → not invoked, `[entry skipped: deadline]`; an extension that runs to the deadline and leaves a pipe open to a grandchild → the next extension is not started, the stage has returned by the cut-off and the hook's output is written before 60 s; a hanging extension → the restore is written whole; long context with astral-plane chars cut on a code-point boundary with marker; total ≤ 9,500 UTF-16 units; no room for the marker → no entry text and the stderr note; C19's lock, fork and close cases still pass |
+| C4 | When compact restores at least one kit and the stage deadline of §4.3 is at least 1 s away, session-start shall run the entry stage once, place each result after the boards, cut or omitted within the budget, without changing the restore, start no work after the cut-off, and write its output before the host's 60 s. | `session.TestCompactEntry`, `session.TestCompactEntryDeadline`, `session.TestCompactEntryBudget` (injected clock or start time) | fake extension invoked once with the restored `kits` and the payload's id in `STACK_SESSION_ID` when the inherited env names another id; no kits → not invoked; a fake `git` that sleeps is never called; boards running to their deadline → entry bounded by the remaining time, no work started after the cut-off and the hook's output written before 60 s; stage deadline just over 1 s away → invoked; just under 1 s → not invoked, `[entry skipped: deadline]`; an extension that runs to the deadline and leaves a pipe open to a grandchild → the next extension is not started, the stage has returned by the cut-off and the hook's output is written before 60 s; a hanging extension → the restore is written whole; long context with astral-plane chars cut on a code-point boundary with marker; total ≤ 9,500 UTF-16 units; no room for the marker → no entry text and the stderr note; C19's lock, fork and close cases still pass |
 | C5 | When `pr merge` verifies a merge, it shall write the `MERGED` line before starting `merged` and exit 0 whatever the results. | `merge.TestMergedStage` (fake gh, fake extension) | the test's stdout writer and the fake extension append to one ordered log, and the `MERGED` write precedes the extension's start; warn marker and context after the line; extension `block` → shown as warn, exit 0; direct path, `--auto` while polling, and `--auto` success found by the final read-back after the wait deadline; request `repo` and `merge` from the verified run with no extra git or gh call; a slow first extension → the next is not started after the deadline; a first extension that runs to the deadline and leaves a pipe open to a grandchild → the next is not started and the stage run returns within 10 s of its start (the results' printing follows); stdout closed → exit 0 |
 | C6 | If `pr merge` refuses or cannot confirm the merge, or is cancelled before its success point, it shall not run `merged`. | `merge.TestMergedStageNotRun` | refusal, unknown, cancel then success found by the final read-back: the fake extension's log is empty; cancel after `merged` started → the merge still reports success |
 | C7 | When no `merged` extension is installed, `pr merge` stdout, stderr and exit code shall be byte-identical to today, under the same `[merge].message_checks` configuration. | `merge.TestMergedNoExtension` | exact stdout, stderr and exit code, with `STACK_SESSION_ID` set, its `.kits` file present and its lock held by the test: the `.kits` file is not read and no lock note appears; a `merged` name found but not executable → `MERGED` line, then its warn marker, exit 0, `.kits` not read |
