@@ -62,7 +62,7 @@ jobs:
         if: runner.os == 'Windows'
         run: ./stack.exe --version
 
-  # The PowerShell oracle (docs/design/powershell-guard.md §9 W2): the recognizer against the
+  # The PowerShell oracle (docs/design/powershell-guard.md §3, C11): the recognizer against the
   # runner's PowerShell engines (5.1 and 7 on Windows, 7 on Linux). Not required: `check` does not
   # need it. It fails on any fail or inconclusive verdict, including a missing engine.
   powershell-oracle:

@@ -26,7 +26,7 @@ import (
 	"github.com/shuymn/stack/internal/shell"
 )
 
-// The oracle of powershell-guard §3 and §9 W2: the installed PowerShell engines (5.1 and 7 on
+// The oracle of powershell-guard §3 (C11): the installed PowerShell engines (5.1 and 7 on
 // Windows, 7 elsewhere) parse the declared corpus (testdata/oracle_cases.json) with their own
 // parser (testdata/oracle.ps1), which classifies each command's position by §3 from the engine's
 // AST and static parameter binding and parses the static scripts of Invoke-Expression and
@@ -733,7 +733,7 @@ func compareArgv(c Call, els []oElem, dynamic []string) ([]string, []string) {
 
 // compareStub compares ShellCall's static words with the argv the stub received. A word ShellCall
 // marks as a home `~` (Tilde) is not compared, since the host's expansion depends on the engine
-// version (W3); a literal `~user` or `~foo/.git` is. Under legacy argument
+// version (powershell-guard §3 Words); a literal `~user` or `~foo/.git` is. Under legacy argument
 // passing (Windows PowerShell 5.1, or `$PSNativeCommandArgumentPassing = 'Legacy'`) a word holding
 // `"` reaches the program split or unquoted: documented in phase2-core §6, so such a call is
 // noted, not compared. An ambiguous word (§3, after a quoted `--%`) is engine-dependent by design
@@ -1374,7 +1374,7 @@ func readDeclared(t *testing.T) []declared {
 	return ds
 }
 
-// TestOracle is W2 of powershell-guard §9: the recognizer against the installed PowerShell
+// TestOracle is C11 of powershell-guard §7.2: the recognizer against the installed PowerShell
 // engines. An engine that is missing, fails, times out or yields incomplete evidence makes the
 // test fail as inconclusive.
 func TestOracle(t *testing.T) {

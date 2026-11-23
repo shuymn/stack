@@ -16,22 +16,22 @@ same hard-boundary policy: near-zero false positives, irreversible hazards only,
 
 In scope: the four rules above for `tool_name == "PowerShell"` on every host OS the tool runs on (Windows, and
 Linux, macOS and WSL where Claude Code enables it, per Claude Code's tools reference); the `PowerShell` tool in
-`stack-observe` replay; the matcher change in dotfiles (stated here, made there).
+`stack-observe` replay; the matchers in dotfiles (stated here, set there).
 
-Out of scope: a full PowerShell parser (issue #44); `CLAUDE_ENV_FILE`/`STACK_SESSION_ID` in PowerShell-only
-sessions (issue #44); the pencil rule (not a shell rule); every construct that phase2-core §6 "Out of static scope" lists.
+Out of scope: a full PowerShell parser; `CLAUDE_ENV_FILE`/`STACK_SESSION_ID` in PowerShell-only sessions; the pencil
+rule (not a shell rule); every construct that phase2-core §6 "Out of static scope" lists.
 
-**Tool input.** Claude Code (2.1.330, recorded on Windows, W1 in §9) sends `tool_name: "PowerShell"` with a
-`tool_input` of `command` and an optional `description` (one recorded call has none); the tool schema also has
-`timeout`, `run_in_background` and `dangerouslyDisableSandbox`, the `Bash` tool's fields. The deciders read only
-`command`. Exec-form hooks (`command` plus `args`) are started directly by `claude.exe`, with no shell between. One
-golden per rule carries a recorded `tool_input` unchanged (§9).
+**Tool input.** Claude Code (2.1.330, recorded on Windows) sends `tool_name: "PowerShell"` with a `tool_input` of
+`command` and an optional `description` (one recorded call has none); the tool schema also has `timeout`,
+`run_in_background` and `dangerouslyDisableSandbox`, the `Bash` tool's fields. The deciders read only `command`.
+Exec-form hooks (`command` plus `args`) are started directly by `claude.exe`, with no shell between. The recorded
+inputs back one golden per rule (§9).
 
 ## 3. Decision 1: how PowerShell text is judged
 
 §3 of phase2-core asks that a check judging another language be built on that language's own parser. For PowerShell
 that parser is `System.Management.Automation.Language.Parser`, which exists only inside `pwsh`/`powershell.exe`; no
-Go library parses PowerShell that this design relies on (the implementation PR re-checks).
+Go library parses PowerShell that this design relies on.
 
 | Option | Gains | Gives up | Reversibility | Cost (estimates) |
 |---|---|---|---|---|
@@ -42,13 +42,16 @@ Go library parses PowerShell that this design relies on (the implementation PR r
 (a) is chosen, and this is an explicit exception to §3's parser rule, approved on two grounds: the parser exists
 only in a child process (a per-call start-up cost on the hottest hook path) and that process is a runtime dependency
 the core otherwise avoids (§3's `cygpath` row makes the same call). The recognizer keeps §3's aim, no calls found
-inside quotes, by tokenizing as PowerShell does and never matching regexes over raw text. (c) is rejected.
+inside quotes, by tokenizing as PowerShell does and never matching regexes over raw text. (c) is rejected. In-process
+recognition keeps the hook's cost that of a `Bash` call: on a Windows desktop under load both hooks' p95 on a
+PowerShell payload equals the `Bash` one (idle p50 32–46 ms), far under the 5 s hook timeout.
 
 PowerShell 5.1 and 7 are the test oracles (C11): the §7.2 commands are parsed by each installed engine
 (`[Parser]::ParseInput`; 5.1 and 7 on Windows, 7 on Linux) and the command names, kinds and argv it finds are
 compared with `powershell.Parse`; native calls also run against an argv-printing stub and their argv is compared
-with `Call.ShellCall()` (W2). The
-choice flips to (b) on a material syntax or argv disagreement the subset cannot be narrowed around, if end-to-end
+with `Call.ShellCall()`. Every declared case passes on Windows PowerShell 5.1.26100, PowerShell 7.7.0 (Windows) and
+7.6.5 (Linux); every engine behaviour this document calls measured was measured on these versions ("5.1" and "7.7"
+are the Windows engines). The choice flips to (b) on a material syntax or argv disagreement the subset cannot be narrowed around, if end-to-end
 Windows timings of both real hooks with (b) stay near today's hook, or if Claude Code's payload starts carrying a
 parsed AST (a third option with no child process). A binding or provider disagreement would survive a switch to
 the AST and is fixed in the rule, not the parser.
@@ -104,7 +107,7 @@ ending in `.exe`). `& 'C:\Program Files\Git\usr\bin\rm.exe' -r '~'` is native, n
 
 **`--%`.** The stop-parsing token is a token that does not start with a quote and whose decoded value is `--%`: `--%`,
 the backtick-escaped `` `--% `` and quotes inside such as `-'-%'`, `--'%'` or `-"-%"` (both engines, argv stub), as a
-whole token followed by a blank; `a`--%` is an ordinary word. A cmdlet keeps the token as a value and gets the rest of the tail as one
+whole token followed by a blank; `a`--%` is an ordinary word and `'--'%` two words, `--` and `%`. A cmdlet keeps the token as a value and gets the rest of the tail as one
 literal argument (`Write-Output a --% $x b` writes `a`, `--%`, `$x b`), so `` Remove-Item -Recurse -Path `--% ~ `` is
 refused (PositionalParameterNotFound) and not judged. A native command has it stripped from argv. The verbatim tail
 ends at a CR or LF, quoted or not, or at an unquoted
@@ -136,7 +139,8 @@ operands (`& rm.exe -r '--%' '' .git` denies); gh-publish still reads its body f
 '--body=a"b' --body-file=b.md` denies). The over-denies this accepts stay inside the region:
 `gh pr merge 7 '--%' '' --help` and `gh pr merge 7 '--%' '--%' --help` deny although both engines pass a separate
 `--help`. A cmdlet keeps such a value as an ordinary argument (`Write-Output a '--%' b`); a dynamic word whose value
-may be `--%` is not modelled, nor is the engine an explicit `powershell.exe`/`pwsh` wrapper names.
+may be `--%` (`"--$('%')"`, which both engines also drop) is not modelled, nor is the engine an explicit
+`powershell.exe`/`pwsh` wrapper names.
 
 Known differences kept: a cmdlet's `--%` tail is trimmed and an empty one dropped, where both engines pass it
 untrimmed and `Write-Output --%` passes an empty value (no rule judges that text); and in a native array whose
@@ -160,8 +164,10 @@ drive), so such a `gh` input is dynamic and skipped.
 A native **home `~` word** is one whose first part is unquoted, outside a `--%` tail and not after a quoted `--%`,
 and whose decoded value (after quotes and backtick escapes) is exactly `~`, `~/…`, or on Windows `~\…`, holding no
 whitespace (Unicode spaces such as U+00A0 and line breaks included): `~`, `` `~ ``, `` ~\`. ``, `` ~`\ ``, `~'\x'` and `~"\x"` all are. PowerShell 7 expands it for native commands
-on Linux and macOS, and on Windows from 7.6, where the feature is on by default; Windows PowerShell 5.1 and
-PowerShell 7.0–7.5 on Windows pass it as written (W3, §9). Everything else stays as written: a quote-started `'~'` or
+on Linux and macOS, and on Windows from 7.6, where the feature is on by default (Microsoft's documentation lists
+`PSNativeWindowsTildeExpansion` as experimental from 7.5-preview.2 and mainstream from 7.6-preview.6; 7.7 expands
+it, measured with an argv stub); Windows PowerShell 5.1 never expands it, and PowerShell 7.0–7.5 on Windows pass it
+as written. Everything else stays as written: a quote-started `'~'` or
 `"~"`, `~user`, `~foo/x` (also spelt `~'foo'/x`), `x~`, a value holding whitespace (`~'\a b'`), a `~` in a `--%` tail,
 and a `~` after a quoted `'--%'` (joined as written, see `--%`). A home form whose value holds a `"` is dynamic
 (unmeasured). Because the Windows result depends on the engine version, the native rules use the home word
@@ -205,7 +211,7 @@ both sets. On Windows: case-insensitive names and paths, `\`≡`/`, drive roots,
 `erase`, `rd` are `Remove-Item` aliases, and `mount` and `ndr` are `New-PSDrive` aliases. Elsewhere: the host's
 case rule (`paths`' fold on darwin, none on Linux), `/` roots only, and `rm`, `rmdir` and `mount` are native
 commands (PowerShell defines them as aliases only on Windows; `ri`, `del`, `erase`, `rd` and `ndr` stay aliases;
-confirmed by the oracle on 5.1 and 7 on Windows and 7 on Linux, W2). Path syntax follows the command kind, not only
+the oracle asserts this set per host). Path syntax follows the command kind, not only
 the host: `Remove-Item` and its real aliases use FileSystem-provider syntax (`\` and `/` both separators) on every
 host, so `Remove-Item -Recurse '.\.git'` on Linux is judged; native commands use the host's native path syntax.
 
@@ -255,8 +261,8 @@ passes.
 ### 4.4 rmroot (`stack-guard`)
 
 A cmdlet-kind `Remove-Item` call (name or alias, module-qualified or not) with `-Recurse` effective denies, on
-every host, when a path operand is the home directory, a drive root or an existing `.git` directory. The `.git` case
-extends issue #44's list to the full rmroot boundary of AGENTS.md (same rule, same reason). The operand, after its
+every host, when a path operand is the home directory, a drive root or an existing `.git` directory, the full rmroot
+boundary of AGENTS.md (same rule, same reason). The operand, after its
 trailing separators and terminal `.` components are trimmed, must end in a `.git` component that `Lstat` finds to be
 a directory; `..` is not collapsed (through a symlink a lexical collapse can name another directory), so forms such
 as `.git/hooks/..` are not judged, and `.git/.` checks a `.git` symlink itself, not its target. A native `rm` (`rm` on
@@ -270,7 +276,8 @@ the old-engine false deny above.
 
 - **Binding** follows PowerShell over a table of `Remove-Item`'s parameters, their aliases (`LiteralPath`: `PSPath`,
   `LP`) and the common parameters: an exact name or alias wins, else a unique prefix (`-r`, `-Rec`, `-RECURSE`); an
-  ambiguous or unknown parameter makes pwsh refuse the call, which is then not judged. `-Path` and `-LiteralPath`
+  ambiguous or unknown parameter makes pwsh refuse the call, which is then not judged (`-p` is ambiguous on all
+  three measured engines). `-Path` and `-LiteralPath`
   are in different parameter sets, so a call binding both, also through a positional `Path` next to a named
   `-LiteralPath` (`Remove-Item -Recurse -LiteralPath '.git'build`), is refused (PositionalParameterNotFound on 5.1
   and 7.7). `--` ends parameters.
@@ -281,8 +288,8 @@ the old-engine false deny above.
   `Remove-Item` parameter is positional), so it is not judged. Values of `-Filter`, `-Include` and `-Exclude` are
   never operands, so `Remove-Item -Recurse -Exclude a, .git .\build` and `Remove-Item -Recurse .\build -Filter
   '.git'` pass.
-- **Home:** `~`, `~\`, `~/` (quoted or not: the FileSystem provider expands `~`, confirmed on Windows PowerShell 5.1
-  and 7.7 even with a directory named `~` in the cwd, W3) through `-Path` and positional 0. Through `-LiteralPath`
+- **Home:** `~`, `~\`, `~/` (quoted or not: the FileSystem provider expands `~`; on 5.1 and 7.7 `Remove-Item`
+  removes home this way even with a directory named `~` in the cwd) through `-Path` and positional 0. Through `-LiteralPath`
   (`-LP`, `-PSPath`, and each element of its list) only the measured forms count: on Windows `~` followed by nothing
   but separators and `.` components (`'~'`, `~\`, `'~/'`, `'~\.'`, `'~/./'`, all reaching home on 5.1 and 7.7) is
   home, and any other value starting with `~` (`'~\x'`, `'~user'`, `'~.'`) is not judged. `-LP` binds on 7.7, while
@@ -325,16 +332,16 @@ exists, or ask the user."
 
 ## 6. Decision 4: code location and dispatch
 
-| Item | Change |
+| Item | Role |
 |---|---|
-| `internal/powershell` (new, core) | `Parse(cmd, cwd, home string, os OS) Result` with `Calls []Call` (`Word`s of §3, binding info), `Nested []Script` (dialect, text, cwd, consumed depth), `Err`. `Call.ShellCall()` adapts a call to `shell.Call` for `ghargs`, raw-merge and gh-publish, and `Call.ShellCallRm()` for the native-`rm` path only. The adapter applies §3's native-argv rules and nothing else: home-form known variables substituted per host (§3 Words), `$env:SystemDrive` left dynamic; a home `~` word gets `Tilde: true`, except in `ShellCall` on Windows, where it is dynamic; a home form holding `"` is dynamic; a quote-started `~`, `~user`, a value holding a blank and a `~` after a quoted `'--%'` get `Tilde: false` (§3 Words). `shell.Word` and every Bash consumer stay unchanged. In core because raw-merge needs it and core never imports `extensions/`. |
+| `internal/powershell` (core) | `Parse(cmd, cwd, home string, os OS) Result` with `Calls []Call` (`Word`s of §3, binding info), `Nested []Script` (dialect, text, cwd, consumed depth), `Err`. `Call.ShellCall()` adapts a call to `shell.Call` for `ghargs`, raw-merge and gh-publish, and `Call.ShellCallRm()` for the native-`rm` path only. The adapter applies §3's native-argv rules and nothing else: home-form known variables substituted per host (§3 Words), `$env:SystemDrive` left dynamic; a home `~` word gets `Tilde: true`, except in `ShellCall` on Windows, where it is dynamic; a home form holding `"` is dynamic; a quote-started `~`, `~user`, a value holding a blank and a `~` after a quoted `'--%'` get `Tilde: false` (§3 Words). `shell.Word` and every Bash consumer stay unchanged. In core because raw-merge needs it and core never imports `extensions/`. |
 | `internal/shell` | `ParseDepth(cmd, cwd, home, depth)`: `Parse` continuing from the depth already consumed, for nested Bash scripts (§3); `Parse` is `ParseDepth(…, 0)`. |
 | `internal/paths` | `ResolvePowerShell(home, cwd, p string, expand, windows bool)`: with `expand`, `~`, `~/…` and on Windows `~\…` are home, and unknown when home is ""; without it they are literal names; no Git Bash mapping; relative joins with the host separator (real file reads work on every CI OS); on Windows `\x`/`/x` rooted on the cwd's drive (unknown without one), `C:x` unknown; plus `Norm`/`Same` with an explicit `windows` flag for the rmroot and home comparisons. |
-| `internal/guard` `Decide` | `Bash` → `shell.Parse` as now; `PowerShell` → same `command` decode, `powershell.Parse`, `rawMerge` over the adapted gh calls, then each nested Bash script through the Bash path; `readInput`/`readFile` take the resolver of the call's dialect. |
+| `internal/guard` `Decide` | `Bash` → `shell.Parse`; `PowerShell` → same `command` decode, `powershell.Parse`, `rawMerge` over the adapted gh calls, then each nested Bash script through the Bash path; `readInput`/`readFile` take the resolver of the call's dialect. |
 | `extensions/guard` `Decide` | `case "PowerShell"`: decode as `Bash`; `secretsPowerShell` (§4.2), `ghPublish` (§4.3), `rmRootPowerShell` (§4.4) in that order, first deny wins, then nested Bash scripts through `decideBash`. Reasons keep `stack-guard (<rule>): `. |
-| `.golangci.yaml` depguard | the `extension-guard` allow list gains `internal/powershell$`; core-stages §4.5's import sentence names it. |
-| `extensions/observe` | `wiredTools` gains `PowerShell`; `guardInput` treats it as `Bash` (`command` non-empty). `replay.go` already pipes `tool_name` and `tool_input` to both hooks. Same PR as the deciders, so a replayed PowerShell call never meets hooks that ignore it. |
-| dotfiles (out of this repo) | core hook matcher `Bash` → `Bash\|PowerShell`; `stack-guard` matcher adds `\|PowerShell`; that PR's settings test asserts both. Until both the release and the matchers are installed, a real `PowerShell` call is still allowed. |
+| `.golangci.yaml` depguard | the `extension-guard` allow list includes `internal/powershell$`; core-stages §4.5's import sentence names it. |
+| `extensions/observe` | `wiredTools` includes `PowerShell`; `guardInput` treats it as `Bash` (`command` non-empty). `replay.go` pipes `tool_name` and `tool_input` to both hooks. |
+| dotfiles (out of this repo) | core hook matcher `Bash\|PowerShell`; the `stack-guard` matcher includes `PowerShell`; the dotfiles settings test asserts both. Without the matcher (or with a release older than this design) a real `PowerShell` call reaches no PowerShell rule and is allowed. |
 
 ## 7. Acceptance criteria
 
@@ -376,7 +383,7 @@ Every allow case is paired with a deny fixture that differs only in the behaviou
 | C8 | When a PowerShell command matches no rule, both hooks shall print nothing. | U5 | goldens `allow-powershell-*` in both packages, each next to its deny pair: `Get-Content README.md`, `Remove-Item -Recurse .\build`, `gh pr view 5`, `echo "gh pr merge"`, `git status; git diff --stat` |
 | C9 | When observe scans `PowerShell` tool calls, it shall replay each through both hooks like a `Bash` call. | §6 observe | `observe.TestReplayRealHook`: a transcript with a core-only PowerShell deny (raw-merge) and an extension-only one (rmroot), both matched; exact `Compared` and `Unrecoverable` totals; a `{}` input counted as not replayable with no hook invocation |
 | C10 | `paths.ResolvePowerShell` and the `windows`-flagged `Norm`/`Same` shall resolve PowerShell paths without Git Bash forms. | §6 | `paths.TestResolvePowerShell`: relative join opens the real file on every OS; Windows `\x` on the cwd's drive, unknown without one; `C:x` unknown; `/c` with cwd `D:\work` resolves to `D:\c` on Windows (not drive C); `C:\Users\<Name>` ≡ `c:/users/<name>` only with `windows`; with `expand` `~/b.md` is home and unknown with no home, without it a name under the cwd; on POSIX `~\b.md`, `~user`, `~foo/x` are names |
-| C11 | Where a PowerShell engine is installed, `powershell.Parse` shall return, for each §7.2 command, exactly the calls the engine's own parser finds at the §3 positions and in the nested scripts §3 parses, with the engine's static argv (and command kind outside nested scripts), and `ShellCall()` the argv a native program receives. | §3, §4, W2 | `powershell.TestOracle`, run only with `STACK_PS_ORACLE=1` (the non-required `powershell-oracle` CI job on `windows-latest` and `ubuntu-latest`). Corpus: C1's tables, the command lists of C2–C5 and positive controls. `testdata/oracle.ps1` (one engine process per version, module autoloading off) classifies each command's position by §3 from the engine's AST and static parameter binding (an invoked block, control-flow bodies, the walked blocks of `ForEach-Object`, `Where-Object` and a local `Invoke-Command` bound within the parameter set that runs them; everything else opaque) and parses the static script of `Invoke-Expression` and `pwsh -Command` down to depth 2. `testdata/oracle_cases.json` declares those names per command and the engines that reject it; `-update-oracle` writes only new commands from a Windows run of both engines, never from `Parse`, and a changed or removed declaration needs `-update-oracle-changes` and prints the difference. Each case's verdict is pass, fail or inconclusive (engine missing or failing, timeout, not `FullLanguage`, malformed version, a required output field missing, null or of the wrong type, a case missing, a position the binding cannot decide, nested scripts included, a module loaded by a lookup, an AST type that names no AST class, a requested alias list or parameter table missing or empty, a stub record missing for a plain native call whose arguments are literals or variable reads or present for any other call, a positive control failing); the test fails on any fail or inconclusive. A missed call, a call from an opaque position, an extra call (static or dynamic name), a static word that differs and a word the engine reads as static that `Parse` makes dynamic all fail; the only declared exception is the unquoted wildcard on non-Windows hosts (`dynamicUnix`). Native calls run only against the test binary as stub, behind a marker argument; words starting with an unquoted `~` are not compared. The engine's elements map to argv by the measured rules of §3 (a `--%` tail, a cmdlet's kept `--%` and one tail argument, a native quoted `--%` dropped with later values split at spaces), and the ambiguous region after a quoted `--%` is compared with neither the AST nor the stub (both parsers drop a parameter token there). Documented differences, asserted by name: 5.1 rejects `&&`, `\|\|` and a trailing `&`; the engine rejects a bare command inside method arguments (only the commands before the first error are compared); 5.1 legacy argument passing of a word holding `"`; `-UseTransaction` (5.1) and Where-Object's comparison parameters absent from the binding tables. Also the alias set of §4 per host and `Remove-Item -p` ambiguous by binding and by parameter metadata |
+| C11 | Where a PowerShell engine is installed, `powershell.Parse` shall return, for each §7.2 command, exactly the calls the engine's own parser finds at the §3 positions and in the nested scripts §3 parses, with the engine's static argv (and command kind outside nested scripts), and `ShellCall()` the argv a native program receives. | §3, §4 | `powershell.TestOracle`, run only with `STACK_PS_ORACLE=1` (the non-required `powershell-oracle` CI job on `windows-latest` and `ubuntu-latest`). Corpus: C1's tables, the command lists of C2–C5 and positive controls. `testdata/oracle.ps1` (one engine process per version, module autoloading off) classifies each command's position by §3 from the engine's AST and static parameter binding (an invoked block, control-flow bodies, the walked blocks of `ForEach-Object`, `Where-Object` and a local `Invoke-Command` bound within the parameter set that runs them; everything else opaque) and parses the static script of `Invoke-Expression` and `pwsh -Command` down to depth 2. `testdata/oracle_cases.json` declares those names per command and the engines that reject it; `-update-oracle` writes only new commands from a Windows run of both engines, never from `Parse`, and a changed or removed declaration needs `-update-oracle-changes` and prints the difference. Each case's verdict is pass, fail or inconclusive (engine missing or failing, timeout, not `FullLanguage`, malformed version, a required output field missing, null or of the wrong type, a case missing, a position the binding cannot decide, nested scripts included, a module loaded by a lookup, an AST type that names no AST class, a requested alias list or parameter table missing or empty, a stub record missing for a plain native call whose arguments are literals or variable reads or present for any other call, a positive control failing); the test fails on any fail or inconclusive. A missed call, a call from an opaque position, an extra call (static or dynamic name), a static word that differs and a word the engine reads as static that `Parse` makes dynamic all fail; the only declared exception is the unquoted wildcard on non-Windows hosts (`dynamicUnix`). Native calls run only against the test binary as stub, behind a marker argument; words starting with an unquoted `~` are not compared. The engine's elements map to argv by the measured rules of §3 (a `--%` tail, a cmdlet's kept `--%` and one tail argument, a native quoted `--%` dropped with later values split at spaces), and the ambiguous region after a quoted `--%` is compared with neither the AST nor the stub (both parsers drop a parameter token there). Documented differences, asserted by name: 5.1 rejects `&&`, `\|\|` and a trailing `&`; the engine rejects a bare command inside method arguments (only the commands before the first error are compared); 5.1 legacy argument passing of a word holding `"`; `-UseTransaction` (5.1) and Where-Object's comparison parameters absent from the binding tables. Also the alias set of §4 per host and `Remove-Item -p` ambiguous by binding and by parameter metadata |
 
 ## 8. Where the contracts are stated
 
@@ -396,45 +403,15 @@ Goldens (payload `tool_name: "PowerShell"`, `@@CWD@@` cwd): `internal/guard/test
 `extensions/guard/testdata/deny-secrets-powershell`, `deny-gh-publish-powershell-body-file` (`.files`),
 `deny-gh-publish-powershell-herestring`, `deny-rmroot-powershell-home`, `allow-rmroot-powershell-build`,
 `allow-powershell-get-content-readme`. Table tests of §7.2 carry the per-form cases with the OS injected. One golden
-per rule carries a `tool_input` recorded on Windows (W1), unchanged: `deny-raw-merge-powershell`
+per rule carries a `tool_input` recorded on Windows (§2), unchanged: `deny-raw-merge-powershell`
 (`& gh.exe pr merge 7 --squash`), `deny-secrets-powershell` (`type C:/work/repo/.dev.vars`; the recorded
 `Get-Content .\.DEV.VARS` denies only where case folds, so the C3 table test covers it), `deny-rmroot-powershell-home`
 (`Remove-Item -Recurse -Force $HOME`) and `deny-gh-publish-powershell-body-file` (`gh pr create -t t --body-file
-b.md`, its `b.md` built from `.files`). `mise exec -- scripts/test` on all three CI OSes.
+b.md`, its `b.md` built from `.files`). `mise exec -- scripts/test` on all three CI OSes; the engine comparison of
+§3 (C11) runs in the non-required `powershell-oracle` CI job.
 
 Risks: the subset diverges from pwsh on a construct (miss or false deny; the oracle comparison and flip of §3);
 5.1 vs 7 differences (`&&`, `||` and a trailing `&` are 5.1 parse errors, so judging them only denies what would not run; 5.1 passes a native word holding `"` split or unquoted; on 5.1 the
-`cd X &&` cwd form does not exist, so a `cd sub; gh … --body-file b.md` stays a miss); `Remove-Item` parameter table
-drift (a new parameter starting with `r` makes `-r` ambiguous, so the rule over-judges only a call pwsh refuses).
-
-Windows hardware checks (issue #54):
-
-- W1 (confirmed): Claude Code 2.1.330 sends `tool_name: "PowerShell"` and a `tool_input` of `command` with an
-  optional `description` (one recorded call omitted it); exec-form hooks are started by `claude.exe` with no shell.
-  The recorded inputs back the goldens above.
-- W2 (done, C11): the oracle passes every declared case on Windows PowerShell 5.1.26100 and PowerShell 7.7.0
-  (Windows) and 7.6.5 (Linux): command names, kinds and argv, and native argv through the stub (`--%` tails; a
-  tail holding quotes or `%NAME%` is dynamic in the recognizer and not compared). It found `mount` missing from the
-  `New-PSDrive` aliases on Windows (added). On Linux `rm` and `rmdir` resolve to native commands and `ri`, `del`,
-  `erase`, `rd` to `Remove-Item`; `Remove-Item -p` is refused as ambiguous on all three engines. The
-  `powershell-oracle` CI job keeps it running.
-- W3 (confirmed): `Remove-Item` with `~`, quoted or bare, through `-Path` or `-LiteralPath`, removes home on Windows
-  PowerShell 5.1 and PowerShell 7.7, even with a directory named `~` in the cwd. Native argv, through an argv stub:
-  PowerShell 7.7 passes an unquoted leading `~`, `~/x`, `~\x` and the backtick-escaped `` `~ ``, `` `~\x `` as the
-  home path (`<home>/x`, `<home>\x`), and leaves `'~'`, `"~"`, `x~`, `~user`, a `--%` tail and a `~` after a quoted
-  `'--%'` as written. It decides by the decoded value: `~'\x'`, `~"\x"`, `~"\x"y`, `~"/x"`, `` ~\`. ``, `` ~`\ `` are
-  expanded, `~'foo'/.git` stays `~foo/.git`, and a value holding a blank (`~'\a b'`, `~"\draft notes.md"`) is not
-  expanded. On both engines an argument valued `--%` that starts with a quote (`'--%'`, `"--%"`, `` "--`%" ``, a
-  here-string, also an expandable `"--$('%')"`) is dropped from argv without stopping parsing (`$HOME` after it
-  expands), and the later arguments are joined as written (`"c d"` arrives as `c`, `d`; `%NAME%` is expanded); they
-  differ on a later `"` (`'--body=a"b' --help` is one argument on 5.1, two on 7.7) and on `''` (an empty argument
-  on 7.7, none on 5.1). The backtick-escaped `` `--% `` and quotes inside an unquoted start (`-'-%'`, `--'%'`, `-"-%"`)
-  make the stop-parsing token (`;` stays in its tail), `a`--%` does not, and `'--'%` is two arguments, `--` and `%`. A cmdlet keeps `--%` or `` `--% `` as a value and gets the tail as
-  one argument. 5.1 never expands `~`. Microsoft's documentation lists the
-  Windows native expansion (`PSNativeWindowsTildeExpansion`) as experimental from 7.5-preview.2 and mainstream from
-  7.6-preview.6, so 5.1 and 7.0–7.5 pass `~` as written. Adopted in §3 Words: as home for the native-`rm` path,
-  skipped for gh inputs on Windows, where the file gh opens depends on that engine version.
-- W4 (confirmed): U1–U6 against `stack.exe`/`stack-guard.exe` with the dotfiles matchers in a live dual-tool
-  session all matched this design. Both hooks' p95 on a PowerShell payload equals the `Bash` one under the same load
-  (interleaved, 300 runs each, CPU about 70% busy on an 8-core desktop: p50 about 117 ms, p95 280–300 ms); idle p50
-  32–46 ms, live hook runs 50–60 ms. All far under the 5 s hook timeout.
+`cd X &&` cwd form does not exist, so a `cd sub; gh … --body-file b.md` stays a miss); the Windows native `~`
+expansion depends on the engine version (§3 Words); `Remove-Item` parameter table drift (a new parameter starting
+with `r` makes `-r` ambiguous, so the rule over-judges only a call pwsh refuses).
