@@ -19,6 +19,10 @@ import (
 // budget runs from process start; a variable only for tests (§3.1).
 var budget = 10 * time.Second
 
+// ledgerWait bounds each usage ledger append; zero means jev.LedgerWait. A variable only for
+// tests.
+var ledgerWait time.Duration
+
 // reserve is kept after the work deadline to answer (§3.1).
 const reserve = 500 * time.Millisecond
 
@@ -149,6 +153,7 @@ func (env Env) live(key string) jev.Live {
 	if env.Home != "" {
 		l.Ledger = &jev.Ledger{
 			Path: jev.LedgerPath(env.Home), Run: jev.RunID(), Extension: name, Stderr: env.Stderr,
+			Wait: ledgerWait,
 		}
 	} else {
 		_, _ = fmt.Fprintf(env.Stderr, "jev: usage ledger: home directory unknown\n")
