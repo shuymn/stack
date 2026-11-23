@@ -28,8 +28,8 @@ them, as `powershell-guard.md` §8 lists its own.
 
 ### 3.1 `sessions/<id>.kits` is read directly
 
-Keep the file interface: steward has only file tools, and the ask-owner hook checks presence by metadata alone so it
-starts no process on a hot path. Revisit with a read command when the file needs a new field, or when a reader that
+Keep the file interface: steward has only file tools, and the ask-owner hook checks presence by metadata alone, so
+it needs no additional `stack` process on a hot path. Revisit with a read command when the file needs a new field, or when a reader that
 can run commands needs the resolved kit dirs.
 
 ### 3.2 The audit-due line names no dir
@@ -51,8 +51,8 @@ indexes are 0-based (the JSON array index).
 
 | ID | EARS claim | Test |
 |---|---|---|
-| W1 | When `stack kit open` renders a kit whose `attention/items.json` is readable but is a file `phase2-core.md` §4.1.1 ignores as a whole, it shall write exactly one line `stack: <path>: attention items ignored: <reason>` to stderr. | `cli.TestKitOpenItemsWarning`, one case each with its reason string: invalid JSON, top-level `null`, `123`, `"x"`, `[]`, `{}` (`items` missing), `{"items": null}`, `{"items": "x"}`; control: no file → no line |
-| W2 | When `items` is an array holding elements `phase2-core.md` §4.1.1 skips, `stack kit open` shall write exactly one line `stack: <path>: <n> of <m> attention items ignored (first: item <i>: <reason>)` to stderr and still render the valid items. | same test, mixing valid `orchestrator` and `all` items with a `null` element (`{"items": [null, …]}`; a top-level `null` file is W1's), `3`, an item without `rule`, `{"role": 1, "rule": "x"}`, `{"role": "all", "rule": 2}`: asserts one line, `n`, `m`, the first index and reason, and the surviving bullets in order; `kit.TestItemsDiagnostics` for each reason |
+| W1 | When `stack kit open` renders a kit whose `attention/items.json` is readable but is a malformed file (`phase2-core.md` §4.1.1), it shall write exactly one line `stack: <path>: attention items ignored: <reason>` to stderr. | `cli.TestKitOpenItemsWarning`, one case each with its reason string: invalid JSON, top-level `null`, `123`, `"x"`, `[]`, `{}` (`items` missing), `{"items": null}`, `{"items": "x"}`; control: no file → no line |
+| W2 | When `items` is an array holding malformed elements (`phase2-core.md` §4.1.1), `stack kit open` shall write exactly one line `stack: <path>: <n> of <m> attention items ignored (first: item <i>: <reason>)` to stderr and still render the valid items. | same test, mixing valid `orchestrator` and `all` items with a `null` element (`{"items": [null, …]}`; a top-level `null` file is W1's), `3`, an item without `rule`, `{"role": 1, "rule": "x"}`, `{"role": "all", "rule": 2}`: asserts one line, `n`, `m`, the first index and reason, and the surviving bullets in order; `kit.TestItemsDiagnostics` for each reason |
 | W3 | While the file is absent or every element is well-formed, `stack kit open` shall write nothing about the items, including for items whose role is neither `orchestrator` nor `all`, an empty `rule`, and an empty `items` array. | same test: a `worker` item (no block, silent), an empty `all` rule (`- `, silent), `{"items": []}` (no block, silent) |
 | W4 | In every W1–W3 case, the warning shall affect stderr only; stdout and the exit code follow the normal `kit open` contract. | same test, comparing stdout and the exit code with fixed expectations of the renderer's output, stderr captured separately, including a number past `float64` and a repeated `items` key in another letter case, which render as Go's JSON decoding gives them |
 | W5 | Session-start shall not write any item diagnostic. | `cli.TestSessionStartItems`: `cli.Run` of `hook claude session-start` with a compact payload and a malformed file, with `STACK_DEBUG` unset and set to `1`: no diagnostic on stderr or in `additionalContext` |
@@ -64,14 +64,17 @@ indexes are 0-based (the JSON array index).
 A target repository can supply the rules for editing its own files: `phase3-cycle.md` §3.4 step 3 and I7 state the
 `writing` key of `.stack/improve.toml`, read from the pinned base commit, kept outside the editable `paths`, with the
 embedded `writing.md` as the fallback when the key is absent. `shuymn/dotfiles` sets it to `.stack/writing.md`, so an
-edit takes effect at the next run after it merges. Removing the embedded fallback would change the prompt of every
-target without the key.
+edit takes effect at the next run after it merges. Revisit the decision if a second target wants the same rules (a
+shared default in `stack-improve` fits that better) or improve stops editing agent instructions; removing the
+embedded fallback would change the prompt of every target without the key, so it is the owner's decision.
 
 ### 5.2 Cycle summary files
 
 `shuymn/dotfiles` owns the cycle wrapper's summary files and their validation, freshness and display rules; see its
 `docs/stack-cycle.md`. `phase2-core.md` §2.1 reserves the directory so no `stack` file lands there, and
-`phase3-cycle.md` owns the extension protocol and the `observe/latest.json` contract.
+`phase3-cycle.md` owns the extension protocol and the `observe/latest.json` contract. Revisit the decision if a
+reader outside `shuymn/dotfiles` needs the summary or `stack` gains its own scheduled runner; having
+`stack run cycle` write the files would be a public behaviour change for the owner to decide.
 
 ## 6. Accepted limits
 
@@ -91,14 +94,14 @@ target without the key.
 | A2 | The tags hiden inspects (`<orchestration-state>`, `<orchestrator-attention-items path=…>`) and the `NORTH.md`-only case are stated in `stack` and match both entry points. | #69 item 2 | both tags at `kit open` and after compaction; nothing on other sources | a kit with `NORTH.md` and an `orchestrator` item: `stack kit open demo`; with the kit recorded under the payload's session id (`STACK_SESSION_ID=<id>` on `kit open`), pipe a compact payload with that `session_id` to `stack hook claude session-start`, then the same payload with `"source":"startup"` (no output); the rest of the §4.2 step 7 matrix is checked by L3 |
 | A3 | A reader following `phase2-core.md` §4.1 gets the recorded slugs, which `stack` filters by dir existence before it restores them. | #69 item 3 | the file lists recorded kits in order, a kit whose dir was removed included, while compaction restores only the others; the file is gone after the last close | `STACK_SESSION_ID=x stack kit open a`, `… b`, remove `b`'s dir, read the file (`a`, `b`), pipe a compact payload for `x` (only `a` restored); `… close a`, `… close b`, the file is gone |
 | A4 | The due line's `<slug>` names the kit dir under the root the merge used. | #69 item 4 | as `core-stages.md` P14 | `core-stages.md` P14 |
-| A5 | `stack` docs carry no steward report format or dispatch rule. | #69 item 5 | the docs only point to `shuymn/dotfiles` for them | review the changed docs for a report length, a report or evidence format, or when and how steward is started, and run `stack-public check <base>..<head>` on the review range |
-| A6 | Each related artifact points to the contract maintained by its code owner. | #69 open questions | §5 | follow the links in §5 |
+| A5 | `stack` docs carry no steward report format or dispatch rule. | #69 item 5 | the docs only point to `shuymn/dotfiles` for them | review the changed docs for a report length, a report or evidence format, or when and how steward is started |
+| A6 | Each related artifact points to the contract maintained by its code owner, with when to revisit that decision and which changes need the owner's decision. | #69 open questions | §5 | follow the links in §5 and read each subsection's revisit and owner-decision sentence |
 
 ### 7.2 Plan layer
 
 | ID | EARS claim | Source | Verified by |
 |---|---|---|---|
-| L1 | The renderer shall render the items `phase2-core.md` §4.1.1 accepts, in file order, and render no block for a file it ignores. | `phase2-core.md` §4.1.1 | `kit.TestRenderStateAndItems` (roles, a non-string rule, a non-object element), `kit.TestRenderNewKit` (invalid JSON), `kit.TestItemsDiagnostics` (every file-level case, including a top-level array, `null` and a non-array `items`) |
+| L1 | The renderer shall render the items whose `role` is exactly `orchestrator` or `all` and whose `rule` is a string, in file order, and render no block for a malformed file (`phase2-core.md` §4.1.1). | `phase2-core.md` §4.1.1 | `kit.TestRenderStateAndItems` (roles, a non-string rule, a non-object element), `kit.TestRenderNewKit` (invalid JSON), `kit.TestItemsDiagnostics` (every file-level case, including a top-level array, `null` and a non-array `items`) |
 | L2 | Verify the `NORTH.md`-only case in `phase2-core.md` §4.1.1. | `phase2-core.md` §4.1.1 | `kit.TestRenderNorthOnly`; built CLI (A2) |
 | L3 | Compact restore shall emit the tags and markers of `phase2-core.md` §4.2 step 6 within 9,500 UTF-16 units, and other sources nothing. | `phase2-core.md` §4.2 | `session.TestWorker` (worker line, `<worker-rules>`, `<original-brief>`), `session.TestCompact` (kits, `<orchestration-board>`, `[kits omitted: .kits locked]`), `session.TestReservedMarkers` and `session.TestMultiKitReservation` (`[state omitted: …]`, `[brief omitted: …]`), `session.TestBudgetUTF16` (`[...cut N chars]`, the total), `session.TestBoards` (board not launched without room), `session.TestCompactEntry`, `session.TestCompactEntryDeadline`, `session.TestEntryOmittedMarker` (entry blocks, `<orchestration-handover>`, `[entry skipped: deadline]`, `[entry context omitted: …]`), `session.TestExport` (other sources print nothing), `session.TestRestoreMarkers` (the items block, `[kits omitted: .kits unreadable]`, `[board omitted: …]`, `[board skipped: deadline]`, `[items omitted: …]`, `[handover omitted: …]`, `[worker rules omitted: …]`), `session.TestCompactEntryMarkers` (`[entry extensions skipped: …]`, `[entry context omitted: …]` from an injected extension response; C19's empty `[stages].entry` invokes no extension) |
 | L4 | Verify the `.kits` read/write contract in `phase2-core.md` §4.1. | §3.1 | `kit.TestStore`, `kit.TestStoreReadsCRLFAndSkipsInvalidLines`, `kit.TestStoreTempFileIsUnique` |
