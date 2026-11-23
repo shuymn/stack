@@ -51,8 +51,7 @@ and which entry point emits what in §4.2 step 7, the single place hiden points 
 the allocator delivers it, including the case where markers alone fill the budget and later kits leave no text,
 rather than a guarantee the code does not keep. A `NORTH.md`-only kit keeps its state block at both entry points
 when room remains (checked on the built CLI), so the agent sees its state. When the budget is used up first, the agent
-sees a `[state omitted: …]` marker or no text for that kit, which is accepted (§6); hiden's explicit
-`<orchestration-state>` check runs after `kit open` in a handover session, where no total budget applies.
+sees a `[state omitted: …]` marker or no text for that kit, which is accepted (§6).
 
 ### 3.3 `sessions/<id>.kits`
 
@@ -70,7 +69,7 @@ The line keeps its text: it is matched by its consumer, and its meaning can be s
 names is defined by the root the merge itself used, because that is the dir the extension counted. The consumer
 resolves the current config, on the premise that the root is not edited from the start of `pr merge` until the
 consumer has resolved the dir; a snapshot of the merge's config would guard only against that edit, so none is added.
-How the consumer finds the dir, including when a dir seen earlier may be reused, is in `core-stages.md` §4.7.
+How the consumer finds the dir is in `core-stages.md` §4.7; it does not reuse a dir from earlier output.
 Rejected: adding the kit dir to the line (§6).
 
 ### 3.5 Steward out of `stack`
