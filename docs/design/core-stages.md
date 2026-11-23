@@ -355,7 +355,7 @@ Public behaviour that changes on purpose, each from #28 or #30 or decided here:
 
 ### 4.10 What v11 overrides in the phase designs
 
-- `docs/design/phase2-core.md`: §4.1.1 (no size note); §4.2 step 2 "No extensions run" and C19's assertion that a
+- `docs/design/phase2-core.md`: §4.2 step 2 "No extensions run" and C19's assertion that a
   fake extension is never invoked (entry at compaction, §4.3; C19's other assertions on ids, the lock, fork and
   close, and C20's restore priority stay); §4.3 (the core hook keeps only raw-merge; the other rules move to
   `stack-guard`, C10–C12, C14–C15 move with them); §4.4 step 1 and C26's message clause (`[merge].message_checks`,
