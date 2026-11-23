@@ -362,19 +362,31 @@ func TestKitOpenItemsWarning(t *testing.T) {
 		// W1: the whole file.
 		{"invalid JSON", `{malformed`, "", "attention items ignored: invalid JSON: " +
 			"invalid character 'm' looking for beginning of object key string"},
-		{"top-level null", `null`, "",
-			"attention items ignored: top level is null, not an object"},
-		{"top-level number", `123`, "",
-			"attention items ignored: top level is a number, not an object"},
-		{"top-level string", `"x"`, "",
-			"attention items ignored: top level is a string, not an object"},
-		{"top-level array", `[]`, "",
-			"attention items ignored: top level is an array, not an object"},
+		{
+			"top-level null", `null`, "",
+			"attention items ignored: top level is null, not an object",
+		},
+		{
+			"top-level number", `123`, "",
+			"attention items ignored: top level is a number, not an object",
+		},
+		{
+			"top-level string", `"x"`, "",
+			"attention items ignored: top level is a string, not an object",
+		},
+		{
+			"top-level array", `[]`, "",
+			"attention items ignored: top level is an array, not an object",
+		},
 		{"items missing", `{}`, "", `attention items ignored: "items" is missing`},
-		{"items null", `{"items": null}`, "",
-			`attention items ignored: "items" is null, not an array`},
-		{"items string", `{"items": "x"}`, "",
-			`attention items ignored: "items" is a string, not an array`},
+		{
+			"items null", `{"items": null}`, "",
+			`attention items ignored: "items" is null, not an array`,
+		},
+		{
+			"items string", `{"items": "x"}`, "",
+			`attention items ignored: "items" is a string, not an array`,
+		},
 		// W2: elements; the valid items still render, in order.
 		{
 			"mixed elements",
@@ -383,16 +395,24 @@ func TestKitOpenItemsWarning(t *testing.T) {
 			"- first\n- second",
 			"5 of 7 attention items ignored (first: item 0: null, not an object)",
 		},
-		{"number element", `{"items": [` + first + `, 3, ` + second + `]}`,
+		{
+			"number element", `{"items": [` + first + `, 3, ` + second + `]}`,
 			"- first\n- second",
-			"1 of 3 attention items ignored (first: item 1: a number, not an object)"},
-		{"rule missing", `{"items": [` + first + `, {"role": "all"}, ` + second + `]}`,
+			"1 of 3 attention items ignored (first: item 1: a number, not an object)",
+		},
+		{
+			"rule missing", `{"items": [` + first + `, {"role": "all"}, ` + second + `]}`,
 			"- first\n- second",
-			`1 of 3 attention items ignored (first: item 1: "rule" is missing)`},
-		{"role number", `{"items": [` + first + `, {"role": 1, "rule": "x"}]}`, "- first",
-			`1 of 2 attention items ignored (first: item 1: "role" is a number, not a string)`},
-		{"rule number", `{"items": [{"role": "all", "rule": 2}, ` + second + `]}`, "- second",
-			`1 of 2 attention items ignored (first: item 0: "rule" is a number, not a string)`},
+			`1 of 3 attention items ignored (first: item 1: "rule" is missing)`,
+		},
+		{
+			"role number", `{"items": [` + first + `, {"role": 1, "rule": "x"}]}`, "- first",
+			`1 of 2 attention items ignored (first: item 1: "role" is a number, not a string)`,
+		},
+		{
+			"rule number", `{"items": [{"role": "all", "rule": 2}, ` + second + `]}`, "- second",
+			`1 of 2 attention items ignored (first: item 0: "rule" is a number, not a string)`,
+		},
 		// W3: silent.
 		{"no file", "", "", ""},
 		{"worker item", `{"items": [{"role": "worker", "rule": "w"}]}`, "", ""},

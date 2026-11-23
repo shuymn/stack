@@ -242,10 +242,11 @@ func parseItems(data []byte) ([]string, string) {
 }
 
 // parseItem returns an element's role and rule, or why it is ignored.
-func parseItem(raw json.RawMessage) (role, rule, reason string) {
+func parseItem(raw json.RawMessage) (string, string, string) {
 	if k := kindOf(raw); k != kindObject {
 		return "", "", k + ", not an object"
 	}
+	var role, rule string
 	var item struct {
 		Role json.RawMessage `json:"role"`
 		Rule json.RawMessage `json:"rule"`
