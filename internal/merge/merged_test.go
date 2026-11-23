@@ -250,18 +250,20 @@ func TestMergedStageDeadline(t *testing.T) {
 
 	t.Run("a pipe left open by a grandchild", func(t *testing.T) {
 		t.Parallel()
+		// Twice the stage's 10 s: under a full suite's load the first start of a fresh fake has
+		// taken over the 8 s before the runner's deadline to spawn and log. The grandchild
+		// outlives the window, so a stage that waited for it would end long after.
+		const window = 2 * ext.MergedTimeout
 		f := newStage(t, map[string]proctest.Response{
 			"first": {
 				Stdout:     `{"status":"pass"}`,
 				Sleep:      time.Minute,
-				Grandchild: 30 * time.Second,
+				Grandchild: window + 10*time.Second,
 			},
 			"next": {Stdout: `{"status":"pass","context":"NEXT"}`},
 		})
-		// The stage's own 10 s: a fake's start under a full suite's load can take seconds before
-		// it spawns and logs.
 		out := run(t, okResponses(), setup{stdout: f.log, opts: func(o *Options) {
-			o.Merged = f.stage([]string{"first", "next"}, 0, nil)
+			o.Merged = f.stage([]string{"first", "next"}, window, nil)
 		}})
 		if out.err != nil ||
 			!strings.HasPrefix(out.stdout, mergedLine+"[extension first: warn: ") ||
@@ -275,16 +277,19 @@ func TestMergedStageDeadline(t *testing.T) {
 			t.Fatalf("next started after the deadline: %+v", calls)
 		}
 		// The stage starts after the MERGED write and its results are printed once it returned:
-		// the reaping fits in the 10 s, the slack covers the kill and the scheduler.
+		// the reaping fits in the window. A runner deadline at the window's end rather than a
+		// pipe wait before it would return no earlier than a pipe wait after it, so that is the
+		// limit, and the kill and the scheduler have the pipe wait's 2 s.
 		f.log.mu.Lock()
 		entries := slices.Clone(f.log.entries)
 		f.log.mu.Unlock()
 		if n := len(entries); n != 4 || entries[0].text != "stdout "+mergedLine {
 			t.Fatalf("log = %+v", entries)
 		}
-		if took := entries[2].at.Sub(entries[0].at); took > ext.MergedTimeout+500*time.Millisecond {
-			t.Fatalf("stage returned %s after the MERGED line, want within %s", took,
-				ext.MergedTimeout)
+		limit := window + proc.DefaultWaitDelay
+		if took := entries[2].at.Sub(entries[0].at); took >= limit {
+			t.Fatalf("stage returned %s after the MERGED line, want within %s, under %s", took,
+				window, limit)
 		}
 	})
 }
