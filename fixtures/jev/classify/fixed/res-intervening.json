@@ -1,0 +1,256 @@
+{
+  "synthetic": "records written by hand: each reply's kind_ and dup_ answer is assigned in the fixture's generator and keyed by the body hash the runtime sends; fixed fixtures check behaviour and are never recorded live (jev-calibrate records the cal cases)",
+  "request": {
+    "jev": {
+      "claude": "claude",
+      "now": "2026-01-08T12:00:00Z",
+      "observe": "observe.json",
+      "records": {},
+      "t3": {
+        "th:i": {
+          "cwd": "repo",
+          "rows": [
+            {
+              "message_id": "m000",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:09.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"a\",\"text\":\"task B\"}"
+            },
+            {
+              "message_id": "m001",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:10.000Z",
+              "payload_json": "{\"text\":\"finished B\"}"
+            },
+            {
+              "message_id": "m002",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:11.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"server\",\"id\":\"b\",\"text\":\"queued prompt\"}"
+            },
+            {
+              "message_id": "m003",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:12.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"c\",\"text\":\"fix two\"}"
+            }
+          ]
+        }
+      }
+    },
+    "stage": "cycle"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": null,
+    "context": "jev-classify (jev-1.14.0): 3 owner replies: 0 qualified (0 new, 0 duplicate, 0 dup unassessed), 0 unqualified, 3 unresolved, 0 unevaluated; report ~/.local/state/stack/jev-classify/latest.json\nunresolved: 3 (intervening prompt 3)",
+    "report": {
+      "complete": true,
+      "sources": {
+        "t3": {
+          "status": "ok",
+          "error": ""
+        },
+        "transcripts": {
+          "status": "ok",
+          "error": ""
+        }
+      },
+      "counts": {
+        "items": 3,
+        "classified": 0,
+        "unresolved": 3,
+        "unevaluated": 0,
+        "qualified": 0,
+        "duplicate": 0,
+        "new": 0,
+        "dup_unassessed": 0,
+        "dup_unassessed_lookup": 0,
+        "not_done": 0
+      },
+      "items": [
+        {
+          "id": "it01",
+          "where": "p/s.jsonl:4",
+          "status": "unresolved",
+          "reason": "intervening prompt",
+          "opener": "",
+          "qualified": false,
+          "kind": "",
+          "excerpt": "",
+          "duplicate": "",
+          "dup_reason": ""
+        },
+        {
+          "id": "it02",
+          "where": "t3:th:i:c",
+          "status": "unresolved",
+          "reason": "intervening prompt",
+          "opener": "",
+          "qualified": false,
+          "kind": "",
+          "excerpt": "",
+          "duplicate": "",
+          "dup_reason": ""
+        },
+        {
+          "id": "it03",
+          "where": "p/s.jsonl:8",
+          "status": "unresolved",
+          "reason": "intervening prompt",
+          "opener": "",
+          "qualified": false,
+          "kind": "",
+          "excerpt": "",
+          "duplicate": "",
+          "dup_reason": ""
+        }
+      ]
+    }
+  },
+  "repo": {
+    "layouts": [
+      {
+        "kind": "checkout",
+        "dir": "repo"
+      }
+    ]
+  },
+  "observe": {
+    "items": [
+      {
+        "id": "it01",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:4",
+        "excerpt": "fix one",
+        "ts": "2026-01-08T09:00:04Z"
+      },
+      {
+        "id": "it02",
+        "signal": "owner-reply",
+        "where": "t3:th:i:c",
+        "excerpt": "fix two",
+        "ts": "2026-01-08T09:00:12Z"
+      },
+      {
+        "id": "it03",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:8",
+        "excerpt": "fix three",
+        "ts": "2026-01-08T09:00:08Z"
+      }
+    ],
+    "sources": {
+      "t3": {
+        "status": "ok",
+        "error": ""
+      },
+      "transcripts": {
+        "status": "ok",
+        "error": ""
+      }
+    },
+    "version": 1,
+    "window": {
+      "since": "2026-01-01T12:00:00Z",
+      "until": "2026-01-08T11:59:00Z"
+    }
+  },
+  "files": {
+    "p/s.jsonl": [
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "task A",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:01Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "text": "finished A",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:02Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "<task-notification>a notification</task-notification>"
+        },
+        "timestamp": "2026-01-08T09:00:03Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "fix one",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:04Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "task C",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:05Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "text": "finished C",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:06Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "repo",
+        "isCompactSummary": true,
+        "message": {
+          "content": "Summary of earlier work"
+        },
+        "timestamp": "2026-01-08T09:00:07Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "fix three",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:08Z",
+        "type": "user"
+      }
+    ]
+  }
+}

@@ -238,7 +238,8 @@ provenance:
 - `path:line` (Claude transcripts), split on the last `:`. Lines are numbered as observe numbers them: from 1,
   newline-terminated, a line over 16 MiB skipped but counted, a final unterminated line not counted
   (`extensions/observe/transcripts.go:214-254`). A *prompt* is a user record whose content is a string and that is
-  not meta or a tool result, a compaction summary included; it is an *owner turn* when it also passes observe's typed-command
+  not meta or a tool result; a compaction summary (`isCompactSummary`) with string content is a prompt even when it is
+  also marked meta. A prompt is an *owner turn* when it also passes observe's typed-command
   filter (`typedText`, `extensions/observe/transcripts.go:525-540`) and its origin is `human`, as observe counts
   owners (`transcripts.go:360-372`). A task notification, a typed command, a compaction summary or a prompt of another origin stays a
   prompt. Any other user record is a *tool result*. An assistant record is *text* when it has `text` blocks, else a
@@ -320,7 +321,8 @@ qualification decision disabled (§3.5) no request is sent and every resolved it
 from the project root (https://code.claude.com/docs/en/memory "Storage location"). Classify assesses only the
 memory location it can verify cheaply, and reports every other case as `unassessed` with its reason:
 
-1. *Layout.* Git runs in the cwd with the repository-location variables dropped (`proc.DropRepoVars`), and only
+1. *Layout.* Git runs in the cwd with the repository-location variables (`proc.DropRepoVars`) and the discovery
+   limits (`GIT_CEILING_DIRECTORIES`, `GIT_DISCOVERY_ACROSS_FILESYSTEM`) dropped, and only
    two layouts are recognised from `git rev-parse --show-toplevel` (`top`): an ordinary checkout, whose `top/.git`
    is a directory, its own main checkout; and a linked worktree, whose `top/.git` is a file `gitdir:
    <common>/worktrees/<name>` where `<common>` is a directory named `.git`, that entry's `gitdir` file points back
@@ -408,7 +410,7 @@ when `unevaluated` for any other reason or `unassessed` for `transient`, `deadli
 `request failed` or `too large`. `complete` is true when every item is done, so an empty week is complete, and a removed worktree, a
 failed observe source or a disabled decision never makes a healthy run look incomplete. Those are coverage, shown
 beside it: `sources`, `decisions`, `counts.unresolved` and `counts.dup_unassessed_lookup`, and named in the context
-of every run, an empty week included (§3.1).
+of every run whose report is published, an empty week included (§3.1).
 
 *Publication.* The report is first written to a temp file in its directory and synced; then classify takes
 `latest.lock` through `gofrs/flock`, as improve's run lock (`extensions/improve/improve.go:284-293`), released by
@@ -417,14 +419,17 @@ reserve (§3.1: 10 s of classify's 20 s), retried with `TryLockContext` until th
 compare, the rename and the response. Still busy at the cutoff → the temp file is removed and the run answers
 `warn` `latest-not-written` (`report lock busy`). Under the lock the existing report is read, and it is replaced
 only when its `window.until` is earlier than this run's, or equal with its `run.started` not later; otherwise this
-run's report is dropped (its temp file removed) with a context line and `pass`, since a newer report already stands. A failed rename leaves
-the old file whole and answers `warn` `latest-not-written`. On Windows `os.Rename` replaces the file, but Go
+run's report is dropped (its temp file removed), since a newer report already stands: its context drops the stale
+summary and candidates for a notice, while its findings and their warnings (a persistent failure's action line)
+stay. An existing report that cannot be read (not missing, not malformed) is a failure, never replaced. A failed
+rename leaves the old file whole and answers `warn` `latest-not-written`. On Windows `os.Rename` replaces the file, but Go
 promises no atomicity there; the Windows-machine check (§7) covers it.
 
 *Context.* The counts; `new` qualified items, newest first, then qualified items whose duplicate check is
 `unassessed`, each marked `(dup unassessed: <reason>)`; up to 10 lines in all, each `<kind> <where>: <excerpt>`, then
-`(+k more in the report)`; the unresolved and unevaluated counts; and, in every run, an empty week included, any
-failed observe source, any disabled decision, and `complete: false` with the items not done and why.
+`(+k more in the report)`; the unresolved and unevaluated counts; and, in every run whose report is published, an
+empty week included, any failed observe source, any disabled decision, and `complete: false` with the items not done
+and why. A dropped run's context is the drop notice and its warnings only.
 
 **Cycle wiring (dotfiles).** The supported path, scheduled or manual, is a dedicated call in the cycle job,
 `stack run cycle --ext jev-classify` (`docs/design/phase3-cycle.md` §4.8), made right after a valid observe with a
@@ -500,7 +505,8 @@ keys. Classify's `run.id` is asserted non-empty then normalised, its times come 
 
 Pin `jev-1.14.0` in `extensions/internal/jev`; `jev-latest` is never sent and no config overrides the pin. Fixtures
 are public, so every case is synthetic (a small repository plus texts, a kit and reference stubs, transcript and
-memory excerpts), Japanese and English. Labels are written by hand with a one-line `why` and reviewed by the owner.
+memory excerpts), Japanese and English. Labels are written by hand with a one-line `why` and reviewed by the owner;
+classify's corpus is instead checked by a reviewer model and frozen before any score is seen (below).
 Ground truth is bound to the scored unit, derived from per-unit labels with the live packing:
 
 | Decision | Scored unit | Ground truth | Score | Cutoffs |
@@ -578,11 +584,15 @@ same `assistant` and reply under two `owner` turns, one ruling the action out (d
 (request), each pair a `group` in one split. Hard duplicate positives restate an English index line in Japanese or
 by paraphrase; hard negatives share its topic or keyword with a different or opposite rule; paraphrases and items
 sharing one memory rule stay in one split. Indexes are 3–20 lines, as observed. Cases are drafted from these quotas
-and the label definitions, never from a real reply, path or name, with labels and `why` written before any scoring
-and reviewed by the owner before the first `jev-calibrate`; the real week sets only the quotas.
+and the label definitions, never from a real reply, path or name, with labels and `why` written and checked against
+the label definitions by a reviewer model before any score is seen; they freeze then. A label changed after scores
+were seen (the owner may still relabel in the PR) does not keep its case: a held-out case relabelled that way is
+replaced by a fresh one, since rerunning on the same case is no longer an independent check. The real week sets only
+the quotas.
 
 `jev-calibrate` records every `kind_` body as the runtime packs it. Samples for the duplicate decision come from
-the 3 calls on each ground-truth correcting item. After fitting, it also records the `dup_` body of every item the
+the 3 calls on each ground-truth correcting item, whatever its `kind_` request answered (a 413 included). After
+fitting, it also records the `dup_` body of every item the
 first `kind_` answer qualifies at the fitted cutoff, so the records hold the union of the two sets; since a `dup_`
 body carries one reply, a record never depends on which other items qualified, and replay finds every body the
 runtime sends.
@@ -592,11 +602,13 @@ lists nothing new: if qualification finds the 8 held-out duplicates and misses t
 precision is 1.0 and recall 0.5, the duplicate decision can pass too, and the `new` list is empty. So on `heldout`
 calibrate also scores the report end to end, before it sets any enabled bit: with the provisional cutoffs (those
 that passed their own gates), the items listed as qualified and `new` from the first answers against the items
-labelled correcting and `new`, with precision, recall and support (a missing score is a miss). Classify ships its
+labelled correcting and `new`, with precision, recall and support (a missing score is a miss); a decision that
+failed its own gate has no cutoff there, so the list is empty. The output also gives these figures per language,
+reported but not a gate. Classify ships its
 qualification decision enabled only when that list also reaches precision 0.8 and recall 0.5; otherwise it ships
 disabled (§3.2: sources read, report written, items `unevaluated`, `classification disabled`), flagged `REVIEW`,
 unless the owner accepts the result in the cutoff table (`accepted`: the pin, a hash of the `heldout` fixtures'
-cases and records, the figures, and the owner's one-line reason). The acceptance holds only while all three match;
+cases, records, repository layouts and samples, the figures, and the owner's one-line reason). The acceptance holds only while all three match;
 any change to the pin, the evaluation inputs or the figures voids it.
 
 The `fixed` classify fixtures are matched per item by ID, on `where`, `status`, `reason`, `opener`, `qualified`,

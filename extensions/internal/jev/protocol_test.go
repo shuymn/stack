@@ -91,3 +91,29 @@ func TestParseReplay(t *testing.T) {
 		t.Fatalf("outcome %+v", o)
 	}
 }
+
+// TestSetRecords: replacing the records keeps the request's other fields and the other keys of
+// its jev object (§3.4).
+func TestSetRecords(t *testing.T) {
+	f := Fixture{Request: json.RawMessage(`{"stage":"cycle","jev":{"now":"2026-01-08T00:00:00Z",` +
+		`"observe":"obs.json","records":{"sha256:` + strings.Repeat("a", 64) + `":{"status":500}}}}`)}
+	h := "sha256:" + strings.Repeat("b", 64)
+	if err := f.SetRecords(map[string]Record{h: {Status: 429}}); err != nil {
+		t.Fatal(err)
+	}
+	var req struct {
+		Stage string                     `json:"stage"`
+		Jev   map[string]json.RawMessage `json:"jev"`
+	}
+	if err := json.Unmarshal(f.Request, &req); err != nil {
+		t.Fatal(err)
+	}
+	if req.Stage != "cycle" || string(req.Jev["now"]) != `"2026-01-08T00:00:00Z"` ||
+		string(req.Jev["observe"]) != `"obs.json"` {
+		t.Fatalf("request %s", f.Request)
+	}
+	replay, err := f.RequestRecords()
+	if err != nil || len(replay.Records) != 1 || replay.Records[h].Status != 429 {
+		t.Fatalf("records %+v (%v)", replay.Records, err)
+	}
+}

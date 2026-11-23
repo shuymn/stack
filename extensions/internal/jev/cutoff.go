@@ -201,11 +201,51 @@ func Calibrate(fit, heldout []Sample, target float64) Decision {
 }
 
 // Table is an extension's committed cutoff table, written by jev-calibrate.
+//
+//nolint:tagliatelle // the cutoff table uses snake_case keys.
 type Table struct {
 	Model string `json:"model"`
 	// Placeholder, when set, marks a table not yet produced by a live calibration run.
 	Placeholder string              `json:"placeholder,omitempty"`
 	Decisions   map[string]Decision `json:"decisions"`
+	// EndToEnd is classify's activation score on heldout (§3.5 Activation), absent elsewhere.
+	EndToEnd *EndToEnd `json:"end_to_end,omitempty"`
+	// Accepted is the owner's acceptance of an end-to-end result under its target.
+	Accepted *Acceptance `json:"accepted,omitempty"`
+}
+
+// EndToEnd scores the report's listed items against the labelled ones on heldout, with the
+// cutoffs that passed their own gates, before the end-to-end gate sets qualification's enabled
+// bit (§3.5 Activation).
+type EndToEnd struct {
+	TP        int     `json:"tp"`
+	FP        int     `json:"fp"`
+	FN        int     `json:"fn"`
+	Precision float64 `json:"precision"`
+	Recall    float64 `json:"recall"`
+	// Support is the number of items labelled as the list's target.
+	Support int `json:"support"`
+	// Passed reports precision ≥ 0.8 and recall ≥ 0.5.
+	Passed bool `json:"passed"`
+	// Scored is false when a decision failed its own gate, so nothing is listed: every
+	// labelled item is a miss, its support kept.
+	Scored bool `json:"scored"`
+}
+
+// Acceptance is the owner's acceptance of an end-to-end result. It holds only while its pin, its
+// heldout hash and its figures all match the current ones.
+type Acceptance struct {
+	Pin     string `json:"pin"`
+	Heldout string `json:"heldout"`
+	// Figures are the end-to-end figures accepted.
+	Figures EndToEnd `json:"figures"`
+	Reason  string   `json:"reason"`
+}
+
+// Holds reports that the acceptance still applies: the same pin, heldout inputs and figures.
+func (a *Acceptance) Holds(heldout string, figures EndToEnd) bool {
+	return a != nil && a.Reason != "" && a.Pin == Pin && a.Heldout == heldout &&
+		a.Figures == figures
 }
 
 // ParseTable decodes a cutoff table; it must name the pin.

@@ -23,7 +23,7 @@ GOBIN="$HOME/.local/bin" go install ./cmd/stack ./extensions/observe/cmd/stack-o
   ./extensions/auditdue/cmd/stack-audit-due
 GOBIN="$HOME/.local/bin" go install ./extensions/public/cmd/stack-public ./extensions/guard/cmd/stack-guard
 GOBIN="$HOME/.local/bin" go install ./extensions/improve/cmd/stack-improve
-GOBIN="$HOME/.local/bin" go install ./extensions/jev/semantic/cmd/stack-jev-semantic
+GOBIN="$HOME/.local/bin" go install ./extensions/jev/semantic/cmd/stack-jev-semantic ./extensions/jev/classify/cmd/stack-jev-classify
 ```
 
 Install `stack-improve` after `stack-public`: improve's public check runs `stack-public check`, which reads
@@ -33,6 +33,12 @@ A key opts `stack-jev-semantic` into sending eligible PR data to TypeSafe's Jev 
 branch, commit messages and diff. A hit produces an advisory `warn`. Without a key a live request (no `jev`
 field) returns `pass` without a call. The shipped cutoffs enable both decisions. If both are disabled, the extension sends nothing.
 Reinstall after `jev-calibrate` changes the embedded cutoffs (`extensions/jev/semantic/cutoffs.json`).
+
+The same key opts `stack-jev-classify` (the `cycle` stage, `stack run cycle --ext jev-classify`) into sending the
+week's owner replies from observe's `latest.json`, each with the assistant message it answers and the owner turn
+before it, to Jev. It writes a local report to `~/.local/state/stack/jev-classify/latest.json` and never blocks.
+Until `jev-calibrate --ext classify` has run, its shipped cutoffs are a placeholder: both decisions are disabled, so
+it reads and reports but sends nothing. Reinstall after that run changes `extensions/jev/classify/cutoffs.json`.
 
 Set `TYPESAFE_API_KEY` or use `~/.config/stack/jev/key`. A non-blank environment value takes precedence. To opt out,
 unset the variable and remove the file. On Unix, use a key file you own with mode `0600`. At the silent prompt below,

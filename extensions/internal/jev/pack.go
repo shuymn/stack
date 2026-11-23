@@ -3,6 +3,7 @@ package jev
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -35,10 +36,15 @@ type Field struct {
 	Value any
 }
 
-// Unit is one splittable input of a state: a diff file, a kit, an item.
+// Unit is one input of a state: a diff file, a kit, an item.
 type Unit struct {
 	Name string
 	Text string
+	// Fields are further keys of the unit's element, encoded in order after its name (and before
+	// its text, when the layout has a text key).
+	Fields []Field
+	// Questions are asked only on the request carrying the unit (unit-question mode, Whole).
+	Questions []Question
 }
 
 // Layout names the JSON keys of a state: the fixed fields come first, then the units array.
@@ -64,7 +70,16 @@ type Input struct {
 	StateLimit int
 	// QuestionLimit bounds the encoded questions; zero means QuestionBudget.
 	QuestionLimit int
+	// Whole never splits a unit: one that does not fit a request whole with the fixed fields is
+	// unpacked and its questions unasked (ReasonUnitTooBig). Units are packed greedily in order
+	// and a request closes when its next unit would pass the state or the question budget. It is
+	// required for unit questions, which an input never mixes with shared ones.
+	Whole bool
 }
+
+// errMixedQuestions reports an input with both shared and unit questions, unit questions
+// without Whole, or a Whole unit with no question when there are no shared ones.
+var errMixedQuestions = errors.New("unit questions need Whole and no shared questions")
 
 // Piece is a unit, or part Part of Parts of it, carried by a batch.
 type Piece struct {
@@ -118,6 +133,7 @@ const (
 	ReasonSmallBudget    = "the fixed fields leave under 1 KiB for the input"
 	ReasonPartTooBig     = "a smallest part does not fit one request"
 	ReasonQuestionTooBig = "the question alone is over 16 KiB"
+	ReasonUnitTooBig     = "the unit does not fit one request whole"
 )
 
 // Pack packs in's units into states of at most StateLimit encoded bytes and in's questions into
@@ -140,13 +156,24 @@ func Pack(in Input) (Plan, error) {
 	budget := limit - frame
 	elems := make([][]byte, len(in.Units))
 	total := 0
+	unitQuestions, bare := false, false
 	for i, u := range in.Units {
-		if elems[i], err = in.element(u.Name, "", u.Text); err != nil {
+		if elems[i], err = in.element(u, "", u.Text); err != nil {
 			return Plan{}, err
 		}
 		total += len(elems[i])
+		unitQuestions = unitQuestions || len(u.Questions) > 0
+		bare = bare || len(u.Questions) == 0
 	}
 	total += max(len(elems)-1, 0)
+	// A Whole unit with no question of its own and no shared one would be dropped unasked.
+	if unitQuestions && (!in.Whole || len(in.Questions) > 0) ||
+		in.Whole && len(in.Questions) == 0 && bare {
+		return Plan{}, errMixedQuestions
+	}
+	if in.Whole {
+		return in.packWhole(model, prefix, elems, budget)
+	}
 
 	var plan Plan
 	var states [][]Piece
@@ -244,7 +271,7 @@ func (in Input) greedy(elems [][]byte, budget int) ([][]Piece, []int, error) {
 		}
 		for k, text := range parts {
 			p := Piece{Unit: i, Part: k + 1, Parts: len(parts), Text: text}
-			elem, err := in.element(u.Name, partLabel(p.Part, p.Parts), text)
+			elem, err := in.element(u, partLabel(p.Part, p.Parts), text)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -266,7 +293,7 @@ func partLabel(k, n int) string {
 func (in Input) split(u Unit, budget int) ([]string, bool, error) {
 	for width := 1; width <= len(strconv.Itoa(len(u.Text)+1)); width++ {
 		nines := strings.Repeat("9", width)
-		empty, err := in.element(u.Name, "part "+nines+" of "+nines, "")
+		empty, err := in.element(u, "part "+nines+" of "+nines, "")
 		if err != nil {
 			return nil, false, err
 		}
@@ -386,11 +413,12 @@ func statePrefix(l Layout) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-// element encodes one unit or part: `{"<name>":…,"part":"part k of n","<text>":…}`.
-func (in Input) element(name, part, text string) ([]byte, error) {
+// element encodes one unit or part: `{"<name>":…,"part":"part k of n",<fields>,"<text>":…}`,
+// without the text when the layout has no text key.
+func (in Input) element(u Unit, part, text string) ([]byte, error) {
 	var b bytes.Buffer
 	b.WriteByte('{')
-	if err := writeKV(&b, in.NameKey, name); err != nil {
+	if err := writeKV(&b, in.NameKey, u.Name); err != nil {
 		return nil, err
 	}
 	if part != "" {
@@ -399,11 +427,130 @@ func (in Input) element(name, part, text string) ([]byte, error) {
 			return nil, err
 		}
 	}
-	b.WriteByte(',')
-	if err := writeKV(&b, in.TextKey, text); err != nil {
-		return nil, err
+	for _, f := range u.Fields {
+		b.WriteByte(',')
+		if err := writeKV(&b, f.Key, f.Value); err != nil {
+			return nil, err
+		}
+	}
+	if in.TextKey != "" {
+		b.WriteByte(',')
+		if err := writeKV(&b, in.TextKey, text); err != nil {
+			return nil, err
+		}
 	}
 	b.WriteByte('}')
+	return b.Bytes(), nil
+}
+
+// packWhole is unit-question mode (§3.1): units in order, never split, each request closed when
+// its next unit would pass the state budget or the question budget; a unit's questions ride only
+// on the request carrying it. Shared questions, when given instead, go on every state.
+func (in Input) packWhole(model string, prefix []byte, elems [][]byte, budget int) (Plan, error) {
+	qlimit := orDefault(in.QuestionLimit, QuestionBudget)
+	type state struct {
+		pieces    []Piece
+		used      int
+		questions []Question
+		encoded   []byte
+	}
+	var plan Plan
+	var states []state
+	var cur state
+	flush := func() {
+		if len(cur.pieces) > 0 {
+			states = append(states, cur)
+		}
+		cur = state{}
+	}
+	for i, u := range in.Units {
+		kvs, err := questionKVs(u.Questions)
+		if err != nil {
+			return Plan{}, err
+		}
+		if len(elems[i]) > budget || len("{}")+len(kvs) > qlimit {
+			plan.Unpacked = append(plan.Unpacked, i)
+			for _, q := range u.Questions {
+				plan.Unasked = append(plan.Unasked, Unasked{q.Name, ReasonUnitTooBig})
+			}
+			continue
+		}
+		sep := func(n int) int {
+			if n > 0 {
+				return 1
+			}
+			return 0
+		}
+		need := len(elems[i]) + sep(len(cur.pieces))
+		qneed := len(kvs)
+		if len(kvs) > 0 {
+			qneed += sep(len(cur.encoded))
+		}
+		if len(cur.pieces) > 0 &&
+			(cur.used+need > budget || len("{}")+len(cur.encoded)+qneed > qlimit) {
+			flush()
+			need = len(elems[i])
+		}
+		cur.pieces = append(cur.pieces, Piece{Unit: i, Text: u.Text})
+		cur.used += need
+		if len(kvs) > 0 {
+			if len(cur.encoded) > 0 {
+				cur.encoded = append(cur.encoded, ',')
+			}
+			cur.encoded = append(cur.encoded, kvs...)
+		}
+		cur.questions = append(cur.questions, u.Questions...)
+	}
+	flush()
+	plan.Whole = len(states) <= 1 && len(plan.Unpacked) == 0
+	var groups []questionGroup
+	if len(in.Questions) > 0 {
+		var oversize []string
+		var err error
+		groups, oversize, err = groupQuestions(in.Questions, qlimit)
+		if err != nil {
+			return Plan{}, err
+		}
+		for _, name := range oversize {
+			plan.Unasked = append(plan.Unasked, Unasked{name, ReasonQuestionTooBig})
+		}
+	}
+	for _, st := range states {
+		encoded, err := in.state(prefix, st.pieces)
+		if err != nil {
+			return Plan{}, err
+		}
+		add := func(questions []byte, qs []Question) {
+			body := requestBody(model, encoded, questions)
+			plan.Batches = append(plan.Batches, Batch{
+				Body: body, Hash: Hash(body), Pieces: st.pieces, Questions: qs,
+			})
+		}
+		for _, g := range groups {
+			add(g.encoded, g.questions)
+		}
+		if len(st.questions) > 0 {
+			add(slices.Concat([]byte("{"), st.encoded, []byte("}")), st.questions)
+		}
+	}
+	return plan, nil
+}
+
+// questionKVs encodes questions as the members of a questions object, without its braces.
+func questionKVs(qs []Question) ([]byte, error) {
+	var b bytes.Buffer
+	for i, q := range qs {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		if err := writeKV(
+			&b,
+			q.Name,
+			questionSpec{q.Type, q.Instructions, q.Criteria},
+		); err != nil {
+			return nil, err
+		}
+	}
 	return b.Bytes(), nil
 }
 
@@ -417,7 +564,7 @@ func (in Input) state(prefix []byte, pieces []Piece) ([]byte, error) {
 		if p.Parts > 0 {
 			part = partLabel(p.Part, p.Parts)
 		}
-		elem, err := in.element(in.Units[p.Unit].Name, part, p.Text)
+		elem, err := in.element(in.Units[p.Unit], part, p.Text)
 		if err != nil {
 			return nil, err
 		}
@@ -492,6 +639,32 @@ func groupQuestions(qs []Question, limit int) ([]questionGroup, []string, error)
 	}
 	flush()
 	return groups, oversize, nil
+}
+
+// Single is one request whose state is the object of fields, in order, asking qs: classify's
+// dup_ request. ok is false when the state or the questions pass their budget; nothing is sent
+// then.
+func Single(fields []Field, qs []Question) (Batch, bool, error) {
+	var state bytes.Buffer
+	state.WriteByte('{')
+	for i, f := range fields {
+		if i > 0 {
+			state.WriteByte(',')
+		}
+		if err := writeKV(&state, f.Key, f.Value); err != nil {
+			return Batch{}, false, err
+		}
+	}
+	state.WriteByte('}')
+	kvs, err := questionKVs(qs)
+	if err != nil {
+		return Batch{}, false, err
+	}
+	if state.Len() > StateBudget || len("{}")+len(kvs) > QuestionBudget {
+		return Batch{}, false, nil
+	}
+	body := requestBody(Pin, state.Bytes(), slices.Concat([]byte("{"), kvs, []byte("}")))
+	return Batch{Body: body, Hash: Hash(body), Questions: qs}, true, nil
 }
 
 func requestBody(model string, state, questions []byte) []byte {

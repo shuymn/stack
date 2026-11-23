@@ -1,0 +1,271 @@
+{
+  "synthetic": "records written by hand: each reply's kind_ and dup_ answer is assigned in the fixture's generator and keyed by the body hash the runtime sends; fixed fixtures check behaviour and are never recorded live (jev-calibrate records the cal cases)",
+  "request": {
+    "jev": {
+      "claude": "claude",
+      "now": "2026-01-08T12:00:00Z",
+      "observe": "observe.json",
+      "records": {
+        "sha256:2d1a81d0e29aebc2e2034a129503dd10fed84a922e5b83e99ae2bd50dbdf368f": {
+          "answer": {
+            "answers": {
+              "kind_r1": {
+                "choice": "drift",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.024999999999999994,
+                  "drift": 0.9,
+                  "noise": 0.024999999999999994,
+                  "request": 0.024999999999999994
+                },
+                "type": "choice"
+              },
+              "kind_r2": {
+                "choice": "drift",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.024999999999999994,
+                  "drift": 0.9,
+                  "noise": 0.024999999999999994,
+                  "request": 0.024999999999999994
+                },
+                "type": "choice"
+              }
+            },
+            "model": "jev-1.14.0",
+            "usage": {
+              "input_tokens": 10,
+              "output_tokens": 1
+            }
+          }
+        },
+        "sha256:729b4ed76b735c8e767330400921e259ced75dcf22b24ce5e0b402f337ba531a": {
+          "answer": {
+            "answers": {
+              "dup_r2": {
+                "noul": 0.9,
+                "type": "noul"
+              }
+            },
+            "model": "jev-1.14.0",
+            "usage": {
+              "input_tokens": 10,
+              "output_tokens": 1
+            }
+          }
+        },
+        "sha256:b71dcf8f1d601e4a03ae8128981ea3ac4d92c9a4d8f2cd347dd3018f515d08f4": {
+          "answer": {
+            "answers": {
+              "dup_r1": {
+                "noul": 0.1,
+                "type": "noul"
+              }
+            },
+            "model": "jev-1.14.0",
+            "usage": {
+              "input_tokens": 10,
+              "output_tokens": 1
+            }
+          }
+        }
+      },
+      "t3": {}
+    },
+    "stage": "cycle"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": null,
+    "context": "jev-classify (jev-1.14.0): 2 owner replies: 2 qualified (1 new, 1 duplicate, 0 dup unassessed), 0 unqualified, 0 unresolved, 0 unevaluated; report ~/.local/state/stack/jev-classify/latest.json\ndrift p/s.jsonl:6: put that back",
+    "report": {
+      "complete": true,
+      "sources": {
+        "t3": {
+          "status": "ok",
+          "error": ""
+        },
+        "transcripts": {
+          "status": "ok",
+          "error": ""
+        }
+      },
+      "counts": {
+        "items": 2,
+        "classified": 2,
+        "unresolved": 0,
+        "unevaluated": 0,
+        "qualified": 2,
+        "duplicate": 1,
+        "new": 1,
+        "dup_unassessed": 0,
+        "dup_unassessed_lookup": 0,
+        "not_done": 0
+      },
+      "items": [
+        {
+          "id": "it01",
+          "where": "p/s.jsonl:3",
+          "status": "classified",
+          "reason": "",
+          "opener": "owner",
+          "qualified": true,
+          "kind": "drift",
+          "excerpt": "put that back",
+          "duplicate": "duplicate",
+          "dup_reason": ""
+        },
+        {
+          "id": "it02",
+          "where": "p/s.jsonl:6",
+          "status": "classified",
+          "reason": "",
+          "opener": "owner",
+          "qualified": true,
+          "kind": "drift",
+          "excerpt": "put that back",
+          "duplicate": "new",
+          "dup_reason": ""
+        }
+      ]
+    },
+    "sent": [
+      {
+        "reply": "put that back",
+        "owner": "Do not change the public API.",
+        "assistant": "I changed the signature of Parse and Format."
+      },
+      {
+        "reply": "put that back",
+        "owner": "Stay inside the billing module.",
+        "assistant": "I changed the signature of Parse and Format."
+      }
+    ]
+  },
+  "repo": {
+    "layouts": [
+      {
+        "kind": "checkout",
+        "dir": "repo"
+      }
+    ]
+  },
+  "observe": {
+    "items": [
+      {
+        "id": "it01",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:3",
+        "excerpt": "put that back",
+        "ts": "2026-01-08T09:00:03Z"
+      },
+      {
+        "id": "it02",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:6",
+        "excerpt": "put that back",
+        "ts": "2026-01-08T09:00:06Z"
+      }
+    ],
+    "sources": {
+      "t3": {
+        "status": "ok",
+        "error": ""
+      },
+      "transcripts": {
+        "status": "ok",
+        "error": ""
+      }
+    },
+    "version": 1,
+    "window": {
+      "since": "2026-01-01T12:00:00Z",
+      "until": "2026-01-08T11:59:00Z"
+    }
+  },
+  "files": {
+    "p/s.jsonl": [
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "Do not change the public API.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:01Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "text": "I changed the signature of Parse and Format.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:02Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "put that back",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:03Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "Stay inside the billing module.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:04Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "text": "I changed the signature of Parse and Format.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:05Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "put that back",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:06Z",
+        "type": "user"
+      }
+    ]
+  },
+  "memory": {
+    "repo": "- Never change the public API without asking.\n- Run scripts/test before every push.\n"
+  }
+}

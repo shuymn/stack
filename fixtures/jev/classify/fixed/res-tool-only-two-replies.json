@@ -1,0 +1,206 @@
+{
+  "synthetic": "records written by hand: each reply's kind_ and dup_ answer is assigned in the fixture's generator and keyed by the body hash the runtime sends; fixed fixtures check behaviour and are never recorded live (jev-calibrate records the cal cases)",
+  "request": {
+    "jev": {
+      "claude": "claude",
+      "now": "2026-01-08T12:00:00Z",
+      "observe": "observe.json",
+      "records": {},
+      "t3": {}
+    },
+    "stage": "cycle"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": null,
+    "context": "jev-classify (jev-1.14.0): 2 owner replies: 0 qualified (0 new, 0 duplicate, 0 dup unassessed), 0 unqualified, 2 unresolved, 0 unevaluated; report ~/.local/state/stack/jev-classify/latest.json\nunresolved: 2 (no assistant text 2)",
+    "report": {
+      "complete": true,
+      "sources": {
+        "t3": {
+          "status": "ok",
+          "error": ""
+        },
+        "transcripts": {
+          "status": "ok",
+          "error": ""
+        }
+      },
+      "counts": {
+        "items": 2,
+        "classified": 0,
+        "unresolved": 2,
+        "unevaluated": 0,
+        "qualified": 0,
+        "duplicate": 0,
+        "new": 0,
+        "dup_unassessed": 0,
+        "dup_unassessed_lookup": 0,
+        "not_done": 0
+      },
+      "items": [
+        {
+          "id": "it01",
+          "where": "p/s.jsonl:6",
+          "status": "unresolved",
+          "reason": "no assistant text",
+          "opener": "",
+          "qualified": false,
+          "kind": "",
+          "excerpt": "",
+          "duplicate": "",
+          "dup_reason": ""
+        },
+        {
+          "id": "it02",
+          "where": "p/s.jsonl:7",
+          "status": "unresolved",
+          "reason": "no assistant text",
+          "opener": "",
+          "qualified": false,
+          "kind": "",
+          "excerpt": "",
+          "duplicate": "",
+          "dup_reason": ""
+        }
+      ]
+    }
+  },
+  "repo": {
+    "layouts": [
+      {
+        "kind": "checkout",
+        "dir": "repo"
+      }
+    ]
+  },
+  "observe": {
+    "items": [
+      {
+        "id": "it01",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:6",
+        "excerpt": "fix one",
+        "ts": "2026-01-08T09:00:06Z"
+      },
+      {
+        "id": "it02",
+        "signal": "owner-reply",
+        "where": "p/s.jsonl:7",
+        "excerpt": "fix two",
+        "ts": "2026-01-08T09:00:07Z"
+      }
+    ],
+    "sources": {
+      "t3": {
+        "status": "ok",
+        "error": ""
+      },
+      "transcripts": {
+        "status": "ok",
+        "error": ""
+      }
+    },
+    "version": 1,
+    "window": {
+      "since": "2026-01-01T12:00:00Z",
+      "until": "2026-01-08T11:59:00Z"
+    }
+  },
+  "files": {
+    "p/s.jsonl": [
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "older task",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:01Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "text": "older closing",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:02Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "task B",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:03Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "id": "tu",
+              "name": "Bash",
+              "type": "tool_use"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:04Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": [
+            {
+              "content": "ok",
+              "tool_use_id": "tu",
+              "type": "tool_result"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:05Z",
+        "toolUseResult": {},
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "fix one",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:06Z",
+        "type": "user"
+      },
+      {
+        "cwd": "repo",
+        "message": {
+          "content": "fix two",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:07Z",
+        "type": "user"
+      }
+    ]
+  }
+}

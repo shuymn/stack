@@ -12,9 +12,10 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/shuymn/stack/extensions/internal/t3loc"
 )
 
 // ---------------------------------------------------------------- T3
@@ -96,7 +97,7 @@ func (s *state) t3(st *Source) error {
 			t, _ := parseTime(row.CreatedAt)
 			s.add(
 				"owner-reply",
-				fmt.Sprintf("t3:%s:%v", row.ThreadID, jsonScalar(d["id"])),
+				t3loc.Locator(row.ThreadID, d["id"]),
 				text,
 				t,
 				"owner",
@@ -119,19 +120,6 @@ func t3MessagesSQL(since, until time.Time) string {
 		"where b.thread_id = m.thread_id and b.created_at < m.created_at) as assistant " +
 		"from orchestration_v2_projection_messages m where m.role = 'user' and m.created_at >= '" +
 		t3Time(since) + "' and m.created_at < '" + t3Time(until) + "' order by m.created_at"
-}
-
-func jsonScalar(v any) string {
-	switch x := v.(type) {
-	case nil:
-		return ""
-	case string:
-		return x
-	case float64:
-		return strconv.FormatFloat(x, 'f', -1, 64)
-	default:
-		return fmt.Sprint(x)
-	}
 }
 
 // rootThread: no lineage, or a lineage without a parent (observe.py:217-220).

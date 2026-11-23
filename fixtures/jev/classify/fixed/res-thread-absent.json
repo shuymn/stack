@@ -1,0 +1,167 @@
+{
+  "synthetic": "records written by hand: each reply's kind_ and dup_ answer is assigned in the fixture's generator and keyed by the body hash the runtime sends; fixed fixtures check behaviour and are never recorded live (jev-calibrate records the cal cases)",
+  "request": {
+    "jev": {
+      "claude": "claude",
+      "now": "2026-01-08T12:00:00Z",
+      "observe": "observe.json",
+      "records": {
+        "sha256:2a01f5b7ca4653af82c8b885c61c5a194f259e5ddaaa2ca448201aeac8550b1c": {
+          "answer": {
+            "answers": {
+              "kind_r1": {
+                "choice": "correction",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.024999999999999994,
+                  "correction": 0.9,
+                  "drift": 0.024999999999999994,
+                  "noise": 0.024999999999999994,
+                  "request": 0.024999999999999994
+                },
+                "type": "choice"
+              }
+            },
+            "model": "jev-1.14.0",
+            "usage": {
+              "input_tokens": 10,
+              "output_tokens": 1
+            }
+          }
+        }
+      },
+      "t3": {
+        "th:p": {
+          "cwd": "repo",
+          "rows": [
+            {
+              "message_id": "m000",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:01.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"a\",\"text\":\"task P\"}"
+            },
+            {
+              "message_id": "m001",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:02.000Z",
+              "payload_json": "{\"text\":\"closing P\"}"
+            },
+            {
+              "message_id": "m002",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:03.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"b\",\"text\":\"fix present\"}"
+            }
+          ]
+        }
+      }
+    },
+    "stage": "cycle"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": null,
+    "context": "jev-classify (jev-1.14.0): 2 owner replies: 1 qualified (1 new, 0 duplicate, 0 dup unassessed), 0 unqualified, 1 unresolved, 0 unevaluated; report ~/.local/state/stack/jev-classify/latest.json\ncorrection t3:th:p:b: fix present\nunresolved: 1 (source gone 1)",
+    "report": {
+      "complete": true,
+      "sources": {
+        "t3": {
+          "status": "ok",
+          "error": ""
+        },
+        "transcripts": {
+          "status": "ok",
+          "error": ""
+        }
+      },
+      "counts": {
+        "items": 2,
+        "classified": 1,
+        "unresolved": 1,
+        "unevaluated": 0,
+        "qualified": 1,
+        "duplicate": 0,
+        "new": 1,
+        "dup_unassessed": 0,
+        "dup_unassessed_lookup": 0,
+        "not_done": 0
+      },
+      "items": [
+        {
+          "id": "it01",
+          "where": "t3:th:p:b",
+          "status": "classified",
+          "reason": "",
+          "opener": "owner",
+          "qualified": true,
+          "kind": "correction",
+          "excerpt": "fix present",
+          "duplicate": "new",
+          "dup_reason": "no memory yet"
+        },
+        {
+          "id": "it02",
+          "where": "t3:th:gone:g1",
+          "status": "unresolved",
+          "reason": "source gone",
+          "opener": "",
+          "qualified": false,
+          "kind": "",
+          "excerpt": "",
+          "duplicate": "",
+          "dup_reason": ""
+        }
+      ]
+    },
+    "sent": [
+      {
+        "reply": "fix present",
+        "owner": "task P",
+        "assistant": "closing P"
+      }
+    ]
+  },
+  "repo": {
+    "layouts": [
+      {
+        "kind": "checkout",
+        "dir": "repo"
+      }
+    ]
+  },
+  "observe": {
+    "items": [
+      {
+        "id": "it01",
+        "signal": "owner-reply",
+        "where": "t3:th:p:b",
+        "excerpt": "fix present",
+        "ts": "2026-01-08T09:00:03Z"
+      },
+      {
+        "id": "it02",
+        "signal": "owner-reply",
+        "where": "t3:th:gone:g1",
+        "excerpt": "fix gone",
+        "ts": "2026-01-08T11:00:00Z"
+      }
+    ],
+    "sources": {
+      "t3": {
+        "status": "ok",
+        "error": ""
+      },
+      "transcripts": {
+        "status": "ok",
+        "error": ""
+      }
+    },
+    "version": 1,
+    "window": {
+      "since": "2026-01-01T12:00:00Z",
+      "until": "2026-01-08T11:59:00Z"
+    }
+  }
+}
