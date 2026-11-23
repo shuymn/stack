@@ -110,19 +110,39 @@ func TestWritingGuide(t *testing.T) {
 			t.Fatalf("stdin lacks the embedded guide:\n%s", in)
 		}
 	})
-	for _, mode := range []string{"100644", "100755"} {
-		t.Run("key set "+mode, func(t *testing.T) {
+	for _, tc := range []struct {
+		name, path, mode, env string
+	}{
+		{name: "100644", path: "docs/writing.md", mode: "100644"},
+		{name: "100755", path: "docs/writing.md", mode: "100755"},
+		// A name git would read as pathspec magic without --literal-pathspecs.
+		{name: "magic name", path: ":(glob)writing.md", mode: "100644"},
+		// Inherited pathspec settings git refuses next to --literal-pathspecs.
+		{name: "glob env", path: "docs/writing.md", mode: "100644", env: "GIT_GLOB_PATHSPECS=1"},
+		{name: "icase env", path: "docs/writing.md", mode: "100644", env: "GIT_ICASE_PATHSPECS=1"},
+		{name: "noglob env", path: "docs/writing.md", mode: "100644", env: "GIT_NOGLOB_PATHSPECS=1"},
+	} {
+		t.Run("key set "+tc.name, func(t *testing.T) {
 			t.Parallel()
 			f := newFx(t)
-			f.commitConfig("paths = [\"skills/**\"]\nwriting = \"docs/writing.md\"\n", func() {
-				f.repo.Write("docs/writing.md", guide)
-				f.repo.Git("add", "-A")
-				if mode == "100755" {
-					f.repo.Git("update-index", "--chmod=+x", "docs/writing.md")
+			if tc.env != "" {
+				f.opts.Env = append(f.opts.Env, tc.env)
+			}
+			f.commitConfig("paths = [\"skills/**\"]\nwriting = \""+tc.path+"\"\n", func() {
+				f.repo.Write(tc.path, guide)
+				if tc.mode == "100755" {
+					p := filepath.Join(f.repo.Dir, filepath.FromSlash(tc.path))
+					if err := os.Chmod(p, 0o700); err != nil {
+						t.Fatal(err)
+					}
 				}
 			})
+			entry := f.repo.Git("--literal-pathspecs", "ls-tree", "HEAD", "--", tc.path)
+			if !strings.HasPrefix(entry, tc.mode+" blob ") {
+				t.Fatalf("committed entry %q, want mode %s", entry, tc.mode)
+			}
 			// Only merged content counts: the work tree's copy differs from the base.
-			f.repo.Write("docs/writing.md", "uncommitted\n")
+			f.repo.Write(tc.path, "uncommitted\n")
 			f.wantOutcome(f.run(), StatusPass, "pr https://github.com/o/r/pull/1")
 			in := f.calls("claude")[0].Stdin
 			if !strings.Contains(in, "\n## Writing rules\n\n"+guide+"\n## Task\n") ||
@@ -200,6 +220,37 @@ func TestWritingGuide(t *testing.T) {
 			f.wantStopped(resp, " is not a valid repository path")
 		}
 	})
+}
+
+// Keys match exactly: a key in another case is unknown and ignored, never bound instead.
+func TestRepoConfigKeys(t *testing.T) {
+	t.Parallel()
+	dual := "Paths = [\"other/**\"]\npaths = [\"skills/**\"]\n" +
+		"Writing = \"skills/a.md\"\nwriting = \"docs/writing.md\"\n"
+	for i := range 256 {
+		cfg, err := repoConfig([]byte(dual))
+		if err != nil || !slices.Equal(cfg.paths, []string{"skills/**"}) ||
+			cfg.writing != "docs/writing.md" {
+			t.Fatalf("run %d: %+v, %v", i, cfg, err)
+		}
+	}
+	for _, bad := range []string{
+		"paths = [\"skills/**\"]\nwriting = 1\nWriting = \"x.md\"\n",
+		"Paths = [\"skills/**\"]\n",
+		"paths = [\"skills/**\", 1]\n",
+	} {
+		for i := range 256 {
+			if _, err := repoConfig([]byte(bad)); err == nil {
+				t.Fatalf("run %d: %q accepted", i, bad)
+			}
+		}
+	}
+	if cfg, err := repoConfig(
+		[]byte("paths = [\"skills/**\"]\nWriting = \"x.md\"\n"),
+	); err != nil ||
+		cfg.writing != "" {
+		t.Fatalf("other-case writing: %+v, %v", cfg, err)
+	}
 }
 
 func TestParseLsTree(t *testing.T) {

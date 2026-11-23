@@ -61,39 +61,39 @@ type repoCfg struct {
 }
 
 // repoConfig decodes the target's .stack/improve.toml: `paths` is a required non-empty list of
-// valid patterns; `writing` is an optional repository path.
+// valid patterns; `writing` is an optional repository path. Keys match exactly: toml's struct
+// decoding also binds keys in another case, so a `Writing` could stand in for `writing`.
 func repoConfig(data []byte) (repoCfg, error) {
-	var cfg struct {
-		Paths   []string `toml:"paths"`
-		Writing any      `toml:"writing"`
-	}
-	md, err := toml.Decode(string(data), &cfg)
-	if err != nil {
+	var cfg map[string]any
+	if _, err := toml.Decode(string(data), &cfg); err != nil {
 		return repoCfg{}, fmt.Errorf("%w: .stack/improve.toml is not valid TOML", errConfig)
 	}
-	if !md.IsDefined("paths") || len(cfg.Paths) == 0 {
+	list, _ := cfg["paths"].([]any)
+	if len(list) == 0 {
 		return repoCfg{}, fmt.Errorf(
 			"%w: .stack/improve.toml needs a non-empty paths list",
 			errConfig,
 		)
 	}
-	for _, p := range cfg.Paths {
-		if !validPattern(p) {
+	out := repoCfg{paths: make([]string, 0, len(list))}
+	for _, v := range list {
+		p, ok := v.(string)
+		if !ok || !validPattern(p) {
 			return repoCfg{}, fmt.Errorf(
-				"%w: .stack/improve.toml path %q is not a valid pattern",
+				"%w: .stack/improve.toml path %s is not a valid pattern",
 				errConfig,
-				p,
+				quoteValue(v),
 			)
 		}
+		out.paths = append(out.paths, p)
 	}
-	out := repoCfg{paths: cfg.Paths}
-	if md.IsDefined("writing") {
-		w, ok := cfg.Writing.(string)
+	if v, set := cfg["writing"]; set {
+		w, ok := v.(string)
 		if !ok || !validPath(w) {
 			return repoCfg{}, fmt.Errorf(
 				"%w: .stack/improve.toml writing %s is not a valid repository path",
 				errConfig,
-				quoteValue(cfg.Writing),
+				quoteValue(v),
 			)
 		}
 		out.writing = w
