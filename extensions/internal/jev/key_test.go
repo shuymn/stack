@@ -118,7 +118,7 @@ func TestKeyFileNotRegular(t *testing.T) {
 	wantKeyError(t, key, err, KeyNotRegular)
 }
 
-// TestKeyFileSize: the file is read up to MaxKeyFile bytes; a longer one is refused unread.
+// TestKeyFileSize: a file of MaxKeyFile bytes is accepted and a longer one refused.
 func TestKeyFileSize(t *testing.T) {
 	home := t.TempDir()
 	writeKey(t, home, strings.Repeat("k", MaxKeyFile), 0o600)
@@ -161,8 +161,8 @@ func TestKeyFileSymlink(t *testing.T) {
 	wantKeyError(t, key, err, KeyDangling)
 }
 
-// TestKeyFixes: only the causes about mode name chmod 600, and an unreadable file asks for
-// searchable parent directories.
+// TestKeyFixes: the causes not about mode or owner never suggest chmod, and an unreadable file
+// asks for searchable parent directories.
 func TestKeyFixes(t *testing.T) {
 	if msg := (&KeyError{Cause: KeyUnreadable}).Error(); !strings.Contains(msg,
 		"parent directories searchable") {

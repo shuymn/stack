@@ -34,8 +34,7 @@ const (
 
 var errRequest = errors.New("invalid request")
 
-// Request is the part of a protocol request the extensions read. Jev is the replay object, nil
-// in a live request.
+// Request is the part of a protocol request the extensions read.
 type Request struct {
 	Stage  string `json:"stage"`
 	Repo   string `json:"repo"`
