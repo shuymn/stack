@@ -340,7 +340,7 @@ except on its own errors.
   - *How a consumer finds that dir:* it resolves the current config as above. The premise is that `[kit].root` is
     not edited from the start of `pr merge` until the consumer has resolved the dir; editing it then is outside
     this design. The consumer may instead reuse a dir it saw for `<slug>` in this session, from `kit open` output
-    or a compact restore, under the same premise: an `<orchestration-state path=…>` or `[state omitted: context
+    or a compact restore, only when `[kit].root` has not changed since that output: an `<orchestration-state path=…>` or `[state omitted: context
     limit: <path>]` path names `<kit dir>/NORTH.md` or `<kit dir>/state.md`, so the kit dir is its parent, and
     `[new kit: <path>; …]` names the kit dir. `[unreadable: <path>]` names either the kit dir or a file in it, and
     a slug may itself be `state.md`, so the consumer does not derive a dir from it. It never assumes the default

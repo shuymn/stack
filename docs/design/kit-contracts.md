@@ -50,9 +50,9 @@ The parts, tags and markers are stated in `phase2-core.md` §4.1.1, the compact 
 and which entry point emits what in §4.2 step 7, the single place hiden points to. The contract states the budget as
 the allocator delivers it, including the case where markers alone fill the budget and later kits leave no text,
 rather than a guarantee the code does not keep. A `NORTH.md`-only kit keeps its state block at both entry points
-when room remains (checked on the built CLI), so hiden's `<orchestration-state>` check holds for it. When the budget
-is used up first, hiden sees a `[state omitted: …]` marker or no text for that kit; its state check then fails
-visibly (there is no state block), which is accepted (§6).
+when room remains (checked on the built CLI), so the agent sees its state. When the budget is used up first, the agent
+sees a `[state omitted: …]` marker or no text for that kit, which is accepted (§6); hiden's explicit
+`<orchestration-state>` check runs after `kit open` in a handover session, where no total budget applies.
 
 ### 3.3 `sessions/<id>.kits`
 
@@ -70,8 +70,7 @@ The line keeps its text: it is matched by its consumer, and its meaning can be s
 names is defined by the root the merge itself used, because that is the dir the extension counted. The consumer
 resolves the current config, on the premise that the root is not edited from the start of `pr merge` until the
 consumer has resolved the dir; a snapshot of the merge's config would guard only against that edit, so none is added.
-A cached dir is reused under the same premise, `[unreadable: …]` is not used to derive a dir, and a slug without an
-established dir is reported as unresolved.
+How the consumer finds the dir, including when a dir seen earlier may be reused, is in `core-stages.md` §4.7.
 Rejected: adding the kit dir to the line (§6).
 
 ### 3.5 Steward out of `stack`
@@ -151,7 +150,7 @@ needed the summary, or if `stack` gained its own scheduled runner. (a) changes n
 | Lockless `.kits` readers see no fresh snapshot: a read racing a session's first `kit open` or last `kit close` can see either side, so the ask-owner hook may show or skip the checklist for that one question | the effect is one reminder more or less on one question |
 | Steward's caller lookup through `.kits` is best-effort: when two sessions list the slug, or one closes it while steward reads, steward can pick the other session's transcript | `.kits` records kits, not callers, so no reader can do better from it; the companion PR (§8) requires steward to name the session it inspected on every lookup, or say it could not establish the caller, so an on-track line is not mistaken for an audit of the right session |
 | On Windows, a reader holding the file open can make `kit open`'s rename or the last `kit close`'s remove fail (exit 2): the open may leave a new empty kit dir and no record, the close leaves the slug recorded; nothing retries | the command reports the failure and changes no other record; rerunning it succeeds once the reader has closed the file; the hook only stats the file and content readers hold it briefly (`phase2-core.md` §4.1) |
-| A compact whose budget is used up before a kit's state block leaves a `[state omitted: …]` marker or no text for that kit, so hiden's `<orchestration-state>` check fails for it | the loss is visible to an agent that expects the kit (no state block for it), and that agent can rerun `stack kit open <slug>`, whose output has no total budget; hiden's explicit `<orchestration-state>` check runs after `kit open` in a handover session, not after compaction; a larger budget would exceed Claude Code's hook output limit |
+| A compact whose budget is used up before a kit's state block leaves a `[state omitted: …]` marker or no text for that kit | the loss is visible to an agent that expects the kit (no state block for it), and that agent can rerun `stack kit open <slug>`, whose output has no total budget; hiden's explicit `<orchestration-state>` check runs after `kit open` in a handover session, not after compaction; a larger budget would exceed Claude Code's hook output limit |
 | The due line names a dotfiles agent | it is matched text; its meaning is stated without depending on that agent |
 | A `NORTH.md`-only kit still gets `[new kit: …]` | a prompt to write `state.md` next to the state block, not a failure; `stack-audit-due` hashes the missing file as `absent` |
 | The steward report is no longer accepted in this repository | `stack` never reads it; the companion PR accepts it (§8) |
