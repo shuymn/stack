@@ -371,8 +371,8 @@ func (s *state) locked() (string, string) {
 	}
 	s.paths, s.writing = cfg.paths, writing
 	if cfg.writing != "" {
-		if status, text, ok := s.writingGuide(cfg.writing); !ok {
-			return status, text
+		if problem := s.writingGuide(cfg.writing); problem != "" {
+			return StatusWarn, problem + "; improve stopped"
 		}
 	}
 	// 4. Open PR gate.
@@ -400,36 +400,33 @@ func (s *state) locked() (string, string) {
 	return s.attempt(ev.public)
 }
 
-// writingGuide reads the target's writing guide p into s.writing. It must be a regular file outside
-// paths, so the model cannot rewrite its own rules.
-func (s *state) writingGuide(p string) (string, string, bool) {
+// writingGuide reads the target's writing guide p into s.writing, or returns why it cannot. It must
+// be a regular file outside paths, so the model cannot rewrite its own rules.
+func (s *state) writingGuide(p string) string {
 	name := "writing guide " + strconv.Quote(p)
 	if matchAny(s.paths, p) {
-		return StatusWarn, name + " matches paths, so improve could edit its own rules; " +
-			"improve stopped", false
+		return name + " matches paths, so improve could edit its own rules"
 	}
 	data, found, problem := s.regularFile(p, name)
 	if problem != "" {
-		return StatusWarn, problem + "; improve stopped", false
+		return problem
 	}
 	if !found {
-		return StatusWarn, name + " does not exist at the base commit; improve stopped", false
+		return name + " does not exist at the base commit"
 	}
 	s.writing = string(data)
-	return "", "", true
+	return ""
 }
 
 // treeEntry is one record of `git ls-tree -z`.
 type treeEntry struct{ mode, typ, oid, path string }
 
-// regular reports a regular-file blob; a symlink (120000) is a blob holding the target's name.
-func (e treeEntry) regular() bool {
-	return e.typ == "blob" && (e.mode == "100644" || e.mode == "100755")
-}
-
-// kind names what a non-regular entry is.
-func (e treeEntry) kind() string {
+// notRegular names what the entry is when it is not a regular-file blob, or returns "". A symlink
+// (120000) is a blob holding the target's name.
+func (e treeEntry) notRegular() string {
 	switch {
+	case e.typ == "blob" && (e.mode == "100644" || e.mode == "100755"):
+		return ""
 	case e.mode == "120000":
 		return "a symlink"
 	case e.typ == "tree":
@@ -470,11 +467,15 @@ func parseLsTree(out []byte) ([]treeEntry, error) {
 // read failed or p is not a regular file.
 func (s *state) regularFile(p, name string) ([]byte, bool, string) {
 	// --literal-pathspecs: a name such as `:(glob)x` is a file name, not pathspec magic. Only this
-	// call drops the inherited settings git refuses next to it; every other git call keeps them.
+	// call drops the inherited settings git refuses next to it (it accepts GIT_LITERAL_PATHSPECS and
+	// GIT_NOGLOB_PATHSPECS); every other git call keeps them.
 	c := s.gitCmd(s.repo, "--literal-pathspecs", "ls-tree", "-z", "--full-tree", s.baseOID, "--", p)
 	c.env = slices.DeleteFunc(c.env, func(kv string) bool {
-		name, _, _ := strings.Cut(kv, "=")
-		return slices.Contains(literalRefused, name)
+		switch name, _, _ := strings.Cut(kv, "="); name {
+		case "GIT_GLOB_PATHSPECS", "GIT_ICASE_PATHSPECS":
+			return true
+		}
+		return false
 	})
 	out := s.child("git", c)
 	if !out.ok() {
@@ -488,8 +489,8 @@ func (s *state) regularFile(p, name string) ([]byte, bool, string) {
 	if i < 0 {
 		return nil, false, ""
 	}
-	if e := entries[i]; !e.regular() {
-		return nil, true, name + " is " + e.kind() + ", not a regular file"
+	if kind := entries[i].notRegular(); kind != "" {
+		return nil, true, name + " is " + kind + ", not a regular file"
 	}
 	out = s.git(s.repo, "cat-file", "blob", entries[i].oid)
 	if !out.ok() {
@@ -653,10 +654,6 @@ func (s *state) gitCmd(dir string, args ...string) command {
 		env: append(slices.Clone(s.o.Env), "GIT_TERMINAL_PROMPT=0", noReplace),
 	}
 }
-
-// literalRefused are the inherited pathspec settings git refuses next to --literal-pathspecs;
-// GIT_LITERAL_PATHSPECS and GIT_NOGLOB_PATHSPECS it accepts.
-var literalRefused = []string{"GIT_GLOB_PATHSPECS", "GIT_ICASE_PATHSPECS"}
 
 // noReplace turns replace refs off for git and for the git `stack-public check` runs.
 const noReplace = "GIT_NO_REPLACE_OBJECTS=1"

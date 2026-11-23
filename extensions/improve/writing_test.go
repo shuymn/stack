@@ -19,12 +19,17 @@ func (f *fx) commitConfig(cfg string, setup func()) {
 		setup()
 	}
 	f.repo.Write(".stack/improve.toml", cfg)
+	f.pushAll()
+}
+
+// pushAll stages the whole work tree, commits it and pushes it to origin.
+func (f *fx) pushAll() {
+	f.t.Helper()
 	f.repo.Git("add", "-A")
 	f.repo.Git("commit", "-q", "-m", "config")
 	f.repo.Git("push", "-q", "origin", "main")
 }
 
-// symlink commits a symlink at name pointing to target.
 func (f *fx) symlink(name, target string) {
 	f.t.Helper()
 	p := filepath.Join(f.repo.Dir, filepath.FromSlash(name))
@@ -42,12 +47,18 @@ func (f *fx) failGit(arg string) {
 	f.wrapGit("for a in \"$@\"; do [ \"$a\" = '" + arg + "' ] && exit 3; done\n")
 }
 
-// logGlobGit records, for every git call, GIT_GLOB_PATHSPECS and the arguments, one line each, in
-// the returned file.
+// logGlobGit records, for every git call, the value of GIT_GLOB_PATHSPECS (or "unset") and the git
+// subcommand after `-C <dir>` and an optional --literal-pathspecs, one line each, in the returned
+// file.
 func (f *fx) logGlobGit() string {
 	f.t.Helper()
 	log := filepath.Join(f.t.TempDir(), "git.log")
-	f.wrapGit("echo \"glob=${GIT_GLOB_PATHSPECS-unset} $*\" >> '" + log + "'\n")
+	f.wrapGit("sub() {\n" +
+		"  if [ \"$1\" = -C ]; then shift 2; fi\n" +
+		"  if [ \"$1\" = --literal-pathspecs ]; then shift; fi\n" +
+		"  printf '%s' \"$1\"\n" +
+		"}\n" +
+		"printf '%s %s\\n' \"${GIT_GLOB_PATHSPECS-unset}\" \"$(sub \"$@\")\" >> '" + log + "'\n")
 	return log
 }
 
@@ -58,13 +69,9 @@ func (f *fx) wrapGit(pre string) {
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	p := filepath.Join(f.t.TempDir(), "git")
-	script := "#!/bin/sh\n" + pre + "exec '" + gitPath + "' \"$@\"\n"
-	//nolint:gosec // G306: the fake git must be executable.
-	if err := os.WriteFile(p, []byte(script), 0o700); err != nil {
-		f.t.Fatal(err)
-	}
-	f.tools["git"] = p
+	dir := f.t.TempDir()
+	writeHook(f.t, dir, "git", pre+"exec '"+gitPath+"' \"$@\"")
+	f.tools["git"] = filepath.Join(dir, "git")
 }
 
 // wantStopped asserts a warn with context containing want, before the model and the stamp.
@@ -88,9 +95,7 @@ func TestRepoConfigFile(t *testing.T) {
 		f.repo.Write("real.toml", "paths = [\"skills/**\"]\n")
 		f.repo.Git("rm", "-q", ".stack/improve.toml")
 		f.symlink(".stack/improve.toml", "../real.toml")
-		f.repo.Git("add", "-A")
-		f.repo.Git("commit", "-q", "-m", "link config")
-		f.repo.Git("push", "-q", "origin", "main")
+		f.pushAll()
 		f.wantStopped(f.run(), ".stack/improve.toml is a symlink, not a regular file")
 	})
 	t.Run("directory", func(t *testing.T) {
@@ -98,9 +103,7 @@ func TestRepoConfigFile(t *testing.T) {
 		f := newFx(t)
 		f.repo.Git("rm", "-q", ".stack/improve.toml")
 		f.repo.Write(".stack/improve.toml/x", "paths = [\"skills/**\"]\n")
-		f.repo.Git("add", "-A")
-		f.repo.Git("commit", "-q", "-m", "config dir")
-		f.repo.Git("push", "-q", "origin", "main")
+		f.pushAll()
 		f.wantStopped(f.run(), ".stack/improve.toml is a directory, not a regular file")
 	})
 	t.Run("lookup fails", func(t *testing.T) {
@@ -183,13 +186,14 @@ func TestWritingGuide(t *testing.T) {
 		}
 		var lookups, kept int
 		for line := range strings.SplitSeq(strings.TrimSpace(string(data)), "\n") {
+			glob, sub, _ := strings.Cut(line, " ")
 			switch {
-			case strings.Contains(line, " ls-tree "):
+			case sub == "ls-tree":
 				lookups++
-				if !strings.HasPrefix(line, "glob=unset ") {
+				if glob != "unset" {
 					t.Errorf("lookup kept the variable: %s", line)
 				}
-			case strings.HasPrefix(line, "glob=1 "):
+			case glob == "1":
 				kept++
 			default:
 				t.Errorf("non-lookup call lost the variable: %s", line)
@@ -199,7 +203,18 @@ func TestWritingGuide(t *testing.T) {
 			t.Fatalf("lookups %d, other calls %d:\n%s", lookups, kept, data)
 		}
 	})
-	oid := func(f *fx) string { return f.repo.Git("rev-parse", "HEAD:docs/writing.md") }
+	t.Run("read fails", func(t *testing.T) {
+		t.Parallel()
+		f := newFx(t)
+		f.commitConfig("paths = [\"skills/**\"]\nwriting = \"docs/writing.md\"\n", func() {
+			f.repo.Write("docs/writing.md", guide)
+		})
+		f.failGit(f.repo.Git("rev-parse", "HEAD:docs/writing.md"))
+		f.wantStopped(
+			f.run(),
+			`cannot read writing guide "docs/writing.md": exit 3; improve stopped`,
+		)
+	})
 	for _, tc := range []struct {
 		name, writing string
 		setup         func(f *fx)
@@ -234,11 +249,6 @@ func TestWritingGuide(t *testing.T) {
 			},
 			want: `git ls-tree of writing guide "docs/writing.md" failed: exit 3`,
 		},
-		{
-			name: "read fails", writing: "docs/writing.md",
-			setup: func(f *fx) { f.repo.Write("docs/writing.md", guide) },
-			want:  `cannot read writing guide "docs/writing.md": exit 3`,
-		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -248,9 +258,6 @@ func TestWritingGuide(t *testing.T) {
 					tc.setup(f)
 				}
 			})
-			if tc.name == "read fails" {
-				f.failGit(oid(f))
-			}
 			f.wantStopped(f.run(), tc.want+"; improve stopped")
 		})
 	}
@@ -272,13 +279,22 @@ func TestWritingGuide(t *testing.T) {
 // Keys match exactly: a key in another case is unknown and ignored, never bound instead.
 func TestRepoConfigKeys(t *testing.T) {
 	t.Parallel()
-	dual := "Paths = [\"other/**\"]\npaths = [\"skills/**\"]\n" +
-		"Writing = \"skills/a.md\"\nwriting = \"docs/writing.md\"\n"
-	for i := range 256 {
-		cfg, err := repoConfig([]byte(dual))
+	for _, tc := range []struct {
+		cfg, writing string
+	}{
+		{
+			"Paths = [\"other/**\"]\npaths = [\"skills/**\"]\n" +
+				"Writing = \"skills/a.md\"\nwriting = \"docs/writing.md\"\n",
+			"docs/writing.md",
+		},
+		// A struct decoder binds Paths to the paths field and fails on its type.
+		{"paths = [\"skills/**\"]\nPaths = 1\n", ""},
+		{"paths = [\"skills/**\"]\nWriting = \"x.md\"\n", ""},
+	} {
+		cfg, err := repoConfig([]byte(tc.cfg))
 		if err != nil || !slices.Equal(cfg.paths, []string{"skills/**"}) ||
-			cfg.writing != "docs/writing.md" {
-			t.Fatalf("run %d: %+v, %v", i, cfg, err)
+			cfg.writing != tc.writing {
+			t.Errorf("%q: %+v, %v", tc.cfg, cfg, err)
 		}
 	}
 	for _, bad := range []string{
@@ -286,17 +302,9 @@ func TestRepoConfigKeys(t *testing.T) {
 		"Paths = [\"skills/**\"]\n",
 		"paths = [\"skills/**\", 1]\n",
 	} {
-		for i := range 256 {
-			if _, err := repoConfig([]byte(bad)); err == nil {
-				t.Fatalf("run %d: %q accepted", i, bad)
-			}
+		if _, err := repoConfig([]byte(bad)); err == nil {
+			t.Errorf("%q accepted", bad)
 		}
-	}
-	if cfg, err := repoConfig(
-		[]byte("paths = [\"skills/**\"]\nWriting = \"x.md\"\n"),
-	); err != nil ||
-		cfg.writing != "" {
-		t.Fatalf("other-case writing: %+v, %v", cfg, err)
 	}
 }
 

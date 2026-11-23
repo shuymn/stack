@@ -124,9 +124,7 @@ func quoteValue(v any) string {
 }
 
 func validPattern(p string) bool {
-	if p == "" || strings.HasPrefix(p, "/") {
-		return false
-	}
+	// An empty pattern or a leading slash gives an empty segment.
 	for seg := range strings.SplitSeq(p, "/") {
 		if seg == "" {
 			return false
