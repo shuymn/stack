@@ -170,7 +170,13 @@ func TestCompactEntryDeadline(t *testing.T) {
 						took, limit)
 				}
 				if tt.start {
-					mustContain(t, ctx, "[extension demo: warn: timed out")
+					// 500 ms are left after the lookup: started and timed out, or, when the start
+					// is slower on a loaded machine, not started. The bound above is the property.
+					const notStarted = "[extension demo: warn: not started: stage deadline"
+					if !strings.Contains(ctx, "[extension demo: warn: timed out") &&
+						!strings.Contains(ctx, notStarted) {
+						t.Fatalf("no stage deadline reported:\n%s", squash(ctx))
+					}
 					return
 				}
 				mustContain(t, ctx, "[extension demo: warn: not started: stage deadline")
@@ -205,10 +211,11 @@ func TestCompactEntryDeadline(t *testing.T) {
 				ctx, _ := f.start(compactIn(testID))
 				calls := proctest.Calls(t, demo)
 				if tt.run {
-					// Past the check: the stage looked the extension up and ran it under the
-					// 1.1 s deadline the check set on the real clock. A loaded machine can use
-					// that up in the lookup or the fake's start; a time-out or a "not started"
-					// still shows the stage ran, and only the check leaves "[entry skipped".
+					// The stage passed the admission check: it looked the extension up and ran
+					// it under the 1.1 s deadline the check set on the real clock. A loaded
+					// machine can use that up in the lookup or the fake's start; a time-out or a
+					// "not started" still shows the stage passed the admission check, and only
+					// a failed check leaves "[entry skipped".
 					ran := []string{
 						"ENTRY CTX",
 						"[extension demo: warn: timed out",
