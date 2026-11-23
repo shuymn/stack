@@ -1,689 +1,13 @@
 {
+  "placeholder": "pending: awaiting a jev-calibrate run with the key",
   "request": {
     "jev": {
       "claude": "claude",
       "now": "2026-01-08T12:00:00Z",
       "observe": "observe.json",
-      "records": {
-        "sha256:01fd0a53916e1603bf6e72d3b354a5b308c6383ff0b5c6f5d1bdd16500d17c51": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r30": {
-                "type": "noul",
-                "noul": 0.54
-              }
-            },
-            "usage": {
-              "input_tokens": 495,
-              "output_tokens": 23
-            }
-          }
-        },
-        "sha256:29fd634a951f1dd18eece6d1fa9ea4a4e513af0c907eba397dadcbf9b808ae7d": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r19": {
-                "type": "noul",
-                "noul": 0.13
-              }
-            },
-            "usage": {
-              "input_tokens": 506,
-              "output_tokens": 23
-            }
-          }
-        },
-        "sha256:54f0d49893ea4ba01cbadb4bc74b91ac4337cd5bbde4d1daac762f7345be09de": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "kind_r1": {
-                "type": "choice",
-                "choice": "noise",
-                "confidence": 0.69,
-                "probabilities": {
-                  "approval": 0.09,
-                  "correction": 0.01,
-                  "drift": 0.01,
-                  "noise": 0.75,
-                  "request": 0.14
-                }
-              },
-              "kind_r2": {
-                "type": "choice",
-                "choice": "noise",
-                "confidence": 0.95,
-                "probabilities": {
-                  "approval": 0.04,
-                  "correction": 0.0,
-                  "drift": 0.0,
-                  "noise": 0.96,
-                  "request": 0.0
-                }
-              },
-              "kind_r3": {
-                "type": "choice",
-                "choice": "noise",
-                "confidence": 0.91,
-                "probabilities": {
-                  "approval": 0.06,
-                  "correction": 0.0,
-                  "drift": 0.0,
-                  "noise": 0.93,
-                  "request": 0.01
-                }
-              },
-              "kind_r4": {
-                "type": "choice",
-                "choice": "noise",
-                "confidence": 0.9,
-                "probabilities": {
-                  "approval": 0.03,
-                  "correction": 0.0,
-                  "drift": 0.01,
-                  "noise": 0.92,
-                  "request": 0.04
-                }
-              },
-              "kind_r5": {
-                "type": "choice",
-                "choice": "noise",
-                "confidence": 0.92,
-                "probabilities": {
-                  "approval": 0.04,
-                  "correction": 0.0,
-                  "drift": 0.0,
-                  "noise": 0.94,
-                  "request": 0.02
-                }
-              },
-              "kind_r6": {
-                "type": "choice",
-                "choice": "approval",
-                "confidence": 1.0,
-                "probabilities": {
-                  "approval": 1.0,
-                  "correction": 0.0,
-                  "drift": 0.0,
-                  "noise": 0.0,
-                  "request": 0.0
-                }
-              },
-              "kind_r7": {
-                "type": "choice",
-                "choice": "approval",
-                "confidence": 1.0,
-                "probabilities": {
-                  "approval": 1.0,
-                  "correction": 0.0,
-                  "drift": 0.0,
-                  "noise": 0.0,
-                  "request": 0.0
-                }
-              },
-              "kind_r8": {
-                "type": "choice",
-                "choice": "approval",
-                "confidence": 0.36,
-                "probabilities": {
-                  "approval": 0.49,
-                  "correction": 0.43,
-                  "drift": 0.05,
-                  "noise": 0.0,
-                  "request": 0.03
-                }
-              },
-              "kind_r9": {
-                "type": "choice",
-                "choice": "approval",
-                "confidence": 1.0,
-                "probabilities": {
-                  "approval": 1.0,
-                  "correction": 0.0,
-                  "drift": 0.0,
-                  "noise": 0.0,
-                  "request": 0.0
-                }
-              },
-              "kind_r10": {
-                "type": "choice",
-                "choice": "approval",
-                "confidence": 1.0,
-                "probabilities": {
-                  "approval": 1.0,
-                  "correction": 0.0,
-                  "drift": 0.0,
-                  "noise": 0.0,
-                  "request": 0.0
-                }
-              },
-              "kind_r11": {
-                "type": "choice",
-                "choice": "request",
-                "confidence": 0.99,
-                "probabilities": {
-                  "approval": 0.01,
-                  "correction": 0.0,
-                  "drift": 0.0,
-                  "noise": 0.0,
-                  "request": 0.99
-                }
-              },
-              "kind_r12": {
-                "type": "choice",
-                "choice": "request",
-                "confidence": 0.81,
-                "probabilities": {
-                  "approval": 0.0,
-                  "correction": 0.14,
-                  "drift": 0.01,
-                  "noise": 0.0,
-                  "request": 0.85
-                }
-              },
-              "kind_r13": {
-                "type": "choice",
-                "choice": "request",
-                "confidence": 1.0,
-                "probabilities": {
-                  "approval": 0.0,
-                  "correction": 0.0,
-                  "drift": 0.0,
-                  "noise": 0.0,
-                  "request": 1.0
-                }
-              },
-              "kind_r14": {
-                "type": "choice",
-                "choice": "request",
-                "confidence": 1.0,
-                "probabilities": {
-                  "approval": 0.0,
-                  "correction": 0.0,
-                  "drift": 0.0,
-                  "noise": 0.0,
-                  "request": 1.0
-                }
-              },
-              "kind_r15": {
-                "type": "choice",
-                "choice": "drift",
-                "confidence": 0.9,
-                "probabilities": {
-                  "approval": 0.0,
-                  "correction": 0.08,
-                  "drift": 0.92,
-                  "noise": 0.0,
-                  "request": 0.0
-                }
-              },
-              "kind_r16": {
-                "type": "choice",
-                "choice": "drift",
-                "confidence": 0.73,
-                "probabilities": {
-                  "approval": 0.0,
-                  "correction": 0.22,
-                  "drift": 0.78,
-                  "noise": 0.0,
-                  "request": 0.0
-                }
-              },
-              "kind_r17": {
-                "type": "choice",
-                "choice": "drift",
-                "confidence": 0.65,
-                "probabilities": {
-                  "approval": 0.0,
-                  "correction": 0.28,
-                  "drift": 0.72,
-                  "noise": 0.0,
-                  "request": 0.0
-                }
-              },
-              "kind_r18": {
-                "type": "choice",
-                "choice": "correction",
-                "confidence": 0.84,
-                "probabilities": {
-                  "approval": 0.0,
-                  "correction": 0.87,
-                  "drift": 0.13,
-                  "noise": 0.0,
-                  "request": 0.0
-                }
-              },
-              "kind_r19": {
-                "type": "choice",
-                "choice": "drift",
-                "confidence": 0.9,
-                "probabilities": {
-                  "approval": 0.0,
-                  "correction": 0.08,
-                  "drift": 0.92,
-                  "noise": 0.0,
-                  "request": 0.0
-                }
-              },
-              "kind_r20": {
-                "type": "choice",
-                "choice": "drift",
-                "confidence": 0.89,
-                "probabilities": {
-                  "approval": 0.0,
-                  "correction": 0.09,
-                  "drift": 0.91,
-                  "noise": 0.0,
-                  "request": 0.0
-                }
-              }
-            },
-            "usage": {
-              "input_tokens": 6299,
-              "output_tokens": 1101
-            }
-          }
-        },
-        "sha256:5dec44d8f213d0e7d389d1d48b995aeadb4d9faf78ef9b0d786d2aafcf86e3bc": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r27": {
-                "type": "noul",
-                "noul": 0.98
-              }
-            },
-            "usage": {
-              "input_tokens": 493,
-              "output_tokens": 23
-            }
-          }
-        },
-        "sha256:651c0ab9a4c7832412e98d273729d0d6aa69308399896771f6df2d5b7bc173d1": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r28": {
-                "type": "noul",
-                "noul": 0.98
-              }
-            },
-            "usage": {
-              "input_tokens": 466,
-              "output_tokens": 23
-            }
-          }
-        },
-        "sha256:7ca1f80fb2980ac4948f0c07baa1477cac01d7936d9feb33e242b7049421d363": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r32": {
-                "type": "noul",
-                "noul": 0.72
-              }
-            },
-            "usage": {
-              "input_tokens": 483,
-              "output_tokens": 23
-            }
-          }
-        },
-        "sha256:8059eeccad99b6d4e99c71ebd78db3552e817e8d2c02f5ea34615b9413186582": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r26": {
-                "type": "noul",
-                "noul": 0.88
-              }
-            },
-            "usage": {
-              "input_tokens": 472,
-              "output_tokens": 23
-            }
-          }
-        },
-        "sha256:96571dcdea9371863382d67802a791710f8fb4f207b8d39e63d7a930d4366011": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r29": {
-                "type": "noul",
-                "noul": 0.15
-              }
-            },
-            "usage": {
-              "input_tokens": 491,
-              "output_tokens": 23
-            }
-          }
-        },
-        "sha256:97d2724766d7b1a6f5c926180df7aa2e59308df9afacc273a77b45b96365a4d8": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r20": {
-                "type": "noul",
-                "noul": 0.97
-              }
-            },
-            "usage": {
-              "input_tokens": 480,
-              "output_tokens": 23
-            }
-          }
-        },
-        "sha256:9b471d622a57c7ebe400455d239dc50849234b5621a5c54ac3ed013bbba9c990": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r18": {
-                "type": "noul",
-                "noul": 0.97
-              }
-            },
-            "usage": {
-              "input_tokens": 486,
-              "output_tokens": 23
-            }
-          }
-        },
-        "sha256:a2a7bcfa4453c60ac5fa80d6dd2afbb22e368f46bb74e571118c38d7efc75c3d": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r22": {
-                "type": "noul",
-                "noul": 0.12
-              }
-            },
-            "usage": {
-              "input_tokens": 484,
-              "output_tokens": 23
-            }
-          }
-        },
-        "sha256:b500960abdd5bb8cffa05a751dc24fe035146445475ce33fc47deb9314c96845": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r24": {
-                "type": "noul",
-                "noul": 0.07
-              }
-            },
-            "usage": {
-              "input_tokens": 476,
-              "output_tokens": 23
-            }
-          }
-        },
-        "sha256:b631583b2f61b72b2a4f59fe87127916e11c7679bc60d1b6a334c0c6af98a860": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r15": {
-                "type": "noul",
-                "noul": 0.1
-              }
-            },
-            "usage": {
-              "input_tokens": 509,
-              "output_tokens": 23
-            }
-          }
-        },
-        "sha256:b828f119f933c0c21bffa6d78ae2f886691bbb7554ca851c6df8639de7e83d6c": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r23": {
-                "type": "noul",
-                "noul": 0.36
-              }
-            },
-            "usage": {
-              "input_tokens": 485,
-              "output_tokens": 23
-            }
-          }
-        },
-        "sha256:b9892bff51e01a2db061241298e0b064414adf4281f57dd6812ee409eca1e453": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r17": {
-                "type": "noul",
-                "noul": 0.95
-              }
-            },
-            "usage": {
-              "input_tokens": 521,
-              "output_tokens": 23
-            }
-          }
-        },
-        "sha256:c810f7cfc563f050cab6c07466a4cbf29265e0012704075654e3257ab153e736": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r25": {
-                "type": "noul",
-                "noul": 0.98
-              }
-            },
-            "usage": {
-              "input_tokens": 491,
-              "output_tokens": 23
-            }
-          }
-        },
-        "sha256:d6836bec00db5d82450a9440f1d362f30cde4425aa2efd006bd39f1c992db5c9": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r21": {
-                "type": "noul",
-                "noul": 0.91
-              }
-            },
-            "usage": {
-              "input_tokens": 518,
-              "output_tokens": 23
-            }
-          }
-        },
-        "sha256:dba5debd888a95e13dc5aeb813361aeb61af136596cab8b28448843572b337b1": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "kind_r21": {
-                "type": "choice",
-                "choice": "drift",
-                "confidence": 0.91,
-                "probabilities": {
-                  "approval": 0.0,
-                  "correction": 0.07,
-                  "drift": 0.93,
-                  "noise": 0.0,
-                  "request": 0.0
-                }
-              },
-              "kind_r22": {
-                "type": "choice",
-                "choice": "drift",
-                "confidence": 0.98,
-                "probabilities": {
-                  "approval": 0.0,
-                  "correction": 0.02,
-                  "drift": 0.98,
-                  "noise": 0.0,
-                  "request": 0.0
-                }
-              },
-              "kind_r23": {
-                "type": "choice",
-                "choice": "correction",
-                "confidence": 0.92,
-                "probabilities": {
-                  "approval": 0.0,
-                  "correction": 0.94,
-                  "drift": 0.06,
-                  "noise": 0.0,
-                  "request": 0.0
-                }
-              },
-              "kind_r24": {
-                "type": "choice",
-                "choice": "correction",
-                "confidence": 0.95,
-                "probabilities": {
-                  "approval": 0.0,
-                  "correction": 0.96,
-                  "drift": 0.03,
-                  "noise": 0.0,
-                  "request": 0.01
-                }
-              },
-              "kind_r25": {
-                "type": "choice",
-                "choice": "correction",
-                "confidence": 0.96,
-                "probabilities": {
-                  "approval": 0.0,
-                  "correction": 0.97,
-                  "drift": 0.03,
-                  "noise": 0.0,
-                  "request": 0.0
-                }
-              },
-              "kind_r26": {
-                "type": "choice",
-                "choice": "correction",
-                "confidence": 0.92,
-                "probabilities": {
-                  "approval": 0.0,
-                  "correction": 0.94,
-                  "drift": 0.05,
-                  "noise": 0.0,
-                  "request": 0.01
-                }
-              },
-              "kind_r27": {
-                "type": "choice",
-                "choice": "correction",
-                "confidence": 0.52,
-                "probabilities": {
-                  "approval": 0.0,
-                  "correction": 0.62,
-                  "drift": 0.02,
-                  "noise": 0.0,
-                  "request": 0.36
-                }
-              },
-              "kind_r28": {
-                "type": "choice",
-                "choice": "correction",
-                "confidence": 0.94,
-                "probabilities": {
-                  "approval": 0.0,
-                  "correction": 0.95,
-                  "drift": 0.04,
-                  "noise": 0.0,
-                  "request": 0.01
-                }
-              },
-              "kind_r29": {
-                "type": "choice",
-                "choice": "drift",
-                "confidence": 0.45,
-                "probabilities": {
-                  "approval": 0.0,
-                  "correction": 0.25,
-                  "drift": 0.56,
-                  "noise": 0.0,
-                  "request": 0.19
-                }
-              },
-              "kind_r30": {
-                "type": "choice",
-                "choice": "drift",
-                "confidence": 0.73,
-                "probabilities": {
-                  "approval": 0.0,
-                  "correction": 0.12,
-                  "drift": 0.78,
-                  "noise": 0.0,
-                  "request": 0.1
-                }
-              },
-              "kind_r31": {
-                "type": "choice",
-                "choice": "drift",
-                "confidence": 0.69,
-                "probabilities": {
-                  "approval": 0.0,
-                  "correction": 0.21,
-                  "drift": 0.75,
-                  "noise": 0.0,
-                  "request": 0.04
-                }
-              },
-              "kind_r32": {
-                "type": "choice",
-                "choice": "drift",
-                "confidence": 0.85,
-                "probabilities": {
-                  "approval": 0.0,
-                  "correction": 0.11,
-                  "drift": 0.88,
-                  "noise": 0.0,
-                  "request": 0.01
-                }
-              }
-            },
-            "usage": {
-              "input_tokens": 3983,
-              "output_tokens": 681
-            }
-          }
-        },
-        "sha256:f3352c02a7cf2705423478025d3739a83bb629d7cc07e3c77d5fc05ba1d617f5": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r31": {
-                "type": "noul",
-                "noul": 0.68
-              }
-            },
-            "usage": {
-              "input_tokens": 472,
-              "output_tokens": 23
-            }
-          }
-        },
-        "sha256:f4545f3ffb087e5f690d55f6c5168bc80ecaaf244557b58ad25faf7a8a936d91": {
-          "answer": {
-            "model": "jev-1.14.0",
-            "answers": {
-              "dup_r16": {
-                "type": "noul",
-                "noul": 0.09
-              }
-            },
-            "usage": {
-              "input_tokens": 474,
-              "output_tokens": 23
-            }
-          }
-        }
-      },
+      "records": {},
       "t3": {
-        "th:heldout-a:p2": {
+        "th:fit-c:p2": {
           "cwd": "p2",
           "rows": [
             {
@@ -854,316 +178,6 @@
     },
     "stage": "cycle"
   },
-  "expect": {
-    "status": "pass"
-  },
-  "want": {
-    "findings": [],
-    "context": "jev-classify (jev-1.14.0): 32 owner replies: 0 qualified (0 new, 0 duplicate, 0 dup unassessed), 0 unqualified, 0 unresolved, 32 unevaluated; report ~/.local/state/stack/jev-classify/latest.json\nunevaluated: 32 (classification disabled 32)\nqualification is disabled: the duplicate decision failed its own gate, so the `new` list is empty; REVIEW\nthe duplicate check is disabled: heldout precision 0.77, recall 1.00 miss the target 0.80 / 0.50",
-    "report": {
-      "complete": true,
-      "counts": {
-        "classified": 0,
-        "dup_unassessed": 0,
-        "dup_unassessed_lookup": 0,
-        "duplicate": 0,
-        "items": 32,
-        "new": 0,
-        "not_done": 0,
-        "qualified": 0,
-        "unevaluated": 32,
-        "unresolved": 0
-      },
-      "decisions": {
-        "duplicate": "disabled",
-        "qualification": "disabled"
-      },
-      "items": [
-        {
-          "id": "held-a01",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "p3/s.jsonl:3"
-        },
-        {
-          "id": "held-a02",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "p3/s.jsonl:6"
-        },
-        {
-          "id": "held-a03",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "p1/s.jsonl:3"
-        },
-        {
-          "id": "held-a04",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "p1/s.jsonl:6"
-        },
-        {
-          "id": "held-a05",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "p1/s.jsonl:9"
-        },
-        {
-          "id": "held-a06",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "p1/s.jsonl:12"
-        },
-        {
-          "id": "held-a07",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "t3:th:heldout-a:p2:r6"
-        },
-        {
-          "id": "held-a08",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "p3/s.jsonl:9"
-        },
-        {
-          "id": "held-a09",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "t3:th:heldout-a:p2:r8"
-        },
-        {
-          "id": "held-a10",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "p1/s.jsonl:15"
-        },
-        {
-          "id": "held-a11",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "p3/s.jsonl:12"
-        },
-        {
-          "id": "held-a12",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "t3:th:heldout-a:p2:r11"
-        },
-        {
-          "id": "held-a13",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "t3:th:heldout-a:p2:r12"
-        },
-        {
-          "id": "held-a14",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "p3/s.jsonl:15"
-        },
-        {
-          "id": "held-a15",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "t3:th:heldout-a:p2:r14"
-        },
-        {
-          "id": "held-a16",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "p3/s.jsonl:18"
-        },
-        {
-          "id": "held-a17",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "p1/s.jsonl:18"
-        },
-        {
-          "id": "held-a18",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "p3/s.jsonl:21"
-        },
-        {
-          "id": "held-a19",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "p1/s.jsonl:21"
-        },
-        {
-          "id": "held-a20",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "t3:th:heldout-a:p2:r19"
-        },
-        {
-          "id": "held-a21",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "p1/s.jsonl:24"
-        },
-        {
-          "id": "held-a22",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "p3/s.jsonl:24"
-        },
-        {
-          "id": "held-a23",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "p1/s.jsonl:27"
-        },
-        {
-          "id": "held-a24",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "p3/s.jsonl:27"
-        },
-        {
-          "id": "held-a25",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "t3:th:heldout-a:p2:r24"
-        },
-        {
-          "id": "held-a26",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "p1/s.jsonl:30"
-        },
-        {
-          "id": "held-a27",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "p3/s.jsonl:30"
-        },
-        {
-          "id": "held-a28",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "p1/s.jsonl:33"
-        },
-        {
-          "id": "held-a29",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "t3:th:heldout-a:p2:r28"
-        },
-        {
-          "id": "held-a30",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "p3/s.jsonl:33"
-        },
-        {
-          "id": "held-a31",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "p1/s.jsonl:36"
-        },
-        {
-          "id": "held-a32",
-          "opener": "owner",
-          "qualified": false,
-          "reason": "classification disabled",
-          "status": "unevaluated",
-          "where": "t3:th:heldout-a:p2:r31"
-        }
-      ],
-      "model": "jev-1.14.0",
-      "run": {
-        "finished": "2026-01-08T12:00:00Z",
-        "id": "",
-        "started": "2026-01-08T12:00:00Z"
-      },
-      "sources": {
-        "t3": {
-          "error": "",
-          "status": "ok"
-        },
-        "transcripts": {
-          "error": "",
-          "status": "ok"
-        }
-      },
-      "usage": {
-        "input_tokens": 0,
-        "requests": 0,
-        "unknown": 0
-      },
-      "version": 1,
-      "window": {
-        "since": "2026-01-01T12:00:00Z",
-        "until": "2026-01-08T11:59:00Z"
-      }
-    }
-  },
   "repo": {
     "layouts": [
       {
@@ -1182,7 +196,7 @@
   },
   "label": {
     "items": {
-      "held-a01": {
+      "fit-c01": {
         "dup": "duplicate",
         "group": "pair-5",
         "hard": true,
@@ -1190,14 +204,14 @@
         "lang": "en",
         "why": "restores the scope (the retry bug only); the index states that the shared wrapper is used"
       },
-      "held-a02": {
+      "fit-c02": {
         "group": "pair-5",
         "hard": true,
         "kind": "request",
         "lang": "en",
-        "why": "the same assistant and reply as held-a01, but the owner had asked for the switch"
+        "why": "the same assistant and reply as fit-c01, but the owner had asked for the switch"
       },
-      "held-a03": {
+      "fit-c03": {
         "dup": "new",
         "group": "pair-6",
         "hard": true,
@@ -1205,77 +219,77 @@
         "lang": "ja",
         "why": "restores the scope (preparation only); the index states where builds are cut, a different rule the build kept"
       },
-      "held-a04": {
+      "fit-c04": {
         "group": "pair-6",
         "hard": true,
         "kind": "request",
         "lang": "ja",
-        "why": "the same assistant and reply as held-a03, but the owner had asked for the build, so undoing it is a new task"
+        "why": "the same assistant and reply as fit-c03, but the owner had asked for the build, so undoing it is a new task"
       },
-      "held-a05": {
+      "fit-c05": {
         "dup": "duplicate",
         "kind": "correction",
         "lang": "en",
         "why": "says the approach was wrong; the index states the rule"
       },
-      "held-a06": {
+      "fit-c06": {
         "dup": "duplicate",
         "hard": true,
         "kind": "correction",
         "lang": "ja",
         "why": "says the work was incomplete against a rule stated in the index"
       },
-      "held-a07": {
+      "fit-c07": {
         "dup": "new",
         "kind": "correction",
         "lang": "en",
         "why": "says the approach was wrong; no index line covers storage visibility"
       },
-      "held-a08": {
+      "fit-c08": {
         "dup": "duplicate",
         "kind": "correction",
         "lang": "ja",
         "why": "states a rule the index also states"
       },
-      "held-a09": {
+      "fit-c09": {
         "dup": "new",
         "hard": true,
         "kind": "correction",
         "lang": "en",
         "why": "a standing naming rule; the index states a tagging rule on the same topic, not this one"
       },
-      "held-a10": {
+      "fit-c10": {
         "dup": "new",
         "kind": "correction",
         "lang": "ja",
         "why": "says the approach was wrong; no index line covers build numbers"
       },
-      "held-a11": {
+      "fit-c11": {
         "dup": "new",
         "kind": "drift",
         "lang": "en",
         "why": "restores the scope the owner set; no index line covers scope in this directory"
       },
-      "held-a12": {
+      "fit-c12": {
         "dup": "duplicate",
         "kind": "drift",
         "lang": "ja",
         "why": "restores the tag-only scope the owner set; the index states that tag-only work leaves bucket policies alone"
       },
-      "held-a13": {
+      "fit-c13": {
         "dup": "duplicate",
         "kind": "drift",
         "lang": "en",
         "why": "restores the tag-only scope the owner set; the index states that tag-only work leaves instance sizes alone"
       },
-      "held-a14": {
+      "fit-c14": {
         "dup": "new",
         "hard": true,
         "kind": "drift",
         "lang": "ja",
         "why": "restores the scope the owner set; the index has no scope rule here"
       },
-      "held-a15": {
+      "fit-c15": {
         "dup": "duplicate",
         "hard": true,
         "kind": "drift",
@@ -1283,14 +297,14 @@
         "overlap": true,
         "why": "an overlap: corrects the laptop apply and restores the scope; the index states the apply rule"
       },
-      "held-a16": {
+      "fit-c16": {
         "dup": "duplicate",
         "kind": "drift",
         "lang": "ja",
         "overlap": true,
         "why": "an overlap: corrects where the copy lives and restores the scope; the index states the i18n rule"
       },
-      "held-a17": {
+      "fit-c17": {
         "dup": "new",
         "hard": true,
         "kind": "drift",
@@ -1298,313 +312,313 @@
         "overlap": true,
         "why": "an overlap: says the move was wrong and restores the scope; no index line covers tab order"
       },
-      "held-a18": {
+      "fit-c18": {
         "dup": "new",
         "kind": "drift",
         "lang": "ja",
         "overlap": true,
         "why": "an overlap: corrects the page size change and restores the scope; no index line covers it"
       },
-      "held-a19": {
+      "fit-c19": {
         "kind": "request",
         "lang": "en",
         "why": "gives a new task"
       },
-      "held-a20": {
+      "fit-c20": {
         "hard": true,
         "kind": "request",
         "lang": "ja",
         "why": "a follow-up question about the plan's detail, a new task that reads like a correction asked as a question"
       },
-      "held-a21": {
+      "fit-c21": {
         "hard": true,
         "kind": "request",
         "lang": "en",
         "why": "reports a defect in what was built"
       },
-      "held-a22": {
+      "fit-c22": {
         "kind": "request",
         "lang": "ja",
         "why": "gives a new idea"
       },
-      "held-a23": {
+      "fit-c23": {
         "kind": "approval",
         "lang": "en",
         "why": "acknowledges a result"
       },
-      "held-a24": {
+      "fit-c24": {
         "kind": "approval",
         "lang": "ja",
         "why": "accepts the change"
       },
-      "held-a25": {
+      "fit-c25": {
         "hard": true,
         "kind": "approval",
         "lang": "en",
         "why": "opens with no but accepts"
       },
-      "held-a26": {
+      "fit-c26": {
         "kind": "approval",
         "lang": "ja",
         "why": "acknowledges a result"
       },
-      "held-a27": {
+      "fit-c27": {
         "kind": "approval",
         "lang": "en",
         "why": "picks an offered option"
       },
-      "held-a28": {
+      "fit-c28": {
         "hard": true,
         "kind": "noise",
         "lang": "ja",
         "why": "an input-method test sentence"
       },
-      "held-a29": {
+      "fit-c29": {
         "kind": "noise",
         "lang": "en",
         "why": "a lone hash"
       },
-      "held-a30": {
+      "fit-c30": {
         "kind": "noise",
         "lang": "ja",
         "why": "a lone link"
       },
-      "held-a31": {
+      "fit-c31": {
         "kind": "noise",
         "lang": "en",
         "why": "a bare attachment"
       },
-      "held-a32": {
+      "fit-c32": {
         "kind": "noise",
         "lang": "ja",
         "why": "a fragment"
       }
     },
-    "split": "heldout"
+    "split": "fit"
   },
   "observe": {
     "items": [
       {
-        "id": "held-a01",
+        "id": "fit-c01",
         "signal": "owner-reply",
         "where": "p3/s.jsonl:3",
         "excerpt": "put that back",
         "ts": "2026-01-08T09:00:03Z"
       },
       {
-        "id": "held-a02",
+        "id": "fit-c02",
         "signal": "owner-reply",
         "where": "p3/s.jsonl:6",
         "excerpt": "put that back",
         "ts": "2026-01-08T09:00:06Z"
       },
       {
-        "id": "held-a03",
+        "id": "fit-c03",
         "signal": "owner-reply",
         "where": "p1/s.jsonl:3",
         "excerpt": "取り消して",
         "ts": "2026-01-08T09:00:09Z"
       },
       {
-        "id": "held-a04",
+        "id": "fit-c04",
         "signal": "owner-reply",
         "where": "p1/s.jsonl:6",
         "excerpt": "取り消して",
         "ts": "2026-01-08T09:00:12Z"
       },
       {
-        "id": "held-a05",
+        "id": "fit-c05",
         "signal": "owner-reply",
         "where": "p1/s.jsonl:9",
         "excerpt": "use the design tokens, not hex values",
         "ts": "2026-01-08T09:00:15Z"
       },
       {
-        "id": "held-a06",
+        "id": "fit-c06",
         "signal": "owner-reply",
         "where": "p1/s.jsonl:12",
         "excerpt": "ラベルがないよ。全画面に必要。",
         "ts": "2026-01-08T09:00:18Z"
       },
       {
-        "id": "held-a07",
+        "id": "fit-c07",
         "signal": "owner-reply",
-        "where": "t3:th:heldout-a:p2:r6",
+        "where": "t3:th:fit-c:p2:r6",
         "excerpt": "keep storage private",
         "ts": "2026-01-08T09:00:21Z"
       },
       {
-        "id": "held-a08",
+        "id": "fit-c08",
         "signal": "owner-reply",
         "where": "p3/s.jsonl:9",
         "excerpt": "inline style は使わない",
         "ts": "2026-01-08T09:00:24Z"
       },
       {
-        "id": "held-a09",
+        "id": "fit-c09",
         "signal": "owner-reply",
-        "where": "t3:th:heldout-a:p2:r8",
+        "where": "t3:th:fit-c:p2:r8",
         "excerpt": "we name buckets with the team prefix",
         "ts": "2026-01-08T09:00:27Z"
       },
       {
-        "id": "held-a10",
+        "id": "fit-c10",
         "signal": "owner-reply",
         "where": "p1/s.jsonl:15",
         "excerpt": "ビルド番号は CI が付けるから触らないで",
         "ts": "2026-01-08T09:00:30Z"
       },
       {
-        "id": "held-a11",
+        "id": "fit-c11",
         "signal": "owner-reply",
         "where": "p3/s.jsonl:12",
         "excerpt": "I only asked for the typo, revert the restyle",
         "ts": "2026-01-08T09:00:33Z"
       },
       {
-        "id": "held-a12",
+        "id": "fit-c12",
         "signal": "owner-reply",
-        "where": "t3:th:heldout-a:p2:r11",
+        "where": "t3:th:fit-c:p2:r11",
         "excerpt": "タグだけって言ったよね、ポリシーは戻して",
         "ts": "2026-01-08T09:00:36Z"
       },
       {
-        "id": "held-a13",
+        "id": "fit-c13",
         "signal": "owner-reply",
-        "where": "t3:th:heldout-a:p2:r12",
+        "where": "t3:th:fit-c:p2:r12",
         "excerpt": "don't touch the instance size, tag only",
         "ts": "2026-01-08T09:00:39Z"
       },
       {
-        "id": "held-a14",
+        "id": "fit-c14",
         "signal": "owner-reply",
         "where": "p3/s.jsonl:15",
         "excerpt": "ロジックは触らないで。幅だけ。",
         "ts": "2026-01-08T09:00:42Z"
       },
       {
-        "id": "held-a15",
+        "id": "fit-c15",
         "signal": "owner-reply",
-        "where": "t3:th:heldout-a:p2:r14",
+        "where": "t3:th:fit-c:p2:r14",
         "excerpt": "never apply from a laptop, and I only asked for tags",
         "ts": "2026-01-08T09:00:45Z"
       },
       {
-        "id": "held-a16",
+        "id": "fit-c16",
         "signal": "owner-reply",
         "where": "p3/s.jsonl:18",
         "excerpt": "文言は i18n ファイルへ。直すのは文言だけで、色は変えないで",
         "ts": "2026-01-08T09:00:48Z"
       },
       {
-        "id": "held-a17",
+        "id": "fit-c17",
         "signal": "owner-reply",
         "where": "p1/s.jsonl:18",
         "excerpt": "no, wrong place — only the label was supposed to change",
         "ts": "2026-01-08T09:00:51Z"
       },
       {
-        "id": "held-a18",
+        "id": "fit-c18",
         "signal": "owner-reply",
         "where": "p3/s.jsonl:21",
         "excerpt": "それは違う。ページサイズは触らないで、並び順だけ",
         "ts": "2026-01-08T09:00:54Z"
       },
       {
-        "id": "held-a19",
+        "id": "fit-c19",
         "signal": "owner-reply",
         "where": "p1/s.jsonl:21",
         "excerpt": "can you add dark mode to the settings screen?",
         "ts": "2026-01-08T09:00:57Z"
       },
       {
-        "id": "held-a20",
+        "id": "fit-c20",
         "signal": "owner-reply",
-        "where": "t3:th:heldout-a:p2:r19",
+        "where": "t3:th:fit-c:p2:r19",
         "excerpt": "その plan で削除されるリソースはどれ？",
         "ts": "2026-01-08T09:01:00Z"
       },
       {
-        "id": "held-a21",
+        "id": "fit-c21",
         "signal": "owner-reply",
         "where": "p1/s.jsonl:24",
         "excerpt": "the login button is misaligned on small phones",
         "ts": "2026-01-08T09:01:03Z"
       },
       {
-        "id": "held-a22",
+        "id": "fit-c22",
         "signal": "owner-reply",
         "where": "p3/s.jsonl:24",
         "excerpt": "次はプッシュ通知を作りたい",
         "ts": "2026-01-08T09:01:06Z"
       },
       {
-        "id": "held-a23",
+        "id": "fit-c23",
         "signal": "owner-reply",
         "where": "p1/s.jsonl:27",
         "excerpt": "nice, the new icon looks right",
         "ts": "2026-01-08T09:01:09Z"
       },
       {
-        "id": "held-a24",
+        "id": "fit-c24",
         "signal": "owner-reply",
         "where": "p3/s.jsonl:27",
         "excerpt": "いいね、そのままで",
         "ts": "2026-01-08T09:01:12Z"
       },
       {
-        "id": "held-a25",
+        "id": "fit-c25",
         "signal": "owner-reply",
-        "where": "t3:th:heldout-a:p2:r24",
+        "where": "t3:th:fit-c:p2:r24",
         "excerpt": "nope, nothing to change, the tags are right",
         "ts": "2026-01-08T09:01:15Z"
       },
       {
-        "id": "held-a26",
+        "id": "fit-c26",
         "signal": "owner-reply",
         "where": "p1/s.jsonl:30",
         "excerpt": "CI 通ったよ、ありがとう",
         "ts": "2026-01-08T09:01:18Z"
       },
       {
-        "id": "held-a27",
+        "id": "fit-c27",
         "signal": "owner-reply",
         "where": "p3/s.jsonl:30",
         "excerpt": "picked option B",
         "ts": "2026-01-08T09:01:21Z"
       },
       {
-        "id": "held-a28",
+        "id": "fit-c28",
         "signal": "owner-reply",
         "where": "p1/s.jsonl:33",
         "excerpt": "あいうえお かきくけこ",
         "ts": "2026-01-08T09:01:24Z"
       },
       {
-        "id": "held-a29",
+        "id": "fit-c29",
         "signal": "owner-reply",
-        "where": "t3:th:heldout-a:p2:r28",
+        "where": "t3:th:fit-c:p2:r28",
         "excerpt": "a1b2c3d",
         "ts": "2026-01-08T09:01:27Z"
       },
       {
-        "id": "held-a30",
+        "id": "fit-c30",
         "signal": "owner-reply",
         "where": "p3/s.jsonl:33",
         "excerpt": "https://example.com/x/9",
         "ts": "2026-01-08T09:01:30Z"
       },
       {
-        "id": "held-a31",
+        "id": "fit-c31",
         "signal": "owner-reply",
         "where": "p1/s.jsonl:36",
         "excerpt": "[image attached]",
         "ts": "2026-01-08T09:01:33Z"
       },
       {
-        "id": "held-a32",
+        "id": "fit-c32",
         "signal": "owner-reply",
-        "where": "t3:th:heldout-a:p2:r31",
+        "where": "t3:th:fit-c:p2:r31",
         "excerpt": "えーと",
         "ts": "2026-01-08T09:01:36Z"
       }
@@ -2486,297 +1500,5 @@
     "p1": "- Never commit signing keys or keystores.\n- Use the design tokens; no hard-coded colours.\n- Every screen needs an accessibility label.\n- Release builds are cut from release/* branches only.\n- 新しい画面には必ずプレビューを付ける。\n",
     "p2": "- Terraform changes go through plan review; never apply from a laptop.\n- Tag every resource with owner and env.\n- Do not open ports to 0.0.0.0/0.\n- Rotate access keys, never share them in chat.\n- Tag-only changes leave bucket access policies as they are.\n- Tag-only changes leave instance sizes as they are.\n",
     "p3": "- Components live in src/components; one per file.\n- No inline styles.\n- Use the shared fetch wrapper for API calls.\n- Write copy in the i18n files, not in JSX.\n- 状態管理は既存の store を使い、新しい状態ライブラリを足さない。\n"
-  },
-  "samples": {
-    "sha256:01fd0a53916e1603bf6e72d3b354a5b308c6383ff0b5c6f5d1bdd16500d17c51": {
-      "dup_r30": [
-        0.54,
-        0.54,
-        0.61
-      ]
-    },
-    "sha256:29fd634a951f1dd18eece6d1fa9ea4a4e513af0c907eba397dadcbf9b808ae7d": {
-      "dup_r19": [
-        0.13,
-        0.1,
-        0.09
-      ]
-    },
-    "sha256:54f0d49893ea4ba01cbadb4bc74b91ac4337cd5bbde4d1daac762f7345be09de": {
-      "kind_r1": [
-        0.02,
-        0.02,
-        0.02
-      ],
-      "kind_r10": [
-        0,
-        0,
-        0
-      ],
-      "kind_r11": [
-        0,
-        0,
-        0
-      ],
-      "kind_r12": [
-        0.15000000000000002,
-        0.13,
-        0.18000000000000002
-      ],
-      "kind_r13": [
-        0,
-        0,
-        0
-      ],
-      "kind_r14": [
-        0,
-        0,
-        0
-      ],
-      "kind_r15": [
-        1,
-        1,
-        1
-      ],
-      "kind_r16": [
-        1,
-        1,
-        1
-      ],
-      "kind_r17": [
-        1,
-        1,
-        1
-      ],
-      "kind_r18": [
-        1,
-        1,
-        1
-      ],
-      "kind_r19": [
-        1,
-        1,
-        1
-      ],
-      "kind_r2": [
-        0,
-        0,
-        0
-      ],
-      "kind_r20": [
-        1,
-        1,
-        1
-      ],
-      "kind_r3": [
-        0,
-        0,
-        0.01
-      ],
-      "kind_r4": [
-        0.01,
-        0.01,
-        0.01
-      ],
-      "kind_r5": [
-        0,
-        0,
-        0
-      ],
-      "kind_r6": [
-        0,
-        0,
-        0
-      ],
-      "kind_r7": [
-        0,
-        0,
-        0
-      ],
-      "kind_r8": [
-        0.48,
-        0.6200000000000001,
-        0.51
-      ],
-      "kind_r9": [
-        0,
-        0,
-        0
-      ]
-    },
-    "sha256:5dec44d8f213d0e7d389d1d48b995aeadb4d9faf78ef9b0d786d2aafcf86e3bc": {
-      "dup_r27": [
-        0.98,
-        0.98,
-        0.98
-      ]
-    },
-    "sha256:651c0ab9a4c7832412e98d273729d0d6aa69308399896771f6df2d5b7bc173d1": {
-      "dup_r28": [
-        0.98,
-        0.98,
-        0.98
-      ]
-    },
-    "sha256:7ca1f80fb2980ac4948f0c07baa1477cac01d7936d9feb33e242b7049421d363": {
-      "dup_r32": [
-        0.72,
-        0.79,
-        0.74
-      ]
-    },
-    "sha256:8059eeccad99b6d4e99c71ebd78db3552e817e8d2c02f5ea34615b9413186582": {
-      "dup_r26": [
-        0.88,
-        0.89,
-        0.87
-      ]
-    },
-    "sha256:96571dcdea9371863382d67802a791710f8fb4f207b8d39e63d7a930d4366011": {
-      "dup_r29": [
-        0.15,
-        0.17,
-        0.17
-      ]
-    },
-    "sha256:97d2724766d7b1a6f5c926180df7aa2e59308df9afacc273a77b45b96365a4d8": {
-      "dup_r20": [
-        0.97,
-        0.97,
-        0.97
-      ]
-    },
-    "sha256:9b471d622a57c7ebe400455d239dc50849234b5621a5c54ac3ed013bbba9c990": {
-      "dup_r18": [
-        0.97,
-        0.97,
-        0.97
-      ]
-    },
-    "sha256:a2a7bcfa4453c60ac5fa80d6dd2afbb22e368f46bb74e571118c38d7efc75c3d": {
-      "dup_r22": [
-        0.12,
-        0.13,
-        0.12
-      ]
-    },
-    "sha256:b500960abdd5bb8cffa05a751dc24fe035146445475ce33fc47deb9314c96845": {
-      "dup_r24": [
-        0.07,
-        0.12,
-        0.09
-      ]
-    },
-    "sha256:b631583b2f61b72b2a4f59fe87127916e11c7679bc60d1b6a334c0c6af98a860": {
-      "dup_r15": [
-        0.1,
-        0.09,
-        0.15
-      ]
-    },
-    "sha256:b828f119f933c0c21bffa6d78ae2f886691bbb7554ca851c6df8639de7e83d6c": {
-      "dup_r23": [
-        0.36,
-        0.43,
-        0.56
-      ]
-    },
-    "sha256:b9892bff51e01a2db061241298e0b064414adf4281f57dd6812ee409eca1e453": {
-      "dup_r17": [
-        0.95,
-        0.94,
-        0.95
-      ]
-    },
-    "sha256:c810f7cfc563f050cab6c07466a4cbf29265e0012704075654e3257ab153e736": {
-      "dup_r25": [
-        0.98,
-        0.97,
-        0.97
-      ]
-    },
-    "sha256:d6836bec00db5d82450a9440f1d362f30cde4425aa2efd006bd39f1c992db5c9": {
-      "dup_r21": [
-        0.91,
-        0.93,
-        0.95
-      ]
-    },
-    "sha256:dba5debd888a95e13dc5aeb813361aeb61af136596cab8b28448843572b337b1": {
-      "kind_r21": [
-        1,
-        1,
-        1
-      ],
-      "kind_r22": [
-        1,
-        1,
-        1
-      ],
-      "kind_r23": [
-        1,
-        1,
-        1
-      ],
-      "kind_r24": [
-        0.99,
-        0.99,
-        0.99
-      ],
-      "kind_r25": [
-        1,
-        1,
-        1
-      ],
-      "kind_r26": [
-        0.99,
-        0.99,
-        0.98
-      ],
-      "kind_r27": [
-        0.64,
-        0.66,
-        0.63
-      ],
-      "kind_r28": [
-        0.99,
-        0.99,
-        0.99
-      ],
-      "kind_r29": [
-        0.81,
-        0.83,
-        0.79
-      ],
-      "kind_r30": [
-        0.9,
-        0.9,
-        0.9299999999999999
-      ],
-      "kind_r31": [
-        0.96,
-        0.9299999999999999,
-        0.9600000000000001
-      ],
-      "kind_r32": [
-        0.99,
-        0.99,
-        0.99
-      ]
-    },
-    "sha256:f3352c02a7cf2705423478025d3739a83bb629d7cc07e3c77d5fc05ba1d617f5": {
-      "dup_r31": [
-        0.68,
-        0.6,
-        0.49
-      ]
-    },
-    "sha256:f4545f3ffb087e5f690d55f6c5168bc80ecaaf244557b58ad25faf7a8a936d91": {
-      "dup_r16": [
-        0.09,
-        0.07,
-        0.08
-      ]
-    }
   }
 }

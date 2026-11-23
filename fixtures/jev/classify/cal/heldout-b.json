@@ -1,0 +1,1500 @@
+{
+  "placeholder": "pending: awaiting a jev-calibrate run with the key",
+  "request": {
+    "jev": {
+      "claude": "claude",
+      "now": "2026-01-08T12:00:00Z",
+      "observe": "observe.json",
+      "records": {},
+      "t3": {
+        "th:heldout-b:p2": {
+          "cwd": "p2",
+          "rows": [
+            {
+              "message_id": "m000",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:07.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o2\",\"text\":\"デプロイ用のスクリプトを追加して。\"}"
+            },
+            {
+              "message_id": "m001",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:08.000Z",
+              "payload_json": "{\"text\":\"deploy.sh を追加しました。先頭は shebang だけです。\"}"
+            },
+            {
+              "message_id": "m002",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:09.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r2\",\"text\":\"スクリプトの先頭には必ず set -euo pipefail を入れて\"}"
+            },
+            {
+              "message_id": "m003",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:19.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o6\",\"text\":\"古いログを消すスクリプトを書いて。\"}"
+            },
+            {
+              "message_id": "m004",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:20.000Z",
+              "payload_json": "{\"text\":\"cleanup.sh を書きました。変数はクォートしておらず、shellcheck も実行していません。\"}"
+            },
+            {
+              "message_id": "m005",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:21.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r6\",\"text\":\"変数は必ずクォートして、shellcheck も通して\"}"
+            },
+            {
+              "message_id": "m006",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:28.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o9\",\"text\":\"Update the nginx config on the staging box.\"}"
+            },
+            {
+              "message_id": "m007",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:29.000Z",
+              "payload_json": "{\"text\":\"I overwrote nginx.conf on staging directly.\"}"
+            },
+            {
+              "message_id": "m008",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:30.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r9\",\"text\":\"take a backup before you overwrite a config, on staging too\"}"
+            },
+            {
+              "message_id": "m009",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:37.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o12\",\"text\":\"Add a --dry-run flag to the backup script.\"}"
+            },
+            {
+              "message_id": "m010",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:38.000Z",
+              "payload_json": "{\"text\":\"I added --dry-run, removed set -euo pipefail because an empty glob made it fail, and changed the backup schedule.\"}"
+            },
+            {
+              "message_id": "m011",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:39.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r12\",\"text\":\"keep set -euo pipefail, handle empty globs with nullglob from now on, and leave the schedule alone\"}"
+            },
+            {
+              "message_id": "m012",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:43.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o14\",\"text\":\"バックアップスクリプトの誤字だけ直して。\"}"
+            },
+            {
+              "message_id": "m013",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:44.000Z",
+              "payload_json": "{\"text\":\"誤字を直し、圧縮方式も gzip から zstd に変えました。\"}"
+            },
+            {
+              "message_id": "m014",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:45.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r14\",\"text\":\"圧縮方式は戻して。誤字だけ\"}"
+            },
+            {
+              "message_id": "m015",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:49.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o16\",\"text\":\"Add a disk usage check to the nightly job.\"}"
+            },
+            {
+              "message_id": "m016",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:50.000Z",
+              "payload_json": "{\"text\":\"I added the check and restarted the database service at noon to apply a tuning change.\"}"
+            },
+            {
+              "message_id": "m017",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:51.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r16\",\"text\":\"services restart only in the maintenance window, and I asked for the disk check, nothing else\"}"
+            },
+            {
+              "message_id": "m018",
+              "role": "user",
+              "created_at": "2026-01-08T09:00:58.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o19\",\"text\":\"ディスク監視のスクリプトを入れて。\"}"
+            },
+            {
+              "message_id": "m019",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:00:59.000Z",
+              "payload_json": "{\"text\":\"監視スクリプトを入れました。\"}"
+            },
+            {
+              "message_id": "m020",
+              "role": "user",
+              "created_at": "2026-01-08T09:01:00.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r19\",\"text\":\"閾値はどこで変えられる？\"}"
+            },
+            {
+              "message_id": "m021",
+              "role": "user",
+              "created_at": "2026-01-08T09:01:10.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o23\",\"text\":\"cron の設定を確認して。\"}"
+            },
+            {
+              "message_id": "m022",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:01:11.000Z",
+              "payload_json": "{\"text\":\"cron の設定は問題ありません。\"}"
+            },
+            {
+              "message_id": "m023",
+              "role": "user",
+              "created_at": "2026-01-08T09:01:12.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r23\",\"text\":\"了解、ありがとう\"}"
+            },
+            {
+              "message_id": "m024",
+              "role": "user",
+              "created_at": "2026-01-08T09:01:22.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o27\",\"text\":\"画面の文字を確認して。\"}"
+            },
+            {
+              "message_id": "m025",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:01:23.000Z",
+              "payload_json": "{\"text\":\"文字を確認しました。\"}"
+            },
+            {
+              "message_id": "m026",
+              "role": "user",
+              "created_at": "2026-01-08T09:01:24.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r27\",\"text\":\"かな入力のテストです\"}"
+            },
+            {
+              "message_id": "m027",
+              "role": "user",
+              "created_at": "2026-01-08T09:01:28.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"o29\",\"text\":\"Where is the runbook?\"}"
+            },
+            {
+              "message_id": "m028",
+              "role": "assistant",
+              "created_at": "2026-01-08T09:01:29.000Z",
+              "payload_json": "{\"text\":\"The runbook is linked from the wiki.\"}"
+            },
+            {
+              "message_id": "m029",
+              "role": "user",
+              "created_at": "2026-01-08T09:01:30.000Z",
+              "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"web\",\"id\":\"r29\",\"text\":\"https://example.com/runbook/17\"}"
+            }
+          ]
+        }
+      }
+    },
+    "stage": "cycle"
+  },
+  "repo": {
+    "layouts": [
+      {
+        "kind": "checkout",
+        "dir": "p1"
+      },
+      {
+        "kind": "checkout",
+        "dir": "p2"
+      },
+      {
+        "kind": "checkout",
+        "dir": "p3"
+      }
+    ]
+  },
+  "label": {
+    "items": {
+      "held-b01": {
+        "dup": "new",
+        "dup_kind": "object",
+        "group": "pair-b2",
+        "hard": true,
+        "kind": "drift",
+        "lang": "ja",
+        "undo": true,
+        "why": "undoes the delimiter change the owner ruled out; the required rule is to keep the delimiter, which no line covers: the CSV line governs the column order, another object of the same kind"
+      },
+      "held-b02": {
+        "group": "pair-b2",
+        "hard": true,
+        "kind": "request",
+        "lang": "ja",
+        "why": "the same assistant and reply as held-b01, but the owner had asked for the delimiter change, so undoing it is a new task"
+      },
+      "held-b03": {
+        "dup": "duplicate",
+        "dup_kind": "restatement",
+        "hard": true,
+        "kind": "correction",
+        "lang": "ja",
+        "why": "a standing rule restated in Japanese; covered by the line 'Shell scripts start with set -euo pipefail.'"
+      },
+      "held-b04": {
+        "dup": "duplicate",
+        "dup_kind": "restatement",
+        "hard": true,
+        "kind": "correction",
+        "lang": "ja",
+        "why": "a standing rule restated in Japanese; covered by the line 'API responses use snake_case field names.'"
+      },
+      "held-b05": {
+        "dup": "duplicate",
+        "dup_kind": "paraphrase",
+        "hard": true,
+        "kind": "correction",
+        "lang": "en",
+        "why": "says the approach was wrong; covered by a paraphrased line, 'Commit notebooks with their outputs cleared.'"
+      },
+      "held-b06": {
+        "dup": "duplicate",
+        "dup_kind": "general",
+        "hard": true,
+        "kind": "drift",
+        "lang": "en",
+        "overlap": true,
+        "why": "an overlap: corrects the local time and restores the scope; the general line 'Store all timestamps in UTC.' covers last_login, and the scope is task-local beside it"
+      },
+      "held-b07": {
+        "dup": "duplicate",
+        "dup_kind": "multi",
+        "hard": true,
+        "kind": "correction",
+        "lang": "ja",
+        "why": "two reusable rules, each covered by its own line: 'Quote every variable expansion in shell scripts.' and 'Run shellcheck on every changed script.'"
+      },
+      "held-b08": {
+        "dup": "duplicate",
+        "group": "pair-b1",
+        "hard": true,
+        "kind": "drift",
+        "lang": "en",
+        "undo": true,
+        "why": "undoes the migration edit the owner ruled out; the instruction it broke is covered by 'Never edit a migration that has already been applied; add a new migration instead.', and the seed-only scope is task-local beside it"
+      },
+      "held-b09": {
+        "group": "pair-b1",
+        "hard": true,
+        "kind": "request",
+        "lang": "en",
+        "why": "the same assistant and reply as held-b08, but the owner had asked for the migration edit, so undoing it is a new task"
+      },
+      "held-b10": {
+        "dup": "new",
+        "dup_kind": "condition",
+        "hard": true,
+        "kind": "correction",
+        "lang": "en",
+        "why": "a standing rule for staging, which no line covers: the backup line applies only on a production server, another condition"
+      },
+      "held-b11": {
+        "dup": "new",
+        "dup_kind": "action",
+        "hard": true,
+        "kind": "correction",
+        "lang": "ja",
+        "why": "a standing rule to record the seed in the experiment log, which no line covers: the seed line asks a different action, fixing it"
+      },
+      "held-b12": {
+        "dup": "new",
+        "dup_kind": "broken",
+        "hard": true,
+        "kind": "drift",
+        "lang": "en",
+        "why": "restores the scope (the histogram only), which no line covers; the notebook-outputs line is a rule the commit also broke, not the one the reply asks for"
+      },
+      "held-b13": {
+        "dup": "new",
+        "dup_kind": "partial",
+        "hard": true,
+        "kind": "drift",
+        "lang": "en",
+        "overlap": true,
+        "why": "an overlap: keeping set -euo pipefail is covered by its line, but the reusable rule to handle empty globs with nullglob has no covering line"
+      },
+      "held-b14": {
+        "dup": "new",
+        "kind": "drift",
+        "lang": "ja",
+        "why": "restores the scope the owner set (keep the sort order); no line covers it"
+      },
+      "held-b15": {
+        "dup": "new",
+        "kind": "drift",
+        "lang": "ja",
+        "why": "restores the scope the owner set (the typo only); no line covers it"
+      },
+      "held-b16": {
+        "dup": "new",
+        "kind": "drift",
+        "lang": "en",
+        "overlap": true,
+        "why": "an overlap: the reusable rule to log dropped rows has no covering line"
+      },
+      "held-b17": {
+        "dup": "duplicate",
+        "kind": "drift",
+        "lang": "en",
+        "overlap": true,
+        "why": "an overlap: the restart rule is covered by 'Restart services only during the maintenance window.', and the scope is task-local beside it"
+      },
+      "held-b18": {
+        "dup": "duplicate",
+        "kind": "drift",
+        "lang": "ja",
+        "why": "restores the scope the owner set; the instruction it broke is covered by 'Do not edit the shared baseline notebook; work on a copy.'"
+      },
+      "held-b19": {
+        "hard": true,
+        "kind": "request",
+        "lang": "en",
+        "why": "reports a defect in what was built, without saying the agent worked wrongly"
+      },
+      "held-b20": {
+        "kind": "request",
+        "lang": "ja",
+        "why": "asks a question"
+      },
+      "held-b21": {
+        "kind": "request",
+        "lang": "en",
+        "why": "gives a new task"
+      },
+      "held-b22": {
+        "kind": "request",
+        "lang": "ja",
+        "why": "gives a new idea"
+      },
+      "held-b23": {
+        "hard": true,
+        "kind": "approval",
+        "lang": "en",
+        "why": "opens with no but accepts"
+      },
+      "held-b24": {
+        "kind": "approval",
+        "lang": "ja",
+        "why": "acknowledges a result"
+      },
+      "held-b25": {
+        "kind": "approval",
+        "lang": "en",
+        "why": "picks an offered option"
+      },
+      "held-b26": {
+        "kind": "approval",
+        "lang": "ja",
+        "why": "acknowledges a result"
+      },
+      "held-b27": {
+        "kind": "approval",
+        "lang": "ja",
+        "why": "accepts the change"
+      },
+      "held-b28": {
+        "hard": true,
+        "kind": "noise",
+        "lang": "ja",
+        "why": "an input-method test sentence that reads as text"
+      },
+      "held-b29": {
+        "kind": "noise",
+        "lang": "en",
+        "why": "a lone hash"
+      },
+      "held-b30": {
+        "kind": "noise",
+        "lang": "en",
+        "why": "a lone link"
+      },
+      "held-b31": {
+        "kind": "noise",
+        "lang": "en",
+        "why": "a bare attachment"
+      },
+      "held-b32": {
+        "kind": "noise",
+        "lang": "ja",
+        "why": "a fragment"
+      }
+    },
+    "split": "heldout"
+  },
+  "observe": {
+    "items": [
+      {
+        "id": "held-b01",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:3",
+        "excerpt": "やっぱり元に戻して",
+        "ts": "2026-01-08T09:00:03Z"
+      },
+      {
+        "id": "held-b02",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:6",
+        "excerpt": "やっぱり元に戻して",
+        "ts": "2026-01-08T09:00:06Z"
+      },
+      {
+        "id": "held-b03",
+        "signal": "owner-reply",
+        "where": "t3:th:heldout-b:p2:r2",
+        "excerpt": "スクリプトの先頭には必ず set -euo pipefail を入れて",
+        "ts": "2026-01-08T09:00:09Z"
+      },
+      {
+        "id": "held-b04",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:9",
+        "excerpt": "レスポンスのフィールド名はスネークケースで",
+        "ts": "2026-01-08T09:00:12Z"
+      },
+      {
+        "id": "held-b05",
+        "signal": "owner-reply",
+        "where": "p3/s.jsonl:3",
+        "excerpt": "strip the outputs before you commit a notebook",
+        "ts": "2026-01-08T09:00:15Z"
+      },
+      {
+        "id": "held-b06",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:12",
+        "excerpt": "last_login has to be UTC, and only add the field: revert the reformatting",
+        "ts": "2026-01-08T09:00:18Z"
+      },
+      {
+        "id": "held-b07",
+        "signal": "owner-reply",
+        "where": "t3:th:heldout-b:p2:r6",
+        "excerpt": "変数は必ずクォートして、shellcheck も通して",
+        "ts": "2026-01-08T09:00:21Z"
+      },
+      {
+        "id": "held-b08",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:15",
+        "excerpt": "put it back the way it was",
+        "ts": "2026-01-08T09:00:24Z"
+      },
+      {
+        "id": "held-b09",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:18",
+        "excerpt": "put it back the way it was",
+        "ts": "2026-01-08T09:00:27Z"
+      },
+      {
+        "id": "held-b10",
+        "signal": "owner-reply",
+        "where": "t3:th:heldout-b:p2:r9",
+        "excerpt": "take a backup before you overwrite a config, on staging too",
+        "ts": "2026-01-08T09:00:30Z"
+      },
+      {
+        "id": "held-b11",
+        "signal": "owner-reply",
+        "where": "p3/s.jsonl:6",
+        "excerpt": "使ったシードは実験ログにも残して",
+        "ts": "2026-01-08T09:00:33Z"
+      },
+      {
+        "id": "held-b12",
+        "signal": "owner-reply",
+        "where": "p3/s.jsonl:9",
+        "excerpt": "keep matplotlib, I only asked for the histogram",
+        "ts": "2026-01-08T09:00:36Z"
+      },
+      {
+        "id": "held-b13",
+        "signal": "owner-reply",
+        "where": "t3:th:heldout-b:p2:r12",
+        "excerpt": "keep set -euo pipefail, handle empty globs with nullglob from now on, and leave the schedule alone",
+        "ts": "2026-01-08T09:00:39Z"
+      },
+      {
+        "id": "held-b14",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:21",
+        "excerpt": "並び順は元に戻して。フィルタだけ",
+        "ts": "2026-01-08T09:00:42Z"
+      },
+      {
+        "id": "held-b15",
+        "signal": "owner-reply",
+        "where": "t3:th:heldout-b:p2:r14",
+        "excerpt": "圧縮方式は戻して。誤字だけ",
+        "ts": "2026-01-08T09:00:45Z"
+      },
+      {
+        "id": "held-b16",
+        "signal": "owner-reply",
+        "where": "p3/s.jsonl:12",
+        "excerpt": "never drop rows silently, log how many you drop; and just the chart, please",
+        "ts": "2026-01-08T09:00:48Z"
+      },
+      {
+        "id": "held-b17",
+        "signal": "owner-reply",
+        "where": "t3:th:heldout-b:p2:r16",
+        "excerpt": "services restart only in the maintenance window, and I asked for the disk check, nothing else",
+        "ts": "2026-01-08T09:00:51Z"
+      },
+      {
+        "id": "held-b18",
+        "signal": "owner-reply",
+        "where": "p3/s.jsonl:15",
+        "excerpt": "baseline は戻して。色だけって言ったよね",
+        "ts": "2026-01-08T09:00:54Z"
+      },
+      {
+        "id": "held-b19",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:24",
+        "excerpt": "the limit resets on every deploy, so it doesn't hold",
+        "ts": "2026-01-08T09:00:57Z"
+      },
+      {
+        "id": "held-b20",
+        "signal": "owner-reply",
+        "where": "t3:th:heldout-b:p2:r19",
+        "excerpt": "閾値はどこで変えられる？",
+        "ts": "2026-01-08T09:01:00Z"
+      },
+      {
+        "id": "held-b21",
+        "signal": "owner-reply",
+        "where": "p3/s.jsonl:18",
+        "excerpt": "can you also break it down by country?",
+        "ts": "2026-01-08T09:01:03Z"
+      },
+      {
+        "id": "held-b22",
+        "signal": "owner-reply",
+        "where": "p3/s.jsonl:21",
+        "excerpt": "次は特徴量の重要度も見たい",
+        "ts": "2026-01-08T09:01:06Z"
+      },
+      {
+        "id": "held-b23",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:27",
+        "excerpt": "no, that's fine as is, merge it",
+        "ts": "2026-01-08T09:01:09Z"
+      },
+      {
+        "id": "held-b24",
+        "signal": "owner-reply",
+        "where": "t3:th:heldout-b:p2:r23",
+        "excerpt": "了解、ありがとう",
+        "ts": "2026-01-08T09:01:12Z"
+      },
+      {
+        "id": "held-b25",
+        "signal": "owner-reply",
+        "where": "p3/s.jsonl:24",
+        "excerpt": "go with option 2",
+        "ts": "2026-01-08T09:01:15Z"
+      },
+      {
+        "id": "held-b26",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:30",
+        "excerpt": "OK、マージした",
+        "ts": "2026-01-08T09:01:18Z"
+      },
+      {
+        "id": "held-b27",
+        "signal": "owner-reply",
+        "where": "p3/s.jsonl:27",
+        "excerpt": "いい感じ、そのままで",
+        "ts": "2026-01-08T09:01:21Z"
+      },
+      {
+        "id": "held-b28",
+        "signal": "owner-reply",
+        "where": "t3:th:heldout-b:p2:r27",
+        "excerpt": "かな入力のテストです",
+        "ts": "2026-01-08T09:01:24Z"
+      },
+      {
+        "id": "held-b29",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:33",
+        "excerpt": "9e4f1c0",
+        "ts": "2026-01-08T09:01:27Z"
+      },
+      {
+        "id": "held-b30",
+        "signal": "owner-reply",
+        "where": "t3:th:heldout-b:p2:r29",
+        "excerpt": "https://example.com/runbook/17",
+        "ts": "2026-01-08T09:01:30Z"
+      },
+      {
+        "id": "held-b31",
+        "signal": "owner-reply",
+        "where": "p3/s.jsonl:30",
+        "excerpt": "[screenshot]",
+        "ts": "2026-01-08T09:01:33Z"
+      },
+      {
+        "id": "held-b32",
+        "signal": "owner-reply",
+        "where": "p1/s.jsonl:36",
+        "excerpt": "あ、",
+        "ts": "2026-01-08T09:01:36Z"
+      }
+    ],
+    "sources": {
+      "t3": {
+        "status": "ok",
+        "error": ""
+      },
+      "transcripts": {
+        "status": "ok",
+        "error": ""
+      }
+    },
+    "version": 1,
+    "window": {
+      "since": "2026-01-01T12:00:00Z",
+      "until": "2026-01-08T11:59:00Z"
+    }
+  },
+  "files": {
+    "p1/s.jsonl": [
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "CSV エクスポートの文字化けだけ直して。区切り文字は変えないで。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:01Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "文字化けを直し、区切り文字をタブに変えました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:02Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "やっぱり元に戻して",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:03Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "CSV エクスポートの文字化けを直して、区切り文字もタブに変えて。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:04Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "文字化けを直し、区切り文字をタブに変えました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:05Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "やっぱり元に戻して",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:06Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "注文 API にキャンセル理由のフィールドを追加して。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:10Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "レスポンスに cancelReason というフィールドを追加しました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:11Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "レスポンスのフィールド名はスネークケースで",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:12Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "Add a last_login field to the user model.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:16Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "I added last_login as a naive local datetime and reformatted the whole models file.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:17Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "last_login has to be UTC, and only add the field: revert the reformatting",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:18Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "Fix the seed script only; do not edit the applied migrations.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:22Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "I fixed the seed script and edited migration 0042 to add the missing column.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:23Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "put it back the way it was",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:24Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "Fix the seed script, and add the missing column to migration 0042.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:25Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "I fixed the seed script and edited migration 0042 to add the missing column.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:26Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "put it back the way it was",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:27Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "ユーザー一覧 API に検索フィルタを付けて。並び順はそのまま。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:40Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "フィルタを付け、並び順を作成日の降順に変えました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:41Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "並び順は元に戻して。フィルタだけ",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:42Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "Add rate limiting to the login endpoint.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:55Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "Rate limiting is on for the login endpoint.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:56Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "the limit resets on every deploy, so it doesn't hold",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:57Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "Use the connection pool in the worker.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:07Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "I switched the worker to the shared connection pool.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:01:08Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "no, that's fine as is, merge it",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:09Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "テストを流して。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:16Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "全テストが通りました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:01:17Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "OK、マージした",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:18Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "Which commit added the column?",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:25Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "The commit before the release tag.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:01:26Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "9e4f1c0",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:27Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "ログを見せて。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:34Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": [
+            {
+              "text": "ログを貼りました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:01:35Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p1",
+        "message": {
+          "content": "あ、",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:36Z",
+        "type": "user"
+      }
+    ],
+    "p3/s.jsonl": [
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "Add the churn analysis notebook.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:13Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": [
+            {
+              "text": "I committed churn.ipynb with every cell output, the charts included.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:14Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "strip the outputs before you commit a notebook",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:15Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "学習率の比較実験を回して。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:31Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": [
+            {
+              "text": "シードを 42 に固定して 3 本回しました。結果は表にまとめています。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:32Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "使ったシードは実験ログにも残して",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:33Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "Add a histogram of session length to the report notebook.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:34Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": [
+            {
+              "text": "I added the histogram, switched every chart from matplotlib to plotly, and committed the notebook with its outputs.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:35Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "keep matplotlib, I only asked for the histogram",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:36Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "Add a weekly retention chart to the dashboard notebook.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:46Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": [
+            {
+              "text": "I added the chart and dropped every user with a missing country from the dataset.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:47Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "never drop rows silently, log how many you drop; and just the chart, please",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:48Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "このノートブックのグラフの色だけ調整して。共有のベースラインノートブックは触らないで。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:52Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": [
+            {
+              "text": "色を調整し、ついでに baseline.ipynb のセルも書き換えました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:00:53Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "baseline は戻して。色だけって言ったよね",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:00:54Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "Summarize the A/B test.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:01Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": [
+            {
+              "text": "Variant B lifts conversion by 2.1%.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:01:02Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "can you also break it down by country?",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:03Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "モデルの評価をまとめて。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:04Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": [
+            {
+              "text": "評価結果をまとめました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:01:05Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "次は特徴量の重要度も見たい",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:06Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "Option 1 or 2 for the chart layout?",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:13Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": [
+            {
+              "text": "I suggest option 2: one chart per metric.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:01:14Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "go with option 2",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:15Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "ノートブックを整理して。",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:19Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": [
+            {
+              "text": "不要なセルを消して整理しました。",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:01:20Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "いい感じ、そのままで",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:21Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "Show the chart.",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:31Z",
+        "type": "user"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": [
+            {
+              "text": "The chart is attached above.",
+              "type": "text"
+            }
+          ]
+        },
+        "timestamp": "2026-01-08T09:01:32Z",
+        "type": "assistant"
+      },
+      {
+        "cwd": "p3",
+        "message": {
+          "content": "[screenshot]",
+          "role": "user"
+        },
+        "origin": {
+          "kind": "human"
+        },
+        "timestamp": "2026-01-08T09:01:33Z",
+        "type": "user"
+      }
+    ]
+  },
+  "memory": {
+    "p1": "- Never edit a migration that has already been applied; add a new migration instead.\n- Store all timestamps in UTC.\n- API responses use snake_case field names.\n- Never change the column order of CSV exports without asking.\n- Health checks must not touch the database.\n",
+    "p2": "- Shell scripts start with set -euo pipefail.\n- Quote every variable expansion in shell scripts.\n- Run shellcheck on every changed script.\n- Back up a config file before overwriting it on a production server.\n- Restart services only during the maintenance window.\n",
+    "p3": "- Commit notebooks with their outputs cleared.\n- Fix the random seed in every experiment.\n- Do not edit the shared baseline notebook; work on a copy.\n- グラフの軸には単位を書く。\n"
+  }
+}
