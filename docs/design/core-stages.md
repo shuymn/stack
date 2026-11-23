@@ -225,7 +225,8 @@ Step 2 of `docs/design/phase2-core.md` §4.2 gains a last step: when at least on
   result leaves no text in the context and the hook writes `stack: entry context of <name> dropped: context limit`
   to stderr; this happens only when the restore already filled the budget, so the restore itself is intact.
 
-This makes compaction return what `kit open` showed.
+Compaction and `kit open` render each kit with the same renderer; compaction adds its budget
+(`docs/design/phase2-core.md` §4.2), so it can omit what `kit open` shows.
 
 ### 4.4 `stack-public` (outbound extension)
 
@@ -337,14 +338,13 @@ except on its own errors.
     `~/.local/state/stack/kits`), and the slug is recorded in the merging session's `.kits` with that dir present
     (`internal/cli/prmerge.go:73-92`, `internal/cli/run.go:281-307`).
   - *How a consumer finds that dir:* it resolves the current config as above. The premise is that `[kit].root` is
-    not edited while `pr merge` runs; editing it then is outside this design. The consumer may instead reuse a dir
-    it saw for `<slug>` in this session, from `kit open` output or a compact restore, only when it knows
-    `[kit].root` has not changed since: an `<orchestration-state path=…>` or `[state omitted: context limit:
-    <path>]` path names `<kit dir>/NORTH.md` or `<kit dir>/state.md`, so the kit dir is its parent; `[new kit:
-    <path>; …]` names the kit dir; `[unreadable: <path>]` names the kit dir itself (a kit dir that cannot be
-    opened), `<kit dir>/NORTH.md`, `<kit dir>/state.md` or `<kit dir>/attention/items.json`, so the consumer
-    strips that file name when present. It never assumes the default root; when no dir can be established, it
-    reports the slug as unresolved instead of guessing.
+    not edited from the start of `pr merge` until the consumer has resolved the dir; editing it then is outside
+    this design. The consumer may instead reuse a dir it saw for `<slug>` in this session, from `kit open` output
+    or a compact restore, under the same premise: an `<orchestration-state path=…>` or `[state omitted: context
+    limit: <path>]` path names `<kit dir>/NORTH.md` or `<kit dir>/state.md`, so the kit dir is its parent, and
+    `[new kit: <path>; …]` names the kit dir. `[unreadable: <path>]` names either the kit dir or a file in it, and
+    a slug may itself be `state.md`, so the consumer does not derive a dir from it. It never assumes the default
+    root; when no dir can be established, it reports the slug as unresolved instead of guessing.
   - *Replay:* with `stack run merged --replay`, the request is the fixture's, so the line's slug names the
     fixture's `kits` entry and its `dir`, not anything under the kit root.
 - **Best effort.** The reset is written before core accepts the response; if the stage deadline passes or stdout
@@ -423,7 +423,8 @@ interface.
 - **State file** `<kit>/audit-due.json` inside each kit (§4.7): the signal belongs to the kit, and the kit dir is
   already the extension-visible place for kit state (`kits[].dir`).
 - **K = 5**, the issue's default. Over the 26 merges of the run #28 cites, with one kit whose state is updated
-  after every merge and one audit per due line, that is five due lines (§4.7).
+  after every merge and one audit per due line, that is five due lines (§4.7), against the one audit that run
+  actually had.
 - **Kit state not updated, by content hash, not mtime.** A hash compares what the steward cares about (content);
   mtime changes on saves without changes, on checkouts and syncs, and has filesystem-dependent resolution, so tests
   would need sleeps. The files are small; hashing costs nothing measurable. Both `NORTH.md` and `state.md` are
@@ -588,7 +589,7 @@ serial cost and no gain over a second hook entry).
 | C1 | When an extension answers `block` at `entry`, `merged` or `cycle`, `ext` shall record `warn` with the stage finding and `error`. | `ext.TestBlockDemotion` | per stage; `outbound` keeps `block`; finding text; `context` and findings kept |
 | C2 | `stack run` shall exit 1 on `block` only at `outbound`. | `cli.TestRunBlockExit` | four stages; replay `expect` compared after demotion; `--title-file`/`--body-file`/`--branch` at a non-outbound stage or with `--replay` → exit 2 |
 | C3 | When `STACK_SESSION_ID` is valid, every live `entry` and `merged` request shall carry `kits` with the existing open kits in `.kits` order; otherwise `[]`. | `cli.TestRequestKits` | unset id → `[]`; a listed kit whose dir is gone is left out; `.kits` lock held past 1 s → `[]` plus the stderr note; `outbound` and `cycle` requests have no `kits` |
-| C4 | When compact restores at least one kit and the stage deadline of §4.3 is at least 1 s away, session-start shall run the entry stage once, place each result after the boards, cut or omitted within the budget, without changing the restore, start no work after the cut-off, and write its output before the host's 60 s. | `session.TestCompactEntry` (replaces only the "no extension" assertion of C19 of `docs/design/phase2-core.md`; injected clock or start time) | fake extension invoked once with the restored `kits` and the payload's id in `STACK_SESSION_ID` when the inherited env names another id; no kits → not invoked; a fake `git` that sleeps is never called; boards running to their deadline → entry bounded by the remaining time, no work started after the cut-off and the hook's output written before 60 s; stage deadline just over 1 s away → invoked; just under 1 s → not invoked, `[entry skipped: deadline]`; an extension that runs to the deadline and leaves a pipe open to a grandchild → the next extension is not started, the stage has returned by the cut-off and the hook's output is written before 60 s; a hanging extension → the restore is written whole; long context with astral-plane chars cut on a code-point boundary with marker; total ≤ 9,500 UTF-16 units; no room for the marker → no entry text and the stderr note; C19's lock, fork and close cases still pass |
+| C4 | When compact restores at least one kit and the stage deadline of §4.3 is at least 1 s away, session-start shall run the entry stage once, place each result after the boards, cut or omitted within the budget, without changing the restore, start no work after the cut-off, and write its output before the host's 60 s. | `session.TestCompactEntry` (injected clock or start time) | fake extension invoked once with the restored `kits` and the payload's id in `STACK_SESSION_ID` when the inherited env names another id; no kits → not invoked; a fake `git` that sleeps is never called; boards running to their deadline → entry bounded by the remaining time, no work started after the cut-off and the hook's output written before 60 s; stage deadline just over 1 s away → invoked; just under 1 s → not invoked, `[entry skipped: deadline]`; an extension that runs to the deadline and leaves a pipe open to a grandchild → the next extension is not started, the stage has returned by the cut-off and the hook's output is written before 60 s; a hanging extension → the restore is written whole; long context with astral-plane chars cut on a code-point boundary with marker; total ≤ 9,500 UTF-16 units; no room for the marker → no entry text and the stderr note; C19's lock, fork and close cases still pass |
 | C5 | When `pr merge` verifies a merge, it shall write the `MERGED` line before starting `merged` and exit 0 whatever the results. | `merge.TestMergedStage` (fake gh, fake extension) | the test's stdout writer and the fake extension append to one ordered log, and the `MERGED` write precedes the extension's start; warn marker and context after the line; extension `block` → shown as warn, exit 0; direct path, `--auto` while polling, and `--auto` success found by the final read-back after the wait deadline; request `repo` and `merge` from the verified run with no extra git or gh call; a slow first extension → the next is not started after the deadline; a first extension that runs to the deadline and leaves a pipe open to a grandchild → the next is not started and the stage run returns within 10 s of its start (the results' printing follows); stdout closed → exit 0 |
 | C6 | If `pr merge` refuses or cannot confirm the merge, or is cancelled before its success point, it shall not run `merged`. | `merge.TestMergedStageNotRun` | refusal, unknown, cancel then success found by the final read-back: the fake extension's log is empty; cancel after `merged` started → the merge still reports success |
 | C7 | When no `merged` extension is installed, `pr merge` stdout, stderr and exit code shall be byte-identical to today, under the same `[merge].message_checks` configuration. | `merge.TestMergedNoExtension` | exact stdout, stderr and exit code, with `STACK_SESSION_ID` set, its `.kits` file present and its lock held by the test: the `.kits` file is not read and no lock note appears; a `merged` name found but not executable → `MERGED` line, then its warn marker, exit 0, `.kits` not read |
