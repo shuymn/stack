@@ -1,9 +1,10 @@
 package session
 
 import (
+	"context"
 	"os"
 	"path/filepath"
-	"slices"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -130,6 +131,19 @@ func TestCompactEntry(t *testing.T) {
 	})
 }
 
+// startCut matches the warn of an extension whose stage deadline passed between the stage's
+// check and the process start: os/exec returns the context's error, which the runner wraps.
+var startCut = regexp.MustCompile(regexp.QuoteMeta("[extension demo: warn: start ") + `[^\]\n]*` +
+	regexp.QuoteMeta(": "+proc.ErrStart.Error()+": "+context.DeadlineExceeded.Error()+"]"))
+
+// cutByDeadline reports that demo was cut by its stage deadline after the stage passed its
+// admission check: timed out once started, not started, or cut while starting.
+func cutByDeadline(ctx string) bool {
+	return strings.Contains(ctx, "[extension demo: warn: timed out") ||
+		strings.Contains(ctx, "[extension demo: warn: not started: stage deadline") ||
+		startCut.MatchString(ctx)
+}
+
 // C4: the entry stage at compaction runs only with time left and ends by the hook's cut-off,
 // leaving the restore whole. Not parallel: it changes PATH.
 func TestCompactEntryDeadline(t *testing.T) {
@@ -171,10 +185,9 @@ func TestCompactEntryDeadline(t *testing.T) {
 				}
 				if tt.start {
 					// 500 ms are left after the lookup: started and timed out, or, when the start
-					// is slower on a loaded machine, not started. The bound above is the property.
-					const notStarted = "[extension demo: warn: not started: stage deadline"
-					if !strings.Contains(ctx, "[extension demo: warn: timed out") &&
-						!strings.Contains(ctx, notStarted) {
+					// is slower on a loaded machine, not started or cut while starting. The bound
+					// above is the property.
+					if !cutByDeadline(ctx) {
 						t.Fatalf("no stage deadline reported:\n%s", squash(ctx))
 					}
 					return
@@ -216,14 +229,7 @@ func TestCompactEntryDeadline(t *testing.T) {
 					// machine can use that up in the lookup or the fake's start; a time-out or a
 					// "not started" still shows the stage passed the admission check, and only
 					// a failed check leaves "[entry skipped".
-					ran := []string{
-						"ENTRY CTX",
-						"[extension demo: warn: timed out",
-						"[extension demo: warn: not started: stage deadline",
-					}
-					if !slices.ContainsFunc(ran, func(s string) bool {
-						return strings.Contains(ctx, s)
-					}) {
+					if !strings.Contains(ctx, "ENTRY CTX") && !cutByDeadline(ctx) {
 						t.Fatalf("entry did not run:\n%s", squash(ctx))
 					}
 					mustLack(t, ctx, "[entry skipped")
