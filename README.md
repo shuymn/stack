@@ -37,8 +37,9 @@ Reinstall after `jev-calibrate` changes the embedded cutoffs (`extensions/jev/se
 The same key opts `stack-jev-classify` (the `cycle` stage, `stack run cycle --ext jev-classify`) into sending the
 week's owner replies from observe's `latest.json`, each with the assistant message it answers and the owner turn
 before it, to Jev. It writes a local report to `~/.local/state/stack/jev-classify/latest.json` and never blocks.
-Until `jev-calibrate --ext classify` has run, its shipped cutoffs are a placeholder: both decisions are disabled, so
-it reads and reports but sends nothing. Reinstall after that run changes `extensions/jev/classify/cutoffs.json`.
+The shipped cutoffs enable the qualification decision and disable the duplicate check, so every candidate is listed
+as not checked against memory. Reinstall after `jev-calibrate --ext classify` changes
+`extensions/jev/classify/cutoffs.json`.
 
 Set `TYPESAFE_API_KEY` or use `~/.config/stack/jev/key`. A non-blank environment value takes precedence. To opt out,
 unset the variable and remove the file. On Unix, use a key file you own with mode `0600`. At the silent prompt below,

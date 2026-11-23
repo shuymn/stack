@@ -1,11 +1,702 @@
 {
-  "placeholder": "pending: awaiting a jev-calibrate run with the key",
   "request": {
     "jev": {
       "claude": "claude",
       "now": "2026-01-08T12:00:00Z",
       "observe": "observe.json",
-      "records": {},
+      "records": {
+        "sha256:3ce3d23477585206f2a2285456b73ace36c8d58bc408fafe9eb685c6467c0345": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r28": {
+                "type": "noul",
+                "noul": 0.97
+              }
+            },
+            "usage": {
+              "input_tokens": 782,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:42059697da4eb45082534bfc46f6dd418d906005f6738c9d2b3137dbca44b701": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r16": {
+                "type": "noul",
+                "noul": 0.11
+              }
+            },
+            "usage": {
+              "input_tokens": 790,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:497897f56b6f1d06bfaa08ccd4483c41a42432733c48f5fadeaae6305be77f3f": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r30": {
+                "type": "noul",
+                "noul": 0.78
+              }
+            },
+            "usage": {
+              "input_tokens": 811,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:54f0d49893ea4ba01cbadb4bc74b91ac4337cd5bbde4d1daac762f7345be09de": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "kind_r1": {
+                "type": "choice",
+                "choice": "noise",
+                "confidence": 0.75,
+                "probabilities": {
+                  "approval": 0.09,
+                  "correction": 0.01,
+                  "drift": 0.01,
+                  "noise": 0.8,
+                  "request": 0.09
+                }
+              },
+              "kind_r2": {
+                "type": "choice",
+                "choice": "noise",
+                "confidence": 0.95,
+                "probabilities": {
+                  "approval": 0.04,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.96,
+                  "request": 0.0
+                }
+              },
+              "kind_r3": {
+                "type": "choice",
+                "choice": "noise",
+                "confidence": 0.91,
+                "probabilities": {
+                  "approval": 0.04,
+                  "correction": 0.0,
+                  "drift": 0.01,
+                  "noise": 0.93,
+                  "request": 0.02
+                }
+              },
+              "kind_r4": {
+                "type": "choice",
+                "choice": "noise",
+                "confidence": 0.89,
+                "probabilities": {
+                  "approval": 0.04,
+                  "correction": 0.0,
+                  "drift": 0.01,
+                  "noise": 0.91,
+                  "request": 0.04
+                }
+              },
+              "kind_r5": {
+                "type": "choice",
+                "choice": "noise",
+                "confidence": 0.92,
+                "probabilities": {
+                  "approval": 0.04,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.94,
+                  "request": 0.02
+                }
+              },
+              "kind_r6": {
+                "type": "choice",
+                "choice": "approval",
+                "confidence": 1.0,
+                "probabilities": {
+                  "approval": 1.0,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r7": {
+                "type": "choice",
+                "choice": "approval",
+                "confidence": 1.0,
+                "probabilities": {
+                  "approval": 1.0,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r8": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.34,
+                "probabilities": {
+                  "approval": 0.45,
+                  "correction": 0.47,
+                  "drift": 0.06,
+                  "noise": 0.0,
+                  "request": 0.02
+                }
+              },
+              "kind_r9": {
+                "type": "choice",
+                "choice": "approval",
+                "confidence": 1.0,
+                "probabilities": {
+                  "approval": 1.0,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r10": {
+                "type": "choice",
+                "choice": "approval",
+                "confidence": 1.0,
+                "probabilities": {
+                  "approval": 1.0,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r11": {
+                "type": "choice",
+                "choice": "request",
+                "confidence": 0.99,
+                "probabilities": {
+                  "approval": 0.01,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 0.99
+                }
+              },
+              "kind_r12": {
+                "type": "choice",
+                "choice": "request",
+                "confidence": 0.74,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.19,
+                  "drift": 0.02,
+                  "noise": 0.0,
+                  "request": 0.79
+                }
+              },
+              "kind_r13": {
+                "type": "choice",
+                "choice": "request",
+                "confidence": 1.0,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 1.0
+                }
+              },
+              "kind_r14": {
+                "type": "choice",
+                "choice": "request",
+                "confidence": 1.0,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.0,
+                  "drift": 0.0,
+                  "noise": 0.0,
+                  "request": 1.0
+                }
+              },
+              "kind_r15": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.89,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.09,
+                  "drift": 0.91,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r16": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.69,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.25,
+                  "drift": 0.75,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r17": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.71,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.23,
+                  "drift": 0.77,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r18": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.79,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.83,
+                  "drift": 0.17,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r19": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.91,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.07,
+                  "drift": 0.93,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r20": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.9,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.08,
+                  "drift": 0.92,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              }
+            },
+            "usage": {
+              "input_tokens": 6299,
+              "output_tokens": 1103
+            }
+          }
+        },
+        "sha256:5ef5aacca4c640909d6b4c9721f7bb4506e3826dad550adc37f001289a2ebe71": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r29": {
+                "type": "noul",
+                "noul": 0.48
+              }
+            },
+            "usage": {
+              "input_tokens": 807,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:7a7a9577af23bda30cb160480f841437b2c8cba2c8c3381adb42bc22f55a184e": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r20": {
+                "type": "noul",
+                "noul": 0.94
+              }
+            },
+            "usage": {
+              "input_tokens": 796,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:839f2fbaf52232f3eea0b97faef1198096af253ad77fb836eb547cc5d82a2cca": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r17": {
+                "type": "noul",
+                "noul": 0.29
+              }
+            },
+            "usage": {
+              "input_tokens": 837,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:8841e2e4d2d4370f7c9513c5ccbbcd06795c3fe2791a6dd824fc2af4979696e9": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r27": {
+                "type": "noul",
+                "noul": 0.98
+              }
+            },
+            "usage": {
+              "input_tokens": 809,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:93f4fc2412024e2ca43b852e636a25bd8492814d2efee719744a8c2ba1d2462b": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r23": {
+                "type": "noul",
+                "noul": 0.27
+              }
+            },
+            "usage": {
+              "input_tokens": 801,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:9bfb30ffbb8533f2dfdcf8bda2163e7260b3f3625177c8bf676ff528aa6540ad": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r15": {
+                "type": "noul",
+                "noul": 0.12
+              }
+            },
+            "usage": {
+              "input_tokens": 825,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:9ed43d9caba1e9b8838e990e5412013eabde8b93d4dc92c8a485eae3572e7fbc": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r22": {
+                "type": "noul",
+                "noul": 0.31
+              }
+            },
+            "usage": {
+              "input_tokens": 800,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:a3299d9fa2ae5eb8ed2d4c16c24e28a2efbd9ca4952acdf4fee5f74d351c8cc1": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r32": {
+                "type": "noul",
+                "noul": 0.7
+              }
+            },
+            "usage": {
+              "input_tokens": 799,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:b2964cc12d5bf5e086c19795862a8fb831b7aac0471fb9eab4f5c822d0a9e841": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r31": {
+                "type": "noul",
+                "noul": 0.59
+              }
+            },
+            "usage": {
+              "input_tokens": 788,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:bf0bae4a0746d7d7b3998782700ee4460368e80f5e32fe82ab1a00d7cb710372": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r25": {
+                "type": "noul",
+                "noul": 0.98
+              }
+            },
+            "usage": {
+              "input_tokens": 807,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:d31424d377c3ce4a3370f0d55736bc366e04dd3695a3346e820472897aec6e6a": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r8": {
+                "type": "noul",
+                "noul": 0.37
+              }
+            },
+            "usage": {
+              "input_tokens": 789,
+              "output_tokens": 22
+            }
+          }
+        },
+        "sha256:d852bd09a5c1b47fbe8628b3a994a9680def51da6ddba9541807d4879cfe91dc": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r26": {
+                "type": "noul",
+                "noul": 0.72
+              }
+            },
+            "usage": {
+              "input_tokens": 788,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:dba5debd888a95e13dc5aeb813361aeb61af136596cab8b28448843572b337b1": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "kind_r21": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.92,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.06,
+                  "drift": 0.94,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r22": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.98,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.02,
+                  "drift": 0.98,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r23": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.94,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.95,
+                  "drift": 0.05,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r24": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.95,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.96,
+                  "drift": 0.03,
+                  "noise": 0.0,
+                  "request": 0.01
+                }
+              },
+              "kind_r25": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.96,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.97,
+                  "drift": 0.03,
+                  "noise": 0.0,
+                  "request": 0.0
+                }
+              },
+              "kind_r26": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.94,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.95,
+                  "drift": 0.04,
+                  "noise": 0.0,
+                  "request": 0.01
+                }
+              },
+              "kind_r27": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.59,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.67,
+                  "drift": 0.02,
+                  "noise": 0.0,
+                  "request": 0.31
+                }
+              },
+              "kind_r28": {
+                "type": "choice",
+                "choice": "correction",
+                "confidence": 0.95,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.96,
+                  "drift": 0.03,
+                  "noise": 0.0,
+                  "request": 0.01
+                }
+              },
+              "kind_r29": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.29,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.31,
+                  "drift": 0.43,
+                  "noise": 0.0,
+                  "request": 0.26
+                }
+              },
+              "kind_r30": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.79,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.09,
+                  "drift": 0.83,
+                  "noise": 0.0,
+                  "request": 0.08
+                }
+              },
+              "kind_r31": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.66,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.22,
+                  "drift": 0.73,
+                  "noise": 0.0,
+                  "request": 0.05
+                }
+              },
+              "kind_r32": {
+                "type": "choice",
+                "choice": "drift",
+                "confidence": 0.87,
+                "probabilities": {
+                  "approval": 0.0,
+                  "correction": 0.09,
+                  "drift": 0.9,
+                  "noise": 0.0,
+                  "request": 0.01
+                }
+              }
+            },
+            "usage": {
+              "input_tokens": 3983,
+              "output_tokens": 681
+            }
+          }
+        },
+        "sha256:eaa27efecb3870d5a09eb2e4b5dc3b987e43074658568d95cf46ebfcfe1d6c44": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r19": {
+                "type": "noul",
+                "noul": 0.08
+              }
+            },
+            "usage": {
+              "input_tokens": 822,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:ed68ca83252baab664cca21729f89a4442881ea4837c83a80da645543551c7af": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r18": {
+                "type": "noul",
+                "noul": 0.78
+              }
+            },
+            "usage": {
+              "input_tokens": 802,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:f91f964c1081357d219f3e7c8a140b7c66cdcd69aabede3371e2fe930721dcf3": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r21": {
+                "type": "noul",
+                "noul": 0.88
+              }
+            },
+            "usage": {
+              "input_tokens": 834,
+              "output_tokens": 23
+            }
+          }
+        },
+        "sha256:fff5a7fef5362189e3b582f302113e7f427b67042f18647019a0ef44f6abcb4d": {
+          "answer": {
+            "model": "jev-1.14.0",
+            "answers": {
+              "dup_r24": {
+                "type": "noul",
+                "noul": 0.07
+              }
+            },
+            "usage": {
+              "input_tokens": 792,
+              "output_tokens": 23
+            }
+          }
+        }
+      },
       "t3": {
         "th:fit-c:p2": {
           "cwd": "p2",
@@ -177,6 +868,616 @@
       }
     },
     "stage": "cycle"
+  },
+  "expect": {
+    "status": "pass"
+  },
+  "want": {
+    "findings": [],
+    "context": "jev-classify (jev-1.14.0): 32 owner replies: 19 qualified (0 new, 0 duplicate, 19 dup unassessed), 13 unqualified, 0 unresolved, 0 unevaluated; report ~/.local/state/stack/jev-classify/latest.json\ncorrection t3:th:fit-c:p2:r24: nope, nothing to change, the tags are right (dup unassessed: duplicate check disabled)\ndrift p3/s.jsonl:21: それは違う。ページサイズは触らないで、並び順だけ (dup unassessed: duplicate check disabled)\ndrift p1/s.jsonl:18: no, wrong place — only the label was supposed to change (dup unassessed: duplicate check disabled)\ndrift p3/s.jsonl:18: 文言は i18n ファイルへ。直すのは文言だけで、色は変えないで (dup unassessed: duplicate check disabled)\ncorrection t3:th:fit-c:p2:r14: never apply from a laptop, and I only asked for tags (dup unassessed: duplicate check disabled)\ndrift p3/s.jsonl:15: ロジックは触らないで。幅だけ。 (dup unassessed: duplicate check disabled)\ndrift t3:th:fit-c:p2:r12: don't touch the instance size, tag only (dup unassessed: duplicate check disabled)\ndrift t3:th:fit-c:p2:r11: タグだけって言ったよね、ポリシーは戻して (dup unassessed: duplicate check disabled)\ndrift p3/s.jsonl:12: I only asked for the typo, revert the restyle (dup unassessed: duplicate check disabled)\ncorrection p1/s.jsonl:15: ビルド番号は CI が付けるから触らないで (dup unassessed: duplicate check disabled)\n(+9 more in the report)\nthe duplicate check is disabled: heldout precision 0.78, recall 0.88 miss the target 0.80 / 0.50; candidates are not checked against memory",
+    "report": {
+      "complete": true,
+      "counts": {
+        "classified": 32,
+        "dup_unassessed": 19,
+        "dup_unassessed_lookup": 0,
+        "duplicate": 0,
+        "items": 32,
+        "new": 0,
+        "not_done": 0,
+        "qualified": 19,
+        "unevaluated": 0,
+        "unresolved": 0
+      },
+      "decisions": {
+        "duplicate": "disabled",
+        "qualification": "enabled"
+      },
+      "items": [
+        {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "put that back",
+          "id": "fit-c01",
+          "kind": "drift",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.09,
+            "drift": 0.9,
+            "noise": 0,
+            "request": 0.01
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p3/s.jsonl:3"
+        },
+        {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "put that back",
+          "id": "fit-c02",
+          "kind": "drift",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.22,
+            "drift": 0.73,
+            "noise": 0,
+            "request": 0.05
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p3/s.jsonl:6"
+        },
+        {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "取り消して",
+          "id": "fit-c03",
+          "kind": "drift",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.09,
+            "drift": 0.83,
+            "noise": 0,
+            "request": 0.08
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p1/s.jsonl:3"
+        },
+        {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "取り消して",
+          "id": "fit-c04",
+          "kind": "drift",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.31,
+            "drift": 0.43,
+            "noise": 0,
+            "request": 0.26
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p1/s.jsonl:6"
+        },
+        {
+          "choice": "correction",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "use the design tokens, not hex values",
+          "id": "fit-c05",
+          "kind": "correction",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.96,
+            "drift": 0.03,
+            "noise": 0,
+            "request": 0.01
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p1/s.jsonl:9"
+        },
+        {
+          "choice": "correction",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "ラベルがないよ。全画面に必要。",
+          "id": "fit-c06",
+          "kind": "correction",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.67,
+            "drift": 0.02,
+            "noise": 0,
+            "request": 0.31
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p1/s.jsonl:12"
+        },
+        {
+          "choice": "correction",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "keep storage private",
+          "id": "fit-c07",
+          "kind": "correction",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.95,
+            "drift": 0.04,
+            "noise": 0,
+            "request": 0.01
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "t3:th:fit-c:p2:r6"
+        },
+        {
+          "choice": "correction",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "inline style は使わない",
+          "id": "fit-c08",
+          "kind": "correction",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.97,
+            "drift": 0.03,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p3/s.jsonl:9"
+        },
+        {
+          "choice": "correction",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "we name buckets with the team prefix",
+          "id": "fit-c09",
+          "kind": "correction",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.96,
+            "drift": 0.03,
+            "noise": 0,
+            "request": 0.01
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "t3:th:fit-c:p2:r8"
+        },
+        {
+          "choice": "correction",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "ビルド番号は CI が付けるから触らないで",
+          "id": "fit-c10",
+          "kind": "correction",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.95,
+            "drift": 0.05,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p1/s.jsonl:15"
+        },
+        {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "I only asked for the typo, revert the restyle",
+          "id": "fit-c11",
+          "kind": "drift",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.02,
+            "drift": 0.98,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p3/s.jsonl:12"
+        },
+        {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "タグだけって言ったよね、ポリシーは戻して",
+          "id": "fit-c12",
+          "kind": "drift",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.06,
+            "drift": 0.94,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "t3:th:fit-c:p2:r11"
+        },
+        {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "don't touch the instance size, tag only",
+          "id": "fit-c13",
+          "kind": "drift",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.08,
+            "drift": 0.92,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "t3:th:fit-c:p2:r12"
+        },
+        {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "ロジックは触らないで。幅だけ。",
+          "id": "fit-c14",
+          "kind": "drift",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.07,
+            "drift": 0.93,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p3/s.jsonl:15"
+        },
+        {
+          "choice": "correction",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "never apply from a laptop, and I only asked for tags",
+          "id": "fit-c15",
+          "kind": "correction",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.83,
+            "drift": 0.17,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "t3:th:fit-c:p2:r14"
+        },
+        {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "文言は i18n ファイルへ。直すのは文言だけで、色は変えないで",
+          "id": "fit-c16",
+          "kind": "drift",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.23,
+            "drift": 0.77,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p3/s.jsonl:18"
+        },
+        {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "no, wrong place — only the label was supposed to change",
+          "id": "fit-c17",
+          "kind": "drift",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.25,
+            "drift": 0.75,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p1/s.jsonl:18"
+        },
+        {
+          "choice": "drift",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "それは違う。ページサイズは触らないで、並び順だけ",
+          "id": "fit-c18",
+          "kind": "drift",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.09,
+            "drift": 0.91,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "p3/s.jsonl:21"
+        },
+        {
+          "choice": "request",
+          "id": "fit-c19",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0,
+            "drift": 0,
+            "noise": 0,
+            "request": 1
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "p1/s.jsonl:21"
+        },
+        {
+          "choice": "request",
+          "id": "fit-c20",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0,
+            "drift": 0,
+            "noise": 0,
+            "request": 1
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "t3:th:fit-c:p2:r19"
+        },
+        {
+          "choice": "request",
+          "id": "fit-c21",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0,
+            "correction": 0.19,
+            "drift": 0.02,
+            "noise": 0,
+            "request": 0.79
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "p1/s.jsonl:24"
+        },
+        {
+          "choice": "request",
+          "id": "fit-c22",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0.01,
+            "correction": 0,
+            "drift": 0,
+            "noise": 0,
+            "request": 0.99
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "p3/s.jsonl:24"
+        },
+        {
+          "choice": "approval",
+          "id": "fit-c23",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 1,
+            "correction": 0,
+            "drift": 0,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "p1/s.jsonl:27"
+        },
+        {
+          "choice": "approval",
+          "id": "fit-c24",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 1,
+            "correction": 0,
+            "drift": 0,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "p3/s.jsonl:27"
+        },
+        {
+          "choice": "correction",
+          "dup_reason": "duplicate check disabled",
+          "duplicate": "unassessed",
+          "excerpt": "nope, nothing to change, the tags are right",
+          "id": "fit-c25",
+          "kind": "correction",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0.45,
+            "correction": 0.47,
+            "drift": 0.06,
+            "noise": 0,
+            "request": 0.02
+          },
+          "qualified": true,
+          "status": "classified",
+          "where": "t3:th:fit-c:p2:r24"
+        },
+        {
+          "choice": "approval",
+          "id": "fit-c26",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 1,
+            "correction": 0,
+            "drift": 0,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "p1/s.jsonl:30"
+        },
+        {
+          "choice": "approval",
+          "id": "fit-c27",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 1,
+            "correction": 0,
+            "drift": 0,
+            "noise": 0,
+            "request": 0
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "p3/s.jsonl:30"
+        },
+        {
+          "choice": "noise",
+          "id": "fit-c28",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0.04,
+            "correction": 0,
+            "drift": 0,
+            "noise": 0.94,
+            "request": 0.02
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "p1/s.jsonl:33"
+        },
+        {
+          "choice": "noise",
+          "id": "fit-c29",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0.04,
+            "correction": 0,
+            "drift": 0.01,
+            "noise": 0.91,
+            "request": 0.04
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "t3:th:fit-c:p2:r28"
+        },
+        {
+          "choice": "noise",
+          "id": "fit-c30",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0.04,
+            "correction": 0,
+            "drift": 0.01,
+            "noise": 0.93,
+            "request": 0.02
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "p3/s.jsonl:33"
+        },
+        {
+          "choice": "noise",
+          "id": "fit-c31",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0.04,
+            "correction": 0,
+            "drift": 0,
+            "noise": 0.96,
+            "request": 0
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "p1/s.jsonl:36"
+        },
+        {
+          "choice": "noise",
+          "id": "fit-c32",
+          "opener": "owner",
+          "probabilities": {
+            "approval": 0.09,
+            "correction": 0.01,
+            "drift": 0.01,
+            "noise": 0.8,
+            "request": 0.09
+          },
+          "qualified": false,
+          "status": "classified",
+          "where": "t3:th:fit-c:p2:r31"
+        }
+      ],
+      "model": "jev-1.14.0",
+      "run": {
+        "finished": "2026-01-08T12:00:00Z",
+        "id": "",
+        "started": "2026-01-08T12:00:00Z"
+      },
+      "sources": {
+        "t3": {
+          "error": "",
+          "status": "ok"
+        },
+        "transcripts": {
+          "error": "",
+          "status": "ok"
+        }
+      },
+      "usage": {
+        "input_tokens": 10282,
+        "requests": 2,
+        "unknown": 0
+      },
+      "version": 1,
+      "window": {
+        "since": "2026-01-01T12:00:00Z",
+        "until": "2026-01-08T11:59:00Z"
+      }
+    }
   },
   "repo": {
     "layouts": [
@@ -1500,5 +2801,304 @@
     "p1": "- Never commit signing keys or keystores.\n- Use the design tokens; no hard-coded colours.\n- Every screen needs an accessibility label.\n- Release builds are cut from release/* branches only.\n- 新しい画面には必ずプレビューを付ける。\n",
     "p2": "- Terraform changes go through plan review; never apply from a laptop.\n- Tag every resource with owner and env.\n- Do not open ports to 0.0.0.0/0.\n- Rotate access keys, never share them in chat.\n- Tag-only changes leave bucket access policies as they are.\n- Tag-only changes leave instance sizes as they are.\n",
     "p3": "- Components live in src/components; one per file.\n- No inline styles.\n- Use the shared fetch wrapper for API calls.\n- Write copy in the i18n files, not in JSX.\n- 状態管理は既存の store を使い、新しい状態ライブラリを足さない。\n"
+  },
+  "samples": {
+    "sha256:3ce3d23477585206f2a2285456b73ace36c8d58bc408fafe9eb685c6467c0345": {
+      "dup_r28": [
+        0.97,
+        0.96,
+        0.96
+      ]
+    },
+    "sha256:42059697da4eb45082534bfc46f6dd418d906005f6738c9d2b3137dbca44b701": {
+      "dup_r16": [
+        0.11,
+        0.08,
+        0.09
+      ]
+    },
+    "sha256:497897f56b6f1d06bfaa08ccd4483c41a42432733c48f5fadeaae6305be77f3f": {
+      "dup_r30": [
+        0.78,
+        0.81,
+        0.86
+      ]
+    },
+    "sha256:54f0d49893ea4ba01cbadb4bc74b91ac4337cd5bbde4d1daac762f7345be09de": {
+      "kind_r1": [
+        0.02,
+        0.02,
+        0.02
+      ],
+      "kind_r10": [
+        0,
+        0,
+        0
+      ],
+      "kind_r11": [
+        0,
+        0,
+        0
+      ],
+      "kind_r12": [
+        0.21,
+        0.19,
+        0.14
+      ],
+      "kind_r13": [
+        0,
+        0,
+        0
+      ],
+      "kind_r14": [
+        0,
+        0,
+        0
+      ],
+      "kind_r15": [
+        1,
+        1,
+        1
+      ],
+      "kind_r16": [
+        1,
+        1,
+        1
+      ],
+      "kind_r17": [
+        1,
+        1,
+        1
+      ],
+      "kind_r18": [
+        1,
+        1,
+        1
+      ],
+      "kind_r19": [
+        1,
+        1,
+        1
+      ],
+      "kind_r2": [
+        0,
+        0,
+        0
+      ],
+      "kind_r20": [
+        1,
+        1,
+        1
+      ],
+      "kind_r3": [
+        0.01,
+        0.01,
+        0.01
+      ],
+      "kind_r4": [
+        0.01,
+        0.01,
+        0
+      ],
+      "kind_r5": [
+        0,
+        0,
+        0
+      ],
+      "kind_r6": [
+        0,
+        0,
+        0
+      ],
+      "kind_r7": [
+        0,
+        0,
+        0
+      ],
+      "kind_r8": [
+        0.53,
+        0.46,
+        0.45
+      ],
+      "kind_r9": [
+        0,
+        0,
+        0
+      ]
+    },
+    "sha256:5ef5aacca4c640909d6b4c9721f7bb4506e3826dad550adc37f001289a2ebe71": {
+      "dup_r29": [
+        0.48,
+        0.46,
+        0.39
+      ]
+    },
+    "sha256:7a7a9577af23bda30cb160480f841437b2c8cba2c8c3381adb42bc22f55a184e": {
+      "dup_r20": [
+        0.94,
+        0.95,
+        0.94
+      ]
+    },
+    "sha256:839f2fbaf52232f3eea0b97faef1198096af253ad77fb836eb547cc5d82a2cca": {
+      "dup_r17": [
+        0.29,
+        0.28,
+        0.24
+      ]
+    },
+    "sha256:8841e2e4d2d4370f7c9513c5ccbbcd06795c3fe2791a6dd824fc2af4979696e9": {
+      "dup_r27": [
+        0.98,
+        0.97,
+        0.98
+      ]
+    },
+    "sha256:93f4fc2412024e2ca43b852e636a25bd8492814d2efee719744a8c2ba1d2462b": {
+      "dup_r23": [
+        0.27,
+        0.07,
+        0.11
+      ]
+    },
+    "sha256:9bfb30ffbb8533f2dfdcf8bda2163e7260b3f3625177c8bf676ff528aa6540ad": {
+      "dup_r15": [
+        0.12,
+        0.11,
+        0.1
+      ]
+    },
+    "sha256:9ed43d9caba1e9b8838e990e5412013eabde8b93d4dc92c8a485eae3572e7fbc": {
+      "dup_r22": [
+        0.31,
+        0.51,
+        0.38
+      ]
+    },
+    "sha256:a3299d9fa2ae5eb8ed2d4c16c24e28a2efbd9ca4952acdf4fee5f74d351c8cc1": {
+      "dup_r32": [
+        0.7,
+        0.8,
+        0.75
+      ]
+    },
+    "sha256:b2964cc12d5bf5e086c19795862a8fb831b7aac0471fb9eab4f5c822d0a9e841": {
+      "dup_r31": [
+        0.59,
+        0.51,
+        0.53
+      ]
+    },
+    "sha256:bf0bae4a0746d7d7b3998782700ee4460368e80f5e32fe82ab1a00d7cb710372": {
+      "dup_r25": [
+        0.98,
+        0.98,
+        0.98
+      ]
+    },
+    "sha256:d31424d377c3ce4a3370f0d55736bc366e04dd3695a3346e820472897aec6e6a": {
+      "dup_r8": [
+        0.37,
+        0.31,
+        0.33
+      ]
+    },
+    "sha256:d852bd09a5c1b47fbe8628b3a994a9680def51da6ddba9541807d4879cfe91dc": {
+      "dup_r26": [
+        0.72,
+        0.73,
+        0.69
+      ]
+    },
+    "sha256:dba5debd888a95e13dc5aeb813361aeb61af136596cab8b28448843572b337b1": {
+      "kind_r21": [
+        1,
+        1,
+        1
+      ],
+      "kind_r22": [
+        1,
+        1,
+        1
+      ],
+      "kind_r23": [
+        1,
+        1,
+        1
+      ],
+      "kind_r24": [
+        0.99,
+        0.99,
+        0.99
+      ],
+      "kind_r25": [
+        1,
+        1,
+        1
+      ],
+      "kind_r26": [
+        0.99,
+        0.99,
+        0.99
+      ],
+      "kind_r27": [
+        0.6900000000000001,
+        0.63,
+        0.6
+      ],
+      "kind_r28": [
+        0.99,
+        0.99,
+        0.99
+      ],
+      "kind_r29": [
+        0.74,
+        0.77,
+        0.8
+      ],
+      "kind_r30": [
+        0.9199999999999999,
+        0.9,
+        0.9299999999999999
+      ],
+      "kind_r31": [
+        0.95,
+        0.96,
+        0.9700000000000001
+      ],
+      "kind_r32": [
+        0.99,
+        0.99,
+        0.99
+      ]
+    },
+    "sha256:eaa27efecb3870d5a09eb2e4b5dc3b987e43074658568d95cf46ebfcfe1d6c44": {
+      "dup_r19": [
+        0.08,
+        0.08,
+        0.09
+      ]
+    },
+    "sha256:ed68ca83252baab664cca21729f89a4442881ea4837c83a80da645543551c7af": {
+      "dup_r18": [
+        0.78,
+        0.77,
+        0.8
+      ]
+    },
+    "sha256:f91f964c1081357d219f3e7c8a140b7c66cdcd69aabede3371e2fe930721dcf3": {
+      "dup_r21": [
+        0.88,
+        0.92,
+        0.9
+      ]
+    },
+    "sha256:fff5a7fef5362189e3b582f302113e7f427b67042f18647019a0ef44f6abcb4d": {
+      "dup_r24": [
+        0.07,
+        0.07,
+        0.06
+      ]
+    }
   }
 }
