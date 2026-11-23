@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"testing/iotest"
@@ -510,7 +511,8 @@ func TestCodexAndLedgers(t *testing.T) {
 	f.opts.Location = time.FixedZone("plus9", 9*3600)
 	//nolint:gosmopolitan // ledger lines record a miss as 見逃し
 	f.write(".claude/review-ledgers/x.md", "- 2026-11-14 a: 見逃し 1\n- 2026-11-15 b: 見逃し 1\n"+
-		"- 2026-11-21 c: 見逃し 1\n- 2026-11-20 d: 見逃し　なし\n")
+		"- 2026-11-21 c: 見逃し 1\n- 2026-11-20 d: 見逃し　なし\n"+
+		"| 2026-11-14 | 見逃し（e） |\n| 2026-11-21 | 見逃し（f） |\n")
 	f.fake("git", proctest.Response{Stdout: "https://github.com/o/codex\n"})
 	f.fake(
 		"gh",
@@ -530,8 +532,65 @@ func TestCodexAndLedgers(t *testing.T) {
 	}
 	got := excerpts(signalItems(l, "ledger-miss"))
 	//nolint:gosmopolitan // ledger text
-	if !slices.Equal(got, []string{"- 2026-11-15 b: 見逃し 1", "- 2026-11-21 c: 見逃し 1"}) {
+	if !slices.Equal(got, []string{
+		"- 2026-11-15 b: 見逃し 1", "- 2026-11-21 c: 見逃し 1", "| 2026-11-21 | 見逃し（f） |",
+	}) {
 		t.Errorf("ledger-miss = %q", got)
+	}
+}
+
+// TestLedgerRows: a ledger records a miss as a dated bullet or as a table row whose first cell is
+// the date and some later cell starts with the miss word; a mention inside a summary cell is not a
+// miss, and a negation applies to its own cell.
+func TestLedgerRows(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	//nolint:gosmopolitan // ledger lines record a miss as 見逃し
+	lines := []string{
+		"# review ledger", // 1
+		"",                // 2
+		"種類: レビュー",        // 3
+		"",                // 4
+		"| 日付 | 対象 | 重要度 | 見逃し | 要約 |",                   // 5 header
+		"|:---|:---:|---:|---|---|",                      // 6 separator
+		"| 2026-11-20 | PR #1 | 低 | - | 通常 |",            // 7 plain row
+		"| 2026-11-20 | 見逃し（main） | 高 | - | x |",         // 8 miss in 対象
+		"| 2026-11-19 | PR #2 | 見逃し（オーナー報告） | - | y |",   // 9 miss in 重要度
+		"| 2026-11-19 | PR #3 | 中 | - | 旧 regex の見逃し |",  // 10 mention only
+		"| 2026-11-18 | PR #4 | 低 | 見逃し なし | z |",        // 11 negated
+		"| 2026-11-20 JST | 見逃し（main） | 高 | - | x |",     // 12 date cell with extra text
+		"  |  2026-11-17  | 見逃し（padded） |  高  | - | x |", // 13 padded miss
+		"| 2026-11-13 | 見逃し（main） | 高 | - | old |",       // 14 before the window
+		"- 2026-11-16 r: 見逃し 1",                          // 15 bullet miss
+		"| 2026-11-20 | 旧表示 \\| 見逃しを防ぐ条件を記録 | 採用 |",      // 16 escaped pipe
+		"| 2026-11-20 | PR #5 | 見逃し　無し | - |",            // 17 full-width negation
+		"| 2026-11-20 | 見逃し（main） | 見逃し なし | - |",        // 18 negation in another cell
+	}
+	path := f.write(".claude/review-ledgers/stack.md", strings.Join(lines, "\n")+"\n")
+	resp, l := f.run()
+	items := signalItems(l, "ledger-miss")
+	got := make([]string, 0, len(items))
+	for _, it := range items {
+		if it.Kind != "miss" {
+			t.Errorf("ledger-miss kind = %q at %s", it.Kind, it.Where)
+		}
+		got = append(got, it.Where)
+	}
+	slices.Sort(got)
+	misses := []int{8, 9, 13, 15, 18}
+	want := make([]string, 0, len(misses))
+	for _, n := range misses {
+		want = append(want, path+":"+strconv.Itoa(n))
+	}
+	slices.Sort(want)
+	if !slices.Equal(got, want) {
+		t.Errorf("ledger-miss where = %q, want %q", got, want)
+	}
+	if st := l.Sources["ledgers"]; st.Status != srcOK || st.Files != 1 || st.Records != 16 {
+		t.Errorf("ledgers = %+v, want ok, 1 file, 16 records", st)
+	}
+	if !strings.Contains(resp.Context, "ledger-miss 5") {
+		t.Errorf("context %q lacks ledger-miss 5", resp.Context)
 	}
 }
 

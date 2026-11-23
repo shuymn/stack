@@ -283,15 +283,65 @@ func readFirstLine(f io.Reader) ([]byte, error) {
 // ---------------------------------------------------------------- ledgers
 
 var (
-	reLedgerLine = regexp.MustCompile(`^\s*-\s*(\d{4}-\d{2}-\d{2})\b`)
+	reLedgerBullet = regexp.MustCompile(`^\s*-\s*(\d{4}-\d{2}-\d{2})\b`)
+	reLedgerRow    = regexp.MustCompile(`^\s*\|\s*(\d{4}-\d{2}-\d{2})\s*\|`)
 	//nolint:gosmopolitan // the review ledgers record a miss as 見逃し (observe.py:47)
 	reNoMiss = regexp.MustCompile(`見逃し(?:\s|\x{3000})*(?:0|なし|無し)`)
 )
 
 const missWord = "見逃し" //nolint:gosmopolitan // the ledger word for a miss (observe.py:314)
 
+// ledgerDate returns the date of a ledger line, whether the line is a table row, and whether it is
+// dated: a bullet starting `- YYYY-MM-DD` (the legacy form, observe.py:300-321) or a Markdown
+// table row whose first cell is the date alone.
+func ledgerDate(line string) (string, bool, bool) {
+	if m := reLedgerBullet.FindStringSubmatch(line); m != nil {
+		return m[1], false, true
+	}
+	if m := reLedgerRow.FindStringSubmatch(line); m != nil {
+		return m[1], true, true
+	}
+	return "", false, false
+}
+
+// ledgerMiss reports whether a dated ledger line records a miss. A bullet records one when it
+// mentions the miss word and does not negate it; a table row when a cell after the date starts
+// with the word and that cell does not negate it, so a mention inside a summary cell is not one.
+func ledgerMiss(line string, table bool) bool {
+	if !table {
+		return strings.Contains(line, missWord) && !reNoMiss.MatchString(line)
+	}
+	// A dated row has at least two pipes: cells[0] precedes the first, cells[1] is the date.
+	for _, c := range rowCells(line)[2:] {
+		c = strings.Trim(c, " \t\u3000")
+		if strings.HasPrefix(c, missWord) && !reNoMiss.MatchString(c) {
+			return true
+		}
+	}
+	return false
+}
+
+// rowCells splits a table row on unescaped pipes; `\|` stays text inside its cell (GFM).
+func rowCells(line string) []string {
+	var cells []string
+	var b strings.Builder
+	for i := 0; i < len(line); i++ {
+		switch {
+		case line[i] == '\\' && i+1 < len(line) && line[i+1] == '|':
+			b.WriteString(`\|`)
+			i++
+		case line[i] == '|':
+			cells = append(cells, b.String())
+			b.Reset()
+		default:
+			b.WriteByte(line[i])
+		}
+	}
+	return append(cells, b.String())
+}
+
 // ledgers reports review-ledger lines that record a miss on a day whose local start lies in the
-// window (observe.py:300-321).
+// window: dated bullets and dated table rows (ledgerDate, ledgerMiss).
 func (s *state) ledgers(st *Source) error {
 	root := filepath.Join(s.o.Home, ".claude", "review-ledgers")
 	if _, err := os.Lstat(root); errors.Is(err, fs.ErrNotExist) {
@@ -331,11 +381,11 @@ func (s *state) ledgers(st *Source) error {
 				continue
 			}
 			st.Records++
-			m := reLedgerLine.FindStringSubmatch(line)
-			if m == nil || !strings.Contains(line, missWord) || reNoMiss.MatchString(line) {
+			date, table, ok := ledgerDate(line)
+			if !ok || !ledgerMiss(line, table) {
 				continue
 			}
-			day, err := time.ParseInLocation(time.DateOnly, m[1], s.o.Location)
+			day, err := time.ParseInLocation(time.DateOnly, date, s.o.Location)
 			if err != nil || !s.inWindow(day) {
 				continue
 			}
