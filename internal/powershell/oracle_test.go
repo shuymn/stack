@@ -1719,6 +1719,65 @@ func untabled(cmdlet, param string) string {
 	return ""
 }
 
+// TestVerdictNestedUndecided judges a synthetic engine record of a nested script whose position
+// the engine's binding cannot decide (`-Process:{…}` before a `--`): no corpus case can hold it,
+// since it is always inconclusive. The same record with the position decided passes, so only the
+// undecided position makes the case inconclusive.
+func TestVerdictNestedUndecided(t *testing.T) {
+	const text = `iex '1 | ForEach-Object -Process:{ gh pr merge 7 } --'`
+	str := func(v, q string) oElem { return oElem{K: "str", V: v, Q: q} }
+	name := func(s string) *string { return &s }
+	record := func(ctx string) *oCase {
+		return &oCase{
+			Commands: []oCmd{{
+				Name: name("iex"), Ctx: "plain", End: len(text),
+				Elements: []oElem{
+					str("iex", "BareWord"),
+					str("1 | ForEach-Object -Process:{ gh pr merge 7 } --", "SingleQuoted"),
+				},
+			}},
+			Nested: []oNested{
+				{Name: name("ForEach-Object"), Ctx: "plain", Elements: []oElem{
+					str("ForEach-Object", "BareWord"),
+					{
+						K: "param", T: "-Process:{ gh pr merge 7 }", Prefix: "-Process:",
+						Arg: &oElem{K: "block"},
+					},
+					{K: "param", T: "--"},
+				}},
+				{Name: name("gh"), Ctx: ctx, Elements: []oElem{
+					str("gh", "BareWord"), str("pr", "BareWord"), str("merge", "BareWord"),
+					str("7", "Constant"),
+				}},
+			},
+		}
+	}
+	engine := &oracleOut{
+		Version: "7.6.5", LanguageMode: "FullLanguage",
+		Resolved: map[string]string{"iex": "cmdlet:Invoke-Expression"},
+	}
+	judgeRecord := func(oc *oCase, d *declared) (Verdict, []string) {
+		e := evidence{text: text, decl: d, engine: engine, oc: oc, r: Parse(text, "", "", Unix)}
+		var st stats
+		return verdict(e, observe(e, &st), &st)
+	}
+
+	decl := &declared{Cmd: text, Calls: []string{"iex"}, Nested: []string{"ForEach-Object"}}
+	v, notes := judgeRecord(record("unknown:binding"), decl)
+	if v != Inconclusive ||
+		!slices.Contains(notes, "nested position not decided: unknown:binding") {
+		t.Errorf("undecided nested position: %s %q, want inconclusive", v, notes)
+	}
+	decided := &declared{
+		Cmd:    text,
+		Calls:  []string{"iex"},
+		Nested: []string{"ForEach-Object", "gh"},
+	}
+	if v, notes := judgeRecord(record("plain"), decided); v != Pass {
+		t.Errorf("decided nested position: %s %q, want pass", v, notes)
+	}
+}
+
 // TestMergeDeclared covers the declaration update of -update-oracle and -update-oracle-changes:
 // new commands are added, a changed or removed declaration is a difference that is written only
 // with rewrite, and a run that is not both engines' or that misses evidence writes nothing.
