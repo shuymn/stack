@@ -209,17 +209,27 @@ func TestItemsDiagnostics(t *testing.T) {
 			"",
 		},
 		{"empty items", `{"items": []}`, ""},
-		{"number past float64 as element", `{"items": [{"role": "all", "rule": "keep"}, 1e400]}`,
-			"1 of 2 attention items ignored (first: item 1: a number, not an object)"},
-		{"number past float64 in another field",
-			`{"items": [{"role": "all", "rule": "keep", "extra": 1e400}]}`, ""},
-		{"number past float64 as rule", `{"items": [{"role": "all", "rule": 1e400}]}`,
-			`1 of 1 attention items ignored (first: item 0: "rule" is a number, not a string)`},
-		{"a non-array items before an array in another case",
+		{
+			"number past float64 as element", `{"items": [{"role": "all", "rule": "keep"}, 1e400]}`,
+			"1 of 2 attention items ignored (first: item 1: a number, not an object)",
+		},
+		{
+			"number past float64 in another field",
+			`{"items": [{"role": "all", "rule": "keep", "extra": 1e400}]}`, "",
+		},
+		{
+			"number past float64 as rule", `{"items": [{"role": "all", "rule": 1e400}]}`,
+			`1 of 1 attention items ignored (first: item 0: "rule" is a number, not a string)`,
+		},
+		{
+			"a non-array items before an array in another case",
 			`{"items": 0, "ITEMS": [{"role": "all", "rule": "keep"}]}`,
-			`attention items ignored: "items" is a number, not an array`},
-		{"null items last", `{"items": [], "Items": null}`,
-			`attention items ignored: "items" is null, not an array`},
+			`attention items ignored: "items" is a number, not an array`,
+		},
+		{
+			"null items last", `{"items": [], "Items": null}`,
+			`attention items ignored: "items" is null, not an array`,
+		},
 		{"last role wins", `{"items": [{"role": 1, "ROLE": "all", "rule": "x"}]}`, ""},
 	}
 	for _, tt := range tests {

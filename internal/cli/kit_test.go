@@ -419,13 +419,19 @@ func TestKitOpenItemsWarning(t *testing.T) {
 		{"empty rule", `{"items": [{"role": "all", "rule": ""}]}`, "- ", ""},
 		{"empty items", `{"items": []}`, "", ""},
 		// Rendering as Go's JSON decoding gives it: numbers past float64, repeated keys.
-		{"number past float64 as element", `{"items": [` + first + `, 1e400]}`, "- first",
-			"1 of 2 attention items ignored (first: item 1: a number, not an object)"},
-		{"number past float64 in another field",
-			`{"items": [{"role": "all", "rule": "keep", "extra": 1e400}]}`, "- keep", ""},
-		{"a non-array items before an array in another case",
+		{
+			"number past float64 as element", `{"items": [` + first + `, 1e400]}`, "- first",
+			"1 of 2 attention items ignored (first: item 1: a number, not an object)",
+		},
+		{
+			"number past float64 in another field",
+			`{"items": [{"role": "all", "rule": "keep", "extra": 1e400}]}`, "- keep", "",
+		},
+		{
+			"a non-array items before an array in another case",
 			`{"items": 0, "ITEMS": [` + first + `]}`, "",
-			`attention items ignored: "items" is a number, not an array`},
+			`attention items ignored: "items" is a number, not an array`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
