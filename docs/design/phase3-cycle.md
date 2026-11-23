@@ -31,7 +31,7 @@ and C21 there); `gh_model` (§3.2) is unchanged.
 4. **Never block.** The `cycle` stage has no caller to stop. Both extensions answer `pass` or `warn`, never `block`.
    Core turns any `block` at `cycle` into a `warn` with a synthetic finding (`internal/ext/ext.go:65-67,379-396`),
    so a live `stack run cycle` exits 0 whatever its extensions answer and 2 when core itself fails; exit 1 comes
-   only from `--replay` when the aggregate differs from the fixture's `expect` (`internal/cli/run.go:59-93`). The
+   only from `--replay` when the aggregate differs from the fixture's `expect` (`internal/cli/run.go:38-94`). The
    wrapper (§3.6) handles each.
 5. **macOS is the runtime, every OS compiles.** The extensions are Go in this module, built and tested on all three
    CI runners like core. They read what they find; a missing source on Linux or Windows is a source status, not a
@@ -295,7 +295,8 @@ never see a partial file):
 The deadline is checked again right before the write starts; past it, observe answers `latest-not-written`
 without writing. A local write already started (temp file, sync, rename) runs to completion: it is not
 interruptible, and the 20-s reserve covers it. `version` is this file's schema; timestamps are RFC 3339 UTC in whole seconds (`until` is the start time cut to the
-second), so the cycle wrapper's freshness check (§3.6) reads them with `jq`'s `fromdateiso8601`. Last writer wins: two overlapping observe runs (a manual one
+second), so the cycle wrapper's freshness check (`shuymn/dotfiles` `scripts/stack-cycle`, rules in its
+`docs/stack-cycle.md`) reads them with `jq`'s `fromdateiso8601`. Last writer wins: two overlapping observe runs (a manual one
 and the job) can leave the older window as the file; improve's freshness bound (§3.4 step 6) still holds, so this is
 accepted. When writing `latest.json` fails, observe answers `warn` with the finding `latest-not-written`, and the
 job (§3.6) does not run improve: a file from an earlier run in the same second would otherwise pass its freshness
@@ -542,19 +543,20 @@ reason, patch, check_hits, codex_high, codex_runs`; `repo` is `<owner>/<name>`, 
 
 The daily `launchd` job `stack-cycle` (with its `PATH`, in `nix/home/profiles/dev.nix`) and the wrapper script
 `scripts/stack-cycle` it runs belong to `shuymn/dotfiles`; its `docs/stack-cycle.md` states the order of the
-`stack run cycle --ext <name>` calls, what makes a run valid and the files a run writes. What the wrapper relies on from this repository is `stack run cycle` itself and
-`observe/latest.json` (§3.3):
+`stack run cycle --ext <name>` calls, what makes a run valid and the files a run writes. What the wrapper relies on
+from this repository is `stack run cycle` itself and `observe/latest.json` (§3.3):
 
 - `stack run cycle --ext <name>` runs only the named extension, so `[stages].cycle` is unused by the job, and gives
   each call its own 30-min stage (§3.9). It prints one aggregate on stdout; an extension not found on `PATH` is
-  listed under `skipped` with no result, a crashed one is a `warn` result with `error` set, and a failure of core
-  itself exits 2 with no output (`internal/cli/run.go:74-93`, `internal/cli/cli.go:27`,
-  `internal/ext/ext.go:217-232,289-310`).
+  listed under `skipped` with no result, and one that crashes without a usable answer is a `warn` result with
+  `error` set (a complete answer written before a crash is used). A failure of core itself exits 2 with its error
+  on stderr, and stdout is then not guaranteed to hold a complete aggregate (`internal/cli/run.go:38-94`,
+  `internal/cli/cli.go:262-271`, `internal/ext/ext.go:217-231,289-310`).
 - `stack run cycle` works on every OS; only the job is macOS-specific.
 
 ### 3.7 Statusline (dotfiles)
 
-`comp_cycle` in `shuymn/dotfiles` replaces `comp_kaizen` and shows the cycle segment from the wrapper's files only
+`comp_cycle` in `shuymn/dotfiles` shows the cycle segment from the wrapper's files only
 when the owner needs to act; its states are in `docs/stack-cycle.md` there. Its tests are `tests/test_statusline.py`
 in that repository.
 
@@ -569,8 +571,8 @@ statusline, with the patch, or the branch, OID, title and body, in the stamp.
 ### 3.9 Time budget
 
 Core gives each `stack run` stage call one 30-min deadline (`internal/ext/ext.go:50`) and kills only the direct
-child at expiry (`phase2-core.md` §2.2). The job (§3.6) therefore makes one call per extension (`--ext observe`,
-then `--ext improve`), so each extension has a stage of its own, and each extension sets its own absolute deadline on a
+child at expiry (`phase2-core.md` §2.2). The job (§3.6) therefore makes one call per extension, in the order
+`shuymn/dotfiles` `docs/stack-cycle.md` states, so each extension has a stage of its own, and each extension sets its own absolute deadline on a
 monotonic clock when it starts, before core's, reserves its cleanup and response time, and cuts every child timeout
 to fit.
 
@@ -658,12 +660,13 @@ owner, not of the repository.
 
 | Option | Gains | Gives up | Reversibility |
 |---|---|---|---|
-| **One launchd job, two stage calls (`--ext observe`, then `--ext improve`) (chosen)** | improve has its own 30-min stage (model about 17 min); improve runs only after a valid, fresh observe; one job, one log, one `last.json`; no core change | the job names its extensions, so `[stages].cycle` is unused by it; the wrapper merges two aggregates | high: the wrapper alone changes |
+| **One launchd job, one stage call per extension (`--ext observe`, `--ext jev-classify`, then `--ext improve`) (chosen)** | improve has its own 30-min stage (model about 17 min); improve runs only after a valid, fresh observe; one job, one log, one `last.json`; no core change | the job names its extensions, so `[stages].cycle` is unused by it; the wrapper merges the aggregates | high: the wrapper alone changes |
 | Both in one `stack run cycle` (`[stages].cycle`) | uses the configured stage; one call | improve shares 30 min with observe and plans 29 min of its own, so core's deadline can kill it mid-publish, leaving its children (§3.1) | high |
 | Two launchd jobs | independent schedules | no order guarantee (after sleep, improve can fire before observe), two status paths | high |
 | `deadline` field in the request | core-computed budgets | a core change no Phase 3 extension needs | low |
 
-`jev-classify` (Phase 4) is placed by Phase 4, as a third call or inside the observe call.
+`jev-classify` runs as its own call between observe and improve, and its outcome never fails the job
+(`docs/design/phase4-jev.md` §3.2, C17).
 
 ### 4.9 Run serialisation
 
@@ -786,7 +789,7 @@ I7); no remote write without enough time (I14); one run at a time (I5); a Codex 
 
 | ID | EARS criterion | Observable result / failure | Verify on the real machine |
 |---|---|---|---|
-| P1 | When the daily job fires, the system shall run observe and then improve from the dotfiles checkout and replace `last.json` with one `cycle` object in which both answered. | after the fire, `last.json` differs from the copy taken before it; `.stage == "cycle"`; exactly `observe` and `improve` in `.results`, each with empty `error`; no `last-error` | copy `last.json` aside; `launchctl kickstart -k gui/$(id -u)/<label>`; wait for the job to end; `cmp` the copy with `last.json` (must differ); `jq '.status, [.results[] \| {name, error}]' ~/.local/state/stack/cycle/last.json`; `test ! -e ~/.local/state/stack/cycle/last-error` |
+| P1 | When the daily job fires, the system shall run observe and then improve from the dotfiles checkout and replace `last.json` with one `cycle` object in which both answered (`jev-classify` runs between them, `docs/design/phase4-jev.md` C17). | after the fire, `last.json` differs from the copy taken before it; `.stage == "cycle"`; `observe` and `improve` in `.results`, each with empty `error`, and `jev-classify` either in `.results` between them or under `.skipped`; no `last-error` | copy `last.json` aside; `launchctl kickstart -k gui/$(id -u)/<label>`; wait for the job to end; `cmp` the copy with `last.json` (must differ); `jq '.status, [.results[] \| {name, error}]' ~/.local/state/stack/cycle/last.json`; `test ! -e ~/.local/state/stack/cycle/last-error` |
 | P2 | When observe runs, it shall report the 7-day counts per source and signal and write `latest.json`. | every source `ok` or `off`; `latest.json` window equals the context's; counts match `jq '.items \| group_by(.signal)'` | `stack run cycle --ext observe \| jq -r '.results[0].context'`; compare with `latest.json` |
 | P3 | When the installed hook decides a recorded call differently from the transcript, observe shall report a `replay-change` finding; otherwise none for that call. | (a) fixed fixture: a known recorded `stack guard (secrets)` deny replays unchanged and a known recorded `no-deny` call that the current rules deny is reported as `no-deny → deny:<rule>`; (b) real window: `replay.compared > 0`, and the counts (`compared`, `changed` by kind, `not_comparable`, `unrecoverable`, `truncated_*`) and the replay wall time are recorded, not judged | (a) `stack-observe` with `HOME` set to a directory holding only the fixture transcript; (b) the job's run, `jq .replay latest.json` and the log's timing; a changed decision is read by the owner, since files and cwd state can differ from the time of the call |
 | P4 | While the `gh` on the job's `PATH` differs from the guard's modelled version, observe shall warn. | finding `gh-version` with both versions; none when equal | run `gh --version` with the launchd job's `PATH` and compare with `stack --version --json`; the observe finding must match that comparison |
@@ -832,7 +835,7 @@ I7); no remote write without enough time (I14); one run at a time (I5); a Codex 
 | I16 | If the Codex check reports a HIGH finding, exits non-zero, times out, or leaves a missing or invalid verdict, improve shall not push and not create a PR. | `improve.TestCodexGate` (real git, fake `codex`, fake `gh`) | the same pinned candidate in each of the five cases → `proposal:codex-high` or `proposal:codex`, patch in the stamp; the bare remote has no `improve/` ref and the `gh` log has no `pr create` |
 | D1 | `stack-private-terms` shall write the terms the legacy generator wrote, without importing `public-check`; `probe/build` shall keep excluding private strings without it. | `tests/test_stack_private_terms.py`, `tests/test_kaizen_probe.py` `BuildTest` | fixture host.toml with generic, role and owner values; hand-kept list; `.t3` fragments; term set equal to the legacy output for the same fixture; with `public-check` removed from the test checkout, a dummy private term in the test `HOME`'s generated terms file and in one filler item → that item excluded, the build passes, and no built file contains the term |
 | D2 | `comp_cycle` shall render each state that `shuymn/dotfiles` `docs/stack-cycle.md` lists (§3.7). | `tests/test_statusline.py` | absent; absent + plist → `cycle never`; absent + `last-error` → `cycle ✗`; unreadable; `.status` null (`{}`); warn with N; stale; `last-error` present with a valid `last.json` → `✗` appended; fresh pass → nothing |
-| D3 | `scripts/stack-cycle` shall run improve only after a valid observe with a fresh `latest.json`, replace `last.json` atomically only when both calls are valid, keep the previous one otherwise, remove `last-error` on success and replace it atomically on failure. | `tests/test_stack_cycle.py` (fake `stack`, `chezmoi`) | both valid → merged `last.json` with exactly two results, exit 0, no `last-error`; each of: non-zero exit with valid JSON, empty output, two JSON objects, `{}`, `stage` not `cycle`, `status` `block`, the extension only in `skipped`, a synthetic `error`, a result status outside pass/warn, findings not an array → previous file kept, `last-error` written, exit 2; observe invalid, `latest.json` not rewritten (window before the job start), or an observe finding `{"kind":"latest-not-written",…}` with a same-second old `latest.json` → improve not run; `chezmoi source-path` failing or empty, unwritable state directory → exit 2 without running `stack`; the fake improve `stack` writes half its output and blocks on a FIFO, the test reads `last.json` (old bytes exactly) and `last-error` (absent or complete), then releases it; the same for a `last-error` write blocked half-way (old `last-error` or none, never partial) |
+| D3 | `scripts/stack-cycle` shall run improve only after a valid observe with a fresh `latest.json`, replace `last.json` atomically only when both calls are valid, keep the previous one otherwise, remove `last-error` on success and replace it atomically on failure; `jev-classify`'s outcome is merged as `docs/design/phase4-jev.md` C17 states and never decides validity. | `tests/test_stack_cycle.py` (fake `stack`, `chezmoi`) | both valid → merged `last.json` with the observe and improve results (and classify's as C17 states), exit 0, no `last-error`; each of: non-zero exit with valid JSON, empty output, two JSON objects, `{}`, `stage` not `cycle`, `status` `block`, the extension only in `skipped`, a synthetic `error`, a result status outside pass/warn, findings not an array → previous file kept, `last-error` written, exit 2; observe invalid, `latest.json` not rewritten (window before the job start), or an observe finding `{"kind":"latest-not-written",…}` with a same-second old `latest.json` → improve not run; `chezmoi source-path` failing or empty, unwritable state directory → exit 2 without running `stack`; the fake improve `stack` writes half its output and blocks on a FIFO, the test reads `last.json` (old bytes exactly) and `last-error` (absent or complete), then releases it; the same for a `last-error` write blocked half-way (old `last-error` or none, never partial) |
 
 ## 9. Owner Decisions
 
