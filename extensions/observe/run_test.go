@@ -214,11 +214,8 @@ func TestLatestFileRun(t *testing.T) {
 func TestDeadline(t *testing.T) {
 	t.Parallel()
 	const budget, reserve = 3 * time.Second, time.Second
-	// Where replay runs to the deadline, three fakes start one after another before it (gh auth
-	// status, gh --version, stack --version --json), each a fresh copy of the test binary; under
-	// the full suite one such start was measured at 2-3 s on macOS, and a 9 s work window was used
-	// up before replay began. The longer budget leaves them that time; the run still lasts until
-	// the deadline, which is what proves the order.
+	// replayBudget leaves the fakes that start before replay time to start on a loaded machine,
+	// where replay runs to the deadline.
 	const replayBudget = 30 * time.Second
 	// hang is how long a hung fake sleeps. A run that waited for it instead of cutting it at the
 	// deadline would last at least that long: halfway between the budget and hang bounds the run
@@ -229,6 +226,17 @@ func TestDeadline(t *testing.T) {
 		if limit := (budget + hang) / 2; took >= limit {
 			t.Fatalf("took %s, want the %s budget kept, under %s", took, budget, limit)
 		}
+	}
+	// replayStarted requires the hung replay hook to have started, so its timeout is the
+	// deadline cutting a running replay rather than one that never began.
+	replayStarted := func(t *testing.T, stack string) {
+		t.Helper()
+		for _, c := range proctest.Calls(t, stack) {
+			if slices.Equal(c.Args, hookArgs) {
+				return
+			}
+		}
+		t.Fatal("the replay hook was never started")
 	}
 	t.Run("gh and later sources", func(t *testing.T) {
 		t.Parallel()
@@ -258,20 +266,25 @@ func TestDeadline(t *testing.T) {
 			t.Errorf("status = %q", resp.Status)
 		}
 	})
-	// Replay runs to the deadline, so gh version is read before it.
+	// Replay runs to the deadline, so gh version is read before it. Before replay, three fakes
+	// start one after another (gh auth status, gh --version, stack --version --json), each a fresh
+	// copy of the test binary; under the full suite one such start was measured at 2-3 s on macOS,
+	// and a 9 s work window was used up before replay began. replayBudget leaves them that time;
+	// the run still lasts until the deadline, which is what proves the order.
 	t.Run("gh version before replay", func(t *testing.T) {
 		t.Parallel()
 		f := newFixture(t)
 		f.opts.Budget, f.opts.Reserve = replayBudget, reserve
 		f.calls("r", bashCall(hourAgo, f.cwd, cmd("b"), "ok"))
 		f.fake("gh", ghAuthOK, ghVersion)
-		f.fake(
+		stack := f.fake(
 			"stack",
 			stackModel,
 			proctest.Response{Args: []string{"hook", "claude", "pre-tool-use"}, Sleep: hang},
 		)
 		f.opts.replayTimeout = hang
 		resp, l := f.run()
+		replayStarted(t, stack)
 		if l.Sources["replay"].Status != srcTimeout {
 			t.Errorf("replay %+v, want timeout", l.Sources["replay"])
 		}
@@ -293,7 +306,7 @@ func TestDeadline(t *testing.T) {
 			bashCall(hourAgo, f.cwd, cmd("b"), "ok"),
 			bashCall(hourAgo, f.cwd, cmd("c"), "ok"),
 		)
-		f.fake(
+		stack := f.fake(
 			"stack",
 			stackModel,
 			proctest.Response{Args: []string{"hook", "claude", "pre-tool-use"}, Sleep: hang},
@@ -302,6 +315,7 @@ func TestDeadline(t *testing.T) {
 		start := time.Now()
 		resp, l := f.run()
 		within(t, time.Since(start), replayBudget)
+		replayStarted(t, stack)
 		if l.Replay != (ReplayTotals{TruncatedCap: 2, TruncatedTime: 1}) {
 			t.Errorf("replay = %+v", l.Replay)
 		}
