@@ -79,9 +79,8 @@ Rejected: adding the kit dir to the line (§6).
 
 ## 4. Warning about ignored attention items
 
-This section is the one statement of which entry point reports ignored attention items, and how. `internal/kit`
-reports why it ignored items, without changing what it renders; `internal/cli/kit.go` prints it. Item indexes are 0-based (the JSON array index). hiden writes the register after the first `kit open` of
-a new kit, so the warning catches a malformed file when the kit is opened again (a reopen or a handover), not on
+`internal/kit` reports why it ignored items, without changing what it renders; `internal/cli/kit.go` prints it.
+Item indexes are 0-based (the JSON array index). hiden writes the register after the first `kit open` of a new kit, so the warning catches a malformed file when the kit is opened again (a reopen or a handover), not on
 creation.
 
 | ID | EARS claim | Test |
@@ -177,7 +176,7 @@ needed the summary, or if `stack` gained its own scheduled runner. (a) changes n
 
 | ID | EARS claim | Source | Verified by |
 |---|---|---|---|
-| L1 | The renderer shall render items whose `role` is `orchestrator` or `all` and whose `rule` is a string, in file order, and render no block for a malformed file. | §3.1 | `kit.TestRenderStateAndItems` (roles, a non-string rule, a non-object element), `kit.TestRenderNewKit` (invalid JSON), `kit.TestRenderMalformedItemsFile` (a top-level array, `null`, a non-array `items`) |
+| L1 | The renderer shall render items whose `role` is `orchestrator` or `all` and whose `rule` is a string, in file order, and render no block for a malformed file. | §3.1 | `kit.TestRenderStateAndItems` (roles, a non-string rule, a non-object element), `kit.TestRenderNewKit` (invalid JSON), `kit.TestItemsDiagnostics` (every file-level case, including a top-level array, `null` and a non-array `items`) |
 | L2 | When a kit has `NORTH.md` and no `state.md`, the renderer shall render the `NORTH.md` block and the `[new kit: …]` marker. | §3.2 | `kit.TestRenderNorthOnly`; built CLI (A2) |
 | L3 | Compact restore shall emit the tags and markers of `phase2-core.md` §4.2 step 6 within 9,500 UTF-16 units, and other sources nothing. | §3.2 | `session.TestWorker` (worker line, `<worker-rules>`, `<original-brief>`), `session.TestCompact` (kits, `<orchestration-board>`, `[kits omitted: .kits locked]`), `session.TestReservedMarkers` and `session.TestMultiKitReservation` (`[state omitted: …]`, `[brief omitted: …]`), `session.TestBudgetUTF16` (`[...cut N chars]`, the total), `session.TestBoards` (board not launched without room), `session.TestCompactEntry`, `session.TestCompactEntryDeadline`, `session.TestEntryOmittedMarker` (entry blocks, `<orchestration-handover>`, `[entry skipped: deadline]`, `[entry context omitted: …]`), `session.TestExport` (other sources print nothing), `session.TestRestoreMarkers` (the items block, `[kits omitted: .kits unreadable]`, `[board omitted: …]`, `[board skipped: deadline]`, `[items omitted: …]`, `[handover omitted: …]`, `[worker rules omitted: …]`), `session.TestCompactEntryMarkers` (`[entry extensions skipped: …]`, `[entry context omitted: …]` from a real entry result; C19's empty `[stages].entry` invokes no extension) |
 | L4 | `kit open`/`close` shall write `<id>.kits` as LF-terminated valid slugs, de-duplicated in the order added, through a rename, and delete it when empty; `kit.Store` shall read it trimming each line and skip blank, invalid and repeated lines. | §3.3 | `kit.TestStore`, `kit.TestStoreReadsCRLFAndSkipsInvalidLines`, `kit.TestStoreTempFileIsUnique` |
