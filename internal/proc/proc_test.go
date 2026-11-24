@@ -27,8 +27,10 @@ func TestMain(m *testing.M) {
 const (
 	testWaitDelay = 500 * time.Millisecond
 	// grandchildLife is far above every bound asserted below, so a test that
-	// waited for the grandchild instead of WaitDelay fails clearly.
-	grandchildLife = 20 * time.Second
+	// waited for the grandchild instead of WaitDelay fails clearly, with room for a slow
+	// process start under -race. proctest's cleanup stops grandchildren, so a passing test
+	// does not wait it out.
+	grandchildLife = time.Minute
 )
 
 func one(r proctest.Response) proctest.Scenario {
@@ -200,7 +202,7 @@ func TestRunTimeout(t *testing.T) {
 // TestRunTimeoutGrandchildHoldsPipe covers a child that leaves a grandchild
 // holding the inherited stdout: Run returns once WaitDelay cuts the pipe after
 // the context's deadline, not when the grandchild exits. The check is that it
-// returns before the grandchild could have exited, 5 s after the deadline.
+// returns before the grandchild could have exited, 45 s after the deadline.
 func TestRunTimeoutGrandchildHoldsPipe(t *testing.T) {
 	t.Parallel()
 
@@ -226,7 +228,7 @@ func TestRunTimeoutGrandchildHoldsPipe(t *testing.T) {
 		t.Fatalf("result = %+v, want TimedOut", res)
 	}
 	// The grandchild starts after the context does, so it outlives the context's deadline by
-	// at least grandchildLife-deadline (5 s): a Run that returned only when the grandchild
+	// at least grandchildLife-deadline (45 s): a Run that returned only when the grandchild
 	// exited would return that long after the deadline. That is the bound, not WaitDelay, so
 	// scheduling delay cannot flip the check.
 	if took, limit := returned.Sub(end), grandchildLife-deadline; took >= limit {
