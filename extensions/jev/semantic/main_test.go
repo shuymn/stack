@@ -108,8 +108,11 @@ func buildBinaries() func() {
 	built.committed = filepath.Join(dir, "committed")
 	committedBin := filepath.Join(built.committed, "stack-jev-semantic"+exe)
 	endpoint := "-X github.com/shuymn/stack/extensions/internal/jev.endpoint=" + fake.server.URL
+	// The long ledger wait keeps a loaded runner from abandoning the appends TestMixedLive counts;
+	// the unit tests cover the production wait.
 	ldflags := endpoint + " -X github.com/shuymn/stack/extensions/jev/semantic.testCutoffs=" +
-		MetaDuty + "=" + testCutoffValue + "," + Unsupported + "=" + testCutoffValue
+		MetaDuty + "=" + testCutoffValue + "," + Unsupported + "=" + testCutoffValue +
+		" -X github.com/shuymn/stack/extensions/jev/semantic.testLedgerWait=30s"
 	env := gittest.CleanEnv(os.Environ())
 	for _, c := range [][]string{
 		{"build", "-o", built.stack, "../../../cmd/stack"},

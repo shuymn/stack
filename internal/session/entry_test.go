@@ -342,12 +342,23 @@ func TestCompactEntryDeadline(t *testing.T) {
 // C4: entry contexts take only the budget the restore left. Not parallel: it changes PATH.
 func TestCompactEntryBudget(t *testing.T) {
 	t.Run("a long context is cut on a code-point boundary", func(t *testing.T) {
-		bin := pathDir(t)
-		demo := fakeEntry(t, bin, "demo", passWith(strings.Repeat("😀", 3000)))
 		f := newFixture(t)
 		f.cfg.Stages.Entry = []string{"demo"}
 		f.open("demo", map[string]string{"state.md": "DEMO STATE"})
+		// The extension's run is a fake that answers at once: this case is about the cut, and a
+		// process start under load could run into the stage deadline.
+		demo := filepath.Join(t.TempDir(), ext.Prefix+"demo")
+		runner := &entryRunner{stdout: passWith(strings.Repeat("😀", 3000)).Stdout}
+		f.params = func(p *Params) {
+			p.Runner = runner
+			p.resolve = func(names []string) []ext.Plan {
+				return []ext.Plan{{Name: names[0], Path: demo}}
+			}
+		}
 		ctx, _ := f.start(compactIn(testID))
+		if len(runner.cmds) != 1 || runner.cmds[0].Name != demo {
+			t.Fatalf("runs = %+v, want one of %s", runner.cmds, demo)
+		}
 		// 6,000 UTF-16 units capped at 4,500: 2,250 whole emoji.
 		mustContain(t, ctx, "DEMO STATE", "<extension-context path="+strconv.Quote(demo)+">\n"+
 			strings.Repeat("😀", 2250)+"\n[...cut 1500 chars]\n</extension-context>\n")

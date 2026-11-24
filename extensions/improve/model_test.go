@@ -46,6 +46,8 @@ func TestBilling(t *testing.T) {
 		outcome     string
 		removed     bool
 		costUnknown bool
+		// killed requires claude to have ended by a signal (exit -1), not on its own.
+		killed bool
 	}{
 		{
 			name: "zero result then garbage", stdout: zeroFailure + "\n{broken",
@@ -57,6 +59,7 @@ func TestBilling(t *testing.T) {
 		}, 0, usage("", 0)) + "\n{broken", outcome: "failed:model-result", costUnknown: true},
 		{
 			name: "zero result then killed", outcome: "failed:model-result", costUnknown: true,
+			killed: true,
 			setup: func(f *fx) {
 				f.fake("claude", &fakeSpec{
 					Print: []fakePrint{{Contains: "-p", Stdout: zeroFailure}}, Kill: true,
@@ -148,10 +151,17 @@ func TestBilling(t *testing.T) {
 					t.Fatalf("context %q", resp.Context)
 				}
 			} else {
+				if _, ok := f.stampRaw(); !ok {
+					t.Fatalf("stamp removed after outcome %q (%s)\n%s", seen.Outcome, seen.Reason,
+						f.stderr)
+				}
 				st := f.stamp()
 				if st.Finished == "" {
 					t.Fatalf("stamp not final: %+v", st)
 				}
+			}
+			if tc.killed && !strings.Contains(f.stderr.String(), "(exit -1)") {
+				t.Fatalf("claude did not end by a signal (%s)\n%s", seen.Reason, f.stderr)
 			}
 			if hasFinding(resp, kindCostUnknown) != tc.costUnknown {
 				t.Fatalf("findings %+v, cost unknown %v", resp.Findings, tc.costUnknown)

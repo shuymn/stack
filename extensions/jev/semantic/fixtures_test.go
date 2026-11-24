@@ -262,7 +262,7 @@ func TestMixedLive(t *testing.T) {
 	}
 	ledger, err := os.ReadFile(jev.LedgerPath(home))
 	if err != nil || strings.Count(string(ledger), "\n") != len(records.Records) {
-		t.Fatalf("ledger %q (%v)", ledger, err)
+		t.Fatalf("ledger %q (%v)\nstderr %s", ledger, err, res.stderr)
 	}
 }
 
