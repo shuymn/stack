@@ -57,7 +57,7 @@ func TestNativeKillAfterExit(t *testing.T) {
 				default:
 				}
 				return err //nolint:wrapcheck // the runner wraps it; the test inspects it raw
-			}, exited)
+			}, nil)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			ch, err := Exec{WaitDelay: retryDelay}.start(ctx, Cmd{
@@ -76,7 +76,7 @@ func TestNativeKillAfterExit(t *testing.T) {
 			}()
 			p := ch.cmd.Process
 
-			if exited(p) {
+			if exited(p, 0) {
 				t.Fatal("probe reports the gated child as exited")
 			}
 			if err := os.WriteFile(gate, nil, 0o600); err != nil {
@@ -94,7 +94,7 @@ func TestNativeKillAfterExit(t *testing.T) {
 					waitErr,
 				)
 			}
-			if !exited(p) {
+			if !exited(p, 0) {
 				t.Fatal("probe reports the terminated child as running before Wait")
 			}
 			out, err := io.ReadAll(ch.stdout)
