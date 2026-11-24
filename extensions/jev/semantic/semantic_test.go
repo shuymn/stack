@@ -449,6 +449,31 @@ func TestDecision(t *testing.T) {
 	}
 }
 
+// TestLedgerWaitWiring: the ledger of a live run waits jev.LedgerWait (zero) unless a test build
+// links testLedgerWait, and an in-process ledgerWait overrides both. Not parallel: it changes
+// package variables.
+func TestLedgerWaitWiring(t *testing.T) {
+	defer func(linked string, override time.Duration) {
+		testLedgerWait, ledgerWait = linked, override
+	}(testLedgerWait, ledgerWait)
+	env := Env{Home: t.TempDir()}
+	for _, tc := range []struct {
+		linked   string
+		override time.Duration
+		want     time.Duration
+	}{
+		{"", 0, 0},
+		{"30s", 0, 30 * time.Second},
+		{"30s", time.Second, time.Second},
+	} {
+		testLedgerWait, ledgerWait = tc.linked, tc.override
+		if got := env.live("k").Ledger.Wait; got != tc.want {
+			t.Errorf("linked %q, override %s: wait %s, want %s", tc.linked, tc.override, got,
+				tc.want)
+		}
+	}
+}
+
 func TestFailures(t *testing.T) {
 	const keyAction = "verify the Jev API key in TYPESAFE_API_KEY if set and non-blank, " +
 		"otherwise in ~/.config/stack/jev/key"
