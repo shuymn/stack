@@ -130,6 +130,46 @@ func TestInstallCleanupWaitsForGrandchildExit(t *testing.T) {
 	}
 }
 
+// TestInstallCleanupStopsUnloggedGrandchild: a grandchild whose PID never reached the call log,
+// as when the fake is killed between starting it and logging, still stops at cleanup.
+func TestInstallCleanupStopsUnloggedGrandchild(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("polls the grandchild with signal 0")
+	}
+	t.Parallel()
+	var pid int
+	t.Run("run", func(t *testing.T) {
+		fake := proctest.Install(t, "fake", one(proctest.Response{Grandchild: grandchildLife}))
+		runner := proc.Exec{WaitDelay: testWaitDelay}
+		if _, err := runner.Run(context.Background(), proc.Cmd{Name: fake}); err != nil {
+			t.Fatal(err)
+		}
+		calls := proctest.Calls(t, fake)
+		if len(calls) != 1 || calls[0].GrandchildPID == 0 {
+			t.Fatalf("calls = %+v", calls)
+		}
+		pid = calls[0].GrandchildPID
+		// The fixture is the proctest call log next to the fake.
+		if err := os.Remove(strings.TrimSuffix(fake, ".exe") + ".proctest.log"); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if pid == 0 {
+		return
+	}
+	p, err := os.FindProcess(pid)
+	if err != nil {
+		return
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for p.Signal(syscall.Signal(0)) == nil {
+		if time.Now().After(deadline) {
+			t.Fatalf("grandchild %d still running 10s after cleanup", pid)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 // TestLookPathExeRunsFake changes PATH, so it must not run in parallel.
 func TestLookPathExeRunsFake(t *testing.T) {
 	dir := t.TempDir()

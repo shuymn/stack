@@ -309,7 +309,9 @@ func spawnGrandchild(exe string, life time.Duration) (int, error) {
 }
 
 // runGrandchild holds the inherited stdout and stderr until its lifetime ends
-// or Install's cleanup creates the stop file.
+// or Install's cleanup creates the stop file. It also ends once the fake's
+// scenario is gone: a cleanup that knew no PID to wait for may remove the
+// directory, stop file included, before the grandchild sees it.
 func runGrandchild(life string) int {
 	d, err := time.ParseDuration(life)
 	if err != nil || d <= 0 {
@@ -320,9 +322,13 @@ func runGrandchild(life string) int {
 		return 1
 	}
 	stop := trimExe(exe) + stopSuffix
+	scenario := trimExe(exe) + scenarioSuffix
 	deadline := time.Now().Add(d)
 	for time.Now().Before(deadline) {
 		if _, err := os.Stat(stop); err == nil {
+			break
+		}
+		if _, err := os.Stat(scenario); errors.Is(err, os.ErrNotExist) {
 			break
 		}
 		time.Sleep(grandchildPoll)
@@ -340,7 +346,6 @@ func stopGrandchildren(tb testing.TB, base string) {
 	calls, err := readCalls(base)
 	if err != nil {
 		tb.Errorf("proctest: %v", err)
-		return
 	}
 	// Take the handles before asking the processes to exit, so a reused PID
 	// is not mistaken for a grandchild (Windows handle, Linux pidfd).
@@ -355,9 +360,9 @@ func stopGrandchildren(tb testing.TB, base string) {
 		}
 		procs = append(procs, p)
 	}
-	if len(procs) == 0 {
-		return
-	}
+	// The stop file goes out even without a logged grandchild: a fake killed
+	// after starting its grandchild but before logging the PID leaves one
+	// that only the stop file reaches.
 	if err := os.WriteFile(base+stopSuffix, nil, 0o600); err != nil {
 		tb.Errorf("proctest: %v", err)
 	}
