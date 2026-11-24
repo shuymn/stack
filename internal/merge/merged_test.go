@@ -427,6 +427,7 @@ func TestMergedStageNotRun(t *testing.T) {
 		out := run(t, s, setup{stop: true, opts: func(o *Options) {
 			o.Merged = f.stage(names, time.Minute, nil)
 		}})
+		out.stop.check(t, stopLimit)
 		if out.err != nil || out.stdout != mergedLine {
 			t.Fatalf("err = %v, stdout = %q; want the merge reported", out.err, out.stdout)
 		}

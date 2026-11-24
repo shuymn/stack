@@ -728,14 +728,38 @@ func TestReadback(t *testing.T) {
 }
 
 // stopAtMerge cancels the context of the run once the fake gh pr merge has written ready, as
-// SIGINT or SIGTERM does through cmd/stack, and records how long the merge call took after that.
+// SIGINT or SIGTERM does through cmd/stack, and records how the merge call ended.
 type stopAtMerge struct {
 	proc.Exec
 
 	cancel func()
 	ready  string
-	// stopped is the time from the cancel to the merge call's return; zero when no cancel came.
-	stopped time.Duration
+	// canceled is when the cancel came; zero when none came while the merge call ran.
+	canceled time.Time
+	// returned is when the merge call returned.
+	returned time.Time
+	// exit and err are the merge call's exit code and error.
+	exit int
+	err  error
+}
+
+// stopLimit bounds how long the merge call may run after the stop: generous for a loaded runner,
+// far below the one-minute sleep of the fake merge call the stop must kill.
+const stopLimit = 20 * time.Second
+
+// check fails t unless the stop came while the merge call ran and killed it within limit.
+func (s *stopAtMerge) check(t *testing.T, limit time.Duration) {
+	t.Helper()
+	if s.canceled.IsZero() || !s.canceled.Before(s.returned) {
+		t.Errorf("no stop while the merge call ran (stop %v, return %v)", s.canceled, s.returned)
+		return
+	}
+	if s.exit != -1 || !errors.Is(s.err, context.Canceled) {
+		t.Errorf("merge call ended with exit %d, err %v; want killed by the stop", s.exit, s.err)
+	}
+	if took := s.returned.Sub(s.canceled); took > limit {
+		t.Errorf("merge call returned %s after the stop, want under %s", took, limit)
+	}
 }
 
 func (s *stopAtMerge) Run(ctx context.Context, c proc.Cmd) (proc.Result, error) {
@@ -743,7 +767,6 @@ func (s *stopAtMerge) Run(ctx context.Context, c proc.Cmd) (proc.Result, error) 
 		return s.Exec.Run(ctx, c)
 	}
 	done := make(chan struct{})
-	var at time.Time
 	watched := make(chan struct{})
 	go func() {
 		defer close(watched)
@@ -751,7 +774,7 @@ func (s *stopAtMerge) Run(ctx context.Context, c proc.Cmd) (proc.Result, error) 
 		defer tick.Stop()
 		for {
 			if _, err := os.Stat(s.ready); err == nil {
-				at = time.Now()
+				s.canceled = time.Now()
 				s.cancel()
 				return
 			}
@@ -763,11 +786,10 @@ func (s *stopAtMerge) Run(ctx context.Context, c proc.Cmd) (proc.Result, error) 
 		}
 	}()
 	res, err := s.Exec.Run(ctx, c)
+	s.returned = time.Now()
 	close(done)
 	<-watched
-	if !at.IsZero() {
-		s.stopped = time.Since(at)
-	}
+	s.exit, s.err = res.ExitCode, err
 	return res, err
 }
 
@@ -793,10 +815,7 @@ func TestStopDuringMerge(t *testing.T) {
 					`","mergeCommit":{"oid":"` + mergeOID + `"}}`,
 			}
 			out := run(t, s, setup{stop: true})
-			if out.stop.stopped == 0 || out.stop.stopped > 20*time.Second {
-				t.Errorf("the stop did not kill the running merge call (%s after the stop)",
-					out.stop.stopped)
-			}
+			out.stop.check(t, stopLimit)
 			if !slices.ContainsFunc(out.gh, func(c proctest.Call) bool {
 				return slices.Equal(c.Args, argv("merge", github.MergeArgs{})[kReadBack])
 			}) {
