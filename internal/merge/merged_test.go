@@ -423,7 +423,7 @@ func TestMergedStageNotRun(t *testing.T) {
 	t.Run("cancel during the merge call", func(t *testing.T) {
 		t.Parallel()
 		f := newStage(t, fakes)
-		s := with(okResponses(), kMerge, proctest.Response{Sleep: 20 * time.Second})
+		s := with(okResponses(), kMerge, proctest.Response{Sleep: time.Minute})
 		out := run(t, s, setup{stop: true, opts: func(o *Options) {
 			o.Merged = f.stage(names, time.Minute, nil)
 		}})

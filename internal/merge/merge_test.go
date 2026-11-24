@@ -105,6 +105,8 @@ type outcome struct {
 	// git are the calls of the fake git of setup.fakeGit; dir is the fixture repository.
 	git []proctest.Call
 	dir string
+	// stop is the stop of setup.stop.
+	stop *stopAtMerge
 }
 
 // merged reports whether the fake gh saw a `gh pr merge` call.
@@ -120,7 +122,7 @@ type setup struct {
 	before func(t *testing.T, dir string)
 	// git replaces the git executable.
 	git string
-	// stop cancels the run's context shortly after the merge call starts.
+	// stop cancels the run's context once the fake gh pr merge is running.
 	stop bool
 	// outside makes git report that the directory is not in a work tree.
 	outside bool
@@ -150,6 +152,14 @@ func run(t *testing.T, s scenario, st setup) outcome {
 		method = "merge"
 	}
 	args := argv(method, o.Merge)
+	var stop *stopAtMerge
+	if st.stop {
+		// The fake writes the file once it runs, before its output and sleep.
+		stop = &stopAtMerge{ready: filepath.Join(t.TempDir(), "merge-running")}
+		resp := s[kMerge]
+		resp.WriteFiles = map[string]string{stop.ready: ""}
+		s[kMerge] = resp
+	}
 	var sc proctest.Scenario
 	for k, resp := range s {
 		resp.Args = args[k]
@@ -174,8 +184,9 @@ func run(t *testing.T, s scenario, st setup) outcome {
 		st.withCancel(cancel)
 	}
 	var runner proc.Runner = proc.Exec{}
-	if st.stop {
-		runner = stopAtMerge{cancel: cancel}
+	if stop != nil {
+		stop.cancel = cancel
+		runner = stop
 	}
 	o.Client = github.Client{Runner: runner, Gh: gh, Git: st.git, Dir: r.Dir, Env: r.Env}
 	o.Stdout, o.Stderr = &stdout, &stderr
@@ -188,7 +199,7 @@ func run(t *testing.T, s scenario, st setup) outcome {
 	err := Run(ctx, o)
 	out := outcome{
 		err: err, stdout: stdout.String(), stderr: stderr.String(),
-		gh: proctest.Calls(t, gh), dir: r.Dir,
+		gh: proctest.Calls(t, gh), dir: r.Dir, stop: stop,
 	}
 	if st.fakeGit {
 		out.git = proctest.Calls(t, st.git)
@@ -716,19 +727,48 @@ func TestReadback(t *testing.T) {
 	}
 }
 
-// stopAtMerge cancels the context of the run shortly after the merge call starts, as SIGINT or
-// SIGTERM does through cmd/stack.
+// stopAtMerge cancels the context of the run once the fake gh pr merge has written ready, as
+// SIGINT or SIGTERM does through cmd/stack, and records how long the merge call took after that.
 type stopAtMerge struct {
 	proc.Exec
 
 	cancel func()
+	ready  string
+	// stopped is the time from the cancel to the merge call's return; zero when no cancel came.
+	stopped time.Duration
 }
 
-func (s stopAtMerge) Run(ctx context.Context, c proc.Cmd) (proc.Result, error) {
-	if len(c.Args) > 1 && c.Args[0] == "pr" && c.Args[1] == "merge" {
-		time.AfterFunc(300*time.Millisecond, s.cancel)
+func (s *stopAtMerge) Run(ctx context.Context, c proc.Cmd) (proc.Result, error) {
+	if len(c.Args) < 2 || c.Args[0] != "pr" || c.Args[1] != "merge" {
+		return s.Exec.Run(ctx, c)
 	}
-	return s.Exec.Run(ctx, c)
+	done := make(chan struct{})
+	var at time.Time
+	watched := make(chan struct{})
+	go func() {
+		defer close(watched)
+		tick := time.NewTicker(10 * time.Millisecond)
+		defer tick.Stop()
+		for {
+			if _, err := os.Stat(s.ready); err == nil {
+				at = time.Now()
+				s.cancel()
+				return
+			}
+			select {
+			case <-done:
+				return
+			case <-tick.C:
+			}
+		}
+	}()
+	res, err := s.Exec.Run(ctx, c)
+	close(done)
+	<-watched
+	if !at.IsZero() {
+		s.stopped = time.Since(at)
+	}
+	return res, err //nolint:wrapcheck // the fake runner passes the real result through
 }
 
 // TestStopDuringMerge: a stop after the merge call started kills it and still reads the PR back.
@@ -745,15 +785,17 @@ func TestStopDuringMerge(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			s := with(okResponses(), kMerge, proctest.Response{Sleep: 20 * time.Second})
+			// The merge call outlives the stop by far unless the stop kills it; the bound below
+			// times only the merge call after the stop, so slow fixture setup cannot reach it.
+			s := with(okResponses(), kMerge, proctest.Response{Sleep: time.Minute})
 			s[kReadBack] = proctest.Response{
 				Stdout: `{"state":"` + tt.back + `","headRefOid":"` + head +
 					`","mergeCommit":{"oid":"` + mergeOID + `"}}`,
 			}
-			start := time.Now()
 			out := run(t, s, setup{stop: true})
-			if time.Since(start) > 15*time.Second {
-				t.Errorf("the stop did not kill the merge call (%s)", time.Since(start))
+			if out.stop.stopped == 0 || out.stop.stopped > 20*time.Second {
+				t.Errorf("the stop did not kill the running merge call (%s after the stop)",
+					out.stop.stopped)
 			}
 			if !slices.ContainsFunc(out.gh, func(c proctest.Call) bool {
 				return slices.Equal(c.Args, argv("merge", github.MergeArgs{})[kReadBack])
