@@ -4,14 +4,19 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
-// SetKillHooks replaces the runner's kill and exit probe until tb ends. Tests
+// SetKillHooks replaces the runner's kill and, unless exitedHook is nil, its
+// exit probe until tb ends; the probe answers at once, whatever the wait. Tests
 // that call it must not run in parallel.
 func SetKillHooks(tb testing.TB, kill func(*os.Process) error, exitedHook func(*os.Process) bool) {
 	tb.Helper()
 	oldKill, oldExited := killProcess, processExited
-	killProcess, processExited = kill, exitedHook
+	killProcess = kill
+	if exitedHook != nil {
+		processExited = func(p *os.Process, _ time.Duration) bool { return exitedHook(p) }
+	}
 	tb.Cleanup(func() { killProcess, processExited = oldKill, oldExited })
 }
 
