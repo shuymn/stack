@@ -101,7 +101,8 @@ type fakeSpec struct {
 	Print        []fakePrint `json:"print,omitempty"`
 	// EnvTo receives the fake's environment, one variable per line.
 	EnvTo string `json:"envTo,omitempty"`
-	// Kill makes the fake kill itself after its edits and prints, before proctest answers.
+	// Kill makes the fake kill itself after its edits and prints, before proctest answers; it
+	// never exits on its own once the kill is sent.
 	Kill bool `json:"kill,omitempty"`
 }
 
@@ -211,7 +212,14 @@ func (s fakeSpec) apply(args []string) error {
 		if err == nil {
 			err = p.Kill()
 		}
-		return fmt.Errorf("kill: %w", err)
+		if err != nil {
+			return fmt.Errorf("kill: %w", err)
+		}
+		// The signal may land after Kill returns; exiting here could win that race and end the
+		// fake normally, so wait for the signal instead.
+		for {
+			time.Sleep(time.Hour)
+		}
 	}
 	return nil
 }
