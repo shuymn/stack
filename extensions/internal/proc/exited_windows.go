@@ -37,8 +37,9 @@ func exited(p *os.Process, wait time.Duration) bool {
 }
 
 // exitInProgress reports whether a kill error can come from a child that is
-// already exiting: TerminateProcess fails with access denied on a process
-// that is terminating, before its handle is signaled.
+// already exiting: TerminateProcess was denied access, likely because the
+// process is terminating and its handle is not yet signaled. An access denied
+// from Kill's DuplicateHandle does not qualify.
 func exitInProgress(err error) bool {
-	return errors.Is(err, syscall.ERROR_ACCESS_DENIED)
+	return syscallFailed(err, "TerminateProcess", syscall.ERROR_ACCESS_DENIED)
 }

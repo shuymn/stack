@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -33,10 +34,11 @@ const (
 	maxStderr = 64 << 10
 	// copyBuffer is the read size for pipes stack drains itself.
 	copyBuffer = 32 << 10
-	// exitGrace bounds how long Cancel waits for a child whose kill failed
-	// because it was already exiting (on Windows, TerminateProcess denies
-	// access to a terminating process before its handle is signaled). The wait
-	// happens only on that failure path, and delays os/exec's retried kill
+	// exitGrace bounds how long Cancel waits for the child's handle to become
+	// signaled after TerminateProcess was denied on Windows while the child was
+	// not yet seen as exited. The likely cause is an exit in progress
+	// (STATUS_PROCESS_IS_TERMINATING), whose handle is signaled only later. The
+	// wait happens only on that failure path, and delays os/exec's retried kill
 	// after WaitDelay by at most exitGrace. A live child that exits on its own
 	// within the grace is reported with its own exit, as if it had exited
 	// before the cancel.
@@ -249,6 +251,13 @@ func exitedAfterKill(p *os.Process, err error) bool {
 	return processExited(p, 0) || exitInProgress(err) && processExited(p, exitGrace)
 }
 
+// syscallFailed reports whether err is the failure of the system call named
+// call with errno.
+func syscallFailed(err error, call string, errno syscall.Errno) bool {
+	se, ok := errors.AsType[*os.SyscallError](err)
+	return ok && se.Syscall == call && errors.Is(se.Err, errno)
+}
+
 // child is a started subprocess whose stdio pipes stack owns.
 type child struct {
 	cmd *exec.Cmd
@@ -287,12 +296,10 @@ func (e Exec) start(ctx context.Context, c Cmd, stderr io.Writer) (*child, error
 			return nil
 		}
 		if !errors.Is(err, os.ErrProcessDone) && exitedAfterKill(cmd.Process, err) {
-			// The kill failed, and the probe then saw that the child had exited
-			// on its own, or, after an access denied on Windows, that it finished
-			// an exit in progress within exitGrace (TerminateProcess fails with
-			// access denied on an exited or terminating child). os/exec injects
-			// no error for os.ErrProcessDone, so the run reports the child's own
-			// exit.
+			// The kill failed, and the probe then saw the child's exit: at once,
+			// or, after TerminateProcess was denied on Windows, the handle became
+			// signaled within exitGrace. os/exec injects no error for
+			// os.ErrProcessDone, so the run reports the child's own exit.
 			ch.exitConfirmed.Store(true)
 			return os.ErrProcessDone
 		}
