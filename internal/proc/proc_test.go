@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -31,7 +32,34 @@ const (
 	// process start under -race. proctest's cleanup stops grandchildren, so a passing test
 	// does not wait it out.
 	grandchildLife = time.Minute
+	// runBound bounds a whole run, process start included, that must not wait for its
+	// grandchild.
+	runBound = 10 * time.Second
+	// pipeBound bounds the wait for held pipes from a point where the child has exited or
+	// been killed: WaitDelay plus scheduling slack, far below a wait of 20 s.
+	pipeBound = 5 * time.Second
 )
+
+// firstWrite records when its first write came.
+type firstWrite struct {
+	mu sync.Mutex
+	at time.Time
+}
+
+func (w *firstWrite) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.at.IsZero() {
+		w.at = time.Now()
+	}
+	return len(p), nil
+}
+
+func (w *firstWrite) time() time.Time {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.at
+}
 
 func one(r proctest.Response) proctest.Scenario {
 	return proctest.Scenario{Responses: []proctest.Response{r}}
@@ -241,8 +269,8 @@ func TestRunTimeout(t *testing.T) {
 
 // TestRunTimeoutGrandchildHoldsPipe covers a child that leaves a grandchild
 // holding the inherited stdout: Run returns once WaitDelay cuts the pipe after
-// the context's deadline, not when the grandchild exits. The check is that it
-// returns before the grandchild could have exited, 45 s after the deadline.
+// the context's deadline, not when the grandchild exits. The deadline leaves
+// room for a slow start; the bound is on the time after it.
 func TestRunTimeoutGrandchildHoldsPipe(t *testing.T) {
 	t.Parallel()
 
@@ -267,17 +295,9 @@ func TestRunTimeoutGrandchildHoldsPipe(t *testing.T) {
 	if !res.TimedOut {
 		t.Fatalf("result = %+v, want TimedOut", res)
 	}
-	// The grandchild starts after the context does, so it outlives the context's deadline by
-	// at least grandchildLife-deadline (45 s): a Run that returned only when the grandchild
-	// exited would return that long after the deadline. That is the bound, not WaitDelay, so
-	// scheduling delay cannot flip the check.
-	if took, limit := returned.Sub(end), grandchildLife-deadline; took >= limit {
-		t.Fatalf(
-			"returned %s after the context's deadline, want under %s, before the grandchild "+
-				"could exit",
-			took,
-			limit,
-		)
+	// The kill at the deadline ends the child; then only WaitDelay may hold Run.
+	if took := returned.Sub(end); took >= pipeBound {
+		t.Fatalf("returned %s after the context's deadline, want under %s", took, pipeBound)
 	}
 }
 
@@ -297,21 +317,25 @@ func TestRunWaitDelayAfterChildExit(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+			// The fake writes stderr after starting its grandchild, right before it exits,
+			// so the first stderr write marks the child's exit within scheduling slack.
 			fake := proctest.Install(t, "fake", one(proctest.Response{
-				Stdout: tc.stdout, Exit: tc.exit, Grandchild: grandchildLife,
+				Stdout: tc.stdout, Stderr: "exiting", Exit: tc.exit, Grandchild: grandchildLife,
 			}))
-			start := time.Now()
+			exiting := &firstWrite{}
 			res, err := proc.Exec{
 				WaitDelay: testWaitDelay,
 			}.Run(
 				context.Background(),
-				proc.Cmd{Name: fake},
+				proc.Cmd{Name: fake, Stderr: exiting},
 			)
+			returned := time.Now()
 			if err != nil {
 				t.Fatal(err)
 			}
-			if took := time.Since(start); took > grandchildLife/2 {
-				t.Fatalf("took %s, waited for the grandchild", took)
+			if at := exiting.time(); at.IsZero() || returned.Sub(at) >= pipeBound {
+				t.Fatalf("returned %s after the child's last write, want under %s",
+					returned.Sub(at), pipeBound)
 			}
 			if !res.WaitDelayExceeded || res.TimedOut || res.ExitCode != tc.exit ||
 				string(res.Stdout) != tc.stdout {
@@ -396,7 +420,7 @@ func TestRunStdinNotRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if took := time.Since(start); took > grandchildLife/2 {
+	if took := time.Since(start); took > runBound {
 		t.Fatalf("took %s", took)
 	}
 	if string(res.Stdout) != "ok" || !res.WaitDelayExceeded {
@@ -533,7 +557,7 @@ func TestStream(t *testing.T) {
 		if !errors.Is(err, errStop) {
 			t.Fatalf("err = %v, want consumer error", err)
 		}
-		if took := time.Since(start); took > grandchildLife/2 {
+		if took := time.Since(start); took > runBound {
 			t.Fatalf("took %s", took)
 		}
 	})
@@ -559,7 +583,7 @@ func TestStream(t *testing.T) {
 		if !errors.Is(err, proc.ErrWaitDelay) {
 			t.Fatalf("err = %v, want ErrWaitDelay", err)
 		}
-		if took := time.Since(start); took > grandchildLife/2 {
+		if took := time.Since(start); took > runBound {
 			t.Fatalf("took %s, waited for the grandchild", took)
 		}
 	})
