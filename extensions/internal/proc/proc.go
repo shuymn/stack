@@ -33,6 +33,14 @@ const (
 	maxStderr = 64 << 10
 	// copyBuffer is the read size for pipes stack drains itself.
 	copyBuffer = 32 << 10
+	// exitGrace bounds how long Cancel waits for a child whose kill failed
+	// because it was already exiting (on Windows, TerminateProcess denies
+	// access to a terminating process before its handle is signaled). The wait
+	// happens only on that failure path, and delays os/exec's retried kill
+	// after WaitDelay by at most exitGrace. A live child that exits on its own
+	// within the grace is reported with its own exit, as if it had exited
+	// before the cancel.
+	exitGrace = 500 * time.Millisecond
 )
 
 var (
@@ -227,11 +235,19 @@ func (e Exec) waitDelay() time.Duration {
 	return DefaultWaitDelay
 }
 
-// Kill seams, swapped only by non-parallel tests.
+// Kill seams, swapped only by non-parallel tests. processExited waits up to
+// its duration for the child's exit.
 var (
 	killProcess   = (*os.Process).Kill
 	processExited = exited
 )
+
+// exitedAfterKill reports whether p, whose kill failed with err, has exited on
+// its own: at once, or within exitGrace when err can come from an exit in
+// progress.
+func exitedAfterKill(p *os.Process, err error) bool {
+	return processExited(p, 0) || exitInProgress(err) && processExited(p, exitGrace)
+}
 
 // child is a started subprocess whose stdio pipes stack owns.
 type child struct {
@@ -270,11 +286,13 @@ func (e Exec) start(ctx context.Context, c Cmd, stderr io.Writer) (*child, error
 			ch.killed.Store(true)
 			return nil
 		}
-		if !errors.Is(err, os.ErrProcessDone) && processExited(cmd.Process) {
+		if !errors.Is(err, os.ErrProcessDone) && exitedAfterKill(cmd.Process, err) {
 			// The kill failed, and the probe then saw that the child had exited
-			// on its own (on Windows, TerminateProcess fails with access denied
-			// on such a child). os/exec injects no error for os.ErrProcessDone,
-			// so the run reports the child's own exit.
+			// on its own, or, after an access denied on Windows, that it finished
+			// an exit in progress within exitGrace (TerminateProcess fails with
+			// access denied on an exited or terminating child). os/exec injects
+			// no error for os.ErrProcessDone, so the run reports the child's own
+			// exit.
 			ch.exitConfirmed.Store(true)
 			return os.ErrProcessDone
 		}
