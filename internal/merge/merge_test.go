@@ -747,21 +747,6 @@ type stopAtMerge struct {
 // far below the one-minute sleep of the fake merge call the stop must kill.
 const stopLimit = 20 * time.Second
 
-// check fails t unless the stop came while the merge call ran and killed it within limit.
-func (s *stopAtMerge) check(t *testing.T, limit time.Duration) {
-	t.Helper()
-	if s.canceled.IsZero() || !s.canceled.Before(s.returned) {
-		t.Errorf("no stop while the merge call ran (stop %v, return %v)", s.canceled, s.returned)
-		return
-	}
-	if s.exit != -1 || !errors.Is(s.err, context.Canceled) {
-		t.Errorf("merge call ended with exit %d, err %v; want killed by the stop", s.exit, s.err)
-	}
-	if took := s.returned.Sub(s.canceled); took > limit {
-		t.Errorf("merge call returned %s after the stop, want under %s", took, limit)
-	}
-}
-
 func (s *stopAtMerge) Run(ctx context.Context, c proc.Cmd) (proc.Result, error) {
 	if len(c.Args) < 2 || c.Args[0] != "pr" || c.Args[1] != "merge" {
 		return s.Exec.Run(ctx, c)
@@ -791,6 +776,21 @@ func (s *stopAtMerge) Run(ctx context.Context, c proc.Cmd) (proc.Result, error) 
 	<-watched
 	s.exit, s.err = res.ExitCode, err
 	return res, err
+}
+
+// check fails t unless the stop came while the merge call ran and killed it within limit.
+func (s *stopAtMerge) check(t *testing.T, limit time.Duration) {
+	t.Helper()
+	if s.canceled.IsZero() || !s.canceled.Before(s.returned) {
+		t.Errorf("no stop while the merge call ran (stop %v, return %v)", s.canceled, s.returned)
+		return
+	}
+	if s.exit != -1 || !errors.Is(s.err, context.Canceled) {
+		t.Errorf("merge call ended with exit %d, err %v; want killed by the stop", s.exit, s.err)
+	}
+	if took := s.returned.Sub(s.canceled); took > limit {
+		t.Errorf("merge call returned %s after the stop, want under %s", took, limit)
+	}
 }
 
 // TestStopDuringMerge: a stop after the merge call started kills it and still reads the PR back.
