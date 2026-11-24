@@ -48,11 +48,12 @@ const (
 	defaultGrandchildLife = 30 * time.Second
 	grandchildPoll        = 10 * time.Millisecond
 	cleanupWait           = 10 * time.Second
+	gateWait              = time.Minute
 )
 
 // Response is one scripted answer. The fake performs, in order: read stdin
 // (unless NoStdin), spawn the grandchild, write WriteFiles, log the call,
-// write stdout and stderr, sleep, exit.
+// write stdout and stderr, sleep, wait for the gate, exit.
 type Response struct {
 	// Args matches the arguments after argv[0] exactly; nil matches any call
 	// and an empty non-nil slice matches only a call without arguments.
@@ -63,6 +64,9 @@ type Response struct {
 	Exit   int      `json:"exit,omitempty"`
 	// Sleep delays the exit after writing output.
 	Sleep time.Duration `json:"sleep,omitempty"`
+	// Gate, when set, holds the exit after Sleep until a file exists at this
+	// path, or at most a minute.
+	Gate string `json:"gate,omitempty"`
 	// NoStdin leaves stdin unread.
 	NoStdin bool `json:"noStdin,omitempty"`
 	// Grandchild, when positive, starts a process that holds the fake's
@@ -260,7 +264,21 @@ func runFake(exe, base string, data []byte) int {
 	_, _ = io.WriteString(os.Stdout, resp.Stdout)
 	_, _ = io.WriteString(os.Stderr, resp.Stderr)
 	time.Sleep(resp.Sleep)
+	if resp.Gate != "" {
+		waitGate(resp.Gate)
+	}
 	return resp.Exit
+}
+
+// waitGate returns once path exists, or after gateWait.
+func waitGate(path string) {
+	deadline := time.Now().Add(gateWait)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		time.Sleep(grandchildPoll)
+	}
 }
 
 func match(s Scenario, args []string) (Response, bool) {
