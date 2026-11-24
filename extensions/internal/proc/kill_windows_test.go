@@ -3,7 +3,6 @@ package proc
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -28,10 +27,9 @@ import (
 func TestNativeKillAfterExit(t *testing.T) {
 	const (
 		retryDelay = 200 * time.Millisecond
-		// retrySettle is the margin past retryDelay for os/exec's retry to run
-		// before finish's Wait takes the watcher's result. If a loaded runner
-		// misses it, Wait takes the result before the retry, and the run still
-		// passes.
+		// retrySettle is the margin past retryDelay that gives os/exec's retried
+		// kill time to run before finish calls Wait. If Wait beats the retry on a
+		// loaded runner, the test can pass without exercising it.
 		retrySettle = time.Second
 		bound       = 30 * time.Second
 		boundMillis = uint32(bound / time.Millisecond)
@@ -41,10 +39,16 @@ func TestNativeKillAfterExit(t *testing.T) {
 	)
 	for _, code := range []int{0, 259} {
 		t.Run(strconv.Itoa(code), func(t *testing.T) {
-			gate := filepath.Join(t.TempDir(), "gate")
-			fake := proctest.Install(t, "fake", proctest.Scenario{Responses: []proctest.Response{{
-				Stdout: "out\n", Exit: code, Gate: gate,
-			}}})
+			dir := t.TempDir()
+			gate := filepath.Join(dir, "gate")
+			fake := proctest.InstallAt(
+				t,
+				dir,
+				"fake",
+				proctest.Scenario{Responses: []proctest.Response{{
+					Stdout: "out\n", Exit: code, Gate: gate,
+				}}},
+			)
 			kills := make(chan error, 1)
 			SetKillHooks(t, func(p *os.Process) error {
 				err := p.Kill()
@@ -52,10 +56,7 @@ func TestNativeKillAfterExit(t *testing.T) {
 				case kills <- err:
 				default:
 				}
-				if err != nil {
-					return fmt.Errorf("native kill: %w", err)
-				}
-				return nil
+				return err //nolint:wrapcheck // the runner wraps it; the test inspects it raw
 			}, exited)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()

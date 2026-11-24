@@ -32,7 +32,7 @@ func gatedFake(t *testing.T) (proc.Cmd, string, string) {
 	t.Helper()
 	dir := t.TempDir()
 	gate, started := filepath.Join(dir, "gate"), filepath.Join(dir, "started")
-	fake := proctest.Install(t, "fake", one(proctest.Response{
+	fake := proctest.InstallAt(t, dir, "fake", one(proctest.Response{
 		Stdout: "out\n", Gate: gate, WriteFiles: map[string]string{started: ""},
 	}))
 	c := proc.Cmd{Name: fake, Env: proc.QuietExitEnv()}

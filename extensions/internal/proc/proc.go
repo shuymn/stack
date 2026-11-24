@@ -271,12 +271,12 @@ func (e Exec) start(ctx context.Context, c Cmd, stderr io.Writer) (*child, error
 			return nil
 		}
 		if !errors.Is(err, os.ErrProcessDone) && processExited(cmd.Process) {
-			// The child exited on its own before the kill (on Windows,
-			// TerminateProcess then fails with access denied). Wrapping
-			// os.ErrProcessDone makes os/exec inject no error, so the run
-			// reports the child's own exit.
+			// The kill failed, and the probe then saw that the child had exited
+			// on its own (on Windows, TerminateProcess fails with access denied
+			// on such a child). os/exec injects no error for os.ErrProcessDone,
+			// so the run reports the child's own exit.
 			ch.exitConfirmed.Store(true)
-			return fmt.Errorf("kill: %w: %w", os.ErrProcessDone, err)
+			return os.ErrProcessDone
 		}
 		return fmt.Errorf("kill: %w", err) // os/exec checks errors.Is(os.ErrProcessDone).
 	}
@@ -328,7 +328,9 @@ func (e Exec) start(ctx context.Context, c Cmd, stderr io.Writer) (*child, error
 
 // finish waits for the child to exit, then at most delay for the pipe
 // goroutines. On overrun it closes stack's pipe ends, which ends those
-// goroutines, and reports true. err is the error of exec.Cmd.Wait.
+// goroutines, and reports true. err is the error of exec.Cmd.Wait, except that
+// after Cancel confirmed the child's exit 0 the error of os/exec's retried kill
+// is dropped.
 func (ch *child) finish(delay time.Duration) (bool, error) {
 	err := ch.cmd.Wait()
 	if err != nil && ch.exitConfirmed.Load() &&
