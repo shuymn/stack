@@ -18,7 +18,7 @@ import (
 // TestCancelKillExiting covers a cancel whose kill fails while the child may be
 // exiting (issue #103): TerminateProcess denies access to a terminating child
 // before its handle is signaled, so the runner waits up to ExitGrace for the
-// exit after an access denied, and only then. The wait hook scripts the
+// exit after TerminateProcess is denied, and only then. The wait hook scripts the
 // handle: the immediate probe always sees the child running, and the gated
 // child is released where the case says, so neither the probe nor a released
 // handle can confirm the exit early. Not parallel: it swaps the runner's hooks.
@@ -31,7 +31,8 @@ func TestCancelKillExiting(t *testing.T) {
 		name    string
 		killErr error
 		// exits releases the child during the grace wait; otherwise the grace
-		// wait runs on the gated child and releases it after.
+		// wait reports a timeout once the released child has exited, so
+		// os/exec's retried kill never races it.
 		exits bool
 		// waits are the timeouts the runner waits on the handle with.
 		waits []uint32
@@ -42,6 +43,13 @@ func TestCancelKillExiting(t *testing.T) {
 		},
 		{name: "running past the grace", killErr: accessDenied, waits: []uint32{0, graceMillis}},
 		{name: "other kill error", killErr: errKill, waits: []uint32{0}},
+		{
+			name: "duplicate handle access denied",
+			killErr: &os.SyscallError{
+				Syscall: "DuplicateHandle", Err: syscall.ERROR_ACCESS_DENIED,
+			},
+			waits: []uint32{0},
+		},
 	} {
 		// hook installs the hooks for the fake's gate and records kills and waits.
 		hook := func(t *testing.T, gate string) (*atomic.Int32, func() []uint32) {
@@ -72,8 +80,13 @@ func TestCancelKillExiting(t *testing.T) {
 					release()
 					return syscall.WaitForSingleObject(h, startMillis)
 				default:
-					defer release()
-					return syscall.WaitForSingleObject(h, millis)
+					release()
+					if ev, err := syscall.WaitForSingleObject(
+						h, startMillis,
+					); err != nil || ev != syscall.WAIT_OBJECT_0 {
+						t.Errorf("wait for the released child: event %d, err %v", ev, err)
+					}
+					return syscall.WAIT_TIMEOUT, nil
 				}
 			})
 			return &kills, func() []uint32 {
