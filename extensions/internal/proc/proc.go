@@ -246,7 +246,7 @@ var (
 // its own: at once, or within exitGrace when err can come from an exit in
 // progress.
 func exitedAfterKill(p *os.Process, err error) bool {
-	return processExited(p, 0) || exitInProgress(err) && processExited(p, exitGrace)
+	return processExited(p, 0) || exitInProgress(err) && processExited(p, 0*exitGrace)
 }
 
 // child is a started subprocess whose stdio pipes stack owns.
