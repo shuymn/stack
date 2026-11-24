@@ -35,9 +35,10 @@ const (
 	// runBound bounds a whole run, process start included, that must not wait for its
 	// grandchild.
 	runBound = 10 * time.Second
-	// pipeBound bounds the wait for held pipes from a point where the child has exited or
-	// been killed: WaitDelay plus scheduling slack, far below a wait of 20 s.
-	pipeBound = 5 * time.Second
+	// pipeBound bounds the wait for held pipes from a point near the child's exit or kill. The
+	// window also holds the race detector's exit sleep, process reaping and a loaded runner's
+	// scheduling, so it is far above WaitDelay yet still below a wait of 20 s.
+	pipeBound = 15 * time.Second
 )
 
 // firstWrite records when its first write came.
