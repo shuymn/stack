@@ -334,8 +334,9 @@ func (ch *child) finish(delay time.Duration) (bool, error) {
 	if err != nil && ch.exitConfirmed.Load() &&
 		ch.cmd.ProcessState != nil && ch.cmd.ProcessState.Success() {
 		// The child exited 0 on its own. Its stdio are *os.File, so os/exec runs
-		// no copying goroutines, and the only error left is from its retry of the
-		// kill after WaitDelay, which fails for the same reason the first did.
+		// no copying goroutines, and the only error left is from its retry of the kill
+		// after WaitDelay, which fails on the exited child too (access denied, or
+		// EINVAL once Wait has released the handle).
 		err = nil
 	}
 	done := make(chan struct{})
