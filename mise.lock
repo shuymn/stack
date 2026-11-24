@@ -108,6 +108,12 @@ url = "https://github.com/shuymn/pommitlint/releases/download/v2.0.5/pommitlint_
 url_api = "https://api.github.com/repos/shuymn/pommitlint/releases/assets/779959718"
 provenance = "github-attestations"
 
+[tools."github:shuymn/pommitlint"."platforms.windows-x64"]
+checksum = "sha256:61472dc7d8fc09dc7016c33cc83be848b77134bea20a6f025865eb0219ae9758"
+url = "https://github.com/shuymn/pommitlint/releases/download/v2.0.5/pommitlint_v2.0.5_windows_amd64.zip"
+url_api = "https://api.github.com/repos/shuymn/pommitlint/releases/assets/779959783"
+provenance = "github-attestations"
+
 [[tools."github:suzuki-shunsuke/ghalint"]]
 version = "1.6.0"
 backend = "github:suzuki-shunsuke/ghalint"

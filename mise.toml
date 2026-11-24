@@ -16,9 +16,7 @@ lefthook = "2"
 actionlint = "1"
 betterleaks = "1"
 "github:suzuki-shunsuke/ghalint" = "1"
-# No Windows release. Windows is a CI-only runtime target, and without this
-# restriction mise on Windows still resolves the tool while installing go.
-"github:shuymn/pommitlint" = { version = "2", os = ["macos", "linux"] }
+"github:shuymn/pommitlint" = "2"
 "github:babarot/gh-infra" = "0"
 # MinGW-w64 gcc for cgo, which `go test -race` needs on Windows (CI runners ship
 # their own). Pinned exactly: the repository's tags mix the ucrt and msvcrt
