@@ -264,8 +264,8 @@ type child struct {
 	// killed is set when the runner killed the child because the context
 	// ended.
 	killed atomic.Bool
-	// exitConfirmed is set when the kill failed because the child had
-	// already exited.
+	// exitConfirmed is set when the kill failed and the probe then saw the
+	// child's exit.
 	exitConfirmed atomic.Bool
 	// stdout is stack's read end of the child's stdout.
 	stdout *os.File

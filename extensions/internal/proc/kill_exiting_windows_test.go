@@ -64,6 +64,16 @@ func TestCancelKillExiting(t *testing.T) {
 					t.Error(err)
 				}
 			}
+			// exit releases the child and waits for its real exit, so os/exec's
+			// retried kill after WaitDelay never meets a child still running.
+			exit := func(h syscall.Handle) {
+				release()
+				if ev, err := syscall.WaitForSingleObject(
+					h, startMillis,
+				); err != nil || ev != syscall.WAIT_OBJECT_0 {
+					t.Errorf("wait for the released child: event %d, err %v", ev, err)
+				}
+			}
 			var mu sync.Mutex
 			var waits []uint32
 			proc.SetWaitHook(t, func(h syscall.Handle, millis uint32) (uint32, error) {
@@ -73,19 +83,14 @@ func TestCancelKillExiting(t *testing.T) {
 				switch {
 				case millis == 0:
 					if len(tc.waits) == 1 {
-						release()
+						exit(h)
 					}
 					return syscall.WAIT_TIMEOUT, nil
 				case tc.exits:
 					release()
 					return syscall.WaitForSingleObject(h, startMillis)
 				default:
-					release()
-					if ev, err := syscall.WaitForSingleObject(
-						h, startMillis,
-					); err != nil || ev != syscall.WAIT_OBJECT_0 {
-						t.Errorf("wait for the released child: event %d, err %v", ev, err)
-					}
+					exit(h)
 					return syscall.WAIT_TIMEOUT, nil
 				}
 			})
