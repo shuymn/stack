@@ -768,7 +768,7 @@ func (s *stopAtMerge) Run(ctx context.Context, c proc.Cmd) (proc.Result, error) 
 	if !at.IsZero() {
 		s.stopped = time.Since(at)
 	}
-	return res, err //nolint:wrapcheck // the fake runner passes the real result through
+	return res, err
 }
 
 // TestStopDuringMerge: a stop after the merge call started kills it and still reads the PR back.
