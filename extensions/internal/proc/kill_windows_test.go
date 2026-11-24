@@ -35,6 +35,9 @@ func TestNativeKillAfterExit(t *testing.T) {
 		retrySettle = time.Second
 		bound       = 30 * time.Second
 		boundMillis = uint32(bound / time.Millisecond)
+		// pipeBound bounds finish's wait for the pipes, apart from the WaitDelay
+		// that times the retry.
+		pipeBound = 10 * time.Second
 	)
 	for _, code := range []int{0, 259} {
 		t.Run(strconv.Itoa(code), func(t *testing.T) {
@@ -57,7 +60,7 @@ func TestNativeKillAfterExit(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			ch, err := Exec{WaitDelay: retryDelay}.start(ctx, Cmd{
-				Name: fake, Env: append(os.Environ(), "GORACE=atexit_sleep_ms=0"),
+				Name: fake, Env: QuietExitEnv(),
 			}, io.Discard)
 			if err != nil {
 				t.Fatal(err)
@@ -66,7 +69,8 @@ func TestNativeKillAfterExit(t *testing.T) {
 			defer func() {
 				if !finished {
 					_ = os.WriteFile(gate, nil, 0o600)
-					_, _ = ch.finish(retryDelay)
+					_ = ch.cmd.Process.Kill()
+					_, _ = ch.finish(pipeBound)
 				}
 			}()
 			p := ch.cmd.Process
@@ -105,7 +109,7 @@ func TestNativeKillAfterExit(t *testing.T) {
 				t.Fatal("the cancel did not call the kill hook")
 			}
 			time.Sleep(retryDelay + retrySettle)
-			overrun, err := ch.finish(retryDelay)
+			overrun, err := ch.finish(pipeBound)
 			finished = true
 
 			var native *os.SyscallError

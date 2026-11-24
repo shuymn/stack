@@ -35,7 +35,7 @@ func gatedFake(t *testing.T) (proc.Cmd, string, string) {
 	fake := proctest.Install(t, "fake", one(proctest.Response{
 		Stdout: "out\n", Gate: gate, WriteFiles: map[string]string{started: ""},
 	}))
-	c := proc.Cmd{Name: fake, Env: append(os.Environ(), "GORACE=atexit_sleep_ms=0")}
+	c := proc.Cmd{Name: fake, Env: proc.QuietExitEnv()}
 	return c, gate, started
 }
 
@@ -59,7 +59,11 @@ func cancelOnStart(t *testing.T, started string) context.Context {
 				t.Errorf("fake did not start within %s", startBound)
 				return
 			}
-			time.Sleep(10 * time.Millisecond)
+			select {
+			case <-ctx.Done(): // The test ended first, e.g. the fake failed to start.
+				return
+			case <-time.After(10 * time.Millisecond):
+			}
 		}
 	}()
 	return ctx

@@ -2,6 +2,7 @@ package proc
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -15,4 +16,13 @@ func SetKillHooks(tb testing.TB, kill func(*os.Process) error, exitedHook func(*
 	oldKill, oldExited := killProcess, processExited
 	killProcess, processExited = kill, exitedHook
 	tb.Cleanup(func() { killProcess, processExited = oldKill, oldExited })
+}
+
+// QuietExitEnv is the environment with the race detector's exit sleep turned
+// off for a child, keeping any other GORACE options.
+func QuietExitEnv() []string {
+	return append(
+		os.Environ(),
+		"GORACE="+strings.TrimSpace(os.Getenv("GORACE")+" atexit_sleep_ms=0"),
+	)
 }
