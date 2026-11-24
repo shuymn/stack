@@ -227,12 +227,21 @@ func (e Exec) waitDelay() time.Duration {
 	return DefaultWaitDelay
 }
 
+// Kill seams, swapped only by non-parallel tests.
+var (
+	killProcess   = (*os.Process).Kill
+	processExited = exited
+)
+
 // child is a started subprocess whose stdio pipes stack owns.
 type child struct {
 	cmd *exec.Cmd
 	// killed is set when the runner killed the child because the context
 	// ended.
 	killed atomic.Bool
+	// exitConfirmed is set when the kill failed because the child had
+	// already exited.
+	exitConfirmed atomic.Bool
 	// stdout is stack's read end of the child's stdout.
 	stdout *os.File
 	// ends are stack's ends of all stdio pipes, closed on a WaitDelay overrun.
@@ -250,16 +259,26 @@ func (e Exec) start(ctx context.Context, c Cmd, stderr io.Writer) (*child, error
 	cmd := exec.CommandContext(ctx, c.Name, c.Args...)
 	cmd.Dir = c.Dir
 	cmd.Env = c.Env
-	// Bounds the wait for a child that survives the kill; pipe handling is
-	// done below because os/exec does not own these pipes.
+	// WaitDelay after the kill, os/exec retries it once; a child that
+	// survives both still blocks Wait. Pipe handling is done below because
+	// os/exec does not own these pipes.
 	cmd.WaitDelay = e.waitDelay()
 	ch := &child{cmd: cmd}
 	cmd.Cancel = func() error {
-		if err := cmd.Process.Kill(); err != nil {
-			return fmt.Errorf("kill: %w", err) // os/exec checks errors.Is(os.ErrProcessDone).
+		err := killProcess(cmd.Process)
+		if err == nil {
+			ch.killed.Store(true)
+			return nil
 		}
-		ch.killed.Store(true)
-		return nil
+		if !errors.Is(err, os.ErrProcessDone) && processExited(cmd.Process) {
+			// The kill failed, and the probe then saw that the child had exited
+			// on its own (on Windows, TerminateProcess fails with access denied
+			// on such a child). os/exec injects no error for os.ErrProcessDone,
+			// so the run reports the child's own exit.
+			ch.exitConfirmed.Store(true)
+			return os.ErrProcessDone
+		}
+		return fmt.Errorf("kill: %w", err) // os/exec checks errors.Is(os.ErrProcessDone).
 	}
 
 	var theirs []*os.File // the child's ends, closed in stack once started
@@ -309,9 +328,19 @@ func (e Exec) start(ctx context.Context, c Cmd, stderr io.Writer) (*child, error
 
 // finish waits for the child to exit, then at most delay for the pipe
 // goroutines. On overrun it closes stack's pipe ends, which ends those
-// goroutines, and reports true. err is the error of exec.Cmd.Wait.
+// goroutines, and reports true. err is the error of exec.Cmd.Wait, except that
+// after Cancel confirmed the child's exit 0 the error of os/exec's retried kill
+// is dropped.
 func (ch *child) finish(delay time.Duration) (bool, error) {
 	err := ch.cmd.Wait()
+	if err != nil && ch.exitConfirmed.Load() &&
+		ch.cmd.ProcessState != nil && ch.cmd.ProcessState.Success() {
+		// The child exited 0 on its own. Its stdio are *os.File, so os/exec runs
+		// no copying goroutines, and the only error left is from its retry of the kill
+		// after WaitDelay, which fails on the exited child too (access denied, or
+		// EINVAL once Wait has released the handle).
+		err = nil
+	}
 	done := make(chan struct{})
 	go func() {
 		ch.io.Wait()
