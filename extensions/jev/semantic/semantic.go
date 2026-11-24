@@ -23,6 +23,23 @@ var budget = 10 * time.Second
 // tests.
 var ledgerWait time.Duration
 
+// testLedgerWait, set only by test builds (`-ldflags -X`), is the ledger wait of a built binary
+// when ledgerWait is zero: a duration such as "30s". It is never configuration.
+var testLedgerWait = ""
+
+// ledgerWaitFor returns the ledger wait: ledgerWait, else a test build's testLedgerWait, else zero
+// (jev.LedgerWait).
+func ledgerWaitFor() time.Duration {
+	if ledgerWait != 0 {
+		return ledgerWait
+	}
+	d, err := time.ParseDuration(testLedgerWait)
+	if err != nil {
+		return 0
+	}
+	return d
+}
+
 // reserve is kept after the work deadline to answer (§3.1).
 const reserve = 500 * time.Millisecond
 
@@ -153,7 +170,7 @@ func (env Env) live(key string) jev.Live {
 	if env.Home != "" {
 		l.Ledger = &jev.Ledger{
 			Path: jev.LedgerPath(env.Home), Run: jev.RunID(), Extension: name, Stderr: env.Stderr,
-			Wait: ledgerWait,
+			Wait: ledgerWaitFor(),
 		}
 	} else {
 		_, _ = fmt.Fprintf(env.Stderr, "jev: usage ledger: home directory unknown\n")
