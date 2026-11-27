@@ -41,8 +41,7 @@ func TestExport(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			line := "export STACK_SESSION_ID='Sess-1'\n"
-			if string(data) != line+line {
+			if string(data) != "export STACK_SESSION_ID='Sess-1'\n" {
 				t.Fatalf("env file = %q", data)
 			}
 			if got := sourceEnv(t, envFile); got != "Sess-1" && got != "<no bash>" {
@@ -69,6 +68,52 @@ func TestExport(t *testing.T) {
 		}
 		if got := sourceEnv(t, envFile); got != "s1" && got != "<no bash>" {
 			t.Fatalf("sourced STACK_SESSION_ID = %q", got)
+		}
+	})
+
+	t.Run("appends only when the last id line differs", func(t *testing.T) {
+		t.Parallel()
+		cases := []struct{ name, before, want string }{
+			{
+				name:   "same id last, other lines after",
+				before: "export STACK_SESSION_ID='s1'\nexport OTHER=1\n",
+				want:   "export STACK_SESSION_ID='s1'\nexport OTHER=1\n",
+			},
+			{
+				name:   "same id with CRLF",
+				before: "export STACK_SESSION_ID='s1'\r\nexport OTHER=1\n",
+				want:   "export STACK_SESSION_ID='s1'\r\nexport OTHER=1\nexport STACK_SESSION_ID='s1'\n",
+			},
+			{
+				name:   "another id last",
+				before: "export STACK_SESSION_ID='s1'\nexport STACK_SESSION_ID='s2'\n",
+				want:   "export STACK_SESSION_ID='s1'\nexport STACK_SESSION_ID='s2'\nexport STACK_SESSION_ID='s1'\n",
+			},
+			{
+				name:   "unset after the line",
+				before: "export STACK_SESSION_ID='s1'\nunset STACK_SESSION_ID",
+				want:   "export STACK_SESSION_ID='s1'\nunset STACK_SESSION_ID\nexport STACK_SESSION_ID='s1'\n",
+			},
+		}
+		for _, c := range cases {
+			t.Run(c.name, func(t *testing.T) {
+				t.Parallel()
+				f := newFixture(t)
+				envFile := filepath.Join(t.TempDir(), "env")
+				write(t, envFile, c.before)
+				f.env[EnvFile] = envFile
+				f.start(hookio.Input{SessionID: "s1", Source: "compact"})
+				data, err := os.ReadFile(envFile)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(data) != c.want {
+					t.Fatalf("env file = %q, want %q", data, c.want)
+				}
+				if got := sourceEnv(t, envFile); got != "s1" && got != "<no bash>" {
+					t.Fatalf("sourced STACK_SESSION_ID = %q", got)
+				}
+			})
 		}
 	})
 
