@@ -101,8 +101,10 @@ func Start(ctx context.Context, p Params) ([]byte, []error) {
 }
 
 // Export appends `export STACK_SESSION_ID='<id>'` to file, on a line of its own: a file not ending
-// in a newline gets one first, so its last line cannot swallow the assignment. An empty file name
-// (Claude Code did not provide one) writes nothing. The caller validates id, so it needs no quoting.
+// in a newline gets one first, so its last line cannot swallow the assignment. When the file's last
+// line naming STACK_SESSION_ID is already that line, it writes nothing, so a session's repeated
+// SessionStart events do not grow the file. An empty file name (Claude Code did not provide one)
+// writes nothing. The caller validates id, so it needs no quoting.
 func Export(file, id string) error {
 	if file == "" {
 		return nil
@@ -111,18 +113,36 @@ func Export(file, id string) error {
 	if err != nil {
 		return fmt.Errorf("open %s: %w", EnvFile, err)
 	}
-	line := fmt.Sprintf("export %s='%s'\n", IDVar, id)
-	last := make([]byte, 1)
-	if fi, err := f.Stat(); err == nil && fi.Size() > 0 {
-		if _, err := f.ReadAt(last, fi.Size()-1); err == nil && last[0] != '\n' {
+	line := fmt.Sprintf("export %s='%s'", IDVar, id)
+	if data, err := io.ReadAll(f); err == nil {
+		if lastIDLine(string(data)) == line {
+			if err := f.Close(); err != nil {
+				return fmt.Errorf("close %s: %w", EnvFile, err)
+			}
+			return nil
+		}
+		if len(data) > 0 && data[len(data)-1] != '\n' {
 			line = "\n" + line
 		}
 	}
-	_, werr := f.WriteString(line)
+	_, werr := f.WriteString(line + "\n")
 	if err := errors.Join(werr, f.Close()); err != nil {
 		return fmt.Errorf("write %s: %w", EnvFile, err)
 	}
 	return nil
+}
+
+// lastIDLine returns the last line of s that names IDVar, without its LF, or "" when none does. A
+// CR stays: bash reads it as part of the value, so a CRLF export is not the line and a fresh LF
+// export follows it.
+func lastIDLine(s string) string {
+	last := ""
+	for l := range strings.Lines(s) {
+		if strings.Contains(l, IDVar) {
+			last = strings.TrimSuffix(l, "\n")
+		}
+	}
+	return last
 }
 
 // kitPieces is one kit as compact restores it: its slug and dir, its rendered state blocks
