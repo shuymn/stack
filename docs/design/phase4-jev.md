@@ -720,6 +720,22 @@ report, where every candidate's excerpt is listed and the owner rules out known 
 lines (median 270 B, largest 2.5 KB observed; the index read now, which may differ from what the replying session
 loaded). A known correction listed is itself worth seeing: the reply repeats a rule present in the current index.
 
+*Status.* The committed table ships the duplicate check disabled, and no further tuning is planned. On `heldout-b`
+its precision is 0.78 against the 0.80 target, with recall 0.88. Both false-positive cases scored `duplicate` on all
+three calls: one has a line on another object of the same kind, the other a line under another condition, kinds
+the question already names. Correcting all three calls on either case would raise precision by about 10 points, so with
+8 + 8 cases a small difference between weeks is sensitive to which hard negatives each holds. Meanwhile the disabled check
+keeps every candidate in the report, which is what the purpose needs. Those two cases have been inspected, so
+`heldout-b` cannot validate a revision: its `heldout` split and the table's figures record the shipped calibration,
+and before the next duplicate-check revision is developed the whole fixture moves to `fit` (split and name) and a
+fresh week is reserved for validation. That move also needs the corpus check to allow `multi` and `partial` cases
+in `fit`, which it now allows in `heldout` only. Revisit when real reports show that triage is a burden and
+that known duplicates make up much of it, or when indexes grow past what the owner checks by eye. One option is
+one `noul` question per index line (§4): it must still establish that every required rule has a covering line,
+keeping the `multi` and `partial` distinction of §3.2, and weigh §4's concern about question count as indexes
+grow. The revised question is developed on `fit`, its cutoff rule and target are chosen before any fresh held-out
+score is seen, and the cutoff is fitted on `fit` and frozen before a fresh held-out week is scored.
+
 The `fixed` classify fixtures are matched per item by ID, on `where`, `status`, `reason`, `opener`, `qualified`,
 `kind`, `excerpt`, `duplicate` and `dup_reason`, and on status, finding kinds, `complete`, `sources`, `counts` and the
 context (lines, order and markers), so a dropped or swapped row fails. They are:
@@ -835,8 +851,8 @@ of it, uncapped; O6 reports what the ledger saw against the number of runs.
 ## 5. Implementation order and PR split (item 7)
 
 1. `jev-semantic` and the shared client are implemented. See §3.2 for the hiden `commit-pr` caller.
-2. `jev-classify` follows #56 and can proceed while the router is deferred. Wire the cycle call and its live key in
-   `shuymn/dotfiles` (§3.2).
+2. `jev-classify` is implemented and runs in the `shuymn/dotfiles` cycle job between observe and improve (§3.2),
+   with qualification enabled and the duplicate check disabled (§3.5).
 3. `jev-router` starts when the §3.2 trigger is met. Add its fixtures and calibrated cutoffs. The owner runs
    calibration before merge (O1).
 
@@ -917,7 +933,9 @@ log, hook runs), since a run with no attempt writes no ledger line.
 - The `dup_` criteria name the kinds of related line seen among the `fit` cases; a line related in another way can
   still read as a match. The highest-scoring observed misses are a rule the agent's action also broke (`fit-a03`) and
   a line under another condition (`fit-c07`), both about 0.9 under the topic-only wording; `heldout-b` holds one
-  case of each kind, and of `partial` and `multi`, which no `fit` case has, to measure them.
+  case of each kind, and of `partial` and `multi`, which no `fit` case has, to measure them. Related lines
+  can still score `duplicate` even though the question names their kind: on `heldout-b` this happened in an
+  `object` and a `condition` case (§3.5 *Status*).
 - The `dup_` question is long (about 1.5 KB, several interacting clauses) and System One answers it in one shot with
   no reasoning text, so a reply with a covering line can still read `new`: a recall risk, measured by the positive
   categories in O1.
